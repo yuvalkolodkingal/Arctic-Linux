@@ -129,7 +129,10 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   list as the wallpaper picker). **Add pictures…** opens the file chooser; you can also drag
   pictures here from Files. Added pictures are copied into `~/Pictures/Wallpapers` (only real
   pictures: JPEG, PNG, WebP, BMP or GIF). Point at one of your own pictures to **rename** or
-  **delete** it (or select it and press `F2` or `Delete`). The picture in use can't be deleted.
+  **delete** it (or select it and press `F2` or `Delete`). Delete on an Arctic picture hides
+  it from the picker and automatic changes without removing its packaged file; **Restore hidden
+  Arctic wallpapers** brings hidden pictures back. Hidden choices survive package updates. A
+  picture in use must be changed before it can be deleted or hidden.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures, Arctic's own, or **Both**, in name order or **in random order** (every picture once
   before any comes again). Each picture becomes your wallpaper and the colours follow it: your

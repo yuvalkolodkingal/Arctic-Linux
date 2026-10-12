@@ -155,28 +155,42 @@ rotation_pictures() {   # rotation_pictures FOLDER|arctic|both: pictures to rota
   if [[ "$1" == arctic ]]; then
     for f in "${DIRS[@]}"; do
       if [[ -f "$f/collection.json" ]]; then
-        photos=$(python3 - "$f" <<'PY'
+        photos=$(python3 - "$f" "$CONF/wallpapers.json" <<'PY'
 import json, re, sys
 from pathlib import Path
 folder = Path(sys.argv[1])
+hidden = set()
+try:
+    picker = json.loads(Path(sys.argv[2]).read_text())
+    raw = picker.get('hidden_arctic', []) if isinstance(picker, dict) else []
+    if isinstance(raw, list):
+        hidden = {slug for slug in raw if isinstance(slug, str)
+                  and re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug)}
+except (OSError, ValueError):
+    pass
 try:
     data = json.loads((folder / 'collection.json').read_text())
     assert data['schema'] == 1
     photos = []
+    available = 0
     for item in data['wallpapers']:
         slug = item['slug']
-        if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug) or item['file'] != slug + '.jpg':
+        if (not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug)
+                or item['file'] != slug + '.jpg'):
             continue
         photo = folder / item['file']
         if photo.is_file() and not photo.is_symlink():
-            photos.append(str(photo.resolve()))
+            available += 1
+            if slug not in hidden:
+                photos.append(str(photo.resolve()))
+    if not available:
+        sys.exit(1)
     print('\n'.join(photos), end='')
 except (OSError, ValueError, KeyError, TypeError, AssertionError):
     sys.exit(1)
 PY
         ) || continue
-        [[ -n "$photos" ]] || continue
-        printf '%s\n' "$photos"
+        [[ -z "$photos" ]] || printf '%s\n' "$photos"
         return 0
       fi
     done

@@ -7,13 +7,16 @@
     wallpapers.py import <path|url>…  copy pictures into your folder (checked with Pillow)
     wallpapers.py delete <path>     delete one of your pictures (not the one in use)
     wallpapers.py rename <path> <name>  rename one of your pictures (same folder and type)
+    wallpapers.py hide <slug>        hide a packaged Arctic photo (not the one in use)
+    wallpapers.py restore [slug|all] restore hidden packaged photos
 
 Items are the packaged Arctic photo collection followed by the pictures in your folder
 (default ~/Pictures/Wallpapers). Older installations without a collection keep the legacy
 illustrations, and saved choices continue to take precedence over fresh defaults.
 
 Thumbnails (480×300 JPEG, Pillow; SVGs rendered with rsvg-convert) are cached in
-~/.cache/arctic/thumbs. Settings live in ~/.config/arctic/wallpapers.json ({"folder": …}).
+~/.cache/arctic/thumbs. Settings live in ~/.config/arctic/wallpapers.json; the
+"hidden_arctic" slug list is per-user state, so hidden packaged photos stay hidden across updates.
 The applied choice is kept by arctic-wallpaper in ~/.config/arctic/wallpaper.
 
 Import, delete and rename only touch files inside your folder (pictures downloaded from
@@ -49,9 +52,19 @@ MAX_PIXELS = 400_000_000
 
 def settings():
     try:
-        return json.loads(SETTINGS.read_text())
+        data = json.loads(SETTINGS.read_text())
+        return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def hidden_arctic(data=None):
+    """Valid packaged-photo tombstones. Bad hand-edited state must never hide a picture."""
+    raw = (data if data is not None else settings()).get('hidden_arctic', [])
+    if not isinstance(raw, list):
+        return set()
+    return {slug for slug in raw if isinstance(slug, str)
+            and re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug)}
 
 
 def save(data):
@@ -334,8 +347,8 @@ def photo_collection():
                 path = folder / item['file']
                 if path.is_symlink() or not path.is_file():
                     continue
-                photos.append(dict(path=path, name=item['title'], photographer=item['photographer'],
-                                   collectionTheme=item['theme']))
+                photos.append(dict(slug=slug, path=path, name=item['title'],
+                                   photographer=item['photographer'], collectionTheme=item['theme']))
             default = folder / (collection['default'] + '.jpg')
             if photos and any(item['path'] == default for item in photos):
                 return photos, default
@@ -347,9 +360,12 @@ def photo_collection():
 def library():
     active = theme()
     items = []
+    data = settings()
+    hidden = hidden_arctic(data)
     photos, _default = photo_collection()
-    candidates = photos or [dict(path=design_file('{}-{}'.format(name, active)), key=name, name=label)
-                            for name, label in DESIGN]
+    candidates = ([item for item in photos if item['slug'] not in hidden] if photos else
+                  [dict(path=design_file('{}-{}'.format(name, active)), key=name, name=label)
+                   for name, label in DESIGN])
     for item in candidates:
         path = item['path']
         if path is None:
@@ -358,8 +374,8 @@ def library():
             thumb = thumbnail(path)
         except (OSError, ValueError):
             thumb = ''
-        items.append(dict(item, key=item.get('key', str(path)), path=str(path), thumb=thumb, arctic=True))
-    data = settings()
+        items.append(dict(item, key=item.get('key', str(path)), path=str(path), thumb=thumb,
+                          arctic=True, hideable=bool(item.get('slug'))))
     folder = Path(data.get('folder') or default_folder()).expanduser()
     system = {p.resolve() for p in SYSTEM if p.is_dir()}
     if folder.is_dir() and folder.resolve() not in system:
@@ -375,7 +391,44 @@ def library():
             items.append(dict(key=str(path), name=path.stem.replace('-', ' ').replace('_', ' '),
                               path=str(path), thumb=thumb, arctic=False,
                               wallhaven=path.parent.name == 'wallhaven' and path.stem.startswith('wallhaven-')))
-    return dict(items=items, current=current(), folder=str(folder), folderExists=folder.is_dir(), theme=active)
+    hidden_items = [dict(slug=item['slug'], name=item['name'])
+                    for item in photos if item['slug'] in hidden]
+    return dict(items=items, current=current(), folder=str(folder), folderExists=folder.is_dir(),
+                theme=active, hiddenArctic=hidden_items)
+
+
+def hide_arctic(slug):
+    photos, _default = photo_collection()
+    item = next((item for item in photos if item['slug'] == slug), None)
+    if item is None:
+        raise ValueError('That Arctic wallpaper is missing. Refresh the list and try again.')
+    if is_current(item['path'].resolve()):
+        raise ValueError('That picture is your wallpaper now. Choose another one first.')
+    data = settings()
+    hidden = hidden_arctic(data)
+    hidden.add(slug)
+    data['hidden_arctic'] = sorted(hidden)
+    save(data)
+    return dict(ok=True, hidden=slug)
+
+
+def restore_arctic(slug):
+    data = settings()
+    if slug == 'all':
+        data.pop('hidden_arctic', None)
+        restored = 'all'
+    else:
+        if not re.fullmatch('[a-z0-9]+(?:-[a-z0-9]+)*', slug):
+            raise ValueError('Choose a hidden Arctic wallpaper to restore.')
+        hidden = hidden_arctic(data)
+        hidden.discard(slug)
+        if hidden:
+            data['hidden_arctic'] = sorted(hidden)
+        else:
+            data.pop('hidden_arctic', None)
+        restored = slug
+    save(data)
+    return dict(ok=True, restored=restored)
 
 
 def main():
@@ -402,8 +455,12 @@ def main():
         print(json.dumps(delete_picture(sys.argv[2])))
     elif action == 'rename':
         print(json.dumps(rename_picture(sys.argv[2], sys.argv[3])))
+    elif action == 'hide':
+        print(json.dumps(hide_arctic(sys.argv[2])))
+    elif action == 'restore':
+        print(json.dumps(restore_arctic(sys.argv[2] if len(sys.argv) > 2 else 'all')))
     else:
-        raise ValueError('usage: wallpapers.py list | folder <path> | apply <key> | import <path>… | delete <path> | rename <path> <name>')
+        raise ValueError('usage: wallpapers.py list | folder <path> | apply <key> | import <path>… | delete <path> | rename <path> <name> | hide <slug> | restore [slug|all]')
 
 
 if __name__ == '__main__':

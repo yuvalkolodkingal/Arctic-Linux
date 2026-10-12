@@ -1198,6 +1198,21 @@ class WallpaperFilesTest(Home):
         self.src.mkdir()
         Image.new('RGB', (48, 30), (90, 20, 20)).save(self.src / 'Red dunes.jpg')
         (self.src / 'readme.png').write_text('not a picture')
+        self.backgrounds = self.tmp / 'backgrounds'
+        self.backgrounds.mkdir()
+        for slug, colour in [('city-afterglow', (220, 100, 40)), ('ember-clouds', (80, 30, 20))]:
+            Image.new('RGB', (48, 30), colour).save(self.backgrounds / (slug + '.jpg'))
+        collection = {
+            'schema': 1,
+            'default': 'city-afterglow',
+            'wallpapers': [
+                {'slug': slug, 'file': slug + '.jpg', 'title': slug.replace('-', ' ').title(),
+                 'photographer': 'Yuval Kolodkingal', 'theme': 'warm'}
+                for slug in ('city-afterglow', 'ember-clouds')
+            ],
+        }
+        (self.backgrounds / 'collection.json').write_text(json.dumps(collection))
+        self.env['ARCTIC_BACKGROUNDS_DIR'] = str(self.backgrounds)
         # Like the real one, it keeps the choice in ~/.config/arctic/wallpaper.
         stub(self.bin, 'arctic-wallpaper', 'echo "arctic-wallpaper $*" >> "{}"\necho "$1" > "$HOME/.config/arctic/wallpaper"\n'.format(self.log))
 
@@ -1214,6 +1229,63 @@ class WallpaperFilesTest(Home):
         self.helper('wallpaper-set', str(renamed))
         self.helper('wallpaper-delete', str(renamed), ok=False)                        # in use
         self.assertIn('arctic-wallpaper ' + str(renamed), self.calls())
+
+    def test_hide_and_restore_packaged_wallpaper(self):
+        state = self.home / '.config/arctic/wallpapers.json'
+        state.write_text(json.dumps({'folder': str(self.pictures), 'future-setting': 7}) + '\n')
+        before = self.helper('wallpapers')
+        self.assertEqual([item['slug'] for item in before['items'] if item['arctic']],
+                         ['city-afterglow', 'ember-clouds'])
+        self.assertTrue(all(item['hideable'] for item in before['items'] if item['arctic']))
+        self.helper('wallpaper-hide', 'ember-clouds')
+        hidden = self.helper('wallpapers')
+        self.assertEqual([item['slug'] for item in hidden['items'] if item['arctic']], ['city-afterglow'])
+        self.assertEqual(hidden['hiddenArctic'], [{'slug': 'ember-clouds', 'name': 'Ember Clouds'}])
+        self.assertTrue((self.backgrounds / 'ember-clouds.jpg').is_file())  # packaged file was not deleted
+        saved = json.loads(state.read_text())
+        self.assertEqual((saved['folder'], saved['future-setting'], saved['hidden_arctic']),
+                         (str(self.pictures), 7, ['ember-clouds']))
+        self.helper('wallpaper-restore', 'all')
+        restored = self.helper('wallpapers')
+        self.assertEqual([item['slug'] for item in restored['items'] if item['arctic']],
+                         ['city-afterglow', 'ember-clouds'])
+        self.assertEqual(restored['hiddenArctic'], [])
+        self.assertNotIn('hidden_arctic', json.loads(state.read_text()))
+
+    def test_missing_or_invalid_collection_keeps_legacy_wallpaper_selectable(self):
+        collection = self.backgrounds / 'collection.json'
+        (self.backgrounds / 'aurora-polar-night.svg').write_text(
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="9">'
+            '<rect width="16" height="9"/></svg>')
+
+        collection.unlink()
+        missing = [item for item in self.helper('wallpapers')['items'] if item['arctic']]
+        self.assertEqual([(item['key'], item['hideable']) for item in missing], [('aurora', False)])
+        self.assertNotIn('slug', missing[0])
+
+        collection.write_text('{not json')
+        invalid = [item for item in self.helper('wallpapers')['items'] if item['arctic']]
+        self.assertEqual([(item['key'], item['hideable']) for item in invalid], [('aurora', False)])
+        self.assertNotIn('slug', invalid[0])
+
+    def test_active_packaged_wallpaper_cannot_be_hidden(self):
+        ember = self.backgrounds / 'ember-clouds.jpg'
+        self.helper('wallpaper-set', str(ember))
+        result = self.helper('wallpaper-hide', 'ember-clouds', ok=False)
+        self.assertIn('Choose another one first', result['error'])
+        self.assertEqual(self.helper('wallpapers')['hiddenArctic'], [])
+        self.assertTrue(ember.is_file())
+
+    def test_malformed_hidden_wallpaper_state_is_ignored(self):
+        state = self.home / '.config/arctic/wallpapers.json'
+        for malformed in ('{bad json', json.dumps({'hidden_arctic': 'ember-clouds'}),
+                          json.dumps(['ember-clouds'])):
+            state.write_text(malformed)
+            data = self.helper('wallpapers')
+            self.assertEqual([item['slug'] for item in data['items'] if item['arctic']],
+                             ['city-afterglow', 'ember-clouds'])
+            self.assertEqual(data['hiddenArctic'], [])
+        self.helper('wallpaper-hide', '../outside', ok=False)
 
     def test_wallhaven_state_and_offline(self):
         state = self.helper('wallhaven', 'state')

@@ -159,22 +159,18 @@ Steam, mpv's on-screen controls and fish (which uses the terminal's colours).
 
 ![The wallpaper picker](images/wallpapers.png)
 
-`Super + Shift + W` opens the wallpaper picker. Arctic Linux has three wallpapers, each in a
-Winter and a Polar night version:
-
-| Wallpaper | Used by default for |
-|---|---|
-| **Snowfield** | Winter |
-| **Aurora** | Polar night |
-| **Fox** | The login screen |
-
-An Arctic wallpaper follows the theme when you switch. Your own pictures (from
+`Super + Shift + W` opens the wallpaper picker. Arctic Linux includes its published photo
+collection, with the accessible Winter and Polar night palettes still available. Your own
+pictures (from
 `~/Pictures/Wallpapers`, or any folder you choose with **Choose folder…**) stay as they are, and
 with **Match colours to wallpaper** on, the desktop takes its colours from them.
 
 To add pictures, use **Settings → Appearance → Add pictures…** or drag them there from Files;
-Settings copies them into your folder and can rename or delete them. **Settings → Appearance →
-Wallhaven** finds wallpapers on [wallhaven.cc](https://wallhaven.cc) and sets one with a click
+Settings copies them into your folder and can rename or delete them. Delete on a packaged Arctic
+photo hides it for your account instead of changing RPM-owned files. Hidden photos stay out of
+the picker and Arctic/Both rotation after updates, and **Restore hidden Arctic wallpapers** brings
+them back. The current wallpaper must be changed before it can be hidden or deleted.
+**Settings → Appearance → Wallhaven** finds wallpapers on [wallhaven.cc](https://wallhaven.cc) and sets one with a click
 (it lands in `~/Pictures/Wallpapers/wallhaven`, so the picker lists it too). See
 [Settings](Settings#appearance).
 
