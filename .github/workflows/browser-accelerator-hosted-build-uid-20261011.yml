@@ -1,0 +1,50 @@
+name: Matching Epiphany accelerator experiment exact public UID span hosted builds
+
+on:
+  push:
+    branches: [codex/browser-accelerator-hosted-build-uid-20261011]
+    paths: [.github/browser-accelerator-hosted-build-uid-20261011.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: arctic-browser-accelerator-hosted-build-screen-20261011
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 155
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Require reviewed immutable build context and sole first-add child
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B tools/browser-accelerator-host-uid-20261011/runner.py --guard-only
+      - name: Two complete matching SRPM builds and real GTK control
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: timeout --signal=TERM --kill-after=120s 145m python3 -B tools/browser-accelerator-host-uid-20261011/runner.py
+      - name: Retain all screened original build logs, RPMs and ELF joins
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-epiphany-accelerator-ab-original-builds-20261011
+          path: ${{ runner.temp }}/arctic-accelerator-ab-screened/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 6
+          include-hidden-files: true
+      - name: Retain only closed finite failure observation
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unqualified-epiphany-build-finite-failure-20261011
+          path: ${{ runner.temp }}/arctic-accelerator-ab-finite-failure/finite-failure.json
+          if-no-files-found: ignore
+          retention-days: 7

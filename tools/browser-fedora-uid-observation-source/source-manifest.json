@@ -1,0 +1,33 @@
+{
+  "all_existing_family_phase_rules_and_primary_cleanup_exact": true,
+  "base": "2b7a3cf3834b87904f62e1b0f62e8541b80d211e",
+  "current_cause_attested": false,
+  "execution_allowed": false,
+  "inherited_component_peer": {
+    "bytes": 6085,
+    "path": "/workspace/Arctic-Linux/out/independent-browser-screen-failure-3d3b-Source-20261011/final-independent-disabled-Source-peer.json",
+    "sha256": "d3ff8fe3626c335fceb39db4fec329bd1fef7ba154acb1c950d454963c1475de"
+  },
+  "limits": {
+    "diagnostic_chars": 1024,
+    "frames": 64,
+    "original": 67108864
+  },
+  "original_privacy_admitted": false,
+  "original_reads": 0,
+  "public_proof": {
+    "bytes": 3666,
+    "path": "/workspace/Arctic-Linux/out/fedora44-key-import-public-Source-research-20261011/concise-public-Source-proof.json",
+    "sha256": "03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378"
+  },
+  "ready": false,
+  "scanner_policy_changed": false,
+  "schema": "disabled-fixed-public-Fedora44-UID-observation-Source-v1",
+  "source_files": {
+    "README.md": "834fc59c6ea5b4cb38db25bd097f8897756c024f3c4c46bf6e6f01e56bc25d92",
+    "observer.py": "1885b93d02aff7a05c02bec87daf1092e4ca0bf74a31f3752f40ae7b850bba3d",
+    "ownership.py": "144dfd018190701e8888a07e3e16f807de493f59a5b7aa2afffa36bbc8b1c3ee",
+    "scanner.py": "0c2176c4892e45e485eeac32f564fdfe9fb1619f142ac0b60babeed52924075f",
+    "test_source.py": "374b73a704b76641fc3de82ba3cfffb75323fbff93ff0fd0a07e97042bb7d1ef"
+  }
+}

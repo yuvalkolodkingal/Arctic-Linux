@@ -1,0 +1,35 @@
+{
+  "Source_parent": "c22d708da8bce8498fe07b383034e992c1154752",
+  "actual_base": "2b7a3cf3834b87904f62e1b0f62e8541b80d211e",
+  "actual_caller_DNF_origin_attested": false,
+  "broad_email_domain_allowance": false,
+  "c22d_component_peer": {
+    "bytes": 9254,
+    "path": "/workspace/Arctic-Linux/out/independent-browser-Fedora-UID-c22-Source-20261011/final-independent-disabled-Source-peer.json",
+    "sha256": "e82828668b43972f7db01013ac67abcabc4654ac41a69e58c53e07a5cdd6d387"
+  },
+  "current_UID_cause_SDK_success": false,
+  "direct_closed_role_argument_permits_only_independently_public_fixed_span": true,
+  "execution_allowed": false,
+  "limits": {
+    "diagnostic_chars": 1024,
+    "frames": 64,
+    "original": 67108864
+  },
+  "original_inputs_read": false,
+  "public_proof": {
+    "bytes": 3666,
+    "path": "/workspace/Arctic-Linux/out/fedora44-key-import-public-Source-research-20261011/concise-public-Source-proof.json",
+    "sha256": "03d813bff505d8ecc081713f7eed577cf3d779a18048676c76bfdee04ae9b378"
+  },
+  "ready": false,
+  "schema": "disabled-exact-public-Fedora44-DNF-UID-remedy-Source-v1",
+  "source_files": {
+    "README.md": "eede80ac0e2fa879a3872d5010fa9e1d2fe30574bfbff7cb8f1b75c1a73c4269",
+    "observer.py": "94332560646e932e3a6a371f5dbfdf45ced7f955161f1d4f7b381b3be8ae322a",
+    "ownership.py": "144dfd018190701e8888a07e3e16f807de493f59a5b7aa2afffa36bbc8b1c3ee",
+    "scanner.py": "b74dba2db145d10d56e430188c4b715dd45a76e12a3f5a661d011cf165498204",
+    "test_source.py": "3785c3508b12c8532c09b34b8061958b1bd95b874c360d61da02b8ecf81ca1bf"
+  },
+  "source_view_only": true
+}
