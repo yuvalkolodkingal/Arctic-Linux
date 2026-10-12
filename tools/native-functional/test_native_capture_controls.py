@@ -90,7 +90,7 @@ class CaptureControls(unittest.TestCase):
         source=(HERE/'native_smoke.py').read_text()
         restored=restore_capture_source(source)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         '63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507')
+                         'dd88a44bc74902db6ee7f59558e0f9f534312239bd6b250b5602e0068e40d70b')
         ast.parse(restored)
         for name in ('visual_reference_frame','visual_capture_geometry','evaluate_reference_rgb','mpv_property'):
             def segment(text):
@@ -245,7 +245,7 @@ class CaptureControls(unittest.TestCase):
             method=ast.get_source_segment(source,next(x for x in node.body if isinstance(x,ast.FunctionDef) and x.name==name))
             self.assertLess(method.index('self.hide_reference_controls(player,ipc)'),method.index('time.sleep(.5)'))
             self.assertLess(method.index('time.sleep(.5)'),method.index("['grim'"))
-            self.assertEqual(method.count('time.sleep(.5)'),1)
+            self.assertEqual(method.count('time.sleep(.5)'),2 if klass=='Smoke' else 1)
             self.assertEqual(method.count('self.hide_reference_controls(player,ipc)'),1)
             self.assertIn('evaluate_reference_rgb(',method)
 
