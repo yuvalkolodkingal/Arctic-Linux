@@ -12,6 +12,44 @@ guest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guest)
 
 
+def restore_collector_diagnostics(text):
+    """Remove only this diagnostic layer and recover its exact reviewed parent bytes."""
+    marker = 'COLLECTOR_SETUP_STAGES = '
+    if marker not in text:
+        return text
+    start = text.index(marker)
+    end = text.index('def verify_small_cpu_fixture', start)
+    text = text[:start] + '\n' + text[end:]
+    for stage in guest.COLLECTOR_SETUP_STAGES:
+        for indent in ('    ', '        '):
+            line = indent + "mark_collector_setup('" + stage + "')\\n"
+            count = text.count(line)
+            if count:
+                text = text.replace(line, '')
+    revised = """if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+        try:
+            code = collector_diagnostic_code(COLLECTOR_SETUP_STAGE, error)
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
+            code = 'collector-unknown'
+        print('ARCTIC-DICTATION-COLLECTOR-ERROR ' + json.dumps(
+            {'code': code, 'release_acceptance': False}, sort_keys=True), flush=True)
+        sys.exit(1)
+"""
+    original = """if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
+        print('ARCTIC-DICTATION-COLLECTOR-ERROR {"code":"collector-guard-or-setup-failed","release_acceptance":false}', flush=True)
+        sys.exit(1)
+"""
+    if text.count(revised) != 1:
+        raise AssertionError('collector diagnostic outer guard differs')
+    return text.replace(revised, original)
+
+
 class PrivateInvalid(guest.Invalid):
     def __str__(self):
         raise AssertionError('exception text must remain private')
@@ -29,6 +67,16 @@ class PrivateValue(ValueError):
 
 
 class CollectorDiagnosticControls(unittest.TestCase):
+    def test_complete_layer_rolls_back_to_exact_parent_source(self):
+        current = Path(guest.__file__).read_text()
+        parent = subprocess.check_output([
+            'git', '-C', str(Path(__file__).resolve().parents[2]), 'show',
+            '2e1e100f636f87799ef44e29cd2156fb1d818de3:tools/dictation-qualification/guest_check.py'
+        ], text=True)
+        restored = restore_collector_diagnostics(current)
+        self.assertEqual(restored, parent)
+        self.assertEqual(restore_collector_diagnostics(restored), parent)
+
     def test_every_source_owned_stage_and_caught_class_has_one_fixed_code(self):
         errors = (
             (PrivateInvalid('private transcript'), 'invalid'),
