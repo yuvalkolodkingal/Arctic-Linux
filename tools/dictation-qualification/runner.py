@@ -159,10 +159,14 @@ def relay_collector_diagnostic(vm, phase):
             after = os.fstat(stream.fileno())
         fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
                                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if fields(before) != fields(after) or len(raw) != before.st_size:
+        if (fields(before) != fields(after)
+                or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                or len(raw) != before.st_size):
             return
         prefix = b'ARCTIC-DICTATION-COLLECTOR-ERROR '
         selected = [line for line in raw.splitlines(keepends=True) if line.startswith(prefix)]
+        if not selected:
+            return
         code = 'collector-invalid-record'
         if (len(selected) == 1 and len(selected[0]) <= 512
                 and selected[0].endswith(b'\n') and not selected[0].endswith(b'\r\n')):
