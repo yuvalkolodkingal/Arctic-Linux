@@ -32,7 +32,7 @@ jobs:
 
       - name: Install pinned verifier
         run: |
-          python -m pip install --disable-pip-version-check faster-whisper==1.2.1
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1 av==16.0.1
 
       - name: Download and verify River master
         env:
@@ -52,6 +52,46 @@ jobs:
               measured = float(container.duration / av.time_base)
           assert abs(measured - 507.559184) <= 0.08, measured
           print(f"measured_duration_seconds={measured:.6f}")
+          PY
+
+      - name: Preflight pinned decoder and one-second transcription
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import json
+          import platform
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          from faster_whisper.audio import decode_audio
+
+          audio = Path("showcase/revision-2026-10-12/work/narration-river-final.mp3")
+          samples = decode_audio(str(audio), sampling_rate=16000)
+          assert 8_000_000 < len(samples) < 8_300_000, len(samples)
+          model = WhisperModel("base.en", device="cpu", compute_type="int8")
+          segments, info = model.transcribe(
+              str(audio),
+              language="en",
+              beam_size=1,
+              word_timestamps=True,
+              clip_timestamps="0,1",
+          )
+          segments = list(segments)
+          assert segments and any(segment.words for segment in segments)
+          versions = {
+              "python": platform.python_version(),
+              "faster-whisper": importlib.metadata.version("faster-whisper"),
+              "av": importlib.metadata.version("av"),
+              "ctranslate2": importlib.metadata.version("ctranslate2"),
+              "huggingface-hub": importlib.metadata.version("huggingface-hub"),
+              "tokenizers": importlib.metadata.version("tokenizers"),
+              "preflight_seconds": 1,
+              "preflight_segments": len(segments),
+              "preflight_words": sum(len(segment.words or []) for segment in segments),
+              "transcript_in_ci_log": False,
+          }
+          out = Path("showcase/revision-2026-10-12/work/verifier-versions.json")
+          out.write_text(json.dumps(versions, indent=2) + "\n")
+          print(json.dumps(versions, sort_keys=True))
           PY
 
       - name: Run local Whisper verification and alignment
@@ -94,5 +134,6 @@ jobs:
             showcase/revision-2026-10-12/work/aligned/whisper-verification.json
             showcase/revision-2026-10-12/work/aligned/whisper-transcript.txt
             showcase/revision-2026-10-12/work/aligned/whisper-words.json
+            showcase/revision-2026-10-12/work/verifier-versions.json
           if-no-files-found: error
           retention-days: 30
