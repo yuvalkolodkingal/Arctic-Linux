@@ -273,7 +273,10 @@ class ControlsStateTrials(unittest.TestCase):
             endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(root/'visual-reference-ipc.sock'))
             try:
                 with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
-                    with self.assertRaisesRegex(RuntimeError,'^actual static visual fixture content unmatched; rendered-content gate remains open
+                    with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
+                        smoke.visual_media()
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
+                smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
