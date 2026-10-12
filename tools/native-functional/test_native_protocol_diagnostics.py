@@ -276,7 +276,7 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.reference_settings_config=Mock()
             commands=[];captures=[];closed=[];original_close=os.close;original_pipe=os.pipe;original_drain=N.NativeProtocolDrain
-            def command(argv):
+            def command(argv,**kwargs):
                 commands.append(argv)
                 if argv[:3]==['mmsg','get','all-monitors']:return (0,json.dumps(dict(monitors=[monitor])),'')
                 if argv[0]=='grim':Path(argv[-1]).write_bytes(b'\x89PNG\r\n\x1a\n'+b'\0\0\0\rIHDR'+struct.pack('>II',160,120))
@@ -288,8 +288,12 @@ class DrainAndExportControls(unittest.TestCase):
                 drain=original_drain();captures.append(drain.raw_fd);return drain
             def close(fd):closed.append(fd);original_close(fd)
             smoke.cmd=Mock(side_effect=command)
-            def prop(path,key,pid,uid):return {'video-params':{'w':160,'h':120},'path':str(fixture),
-                    'pause':False,'current-vo':'libmpv','time-pos':.5}[key]
+            time_calls=[]
+            def prop(path,key,pid,uid):
+                if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
+                    'pause':False,'current-vo':'libmpv'}[key]
+                time_calls.append(True)
+                return 0 if len(time_calls)==1 else .2
             with patch.object(N,'NativeProtocolDrain',side_effect=drain_factory) as factory,\
                  patch.object(N.os,'pipe',side_effect=pipe),patch.object(N.os,'close',side_effect=close),\
                  patch.object(N.threading.Thread,'start',side_effect=RuntimeError('private optional setup text')),\
@@ -298,7 +302,7 @@ class DrainAndExportControls(unittest.TestCase):
                 self.assertIsNone(smoke.gate('open-codec-content-and-player-state',smoke.visual_media))
             self.assertEqual(factory.call_count,1);self.assertEqual(popen.call_count,1)
             self.assertNotIn('WAYLAND_DEBUG=client',popen.call_args.args[0])
-            sleep.assert_called_once_with(.5)
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
             self.assertIn('actual static visual fixture content unmatched',smoke.gates[-1]['detail'])
             self.assertNotIn('private optional',json.dumps(smoke.gates))
             self.assertEqual(json.loads((smoke.root/'visual-oracle.json').read_bytes())['oracle']['status'],'unmatched')
@@ -380,19 +384,23 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
             commands=[]
-            def command(argv):
+            def command(argv,**kwargs):
                 commands.append(argv)
                 if argv[:3]==['mmsg','get','all-monitors']:return (0,json.dumps(dict(monitors=[monitor])),'')
                 if argv[0]=='grim':Path(argv[-1]).write_bytes(b'\x89PNG\r\n\x1a\n'+b'\0\0\0\rIHDR'+struct.pack('>II',160,120))
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
-            def prop(path,key,pid,uid):return {'video-params':{'w':160,'h':120},'path':str(fixture),
-                    'pause':False,'current-vo':'libmpv','time-pos':.5}[key]
+            time_calls=[]
+            def prop(path,key,pid,uid):
+                if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
+                    'pause':False,'current-vo':'libmpv'}[key]
+                time_calls.append(True)
+                return 0 if len(time_calls)==1 else .2
             with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                 with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                     smoke.visual_media()
-            sleep.assert_called_once_with(.5)
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proof,True))
             self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proof,False))
