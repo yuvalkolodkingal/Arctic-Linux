@@ -88,7 +88,7 @@ class BulkTransportControls(unittest.TestCase):
                               ('            record_native_stop(vm,"install",t,install_timeout,rc)\n', ''),
                               ('def installed_login(', 'def installed_login_mutated('),
                               ('if not installed_session_settled(vm):',
-                               'if not installed_session_settled_mutated(vm):')]: 
+                               'if not installed_session_settled_mutated(vm):')]:
             with self.subTest(mutation=before):
                 self.assertEqual(driver.count(before), 1)
                 with self.assertRaises(AssertionError):
