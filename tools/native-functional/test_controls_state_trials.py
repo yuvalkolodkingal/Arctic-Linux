@@ -18,8 +18,8 @@ from unittest.mock import Mock, patch
 import zlib
 
 HERE=Path(__file__).resolve().parent
-BASE_NATIVE_SHA='51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532'
-BASE_GUEST_SHA='5cbf0c6385465cfa5f94fd3addaa36729e030a10b2864af5424f09438c4580ec'
+BASE_NATIVE_SHA='e7a0018c02b0d8fb78db3187db5155544e7462841fb5da841eb5cf1c8a80279f'
+BASE_GUEST_SHA='29ccacbe04be9306de58f275762a4f0b0dd60220d6ea51e40ad805a8b9485926'
 spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
@@ -264,13 +264,19 @@ class ControlsStateTrials(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3));return 0,'',''
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
-            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv','time-pos':0.0}
+            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
+            time_calls=[]
+            def prop(path,key,pid,uid):
+                if key!='time-pos':return media[key]
+                time_calls.append(True)
+                return 0 if len(time_calls)==1 else .2
             endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=lambda path,key,pid,uid:media[key]),patch.object(N.time,'sleep') as sleep:
-                    with self.assertRaisesRegex(RuntimeError,'^actual static visual fixture content unmatched; rendered-content gate remains open$'):
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
-                sleep.assert_called_once_with(.5);smoke.controlled_controls_trials.assert_called_once()
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
+                smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')

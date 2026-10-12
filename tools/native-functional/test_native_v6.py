@@ -150,11 +150,12 @@ class NewControls(unittest.TestCase):
             N.visual_capture_geometry(client,dict(monitors=[monitor,monitor]))
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'host FFmpeg absent; actual guest gate remains mandatory')
-    def test_actual_visual_method_positive_and_black_capture_failure(self):
+    def test_actual_visual_method_retries_transient_capture_without_weakening_oracle(self):
         # Actual visual_media method + real FFmpeg fixture/PNG/crop. Only GUI,
         # window authority and mpv responses are explicit host-only fixtures.
-        for case in ('positive','black','unfocused-before','unfocused-after','boolean-scale','boolean-coordinate','monitor-changed','identity-changed'):
-            black=case=='black'
+        cases=('positive','transient','black','unfocused-before','unfocused-after',
+               'boolean-scale','boolean-coordinate','monitor-changed','identity-changed')
+        for case in cases:
             with self.subTest(case=case),tempfile.TemporaryDirectory() as t:
                 root=Path(t);smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.user=pwd.getpwuid(os.getuid())
                 smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[]
@@ -168,17 +169,22 @@ class NewControls(unittest.TestCase):
                 if case=='boolean-scale':monitor['scale']=True
                 if case=='boolean-coordinate':monitor['x']=True;before['x']=after['x']=1
                 if case=='identity-changed':after['id']=2
-                smoke.alive=Mock(side_effect=[client,before,after])
-                monitor_calls=[]
+                smoke.alive=Mock(side_effect=[client,before,after]+[client,client]*5)
+                monitor_calls=[];grim_calls=[]
                 def wait(fn,*args,**kwargs):
                     value=fn();self.assertTrue(value);return value
                 smoke.wait=Mock(side_effect=wait)
-                props={'path':str(root/'visual-reference.mkv'),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv','time-pos':.5}
-                pixels=b'\0'*(160*120*3) if black else N.visual_reference_frame()
-                raw=root/'fake-capture.raw';raw.write_bytes(pixels)
-                capture=root/'fake-capture.png'
-                N.execute(['ffmpeg','-nostdin','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgb24','-video_size','160x120',
-                           '-i',str(raw),'-frames:v','1',str(capture)])
+                props={'path':str(root/'visual-reference.mkv'),'pause':False,
+                       'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
+                raw_good=root/'fake-good.raw';raw_good.write_bytes(N.visual_reference_frame())
+                raw_bad=root/'fake-bad.raw';raw_bad.write_bytes(b'\0'*(160*120*3))
+                captures=[]
+                for raw,name in ((raw_good,'fake-good.png'),(raw_bad,'fake-bad.png')):
+                    capture=root/name
+                    N.execute(['ffmpeg','-nostdin','-loglevel','error','-y','-f','rawvideo','-pixel_format','rgb24','-video_size','160x120',
+                               '-i',str(raw),'-frames:v','1',str(capture)])
+                    captures.append(capture)
+                good_capture,bad_capture=captures
                 original=smoke.cmd
                 def cmd(argv,**kwargs):
                     if argv[:2]==['mmsg','dispatch']:return (0,'{"success":true}','')
@@ -187,21 +193,35 @@ class NewControls(unittest.TestCase):
                         observed=copy.deepcopy(monitor)
                         if case=='monitor-changed' and len(monitor_calls)==2:observed['width']=161
                         return (0,json.dumps(dict(monitors=[observed])),'')
-                    if argv[0]=='grim':shutil.copyfile(capture,argv[-1]);return (0,'','')
+                    if argv[0]=='grim':
+                        grim_calls.append(True)
+                        source=bad_capture if case=='black' or (case=='transient' and len(grim_calls)==1) else good_capture
+                        shutil.copyfile(source,argv[-1]);return (0,'','')
                     return original(argv,**kwargs)
                 smoke.cmd=Mock(side_effect=cmd)
+                time_calls=[]
+                def prop(path,key,*args):
+                    if key!='time-pos':return props[key]
+                    time_calls.append(True)
+                    return 0 if len(time_calls)==1 else .2
                 with socket.socket(socket.AF_UNIX) as peer:
                     peer.bind(str(root/'visual-reference-ipc.sock'))
-                    with patch.object(N,'mpv_property',side_effect=lambda path,key,*args:props[key]),patch.object(N.time,'sleep'):
-                        if case=='positive':
+                    with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep'):
+                        if case in ('positive','transient'):
                             value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
                         else:
                             with self.assertRaises(RuntimeError):smoke.visual_media()
-                if case in ('positive','black'):
+                if case in ('positive','transient','black'):
                     value=json.loads((root/'visual-oracle.json').read_text())
-                    self.assertEqual(value['oracle']['status'],'unmatched' if black else 'matched')
+                    expected='unmatched' if case=='black' else 'matched'
+                    self.assertEqual(value['oracle']['status'],expected)
                     self.assertTrue((root/'celluloid-reference.png').is_file());self.assertTrue((root/'visual-owned-window.rgb').is_file())
-                    self.assertEqual(len(monitor_calls),2)
+                    expected_attempts=6 if case=='black' else (2 if case=='transient' else 1)
+                    self.assertEqual(len(value['capture_attempts']),expected_attempts)
+                    self.assertEqual(len(monitor_calls),expected_attempts*2)
+                    self.assertEqual(value['accepted_capture_attempt'],None if case=='black' else expected_attempts)
+                    if case=='transient':
+                        self.assertEqual([x['oracle']['status'] for x in value['capture_attempts']],['unmatched','matched'])
                 elif case in ('unfocused-after','monitor-changed','identity-changed'):
                     self.assertTrue((root/'celluloid-reference.png').is_file())
                     self.assertFalse((root/'visual-oracle.json').exists())

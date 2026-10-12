@@ -1470,6 +1470,19 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
+        initial_time=state['time-pos']
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'initial visual playback clock is invalid')
+        def playback_advanced():
+            observed=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+            require(type(observed) in (int,float) and not isinstance(observed,bool)
+                    and math.isfinite(observed) and 0<=observed<=2,
+                    'visual playback clock is invalid')
+            delta=observed-initial_time
+            if delta<0: delta+=2
+            return observed if delta>=.05 else None
+        advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
         time.sleep(.5)
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -1479,38 +1492,71 @@ class Smoke:
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
         image=self.root/'celluloid-reference.png'
-        self.cmd(['grim','-o',monitor['name'],str(image)])
-        screenshot=dict(path=str(image),sha256=digest(image),review='static content oracle plus human review; screencopy can request repaint')
-        # The PNG header supplies actual physical pixel dimensions, not a config guess.
-        header=image.read_bytes()[:24]
-        require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR','invalid reference capture PNG')
-        size=list(struct.unpack('>II',header[16:24]))
-        require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
-        after=self.alive(player)
-        monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
-        self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after)
+        rgb=self.root/'visual-owned-window.rgb'
+        capture_deadline=time.monotonic()+8
+        attempt_limit=6
+        attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
+        oracle=dict(status='unmatched',reason='No capture attempted')
+        for attempt in range(1,attempt_limit+1):
+            if attempt>1:
+                remaining=capture_deadline-time.monotonic()
+                require(remaining>.5,'visual capture retry deadline exhausted')
+                time.sleep(.5)
+                client_now=self.alive(player)
+                monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+                monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
+                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                        and geometry_now==geometry and crop_now==crop
+                        and all(monitor_now.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                        'owned player identity/geometry/focus or monitor changed before recapture')
+            remaining=capture_deadline-time.monotonic()
+            require(remaining>.1,'visual capture retry deadline exhausted')
+            self.cmd(['grim','-o',monitor['name'],str(image)],timeout=min(3,remaining))
+            screenshot=dict(path=str(image),sha256=digest(image),
+                review='static content oracle plus human review; screencopy can request repaint')
+            # The PNG header supplies actual physical pixel dimensions, not a config guess.
+            header=image.read_bytes()[:24]
+            require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR','invalid reference capture PNG')
+            size=list(struct.unpack('>II',header[16:24]))
+            require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
+            after=self.alive(player)
+            monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after,attempt=attempt)
+            monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
+            require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                    and geometry_after==geometry and crop_after==crop
+                    and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                    'owned player identity/geometry/focus or monitor changed across capture')
+            remaining=capture_deadline-time.monotonic()
+            require(remaining>.1,'visual capture retry deadline exhausted')
+            self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
+                             '-pix_fmt','rgb24','-f','rawvideo',str(rgb)],timeout=min(3,remaining))
+            try:
+                oracle=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
+            except Exception as exc:
+                oracle=dict(status='failed',error=type(exc).__name__+': '+str(exc))
+            attempt_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+            require(type(attempt_time) in (int,float) and not isinstance(attempt_time,bool)
+                    and math.isfinite(attempt_time) and 0<=attempt_time<=2,
+                    'capture-attempt playback clock is invalid')
+            attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
+                actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
+                owned_identity_geometry_unchanged=True))
+            if oracle.get('status')=='matched': break
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,client,after,screenshot)
-        monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
-        require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
-                and geometry_after==geometry and crop_after==crop
-                and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
-                'owned player identity/geometry/focus or monitor changed across capture')
-        rgb=self.root/'visual-owned-window.rgb'
-        self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
-                         '-pix_fmt','rgb24','-f','rawvideo',str(rgb)])
         info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
+                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+                  capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=8,
+                  accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
-        try:
-            info['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
-        except Exception as exc:
-            info['oracle']=dict(status='failed',error=type(exc).__name__+': '+str(exc))
+        info['oracle']=oracle
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
@@ -2165,7 +2211,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
+    native_source_sha = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

@@ -13,7 +13,7 @@ import unittest
 from unittest import mock
 
 HERE = Path(__file__).resolve().parent
-ORIGINAL_GUEST_SHA = 'aab4323815e239b5debeccf93c4b73f727cd9ed54715f519b8bb1e99915a1d78'
+ORIGINAL_GUEST_SHA = '87977cda4514fa23de35c18ef1e84be88db4148807bbf8e70078d98f69beedfe'
 PROFILE_RECORD = 'ARCTIC-NATIVE-PRIVATE-PROFILES '
 
 
