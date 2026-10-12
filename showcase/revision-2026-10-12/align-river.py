@@ -11,7 +11,7 @@ import difflib
 import json
 import logging
 import re
-import subprocess
+import av
 from pathlib import Path
 
 from faster_whisper import WhisperModel
@@ -24,12 +24,10 @@ def tokens(text: str) -> list[str]:
 
 
 def media_duration(path: Path) -> float:
-    result = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=noprint_wrappers=1:nokey=1", str(path)],
-        check=True, capture_output=True, text=True,
-    )
-    return float(result.stdout.strip())
+    with av.open(str(path)) as container:
+        if container.duration is None:
+            raise SystemExit("audio container has no measured duration")
+        return float(container.duration * av.time_base)
 
 
 def edit_distance(reference: list[str], hypothesis: list[str]) -> int:
