@@ -29,12 +29,12 @@
     "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
     "test_native_v6.py": "3866ef094ef05818c4f039f312b30c8ea91dbfccc5e7c42773f401d81735c97e",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
-    "test_native_protocol_diagnostics.py": "e604bed4dc30c6970f18c5b73842a30108c5ed04b17a2dc97943803248562d06",
-    "test_renderer_trials.py": "966d1a72b189ba188e6d79a44617d1982e8cff3abe937324af331f3d1d89046e",
-    "test_native_capture_controls.py": "ed1fa94b18c60337b155500e78474ab64e60df16de256b4c97706596e70a0df6",
+    "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
+    "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
+    "test_native_capture_controls.py": "89bdfc6c6888f16f40d45004403234ca5abed4f84eb403cc53c07a1e7dff4b50",
     "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42",
     "test_native_public_evidence.py": "6d82d955b67b613e9ebd891bbbd49288598eec15e2a76ac5ed4e619dbeaa1ed0",
-    "test_controls_state_trials.py": "55b54bba8efcd6b8e487d1f8763899fccac65737a786df8c650497870e644552"
+    "test_controls_state_trials.py": "effb03b77f7b104a27ebab53f73101ddecfbac859bfb3670fed4a765428f9053"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
