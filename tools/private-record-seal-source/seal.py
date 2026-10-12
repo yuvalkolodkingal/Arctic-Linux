@@ -37,8 +37,14 @@ def staged(label,function):
 def closed_failure_label(error):
     """Map any object to a fixed public label without reading foreign exception data."""
     if type(error)is SealStageError:
-        label=error.label
-        if type(label)is str and label in SEAL_STAGE_LABELS and error.args==(SEAL_FAILURE_MESSAGE,):return label
+        try:
+            label=object.__getattribute__(error,'label')
+            args=BaseException.args.__get__(error,SealStageError)
+        except BaseException:
+            return SEAL_STAGE_UNKNOWN
+        if (type(label)is str and label in SEAL_STAGE_LABELS and type(args)is tuple
+                and len(args)==1 and type(args[0])is str and args[0]is SEAL_FAILURE_MESSAGE):
+            return label
     return SEAL_STAGE_UNKNOWN
 
 def require(value,message='Private record sealing contract differs'):

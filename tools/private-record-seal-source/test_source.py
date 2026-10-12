@@ -48,6 +48,18 @@ raise SystemExit(2)
         class Foreign(BaseException):
             def __str__(self):raise AssertionError('foreign exception was stringified')
         self.assertEqual(S.closed_failure_label(Foreign()),S.SEAL_STAGE_UNKNOWN)
+    def test_mutated_exact_error_does_not_compare_foreign_args(self):
+        calls=[]
+        class Hostile:
+            def __eq__(self,unused):calls.append('eq');raise AssertionError('foreign equality used')
+            def __str__(self):calls.append('str');raise AssertionError('foreign string used')
+        error=S.SealStageError('private-seal-stage-scanner-frame');error.args=(Hostile(),)
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        error=S.SealStageError('private-seal-stage-scanner-frame');error.label=Hostile()
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        del error.label
+        self.assertEqual(S.closed_failure_label(error),S.SEAL_STAGE_UNKNOWN)
+        self.assertEqual(calls,[])
     def test_recipient_is_exact_and_pinned(self):
         self.assertEqual(S.validate_recipient(RECIPIENT,RECIPIENT_SHA),RECIPIENT)
         for bad in ('age1'+'q'*57,'AGE1'+'q'*58,'age1'+'b'*58):
