@@ -77,26 +77,46 @@ shot sddm-a
 # Bind input to the exact greeter process instead of assuming an app_id or the
 # compositor's startup focus. Test mode exercises the installed path's real
 # password TextInput directly. Do not submit the login.
-swaymsg "[pid=\"$greeter\"] focus" >/dev/null
-swaymsg -t get_tree -r >"$OUT/sddm-focused-tree.json"
-python3 - "$OUT/sddm-focused-tree.json" "$greeter" <<'PY'
+swaymsg -t get_tree -r >"$OUT/sddm-tree-before-focus.json"
+greeter_con="$(python3 - "$OUT/sddm-tree-before-focus.json" "$greeter" <<'PY'
 import json
 import sys
 root = json.load(open(sys.argv[1]))
 target = int(sys.argv[2])
-stack = [root]
 owned = []
-focused = []
+stack = [(root, None)]
 while stack:
-    node = stack.pop()
+    node, output = stack.pop()
+    if node.get('type') == 'output':
+        output = node.get('name')
     if node.get('pid') == target:
-        owned.append(node)
+        owned.append((node.get('id'), output))
+    stack.extend((child, output) for child in node.get('nodes', []))
+    stack.extend((child, output) for child in node.get('floating_nodes', []))
+landscape = [node_id for node_id, output in owned if output == 'HEADLESS-1']
+assert len(landscape) == 1, f'exact greeter surface count on HEADLESS-1: {len(landscape)}'
+print(landscape[0])
+PY
+)"
+swaymsg "[con_id=\"$greeter_con\"] focus" >/dev/null
+swaymsg -t get_tree -r >"$OUT/sddm-focused-tree.json"
+python3 - "$OUT/sddm-focused-tree.json" "$greeter_con" "$greeter" <<'PY'
+import json
+import sys
+root = json.load(open(sys.argv[1]))
+expected_id = int(sys.argv[2])
+target_pid = int(sys.argv[3])
+focused = []
+stack = [(root, None)]
+while stack:
+    node, output = stack.pop()
+    if node.get('type') == 'output':
+        output = node.get('name')
     if node.get('focused'):
-        focused.append(node)
-    stack.extend(node.get('nodes', []))
-    stack.extend(node.get('floating_nodes', []))
-assert owned, 'greeter PID is absent from the compositor tree'
-assert len(focused) == 1 and focused[0].get('pid') == target, 'greeter surface is not focused'
+        focused.append((node.get('id'), node.get('pid'), output))
+    stack.extend((child, output) for child in node.get('nodes', []))
+    stack.extend((child, output) for child in node.get('floating_nodes', []))
+assert focused == [(expected_id, target_pid, 'HEADLESS-1')], f'unexpected focused surface: {focused}'
 PY
 sleep 1
 shot sddm-password-focused
