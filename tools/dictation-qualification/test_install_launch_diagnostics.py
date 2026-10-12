@@ -17,6 +17,7 @@ import zlib
 
 from test_host_diagnostics import DRIVER, ROOT, SHELL, driver_functions, r
 from test_contract import declared, c
+from test_host_collector_relay import restore_collector_host_relay
 
 BASE = '210f76ed599f5b2c51b16dcb97be3fb6c709cfd8'
 ADDED = frozenset({
@@ -198,7 +199,7 @@ class LaunchDiagnostics(unittest.TestCase):
         self.assertEqual(shell.replace(driver,rolled,1),old_shell)
         self.assertEqual(ast.dump(ast.parse(rolled),include_attributes=False),ast.dump(old_tree,include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode()
-        new_runner=Path(r.__file__).read_text()
+        new_runner=restore_collector_host_relay(Path(r.__file__).read_text())
         def assignment(text):
             return next(n for n in ast.parse(text).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='HOST_STAGES' for t in n.targets))
         a,b=assignment(old_runner),assignment(new_runner); lines=new_runner.splitlines(keepends=True)
