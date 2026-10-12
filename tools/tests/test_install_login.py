@@ -87,6 +87,7 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertNotIn(('ret',), vm.keys_sent)
         self.assertEqual(vm.typed, 1)
         self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_perpetual_login_is_bounded_and_fails(self):
         fixture = load_functions(lambda _path: 'login')
@@ -94,8 +95,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_login(vm))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
         self.assertEqual(vm.typed, 3)
-        # Three 150s transition windows plus typed/cleanup seconds stay bounded.
-        self.assertLessEqual(fixture.time.now, 456)
+        # Three exact 150s transition windows plus one typed and cleanup second each.
+        self.assertEqual(fixture.time.now, 456)
         self.assertEqual(fixture.logs[-1], 'installed login did not transition (attempt 3)')
 
     def test_perpetual_login_discards_every_password_bearing_frame(self):
@@ -112,6 +113,7 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertTrue(fixture.installed_login(vm))
         self.assertEqual(vm.keys_sent.count(('ret',)), 1)
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_settle_rejects_login_immediately(self):
         fixture = load_functions(lambda _path: 'login')
@@ -119,6 +121,7 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_session_settled(vm))
         self.assertEqual(len(vm.shots), 1)
         self.assertEqual(fixture.logs, ['installed session returned to the login screen'])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_settle_accepts_stable_non_login_only_after_90_seconds(self):
         fixture = load_functions(lambda _path: 'other', fraction=0)
@@ -126,6 +129,7 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertTrue(fixture.installed_session_settled(vm))
         self.assertGreater(fixture.time.now, 90)
         self.assertEqual(fixture.logs, [f'session settled after {fixture.time.now:.0f}s'])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_unstable_session_timeout_is_bounded_and_fails(self):
         fixture = load_functions(lambda _path: 'other', fraction=1)
@@ -133,6 +137,23 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_session_settled(vm))
         self.assertEqual(fixture.time.now, 900)
         self.assertEqual(fixture.logs, ['installed session did not settle within 900s'])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_settle_classifier_error_discards_current_frame(self):
+        fixture = load_functions(lambda _path: (_ for _ in ()).throw(RuntimeError('synthetic classify')))
+        vm = FakeVM()
+        with self.assertRaisesRegex(RuntimeError, 'synthetic classify'):
+            fixture.installed_session_settled(vm)
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_settle_comparator_error_discards_both_frames(self):
+        fixture = load_functions(lambda _path: 'other')
+        fixture.vmtest.changed_fraction = lambda _before, _after: (
+            _ for _ in ()).throw(RuntimeError('synthetic compare'))
+        vm = FakeVM()
+        with self.assertRaisesRegex(RuntimeError, 'synthetic compare'):
+            fixture.installed_session_settled(vm)
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_stage_boot_guards_collection_with_both_controls(self):
         source = ast.get_source_segment(DRIVER, FUNCTIONS['stage_boot'])
@@ -143,7 +164,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertLess(settle, collection)
         self.assertIn('if not installed_login(vm):\n            log("installed login failed; private greeter capture suppressed")\n            return 1', source)
         self.assertNotIn('boot-44-login-failed', source)
-        self.assertIn('if not installed_session_settled(vm):\n            vm.shot("boot-50-settle-failed")\n            return 1', source)
+        self.assertIn('if not installed_session_settled(vm):\n            log("installed session did not settle; private session capture suppressed")\n            return 1', source)
+        self.assertNotIn('boot-50-settle-failed', source)
 
 
 if __name__ == '__main__':

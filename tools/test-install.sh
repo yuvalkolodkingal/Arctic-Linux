@@ -1200,16 +1200,28 @@ def installed_session_settled(vm):
         current = vm.shot(f"boot-50-session-{index:02d}")
         if not current:
             continue
-        if vmtest.classify(current) == "login":
+        try:
+            kind = vmtest.classify(current)
+        except BaseException:
+            discard_private_shot(previous)
+            discard_private_shot(current)
+            raise
+        if kind == "login":
             discard_private_shot(previous)
             discard_private_shot(current)
             log("installed session returned to the login screen")
             return False
         if previous:
-            stable = stable + 1 if vmtest.changed_fraction(previous, current) < 0.02 else 0
+            try:
+                stable = stable + 1 if vmtest.changed_fraction(previous, current) < 0.02 else 0
+            except BaseException:
+                discard_private_shot(previous)
+                discard_private_shot(current)
+                raise
             discard_private_shot(previous)
         previous = current
         if stable >= 2 and time.time() - t > 90:
+            discard_private_shot(previous)
             log(f"session settled after {time.time() - t:.0f}s")
             return True
     discard_private_shot(previous)
@@ -1289,7 +1301,7 @@ def stage_boot():
         # The desktop must stay off the login card and settle before collection.
         dictation_host_stage("boot-settle")
         if not installed_session_settled(vm):
-            vm.shot("boot-50-settle-failed")
+            log("installed session did not settle; private session capture suppressed")
             return 1
         time.sleep(30)
         vm.shot("boot-51-desktop")
