@@ -20,12 +20,13 @@ def restore_collector_diagnostics(text):
     start = text.index(marker)
     end = text.index('def verify_small_cpu_fixture', start)
     text = text[:start] + '\n' + text[end:]
-    for stage in guest.COLLECTOR_SETUP_STAGES:
-        for indent in ('    ', '        '):
-            line = indent + "mark_collector_setup('" + stage + "')\n"
-            count = text.count(line)
-            if count:
-                text = text.replace(line, '')
+    owned_markers = {
+        indent + "mark_collector_setup('" + stage + "')\n"
+        for stage in guest.COLLECTOR_SETUP_STAGES
+        for indent in ('    ', '        ')
+    }
+    text = ''.join(line for line in text.splitlines(keepends=True)
+                   if line not in owned_markers)
     revised = """if __name__ == '__main__':
     try:
         sys.exit(main())
