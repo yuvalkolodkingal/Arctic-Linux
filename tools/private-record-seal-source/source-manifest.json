@@ -1,0 +1,42 @@
+{
+  "age": {
+    "archive_bytes": 5194720,
+    "archive_sha256": "7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50",
+    "archive_url": "https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz",
+    "binary_sha256": "aaec874ed903da4b02a9d503778ae05ee5005b2acc0f4a4cf10e5d0f17fd4384",
+    "keygen_sha256": "50f849de5f05dc136de3dba623dd2b7e166e7badb9d4e3d83da88f2dbdb2d439",
+    "proof_bytes": 1544,
+    "proof_sha256": "55b941732d9fc88b0db9f954f2de2bb5a8bacb6479063b2cf5f244ffbb9b3f3a",
+    "proof_url": "https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz.proof",
+    "version": "v1.2.1"
+  },
+  "base": "cf4ef587746f01b4d03dc7ef5ef404b335e41be4",
+  "capture": {
+    "envelope_bytes": 16384,
+    "exact_repo_attested_unit_family_required": true,
+    "plaintext_digest_exported": false,
+    "plaintext_file_created": false,
+    "plaintext_length_exported": false,
+    "plaintext_value_exported": false,
+    "privacy_gate_changed": false,
+    "records": 1,
+    "release_acceptance": false,
+    "runtime_gate_changed": false,
+    "same_owned_rejection_only": true,
+    "scanner_changed": false,
+    "source_member_id": "serial-install-log",
+    "unknown_record_family_required": true
+  },
+  "files": {
+    "tools/private-record-seal-source/README.md": "432c94cfab12f837fbec32d6ea34a14e060bef7e6b424336ef9e9ac08293066d",
+    "tools/private-record-seal-source/seal.py": "780d4289ae3f88943a08e99a2c180344438d58739f78a1a204b6ce9e096736ba",
+    "tools/private-record-seal-source/test_source.py": "4e7625b66e82d36a77b137232caddb67b7848439921e5242992c0e89dbfa63e6"
+  },
+  "operational_cli": false,
+  "ready": true,
+  "recipient": "age1vvy5lefyl7ftm6y5espjwgmfh2exztyzd8rsfuf962q6q48vfv5sd7h4m4",
+  "recipient_generated_outside_github": true,
+  "recipient_sha256": "04cea137be3d99cd418580ceb7ff42117af95ab587bec0f961ff439ec9c8827b",
+  "release_acceptance": false,
+  "schema": "arctic-private-record-seal-disabled-source-v1"
+}
