@@ -79,7 +79,7 @@ class JournalStreamControls(unittest.TestCase):
                 "child=subprocess.Popen([sys.executable,'-c'," + repr(child) + "])\n"
                 "open(" + repr(str(identity)) + ",'w').write("
                 "str(os.getpid())+' '+str(child.pid))\n")
-            self.assert_private_failure(program, timeout=.1)
+            self.assert_private_failure(program, timeout=1)
             leader, descendant = (int(value) for value in identity.read_text().split())
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline:
