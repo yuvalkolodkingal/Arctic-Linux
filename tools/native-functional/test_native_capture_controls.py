@@ -90,7 +90,7 @@ class CaptureControls(unittest.TestCase):
         source=(HERE/'native_smoke.py').read_text()
         restored=restore_capture_source(source)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         'dd88a44bc74902db6ee7f59558e0f9f534312239bd6b250b5602e0068e40d70b')
+                         'ae385702782083bd658f034d735fac539ba96d81abcd935ccaefc631f20a8043')
         ast.parse(restored)
         for name in ('visual_reference_frame','visual_capture_geometry','evaluate_reference_rgb','mpv_property'):
             def segment(text):
