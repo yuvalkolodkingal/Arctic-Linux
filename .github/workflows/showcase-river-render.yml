@@ -67,6 +67,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --pattern narration-river-final.mp3 \
             --dir showcase/audio
+          mv -f showcase/audio/narration-river-final.mp3 showcase/audio/narration.mp3
           printf '%s  %s\n' "$MASTER_SHA256" showcase/audio/narration.mp3 | sha256sum --check -
 
       - name: Build current evidence composition
