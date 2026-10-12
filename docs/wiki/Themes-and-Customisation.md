@@ -195,15 +195,16 @@ PNG, JPEG, WebP, GIF, BMP, TIFF and SVG pictures all work.
 ```sh
 arctic-wallpaper rotate 1h                 # every hour, from your wallpaper folder, in name order
 arctic-wallpaper rotate 30m arctic --shuffle   # every 30 minutes, Arctic's own, in random order
+arctic-wallpaper rotate 30m both --shuffle # combine your pictures and Arctic's collection
 arctic-wallpaper rotate 1d ~/Pictures/Trips    # every day, from any folder
 arctic-wallpaper rotate off                # stop
 arctic-wallpaper next                      # the next picture now
 ```
 
-Only the picture changes: the wallpaper you chose (`~/.config/arctic/wallpaper`) and the colours
-stay, so **Match colours to wallpaper** doesn't remake the theme every half hour, and a theme
-switch or the next login starts from your choice again. In random order every picture comes once
-before any comes again. Your [wallpaper hooks](#hooks-for-other-events) run with each picture.
+Each picture becomes the saved wallpaper and the colours follow it. In random order every picture
+from the selected source comes once before any comes again; **Both** treats your configured
+wallpaper folder and Arctic's collection as one round. Your folder choice itself is left alone.
+Your [wallpaper hooks](#hooks-for-other-events) run with each picture.
 The setting is kept in `~/.config/arctic/wallpaper-rotate.json` and runs as the systemd user
 timer `arctic-wallpaper-rotate` (`systemctl --user list-timers` shows the next change).
 
