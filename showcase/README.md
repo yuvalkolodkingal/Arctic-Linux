@@ -9,10 +9,11 @@ A 6 minute 47 second, 1920 × 1080 showcase made with HyperFrames. It walks thro
 ## Replacement in preparation
 
 The [12 October revision source](revision-2026-10-12/) describes the current native apps, photo
-collection, separate Remove apps, local dictation and stable updates. New River narration has
-been generated through ElevenLabs; downloaded-media validation, sentence alignment, refreshed
-captures and the final render remain pending. The published video below remains the October 3
-edition. No replacement download is claimed yet.
+collection, separate Remove apps, local dictation and stable updates. Its 8 minute 27.53 second
+River candidate passed local Whisper alignment, strict HyperFrames checks, complete media decode
+and representative-frame review in [workflow run 38300570733](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733).
+The candidate remains unpublished while the matching Arctic release finishes qualification. The
+published video below remains the October 3 edition, so no replacement download is claimed yet.
 
 ## What the video shows
 

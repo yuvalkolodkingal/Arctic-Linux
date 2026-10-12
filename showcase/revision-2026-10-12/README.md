@@ -14,21 +14,23 @@ rendered and checked.
   `d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
   The corrected `winter` paragraph replaces the earlier hard-coded 19-photo wording.
 - `scene-narration.json` contains the spoken text for each scene. `narration.txt` is the same
-  text in reading order. `caption-text.json` supplies sentence text with deliberately unset
-  times. Sentence alignment, captions and scene timing still require verification against the
-  measured River master before rendering.
+  text in reading order. `caption-text.json` preserves the approved untimed source;
+  `caption-text-aligned.json`, `timing.json`, SRT, VTT and chapters contain the verified
+  local-Whisper alignment used by the rendered candidate.
 - Keep `../DESIGN.md` colours, fonts, restrained motion and readable screens. The installer
   uses labelled demo screens; combined app captures retain their composed-layout disclosure.
   No continuous installation or newly qualified release is claimed.
 - New pictures must show Foot/Fish, PCManFM, the current app picker, separate Remove apps,
   photo backgrounds, the bar's modes and Dictation's setup/recording/error states. Use current
   repository assets or separately admitted new captures, never closed runtime evidence.
-- The existing composition generator hard-codes the former app cards and Kitty/Nautilus
-  tiling captures. Update those with the new assets when preparing the rendered revision.
-- Generate sentence/scene timings from the final River audio, then embed captions and ship
-  SRT/VTT. Do not reuse or proportionally scale the old Kokoro caption times.
-- Before publication, run the full HyperFrames check, inspect representative frames, verify
-  video/audio/caption/chapter timing, and replace download links only after the new assets exist.
+- The composition uses GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
+  Fish/Bash. Exact-candidate captures keep their qualification disclosure; features without a
+  current admitted screen use labelled evidence cards.
+- Workflow run 38300570733 passed strict HyperFrames checks, rendered the full candidate, decoded
+  every frame and verified H.264/AAC/selectable-English-subtitle streams. Fifteen representative
+  scenes were visually reviewed.
+- Publication remains pending the matching Arctic release qualification. Replace public download
+  links only after the candidate is deliberately published.
 
 The **Both** wallpaper source, twenty-eight-photo collection and per-account hide/restore
 behavior are implemented on the source base for this revision. The spoken text intentionally says

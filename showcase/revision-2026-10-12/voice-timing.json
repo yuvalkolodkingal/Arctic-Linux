@@ -106,7 +106,7 @@
     "local_speech_to_text_verification": "passed",
     "transcript_leakage_review": "passed_for_verifier_logs",
     "authentic_capture_review": "in_progress",
-    "render_verified": false,
+    "render_verified": true,
     "public_video_published": false,
     "whisper_metrics": {
       "audio_duration_seconds": 507.512041,
@@ -143,6 +143,47 @@
       "name": "showcase-river-whisper-alignment",
       "bytes": 44296,
       "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
+    },
+    "render_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733",
+    "render_artifact": {
+      "id": 11771111869,
+      "name": "Arctic-Linux-Showcase-River-1080p-candidate",
+      "bytes": 63981992,
+      "sha256": "c569ea70092736eec2d1abca29678211897b6aa665233d396aa38d0f4f5dfe5f"
+    },
+    "final_video": {
+      "path": "Arctic-Linux-Showcase-River-1080p.mp4",
+      "bytes": 60327673,
+      "sha256": "731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836",
+      "duration_seconds": 507.533333,
+      "width": 1920,
+      "height": 1080,
+      "frame_rate": "30/1",
+      "video_codec": "h264",
+      "audio_codec": "aac",
+      "subtitle_codec": "mov_text"
+    },
+    "full_decode_errors": 0,
+    "representative_frame_review": {
+      "status": "passed",
+      "count": 15,
+      "timestamps_seconds": [
+        0.5,
+        24,
+        56,
+        112,
+        198,
+        210,
+        238,
+        266,
+        283,
+        304,
+        322,
+        352,
+        383,
+        394,
+        493
+      ]
     }
   },
   "generated_audio_binaries_committed": false,
