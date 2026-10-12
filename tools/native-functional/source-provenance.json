@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
+  "native_source_sha256": "54a0c95dcc41df6c8221bae4a34e82d7fe3f901d20b5fcfb8eef1ff479146ad2",
   "files": {
-    "native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
-    "guest-check-native-v6.py": "e9135f35df4fc3c39ff825e2e37bee253158623b5a9a81cbf841db1f8df7a93b",
+    "native_smoke.py": "54a0c95dcc41df6c8221bae4a34e82d7fe3f901d20b5fcfb8eef1ff479146ad2",
+    "guest-check-native-v6.py": "4f52f2689d0fa6352bd1a719d50f7137332be800864542b221a07aff66b55763",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -27,7 +27,7 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
     "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
-    "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
+    "test_native_v6.py": "3866ef094ef05818c4f039f312b30c8ea91dbfccc5e7c42773f401d81735c97e",
     "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
     "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
     "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
@@ -44,7 +44,7 @@
     "release_acceptance": false
   },
   "controlled_renderer_trials": {
-    "trigger": "original static oracle unmatched only",
+    "trigger": "bounded primary static oracle attempts unmatched only",
     "interventions": [
       "GSK_RENDERER unset",
       "GSK_RENDERER=gl"
@@ -84,7 +84,9 @@
     "upstream_glib_source_sha256": {
       "gkeyfilesettingsbackend.c": "51a5d48003567ffb89f6b365f871fe2e16d9483c89d6bce7d3ad208465fcfc98",
       "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
-    }
+    },
+    "playback_clock_advancement_required": true,
+    "capture_retry_bound": "six fresh captures within eight seconds"
   },
   "bulk_evidence_transport": {
     "UART_records_unchanged": [
@@ -148,7 +150,7 @@
     "acceptance_validators_unchanged": true
   },
   "controls_state_trials": {
-    "trigger": "original static oracle unmatched only; replaces the optional default/gl invocation",
+    "trigger": "bounded primary static oracle attempts unmatched only; replaces the optional default/gl invocation",
     "ordered_interventions": [
       "private show-controls true to false",
       "private show-controls false to false"
@@ -169,5 +171,24 @@
     "three_optional_public_slots_replaced_not_added": true,
     "release_acceptance": false,
     "rendering_cause_proven": false
+  },
+  "capture_retry": {
+    "observed_failure_run": "38275826520",
+    "diagnosis": "first fullscreen screencopy contained transiently incomplete scaled palette content; two subsequent fresh owned-player trials matched the unchanged exact oracle",
+    "playback_clock_minimum_advance_seconds": 0.05,
+    "playback_clock_timeout_seconds": 5,
+    "capture_attempt_limit": 6,
+    "capture_deadline_seconds": 8,
+    "recapture_settle_seconds": 0.5,
+    "fresh_grim_capture_each_attempt": true,
+    "owned_identity_geometry_focus_monitor_unchanged_each_attempt": true,
+    "oracle_thresholds_unchanged": true,
+    "final_fixed_capture_paths": [
+      "celluloid-reference.png",
+      "visual-owned-window.rgb"
+    ],
+    "bounded_attempt_receipt": "visual-oracle.json capture_attempts",
+    "product_or_codec_failure_inferred": false,
+    "release_acceptance": false
   }
 }
