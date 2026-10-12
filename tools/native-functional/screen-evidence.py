@@ -316,9 +316,53 @@ EXTERNAL_MEMBER_DIAGNOSTICS = {
 }
 
 
+def performance_member_role(relative):
+    """Map exact paired-lane shapes to a finite role without exposing a path."""
+    if type(relative) is not str:
+        return None
+    fixed = {
+        'status.json': 'paired-status',
+        'comparison.json': 'paired-comparison',
+        'producer-receipt.json': 'paired-producer-receipt',
+        'observer-source.txt': 'paired-observer-source',
+        'execution.json': 'paired-execution',
+        'runner-cleanup.json': 'paired-cleanup',
+        'vm-base-image-id.txt': 'paired-base-image-id',
+        'vm-prepared-image-id.txt': 'paired-prepared-image-id',
+        'vm-tools-provision.log': 'paired-tool-provision',
+    }
+    if relative in fixed:
+        return fixed[relative]
+    for image in ('baseline', 'candidate'):
+        if relative == image + '-install-harness.log':
+            return 'paired-' + image + '-install-harness'
+        prefix = image + '/'
+        if relative.startswith(prefix) and len(relative) > len(prefix):
+            member = relative[len(prefix):]
+            exact = {
+                'serial-install.log': 'install-uart',
+                'vm-toolchain.txt': 'install-toolchain',
+            }.get(member, 'install-other')
+            return 'paired-' + image + '-' + exact
+        prefix = 'runs/' + image + '/'
+        if relative.startswith(prefix):
+            match = re.fullmatch(re.escape(prefix) + r'[123]/(.+)', relative)
+            if match:
+                exact = {
+                    'serial-boot.log': 'boot-uart',
+                    'harness.log': 'boot-harness',
+                    'performance-context.json': 'boot-context',
+                    'vm-toolchain.txt': 'boot-toolchain',
+                }.get(match.group(1), 'boot-other')
+                return 'paired-' + image + '-' + exact
+    return None
+
+
 def diagnose_external_member(relative, error):
     """Source-closed member/rejection labels; never print any path or message."""
-    role = EXTERNAL_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
+    role = performance_member_role(relative)
+    if role is None:
+        role = EXTERNAL_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
     reason = 'other-error'
     if type(error) is RuntimeError and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
         if error.args[0] == 'Sensitive text in external evidence':
