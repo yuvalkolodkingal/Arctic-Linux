@@ -1,0 +1,3 @@
+Fresh disabled exact-image BIOS diagnostic admission based on c2c88d. Thirteen ADD paths preserve that whole tree. The only workload observation is a default-off finite projection on the already rejected, same owned source-view Match.
+
+It publishes one generic D-Bus broker factory-shape boolean and one opaque ID for a closed ten-name catalog already attested in this repository. It publishes no matched value, digest, numeric field or length. The scanner, rejection, encrypted installation, security/privacy oracles and 2400/6600 second limits are unchanged. Runtime cause and release acceptance remain false. This lane cannot qualify a release.
