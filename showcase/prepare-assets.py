@@ -11,7 +11,7 @@ assets = ROOT/'assets'
 assets.mkdir(exist_ok=True)
 provenance=[]
 for scene in story:
-    if 'image' not in scene:
+    if 'image' not in scene or scene.get('type') in {'apps','evidence','qualification-pair'}:
         continue
     source=REPO/scene['source'] if 'source' in scene else REPO/'docs/wiki/images'/(scene['image']+'.png')
     dest=assets/(scene['id']+'.png')
