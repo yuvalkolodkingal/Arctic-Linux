@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '54a0c95dcc41df6c8221bae4a34e82d7fe3f901d20b5fcfb8eef1ff479146ad2'
+NATIVE_SOURCE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '4f52f2689d0fa6352bd1a719d50f7137332be800864542b221a07aff66b55763')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', '90c1cd3bcd0151ea980f25e6443dcd5554faac354d5d0e348076b3c63dcb4db7')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
