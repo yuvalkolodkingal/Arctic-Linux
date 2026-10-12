@@ -1146,19 +1146,24 @@ def discard_private_shot(path):
 
 
 def installed_login(vm):
-    """Enter the installed password only after its bounded field ROI changes."""
+    """Enter the installed password without retaining password-bearing frames."""
     for attempt in (1, 2, 3):
-        before = vm.shot(f"boot-42-password-before-{attempt}")
-        if not before or vmtest.classify(before) != "login":
-            log("installed login controls are not visible")
-            return False
-        vm.keys("ctrl-a", "backspace")
-        vm.type_text(password, gap=0.3)
-        time.sleep(1)
-        typed = vm.shot(f"boot-42-password-typed-{attempt}")
-        accepted = (typed and vmtest.classify(typed) == "login"
-                    and vmtest.login_password_changed(before, typed))
-        discard_private_shot(typed)
+        before = None
+        typed = None
+        try:
+            before = vm.shot(f"boot-42-password-before-{attempt}")
+            if not before or vmtest.classify(before) != "login":
+                log("installed login controls are not visible")
+                return False
+            vm.keys("ctrl-a", "backspace")
+            vm.type_text(password, gap=0.3)
+            time.sleep(1)
+            typed = vm.shot(f"boot-42-password-typed-{attempt}")
+            accepted = (typed and vmtest.classify(typed) == "login"
+                        and vmtest.login_password_changed(before, typed))
+        finally:
+            discard_private_shot(typed)
+            discard_private_shot(before)
         if not accepted:
             vm.keys("ctrl-a", "backspace")
             time.sleep(1)
@@ -1169,8 +1174,16 @@ def installed_login(vm):
         while time.time() - t < 150 and vm.alive():
             time.sleep(10)
             probe = vm.shot("boot-43-probe")
-            if probe and vmtest.classify(probe) != "login":
+            try:
+                kind = vmtest.classify(probe) if probe else "none"
+            finally:
+                discard_private_shot(probe)
+            if kind != "login" and kind != "none":
                 return True
+        # A hung greeter may leave bullets behind. Clear it before any retry or
+        # failure, and retain only the textual state transition diagnostic.
+        vm.keys("ctrl-a", "backspace")
+        time.sleep(1)
         log(f"installed login did not transition (attempt {attempt})")
     return False
 
@@ -1271,7 +1284,7 @@ def stage_boot():
             ok = False
         dictation_host_stage("boot-login")
         if not installed_login(vm):
-            vm.shot("boot-44-login-failed")
+            log("installed login failed; private greeter capture suppressed")
             return 1
         # The desktop must stay off the login card and settle before collection.
         dictation_host_stage("boot-settle")
