@@ -62,7 +62,7 @@ class JournalMessageSemantics(unittest.TestCase):
     def test_full_same_boot_after_cursor_commands_deadlines_roles_and_whole_rollback(self):
         text=Path(guest.__file__).read_text();restored=restore_journal_projection(text)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),CFCC_SHA256)
-        before,after=ast.parse(restored),ast.parse(text)
+        before,after=ast.parse(restored),ast.parse(restore_collector_diagnostics(text))
         old={n.name:n for n in ast.walk(before) if isinstance(n,ast.FunctionDef)};new={n.name:n for n in ast.walk(after) if isinstance(n,ast.FunctionDef)}
         for name,node in old.items():
             if name not in ('leakage','avcs'):self.assertEqual(ast.dump(node),ast.dump(new[name]))
