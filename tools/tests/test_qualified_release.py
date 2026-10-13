@@ -5,6 +5,7 @@ import copy
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import tempfile
 import textwrap
@@ -52,6 +53,62 @@ class PublicationGuardTest(unittest.TestCase):
             with patch.object(prepare, 'ROOT', root):
                 self.assertEqual(prepare.changed_product_files(before, 'HEAD'),
                                  ['profiles/ci/offline.toml'])
+
+    def test_showcase_media_exemption_is_bound_to_build_exclusions(self):
+        names = ['showcase/storyboard.json', 'showcase/assets/frame.png']
+        self.assertTrue(prepare.showcase_is_non_product())
+        self.assertEqual(prepare.product_changes(names), [])
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in prepare.SHOWCASE_BUILD_DEFINITIONS | {
+                    '.github/workflows/iso.yml', '.gitattributes'}:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / name, target)
+            with patch.object(prepare, 'ROOT', root):
+                self.assertTrue(prepare.showcase_is_non_product())
+                workflow = root / '.github/workflows/iso.yml'
+                original = workflow.read_text()
+                workflow.write_text(original.replace('            !/showcase/\n', ''))
+                self.assertFalse(prepare.showcase_is_non_product())
+                self.assertEqual(prepare.product_changes(names), names)
+                workflow.write_text(original)
+                builder = root / 'tools/build-iso.sh'
+                builder_original = builder.read_text()
+                builder.write_text(builder.read_text() + '\ncp -a showcase /work/root/\n')
+                self.assertFalse(prepare.showcase_is_non_product())
+                self.assertEqual(prepare.product_changes(names), names)
+                builder.write_text(builder_original)
+                attributes = root / '.gitattributes'
+                attributes.write_text(attributes.read_text().replace('/showcase export-ignore\n', ''))
+                self.assertFalse(prepare.showcase_is_non_product())
+                self.assertEqual(prepare.product_changes(names), names)
+
+    def test_runtime_rename_into_showcase_still_requires_rebuild(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            def git(*args):
+                return subprocess.check_output(['git', '-C', str(root), *args], text=True).strip()
+            git('init', '-q')
+            git('config', 'user.name', 'Arctic guard control')
+            git('config', 'user.email', 'guard@example.invalid')
+            source = root / 'shell/runtime.qml'
+            source.parent.mkdir(parents=True)
+            source.write_text('runtime\n')
+            git('add', '.')
+            git('commit', '-qm', 'Runtime source')
+            before = git('rev-parse', 'HEAD')
+            destination = root / 'showcase/runtime.qml'
+            destination.parent.mkdir(parents=True)
+            source.rename(destination)
+            git('add', '-A')
+            git('commit', '-qm', 'Move runtime into showcase')
+            self.assertEqual(git('diff', '--name-only', before, 'HEAD'),
+                             'showcase/runtime.qml')
+            with patch.object(prepare, 'ROOT', root), \
+                    patch.object(prepare, 'showcase_is_non_product', return_value=True):
+                self.assertEqual(prepare.changed_product_files(before, 'HEAD'),
+                                 ['shell/runtime.qml'])
 
     def test_docs_only_stable_fallback_rejects_runtime_changes_and_failed_exact_run(self):
         source, stable = 'a' * 40, 'b' * 40
