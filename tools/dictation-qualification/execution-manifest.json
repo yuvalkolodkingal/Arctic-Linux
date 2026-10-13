@@ -1,10 +1,37 @@
 {
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
-  "image": null,
-  "fixture_manifest_sha256": null,
-  "fixture_decoder": null,
-  "execution_files": {},
+  "image": {
+    "archive_bytes": 1934828445,
+    "archive_sha256": "2d87f333d089e4ffe31ca3464bdf6c54dfee38e3ebcfd8ba6bd0f0a22f03beaf",
+    "artifact_id": 11786640630,
+    "bytes": 1934641152,
+    "name": "Arctic-Linux-1.2-candidate-38334358585-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "1bedcb7a5c34f5ddc057973751b0887398786dea70ef60680f2ab7b0f87fb761",
+    "run_id": 38334358585,
+    "sha256": "296c2f1ca0b2613a67fbd40898873c4ce4d28de37a6df8f8c36be7a41f498982",
+    "source_sha": "1d13ff86cf0ce6e1b071b2688d587c312ff59a44"
+  },
+  "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
+  "fixture_decoder": {
+    "libsndfile": "1.2.2",
+    "pyarrow": "20.0.0",
+    "soundfile": "0.13.1"
+  },
+  "execution_files": {
+    ".github/workflows/dictation-candidate-20261009.yml": "514ea67cb2306ba4e88968e4fac78fab7f0369e9bb028da3c23c0ffac20b3c6d",
+    "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
+    "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
+    "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
+    "tools/dictation-qualification/guest_check.py": "2b0bcc30e0606b81c51dadf6dc32d2ea41051dbe93b9e081b7ecc191dc74d9eb",
+    "tools/dictation-qualification/runner.py": "6a88f42e60422687cea6af1604e8b50d41297638e650655aa2b87c0d5fc85687",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "8dbfabdb550dc4a72b38228b27e0d6aefb2709fa2c0d5055cfc8a28b24828f93",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/test-install.sh": "5b4fdea17190b4d73c2765f76a499e2ca79b92b8d297c4cdfd08aed6d4cf1c99"
+  },
   "hardware_profiles": [
     "small-v2",
     "turbo-q5-v3"
