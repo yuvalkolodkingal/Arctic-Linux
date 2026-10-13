@@ -1,0 +1,120 @@
+name: Final exact-image BIOS encrypted private record review v2
+
+on:
+  push:
+    branches: [codex/final-bios-private-review-v7-20261013]
+    paths: [.github/final-bios-private-record-review-v7-20261013.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  bios-private-review:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: execution
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify ready manifest before any workload or download
+        id: image
+        working-directory: execution
+        run: |
+          python3 -B - <<'PY'
+          import os,sys
+          from pathlib import Path
+          sys.path.insert(0,'tools/final-bios-private-record-review')
+          import common
+          value=common.manifest(common.strict_json(Path('tools/final-bios-private-record-review/execution-manifest.json').read_bytes()),True)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as stream:
+              stream.write('source='+value['image']['source_sha']+'\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: ${{ steps.image.outputs.source }}
+          persist-credentials: false
+      - name: Verify sole first marker, exact source and execution pins
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,'execution/tools/final-bios-private-record-review')
+          import common
+          value=common.manifest(common.strict_json(Path('execution/tools/final-bios-private-record-review/execution-manifest.json').read_bytes()),True)
+          common.guard(value,Path('source').resolve())
+          PY
+      - name: Acquire and verify pinned official age 1.2.1
+        timeout-minutes: 5
+        run: |
+          mkdir -m 700 "$RUNNER_TEMP/arctic-private-review" "$RUNNER_TEMP/arctic-private-review/age"
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --output "$RUNNER_TEMP/arctic-private-review/age.tar.gz" https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz
+          curl --fail --location --proto '=https' --tlsv1.2 --retry 2 --output "$RUNNER_TEMP/arctic-private-review/age.tar.gz.proof" https://github.com/FiloSottile/age/releases/download/v1.2.1/age-v1.2.1-linux-amd64.tar.gz.proof
+          python3 -B - <<'PY'
+          import hashlib,os,stat,tarfile
+          from pathlib import Path
+          root=Path(os.environ['RUNNER_TEMP'])/'arctic-private-review'
+          archive=root/'age.tar.gz';proof=root/'age.tar.gz.proof'
+          def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+          assert archive.stat().st_size==5194720
+          assert digest(archive)=='7df45a6cc87d4da11cc03a539a7470c15b1041ab2b396af088fe9990f7c79d50'
+          assert proof.stat().st_size==1544
+          assert digest(proof)=='55b941732d9fc88b0db9f954f2de2bb5a8bacb6479063b2cf5f244ffbb9b3f3a'
+          expected={'age':('dir',0o755,None),'age/LICENSE':('file',0o644,2943),
+                    'age/age-keygen':('file',0o755,3092882),'age/age':('file',0o755,5588157)}
+          with tarfile.open(archive,'r:gz') as package:
+              members=package.getmembers()
+              actual={m.name:('dir' if m.isdir() else 'file',stat.S_IMODE(m.mode),None if m.isdir() else m.size) for m in members}
+              assert actual==expected and all(not(m.issym()or m.islnk()or m.isdev()) for m in members)
+              for name in ('age/age','age/age-keygen'):
+                  member=package.getmember(name);target=root/name
+                  target.parent.mkdir(parents=True,exist_ok=True)
+                  with package.extractfile(member) as source,target.open('xb') as output:output.write(source.read())
+                  target.chmod(0o700)
+          assert digest(root/'age/age')=='aaec874ed903da4b02a9d503778ae05ee5005b2acc0f4a4cf10e5d0f17fd4384'
+          assert digest(root/'age/age-keygen')=='50f849de5f05dc136de3dba623dd2b7e166e7badb9d4e3d83da88f2dbdb2d439'
+          assert os.popen(str(root/'age/age')+' --version').read().strip()=='v1.2.1'
+          PY
+      - name: Install original PNG decoder and same-buffer OCR
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil tesseract-ocr
+      - name: Fetch exact final ISO and verify archive and ISO bytes
+        timeout-minutes: 15
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B execution/tools/native-functional/fetch-image.py --manifest execution/tools/final-bios-private-record-review/execution-manifest.json --out "$RUNNER_TEMP/arctic-private-review/inputs"
+      - name: Materialize the exact reviewed prior execution tree
+        run: |
+          git -C execution worktree add --detach "$RUNNER_TEMP/arctic-private-review/prior-execution" 3f2c967ea2b6f07ecc01440f035c7b5cd54be016
+          test "$(git -C "$RUNNER_TEMP/arctic-private-review/prior-execution" rev-parse HEAD)" = 3f2c967ea2b6f07ecc01440f035c7b5cd54be016
+          test "$(git -C "$RUNNER_TEMP/arctic-private-review/prior-execution" rev-parse 'HEAD^{tree}')" = 18e641eef98cb685f44246a91d85c4a6b8cb270d
+      - name: Exact offline BIOS install and failure-only encrypted private record capture
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B execution/tools/final-bios-private-record-review/run.py --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-private-review/inputs" --prior-execution "$RUNNER_TEMP/arctic-private-review/prior-execution" --out "$RUNNER_TEMP/arctic-private-review/evidence" --age-binary "$RUNNER_TEMP/arctic-private-review/age/age" --sealed-out "$RUNNER_TEMP/arctic-private-review/sealed"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-bios-private-review-public-status
+          path: ${{ runner.temp }}/arctic-private-review/evidence/public/
+          if-no-files-found: ignore
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: final-bios-private-review-ciphertext
+          path: |
+            ${{ runner.temp }}/arctic-private-review/sealed/record.age
+            ${{ runner.temp }}/arctic-private-review/sealed/receipt.json
+          if-no-files-found: error
+          retention-days: 3
