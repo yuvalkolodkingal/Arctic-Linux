@@ -244,5 +244,21 @@
     "private_frame_retention": false,
     "login_transition_settle_taskbar_audio_gates_unchanged": true,
     "release_acceptance": false
+  },
+  "installed_login_split_click": {
+    "failure_run": "38408096333",
+    "failure_artifact": "11822985193",
+    "failure_artifact_sha256": "9e17a137ec277d0ab44d85dc895b4f6a9ee117d4b6a04f1f9de80bed111f7974",
+    "failure_stage": "public-probe-rejected",
+    "diagnosis": "QMP input-send-event synchronizes once after the complete event list, so batching absolute motion, BTN_LEFT down, and BTN_LEFT up exposed only the final released USB HID state to the guest",
+    "qemu_ui_input_source_sha256": "e7307b5d131c9ae0ac94fb1030ee071b9959a5fd9468fec6e55104c2f339cd14",
+    "qemu_hid_source_sha256": "93cd188f44c159a6f57261c7d23b4085cf214f26da69f3f313342c32e2480a58",
+    "qemu_usb_hid_source_sha256": "a3a5ab827a533e7ba50efb380330dc509b90beae3dd3625f70bc8185e51aa56c",
+    "qemu_qapi_ui_source_sha256": "bbce006f303454949f17bc9c2ca76efd77c8c256e65bfbb4b216a2f7f4485065",
+    "click_sequence": "selected global pointer motion, 0.4 second settle, selected button down, 0.15 second settle, selected button up in three QMP synchronization frames",
+    "button_release_cleanup": "after button-down send intent begins, the exact selected release is attempted in finally even when the reply is interrupted or rejected; a primary cancellation or failure is preserved",
+    "selected_input_error_fallback": false,
+    "keyboard_capture_roi_privacy_and_product_gates_unchanged": true,
+    "release_acceptance": false
   }
 }
