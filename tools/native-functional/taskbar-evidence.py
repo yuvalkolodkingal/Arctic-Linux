@@ -20,6 +20,14 @@ spec.loader.exec_module(runtime)
 require, strict_json, validate_context = runtime.require, runtime.strict_json, runtime.validate_context
 MAX_FILE, MAX_TOTAL, MAX_FILES, CHUNK = runtime.MAX_FILE, runtime.MAX_TOTAL, runtime.MAX_FILES, runtime.CHUNK
 PREFIX = 'ARCTIC-TASKBAR-'
+PREFLIGHT_STAGES = frozenset({
+    'runtime-path', 'runtime-authorization', 'context', 'bundle-taskbar',
+    'bundle-runtime', 'bundle-native', 'bundle-pointer', 'bundle-capture',
+    'helpers', 'guest-guard', 'desktop', 'account', 'session',
+    'session-type', 'session-active', 'session-user', 'boot-id',
+    'port-alias', 'port-metadata', 'port-identity', 'port-open',
+    'port-device', 'begin-write', 'provenance-write',
+})
 EDGES = ('top', 'bottom', 'left', 'right')
 SCALES = (1, 1.5, 2)
 FOOT = (33, 131, 79)
@@ -56,15 +64,52 @@ def block(serial, context, transport_serial=None):
     lines = native_lines if transport_serial is None else transport_serial.splitlines()
     records = []
     native = []
+    native_ends = []
     markers = []
+    failures = []
     for index, line in enumerate(native_lines):
         if line.startswith('ARCTIC-NATIVE-PROVENANCE '):
             require(len(line) <= MAX_FILE, 'native taskbar bootstrap exceeds bound')
             native.append((index, strict_json(line.split(' ', 1)[1])))
+        if line.startswith('ARCTIC-NATIVE-RUNNER-END '):
+            require(len(line) <= 16384, 'native taskbar completion exceeds bound')
+            native_ends.append((index, strict_json(line.split(' ', 1)[1])))
         if transport_serial is not None and line.startswith(PREFIX):
-            require(line.startswith(PREFIX+'PORT-END ') and len(line) <= 16384,
+            require(len(line) <= 16384 and ' ' in line,
                     'taskbar actual guest placed evidence or malformed status on UART')
-            markers.append((index, strict_json(line.split(' ', 1)[1])))
+            if line.startswith(PREFIX+'PORT-END '):
+                markers.append((index, strict_json(line.split(' ', 1)[1])))
+            elif line.startswith(PREFIX+'COLLECTOR-ERROR '):
+                failures.append((index, strict_json(line.split(' ', 1)[1])))
+            else:
+                require(False, 'taskbar actual guest placed evidence or malformed status on UART')
+    if failures:
+        require(len(failures) == 1 and not markers and transport_serial == '',
+                'taskbar collector failure receipt is ambiguous')
+        require(len(native) == 1 and native[0][0] < failures[0][0],
+                'taskbar collector failure native bootstrap is missing/ambiguous/reversed')
+        require(len(native_ends) == 1 and native[0][0] < native_ends[0][0] < failures[0][0],
+                'taskbar collector failure native completion is missing/ambiguous/reversed')
+        boot = native[0][1]
+        require(type(boot) is dict and boot.get('stage') == 'installed'
+                and boot.get('native_source_sha256') == context['native_sha256']
+                and boot.get('release_acceptance') is False,
+                'taskbar collector failure native bootstrap differs')
+        native_end = native_ends[0][1]
+        exact(native_end, {'stage', 'status', 'error', 'evidence_export_complete', 'release_acceptance'},
+              'taskbar collector failure native completion schema differs')
+        require(native_end['stage'] == 'installed' and native_end['status'] == 'passed'
+                and native_end['error'] is None and native_end['evidence_export_complete'] is True
+                and native_end['release_acceptance'] is False,
+                'taskbar collector failure native completion differs')
+        failure = failures[0][1]
+        exact(failure, {'schema', 'stage', 'status', 'release_acceptance'},
+              'taskbar collector failure receipt schema differs')
+        require(failure['schema'] == 'arctic-taskbar-preflight-v1'
+                and failure['stage'] in PREFLIGHT_STAGES and failure['status'] == 'failed'
+                and failure['release_acceptance'] is False,
+                'taskbar collector failure receipt values differ')
+        raise RuntimeError('taskbar collector preflight failed: ' + failure['stage']) from None
     for index, line in enumerate(lines):
         if line.startswith(PREFIX):
             require(' ' in line and len(line) <= MAX_FILE + 256, 'malformed taskbar serial record')

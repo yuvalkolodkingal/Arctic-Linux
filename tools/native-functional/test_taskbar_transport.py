@@ -250,7 +250,206 @@ class Controls(unittest.TestCase):
         for text in ('{"a":1,"a":2}','{"a":NaN}','{"a":Infinity}'):
             with self.assertRaises(RuntimeError):e.strict_json(text)
         result=subprocess.run([sys.executable,str(HERE/'taskbar-runtime.py'),'--disposable-guest'],capture_output=True,text=True,timeout=10)
-        self.assertNotEqual(result.returncode,0);self.assertEqual(result.stdout.strip(),'ARCTIC-TASKBAR-COLLECTOR-ERROR')
+        self.assertNotEqual(result.returncode,0)
+        prefix='ARCTIC-TASKBAR-COLLECTOR-ERROR '
+        self.assertTrue(result.stdout.strip().startswith(prefix))
+        self.assertEqual(json.loads(result.stdout.strip()[len(prefix):]),dict(
+            schema='arctic-taskbar-preflight-v1',stage='runtime-path',status='failed',release_acceptance=False))
+
+    def preflight_serial(self, value):
+        native_end=dict(stage='installed',status='passed',error=None,
+                        evidence_export_complete=True,release_acceptance=False)
+        return ('ARCTIC-NATIVE-PROVENANCE '+json.dumps(self.native)+'\n'
+                'ARCTIC-NATIVE-RUNNER-END '+json.dumps(native_end)+'\n'
+                'ARCTIC-TASKBAR-COLLECTOR-ERROR '+json.dumps(value)+'\n')
+
+    def test_preflight_failure_receipt_is_closed_finite_and_never_accepted(self):
+        self.assertEqual(r.PREFLIGHT_STAGES,e.PREFLIGHT_STAGES)
+        for stage in sorted(r.PREFLIGHT_STAGES):
+            receipt=dict(schema='arctic-taskbar-preflight-v1',stage=stage,status='failed',release_acceptance=False)
+            with self.assertRaisesRegex(RuntimeError,'^taskbar collector preflight failed: '+stage+'$'):
+                self.check_port(self.preflight_serial(receipt),'')
+        with self.assertRaises(RuntimeError):r.preflight_stage('foreign-/private/path')
+
+    def test_preflight_failure_rejects_malformed_unknown_duplicate_and_mixed_receipts(self):
+        good=dict(schema='arctic-taskbar-preflight-v1',stage='context',status='failed',release_acceptance=False)
+        mutations=[]
+        for key,value in (('schema','foreign'),('stage','foreign'),('status','passed'),('release_acceptance',True)):
+            changed=dict(good);changed[key]=value;mutations.append(changed)
+        changed=dict(good);changed['private']='secret@example.invalid';mutations.append(changed)
+        changed=dict(good);changed.pop('status');mutations.append(changed)
+        serials=[self.preflight_serial(value) for value in mutations]
+        serials += [self.preflight_serial(good)+self.preflight_serial(good).splitlines()[-1]+'\n',
+                    self.preflight_serial(good)+'ARCTIC-TASKBAR-PORT-END {}\n',
+                    '\n'.join(self.preflight_serial(good).splitlines()[1:])+'\n',
+                    '\n'.join((self.preflight_serial(good).splitlines()[1],
+                               self.preflight_serial(good).splitlines()[0],
+                               self.preflight_serial(good).splitlines()[2]))+'\n',
+                    self.preflight_serial(good).replace(self.context['native_sha256'],'0'*64),
+                    'ARCTIC-NATIVE-PROVENANCE '+json.dumps(self.native)+'\n'
+                    'ARCTIC-TASKBAR-COLLECTOR-ERROR {"schema":"arctic-taskbar-preflight-v1",'
+                    '"stage":"context","stage":"desktop","status":"failed","release_acceptance":false}\n']
+        for serial in serials:
+            with self.assertRaises(RuntimeError):self.check_port(serial,'')
+        prefix='\n'.join(self.preflight_serial(good).splitlines()[:2])+'\n'
+        for line in ('ARCTIC-TASKBAR-UNKNOWN {}',
+                     'ARCTIC-TASKBAR-COLLECTOR-ERROR '+('x'*16384)):
+            with self.assertRaises(RuntimeError):self.check_port(prefix+line+'\n','')
+        lines=self.preflight_serial(good).splitlines()
+        for mutation in ('missing','failed','duplicate','reversed'):
+            rows=list(lines)
+            if mutation=='missing':rows.pop(1)
+            elif mutation=='failed':
+                end=json.loads(rows[1].split(' ',1)[1]);end['status']='failed';rows[1]='ARCTIC-NATIVE-RUNNER-END '+json.dumps(end)
+            elif mutation=='duplicate':rows.insert(2,rows[1])
+            else:rows[0],rows[1]=rows[1],rows[0]
+            with self.assertRaises(RuntimeError):self.check_port('\n'.join(rows)+'\n','')
+        with self.assertRaises(RuntimeError):self.check_port(self.preflight_serial(good),'nonempty')
+
+    def test_preflight_emitter_cannot_leak_foreign_exception_text_or_values(self):
+        secret='private/path secret@example.invalid transcript pixels'
+        r.preflight_stage('bundle-runtime')
+        stream=io.StringIO()
+        try:
+            raise RuntimeError(secret)
+        except RuntimeError:
+            r.emit_preflight_failure(stream)
+        output=stream.getvalue()
+        self.assertNotIn(secret,output)
+        self.assertEqual(json.loads(output.split(' ',1)[1]),dict(
+            schema='arctic-taskbar-preflight-v1',stage='bundle-runtime',status='failed',release_acceptance=False))
+
+    def test_preflight_observability_provenance_binds_failed_run_and_closed_scope(self):
+        proof=json.loads((HERE/'source-provenance.json').read_text())['taskbar_preflight_observability']
+        self.assertEqual((proof['failure_run'],proof['failure_artifact']),('38427809531','11830572893'))
+        self.assertEqual(proof['failure_artifact_sha256'],
+                         'da2a819f4805ea078e1e97521718f95633f33f43a02e1c237797f70bd95f2169')
+        self.assertIs(proof['taskbar_port_product_geometry_and_acceptance_unchanged'],True)
+        self.assertIs(proof['release_acceptance'],False)
+
+    def test_preflight_observability_exact_inverse_restores_historical_sources(self):
+        def remove_once(text,block):
+            self.assertEqual(text.count(block),1)
+            return text.replace(block,'',1)
+        runtime=(HERE/'taskbar-runtime.py').read_text()
+        runtime=remove_once(runtime,"""PREFLIGHT_STAGES = frozenset({
+    'runtime-path', 'runtime-authorization', 'context', 'bundle-taskbar',
+    'bundle-runtime', 'bundle-native', 'bundle-pointer', 'bundle-capture',
+    'helpers', 'guest-guard', 'desktop', 'account', 'session',
+    'session-type', 'session-active', 'session-user', 'boot-id',
+    'port-alias', 'port-metadata', 'port-identity', 'port-open',
+    'port-device', 'begin-write', 'provenance-write',
+})
+_preflight_stage = 'runtime-path'
+
+
+def preflight_stage(stage):
+    \"\"\"Select one source-owned, privacy-safe preflight diagnostic code.\"\"\"
+    require(type(stage) is str and stage in PREFLIGHT_STAGES,
+            'taskbar collector preflight stage differs')
+    global _preflight_stage
+    _preflight_stage = stage
+
+
+def preflight_failure():
+    \"\"\"Return the only public failure receipt allowed before protected transport.\"\"\"
+    return dict(schema='arctic-taskbar-preflight-v1', stage=_preflight_stage,
+                status='failed', release_acceptance=False)
+
+
+def emit_preflight_failure(stream=None):
+    \"\"\"Emit no caught exception data, paths, metadata, or guest values.\"\"\"
+    print('ARCTIC-TASKBAR-COLLECTOR-ERROR ' +
+          json.dumps(preflight_failure(), sort_keys=True, allow_nan=False),
+          file=stream if stream is not None else sys.stdout, flush=True)
+
+
+""")
+        runtime=runtime.replace("PORT_NAME = 'arctic-taskbar-evidence'\ndef require",
+                                "PORT_NAME = 'arctic-taskbar-evidence'\n\n\ndef require",1)
+        for line in (
+                "    preflight_stage('port-alias')\n", "    preflight_stage('port-metadata')\n",
+                "    preflight_stage('port-identity')\n", "    preflight_stage('port-open')\n",
+                "        preflight_stage('port-device')\n", "    preflight_stage('runtime-path')\n",
+                "    preflight_stage('runtime-authorization')\n", "    preflight_stage('context')\n",
+                "    preflight_stage('helpers')\n", "    preflight_stage('guest-guard')\n",
+                "    preflight_stage('desktop')\n", "    preflight_stage('account')\n",
+                "    preflight_stage('session')\n", "        preflight_stage('session-' + key.lower())\n",
+                "    preflight_stage('boot-id')\n", "    preflight_stage('begin-write')\n",
+                "    preflight_stage('provenance-write')\n"):
+            runtime=remove_once(runtime,line)
+        runtime=remove_once(runtime,"""        preflight_stage('bundle-' + {
+            'taskbar.py': 'taskbar', 'taskbar-runtime.py': 'runtime',
+            'native_smoke.py': 'native', 'virtual-pointer': 'pointer',
+            'raw-screencopy': 'capture'}[name])
+""")
+        runtime=runtime.replace('        emit_preflight_failure()\n',
+                                "        print('ARCTIC-TASKBAR-COLLECTOR-ERROR', flush=True)\n",1)
+        self.assertEqual(hash_bytes(runtime.encode()),
+                         '3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e')
+
+        evidence=(HERE/'taskbar-evidence.py').read_text()
+        evidence=remove_once(evidence,"""PREFLIGHT_STAGES = frozenset({
+    'runtime-path', 'runtime-authorization', 'context', 'bundle-taskbar',
+    'bundle-runtime', 'bundle-native', 'bundle-pointer', 'bundle-capture',
+    'helpers', 'guest-guard', 'desktop', 'account', 'session',
+    'session-type', 'session-active', 'session-user', 'boot-id',
+    'port-alias', 'port-metadata', 'port-identity', 'port-open',
+    'port-device', 'begin-write', 'provenance-write',
+})
+""")
+        evidence=remove_once(evidence,'    failures = []\n')
+        evidence=remove_once(evidence,'    native_ends = []\n')
+        evidence=remove_once(evidence,"""        if line.startswith('ARCTIC-NATIVE-RUNNER-END '):
+            require(len(line) <= 16384, 'native taskbar completion exceeds bound')
+            native_ends.append((index, strict_json(line.split(' ', 1)[1])))
+""")
+        current="""        if transport_serial is not None and line.startswith(PREFIX):
+            require(len(line) <= 16384 and ' ' in line,
+                    'taskbar actual guest placed evidence or malformed status on UART')
+            if line.startswith(PREFIX+'PORT-END '):
+                markers.append((index, strict_json(line.split(' ', 1)[1])))
+            elif line.startswith(PREFIX+'COLLECTOR-ERROR '):
+                failures.append((index, strict_json(line.split(' ', 1)[1])))
+            else:
+                require(False, 'taskbar actual guest placed evidence or malformed status on UART')
+    if failures:
+        require(len(failures) == 1 and not markers and transport_serial == '',
+                'taskbar collector failure receipt is ambiguous')
+        require(len(native) == 1 and native[0][0] < failures[0][0],
+                'taskbar collector failure native bootstrap is missing/ambiguous/reversed')
+        require(len(native_ends) == 1 and native[0][0] < native_ends[0][0] < failures[0][0],
+                'taskbar collector failure native completion is missing/ambiguous/reversed')
+        boot = native[0][1]
+        require(type(boot) is dict and boot.get('stage') == 'installed'
+                and boot.get('native_source_sha256') == context['native_sha256']
+                and boot.get('release_acceptance') is False,
+                'taskbar collector failure native bootstrap differs')
+        native_end = native_ends[0][1]
+        exact(native_end, {'stage', 'status', 'error', 'evidence_export_complete', 'release_acceptance'},
+              'taskbar collector failure native completion schema differs')
+        require(native_end['stage'] == 'installed' and native_end['status'] == 'passed'
+                and native_end['error'] is None and native_end['evidence_export_complete'] is True
+                and native_end['release_acceptance'] is False,
+                'taskbar collector failure native completion differs')
+        failure = failures[0][1]
+        exact(failure, {'schema', 'stage', 'status', 'release_acceptance'},
+              'taskbar collector failure receipt schema differs')
+        require(failure['schema'] == 'arctic-taskbar-preflight-v1'
+                and failure['stage'] in PREFLIGHT_STAGES and failure['status'] == 'failed'
+                and failure['release_acceptance'] is False,
+                'taskbar collector failure receipt values differ')
+        raise RuntimeError('taskbar collector preflight failed: ' + failure['stage']) from None
+"""
+        previous="""        if transport_serial is not None and line.startswith(PREFIX):
+            require(line.startswith(PREFIX+'PORT-END ') and len(line) <= 16384,
+                    'taskbar actual guest placed evidence or malformed status on UART')
+            markers.append((index, strict_json(line.split(' ', 1)[1])))
+"""
+        self.assertEqual(evidence.count(current),1)
+        evidence=evidence.replace(current,previous,1)
+        self.assertEqual(hash_bytes(evidence.encode()),
+                         'be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d')
 
     def test_guest_inventory_rejects_symlink_special_file_and_changed_bounds(self):
         with tempfile.TemporaryDirectory(prefix='arctic-native-smoke-') as folder:
