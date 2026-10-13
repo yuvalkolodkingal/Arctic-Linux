@@ -66,6 +66,7 @@ class UpdateRecordsTest(unittest.TestCase):
 
     def test_disabled_manifest_stops_before_external_actions(self):
         manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
+        manifest['ready'] = False
         self.assertFalse(manifest['ready'])
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             guard.verify(manifest, ROOT)
