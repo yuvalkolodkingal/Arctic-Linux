@@ -1,10 +1,13 @@
 """Fail-closed controls for the installed SDDM-to-desktop transition."""
 import ast
+import hashlib
 import importlib.util
+import json
 from pathlib import Path
 import tempfile
 import types
 import unittest
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = (ROOT / 'tools/test-install.sh').read_text()
@@ -631,8 +634,64 @@ class VmShotSelectorTests(unittest.TestCase):
         instance = self.vmtest.VM.__new__(self.vmtest.VM)
         instance.alive = lambda: True
         instance.calls = []
-        instance.cmd = lambda name, **args: instance.calls.append((name, args)) or (answer or {'return': {}})
+        answers = iter(answer) if isinstance(answer, (list, tuple)) else None
+        def cmd(name, **args):
+            instance.calls.append((name, args))
+            if answers is not None:
+                response = next(answers)
+            else:
+                response = answer or {'return': {}}
+            if isinstance(response, BaseException):
+                raise response
+            return response
+        instance.cmd = cmd
         return instance
+
+    def test_split_click_exact_rollback_restores_pre_sync_source(self):
+        source = (ROOT / 'tools/lib/vmtest.py').read_text()
+        start = source.index('    def click(')
+        end = source.index('    def quit(', start)
+        current = source[start:end]
+        self.assertEqual(hashlib.sha256(current.encode()).hexdigest(),
+                         'd29e04fa45459d4e2a5ed59188c90a3cfccaf31fed64d5c0259c8daeb9172b47')
+        previous = '''    def click(self, x, y, width, height, *, device=None, head=None):
+        """Move and click on one exact display head without an unselected fallback."""
+        selected = self._input_selector(device, head)
+        events = self._absolute_pointer_events(x, y, width, height)
+        events += [
+            {"type": "btn", "data": {"down": True, "button": "left"}},
+            {"type": "btn", "data": {"down": False, "button": "left"}},
+        ]
+        arguments = {"events": events}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
+        if "error" in r:
+            raise QMPError("selected pointer event failed" if selected else "pointer event failed")
+
+'''
+        historical = source[:start] + previous + source[end:]
+        self.assertEqual(hashlib.sha256(historical.encode()).hexdigest(),
+                         '0b947df3c616c81e4e92d64c77d9a92f3bd9a34dcc4bed102c13042172f43eac')
+
+    def test_split_click_provenance_binds_failure_and_qemu_sources(self):
+        proof = json.loads((ROOT / 'tools/native-functional/source-provenance.json').read_text())
+        row = proof['installed_login_split_click']
+        self.assertEqual((row['failure_run'], row['failure_artifact']),
+                         ('38408096333', '11822985193'))
+        self.assertEqual(row['failure_artifact_sha256'],
+                         '9e17a137ec277d0ab44d85dc895b4f6a9ee117d4b6a04f1f9de80bed111f7974')
+        self.assertEqual({row[name] for name in (
+            'qemu_ui_input_source_sha256', 'qemu_hid_source_sha256',
+            'qemu_usb_hid_source_sha256', 'qemu_qapi_ui_source_sha256')}, {
+                'e7307b5d131c9ae0ac94fb1030ee071b9959a5fd9468fec6e55104c2f339cd14',
+                '93cd188f44c159a6f57261c7d23b4085cf214f26da69f3f313342c32e2480a58',
+                'a3a5ab827a533e7ba50efb380330dc509b90beae3dd3625f70bc8185e51aa56c',
+                'bbce006f303454949f17bc9c2ca76efd77c8c256e65bfbb4b216a2f7f4485065',
+            })
+        self.assertIs(row['selected_input_error_fallback'], False)
+        self.assertIs(row['keyboard_capture_roi_privacy_and_product_gates_unchanged'], True)
+        self.assertIs(row['release_acceptance'], False)
 
     def test_selected_screendump_forwards_exact_device_and_head(self):
         vm = self.vm()
@@ -683,20 +742,26 @@ class VmShotSelectorTests(unittest.TestCase):
 
     def test_selected_click_forwards_exact_head_and_bounded_absolute_pointer(self):
         vm = self.vm()
-        vm.click(600, 468, 1280, 720, device='arctic_taskbar_gpu', head=1)
-        self.assertEqual(len(vm.calls), 1)
+        with patch.object(self.vmtest.time, 'sleep') as sleep:
+            vm.click(600, 468, 1280, 720, device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 3)
+        self.assertEqual([call.args for call in sleep.call_args_list], [(0.4,), (0.15,)])
         name, arguments = vm.calls[0]
         self.assertEqual(name, 'input-send-event')
         self.assertEqual((arguments['device'], arguments['head']),
                          ('arctic_taskbar_gpu', 1))
-        self.assertEqual(arguments['events'][:2], [
+        self.assertEqual(arguments['events'], [
             {'type': 'abs', 'data': {'axis': 'x', 'value': 600 * 0x7fff // 1279}},
             {'type': 'abs', 'data': {'axis': 'y', 'value': 468 * 0x7fff // 719}},
         ])
-        self.assertEqual(arguments['events'][2:], [
+        self.assertEqual([arguments['events'] for _, arguments in vm.calls[1:]], [[
             {'type': 'btn', 'data': {'down': True, 'button': 'left'}},
+        ], [
             {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
-        ])
+        ]])
+        self.assertTrue(all(arguments['device'] == 'arctic_taskbar_gpu'
+                            and arguments['head'] == 1
+                            for _, arguments in vm.calls))
 
     def test_global_dual_head_clicks_emit_exact_whole_desktop_absolute_values(self):
         cases = (
@@ -706,8 +771,10 @@ class VmShotSelectorTests(unittest.TestCase):
         for head, x, expected_x in cases:
             with self.subTest(head=head):
                 vm = self.vm()
-                vm.click(x, 468, 2560, 720,
-                         device='arctic_taskbar_gpu', head=head)
+                with patch.object(self.vmtest.time, 'sleep'):
+                    vm.click(x, 468, 2560, 720,
+                             device='arctic_taskbar_gpu', head=head)
+                self.assertEqual(len(vm.calls), 3)
                 name, arguments = vm.calls[0]
                 self.assertEqual(name, 'input-send-event')
                 self.assertEqual((arguments['device'], arguments['head']),
@@ -717,6 +784,96 @@ class VmShotSelectorTests(unittest.TestCase):
                     {'type': 'abs', 'data': {
                         'axis': 'y', 'value': 468 * 0x7fff // 719}},
                 ])
+                self.assertTrue(all(call['device'] == 'arctic_taskbar_gpu'
+                                    and call['head'] == head
+                                    for _, call in vm.calls))
+
+    def test_qemu_hid_sync_requires_split_button_frames(self):
+        def guest_button_state(events):
+            state = False
+            for event in events:
+                if event['type'] == 'btn':
+                    state = event['data']['down']
+            return state
+        down = {'type': 'btn', 'data': {'down': True, 'button': 'left'}}
+        up = {'type': 'btn', 'data': {'down': False, 'button': 'left'}}
+        self.assertFalse(guest_button_state([down, up]))
+        self.assertEqual([guest_button_state(frame) for frame in ([down], [up])],
+                         [True, False])
+
+    def test_selected_click_down_error_still_releases_without_fallback(self):
+        vm = self.vm([{'return': {}}, {'error': {'class': 'GenericError'}},
+                      {'return': {}}])
+        with patch.object(self.vmtest.time, 'sleep'):
+            with self.assertRaisesRegex(self.vmtest.QMPError,
+                                        '^selected pointer button event failed$'):
+                vm.click(600, 468, 1280, 720,
+                         device='arctic_taskbar_gpu', head=1)
+        self.assertEqual([name for name, _ in vm.calls],
+                         ['input-send-event'] * 3)
+        self.assertEqual(vm.calls[-1][1]['events'], [
+            {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
+        ])
+        self.assertNotIn('send-key', [name for name, _ in vm.calls])
+
+    def test_selected_click_down_reply_interruption_releases_and_preserves_primary(self):
+        for interruption in (KeyboardInterrupt('cancelled'), SystemExit('stopped')):
+            with self.subTest(interruption=type(interruption).__name__):
+                vm = self.vm([{'return': {}}, interruption, {'return': {}}])
+                with patch.object(self.vmtest.time, 'sleep'):
+                    with self.assertRaisesRegex(type(interruption), str(interruption)):
+                        vm.click(600, 468, 1280, 720,
+                                 device='arctic_taskbar_gpu', head=1)
+                self.assertEqual(len(vm.calls), 3)
+                self.assertEqual(vm.calls[-1][1]['events'], [
+                    {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
+                ])
+                self.assertNotIn('send-key', [name for name, _ in vm.calls])
+
+    def test_selected_click_down_interruption_survives_release_failure(self):
+        vm = self.vm([{'return': {}}, KeyboardInterrupt('cancelled'),
+                      {'error': {'class': 'PrivateBackendMessage'}}])
+        with patch.object(self.vmtest.time, 'sleep'):
+            with self.assertRaisesRegex(KeyboardInterrupt, '^cancelled$'):
+                vm.click(600, 468, 1280, 720,
+                         device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 3)
+        self.assertEqual(vm.calls[-1][1]['events'], [
+            {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
+        ])
+
+    def test_selected_click_release_error_is_fixed_and_has_no_fallback(self):
+        vm = self.vm([{'return': {}}, {'return': {}},
+                      {'error': {'class': 'PrivateBackendMessage'}}])
+        with patch.object(self.vmtest.time, 'sleep'):
+            with self.assertRaisesRegex(self.vmtest.QMPError,
+                                        '^selected pointer release failed$'):
+                vm.click(600, 468, 1280, 720,
+                         device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 3)
+        self.assertNotIn('send-key', [name for name, _ in vm.calls])
+
+    def test_selected_click_sleep_interruption_still_releases_button(self):
+        vm = self.vm()
+        with patch.object(self.vmtest.time, 'sleep',
+                          side_effect=[None, KeyboardInterrupt('cancelled')]):
+            with self.assertRaisesRegex(KeyboardInterrupt, '^cancelled$'):
+                vm.click(600, 468, 1280, 720,
+                         device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 3)
+        self.assertEqual(vm.calls[-1][1]['events'], [
+            {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
+        ])
+
+    def test_selected_click_release_failure_preserves_sleep_interruption(self):
+        vm = self.vm([{'return': {}}, {'return': {}},
+                      {'error': {'class': 'PrivateBackendMessage'}}])
+        with patch.object(self.vmtest.time, 'sleep',
+                          side_effect=[None, KeyboardInterrupt('cancelled')]):
+            with self.assertRaisesRegex(KeyboardInterrupt, '^cancelled$'):
+                vm.click(600, 468, 1280, 720,
+                         device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 3)
 
     def test_selected_pointer_park_forwards_exact_head(self):
         vm = self.vm()

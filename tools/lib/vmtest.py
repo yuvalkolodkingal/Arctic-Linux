@@ -166,17 +166,48 @@ class VM:
     def click(self, x, y, width, height, *, device=None, head=None):
         """Move and click on one exact display head without an unselected fallback."""
         selected = self._input_selector(device, head)
-        events = self._absolute_pointer_events(x, y, width, height)
-        events += [
+        self.pointer(x, y, width, height, device=device, head=head)
+        # QMP synchronizes once after each input-send-event command. Keep the
+        # press and release in separate commands so the USB HID guest observes
+        # both button states, and give the compositor bounded time to process
+        # the absolute move before activation.
+        time.sleep(0.4)
+        arguments = {"events": [
             {"type": "btn", "data": {"down": True, "button": "left"}},
-            {"type": "btn", "data": {"down": False, "button": "left"}},
-        ]
-        arguments = {"events": events}
+        ]}
         if selected:
             arguments.update(device=device, head=head)
-        r = self.cmd("input-send-event", **arguments)
-        if "error" in r:
-            raise QMPError("selected pointer event failed" if selected else "pointer event failed")
+        primary = None
+        try:
+            try:
+                r = self.cmd("input-send-event", **arguments)
+            except QMPError:
+                raise QMPError("selected pointer button event failed"
+                               if selected else "pointer button event failed") from None
+            if "error" in r:
+                raise QMPError("selected pointer button event failed"
+                               if selected else "pointer button event failed")
+            time.sleep(0.15)
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            release = {"events": [
+                {"type": "btn", "data": {"down": False, "button": "left"}},
+            ]}
+            if selected:
+                release.update(device=device, head=head)
+            try:
+                r = self.cmd("input-send-event", **release)
+                if "error" in r:
+                    raise QMPError("selected pointer release failed"
+                                   if selected else "pointer release failed")
+            except BaseException as error:
+                if primary is None:
+                    if isinstance(error, QMPError):
+                        raise QMPError("selected pointer release failed"
+                                       if selected else "pointer release failed") from None
+                    raise
 
     def quit(self):
         if self.alive():
