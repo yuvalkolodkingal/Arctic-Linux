@@ -212,14 +212,13 @@ class StartupDiagnostics(unittest.TestCase):
             with contextlib.redirect_stdout(out):r.relay_host_stages(path,'a'*32,'online-installed')
             self.assertEqual(out.getvalue(),''.join('ARCTIC-DICTATION-HOST-PROGRESS online-installed '+code+'\n' for code in sorted(new_codes)))
 
-    def test_whole_shell_driver_and_runner_rollback_to_accepted_b3_is_byte_exact(self):
+    def test_driver_and_runner_rollback_to_accepted_b3_is_byte_exact(self):
         helper_path = ROOT / 'tools/native-functional/test_native_bulk_transport.py'
         helper = next(n for n in ast.parse(helper_path.read_text()).body
                       if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
         namespace = {}
         exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
         driver = namespace['restore_native_bulk_driver'](DRIVER)
-        shell = SHELL.replace(DRIVER, driver, 1)
         old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
         old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
         def enum(text,name):return next(n for n in ast.parse(text).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id==name for t in n.targets))
@@ -233,7 +232,9 @@ class StartupDiagnostics(unittest.TestCase):
         restored=restored.replace('vm = dictation_acquire_vm(','vm = vmtest.VM(')
         restored=restored.replace('        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.\n', '', 1)
         restored=restored.replace('"Westmere-v2,-spec-ctrl,enforce"', '"Westmere-v2,enforce"', 1)
-        self.assertEqual(restored,old_driver);self.assertEqual(shell.replace(driver,restored,1),old_shell)
+        # The shell now also contains independently tested taskbar media
+        # protection outside DRIVER; this inverse remains byte-exact for DRIVER.
+        self.assertEqual(restored,old_driver)
         self.assertEqual(ast.dump(ast.parse(restored),include_attributes=False),ast.dump(ast.parse(old_driver),include_attributes=False))
         old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode();new_runner=restore_collector_host_relay(Path(r.__file__).read_text())
         a,b=enum(old_runner,'HOST_STAGES'),enum(new_runner,'HOST_STAGES');lines=new_runner.splitlines(keepends=True)

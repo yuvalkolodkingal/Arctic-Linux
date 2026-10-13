@@ -32,7 +32,7 @@
     "test_native_protocol_diagnostics.py": "06d8feb918d66c9aab3aa0d728c2b38b095d3489fa6a65bee3de4f78e5d8395c",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
-    "test_native_bulk_transport.py": "8d3324593c7a743bda344a2008d6ba31e3eaf1b9d90b68e6174f7dfe1c3a9e83",
+    "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
     "test_controls_state_trials.py": "72a6ce278d3a7a779d26633a05078fe6edb92d9f17539952ed4b33ccaa99b8e3",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
@@ -288,5 +288,16 @@
       "celluloid-reference-player-2.png"
     ],
     "host_attempt_receipt_schema_exact": true
+  },
+  "taskbar_context_media_protection": {
+    "failure_run": 38476315147,
+    "failure_artifact": 11855882054,
+    "failure_artifact_sha256": "4f1ffbb87b2c1ad100683a19a507ea0a8dacd47fca055a398a477f94c2a9d1e6",
+    "observed_stage": "context",
+    "bounded_diagnosis": "retained context validates exactly, while ambient payload modes and a simultaneous desktop-user optical automount were not covered by the existing actual-CD test; the closed stage cannot distinguish those protected-file metadata paths",
+    "host_normalization": "Python/context files 0644 and native helpers 0755 before Rock Ridge creation, independent of runner umask",
+    "guest_staging": "exact read-only ARCTICTEST device and ISO9660 mount are verified; regular files and directories only are copied to a root-owned non-writable staging tree and exposed at /run/t through a read-only nodev nosuid bind mount",
+    "taskbar_hash_schema_port_geometry_and_acceptance_unchanged": true,
+    "release_acceptance": false
   }
 }

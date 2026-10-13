@@ -142,8 +142,11 @@ Mango's IPC for them. Screen sharing in Mango sessions: `/etc/xdg/xdg-desktop-po
 and window (the shell's "Share your screen" card over IPC, else fuzzel) and prints
 xdg-desktop-portal-wlr's `Monitor: <output>` / `Window: <id>`.
 
-Per-update What’s New: `/usr/share/arctic/shell/whats-new.json` has schema 1 and a unique
-`update_id`. On an installed system, the shell compares it with
+Per-update What’s New: `/usr/share/arctic/shell/whats-new.json` has schema 1. During the RPM
+build, `tools/render-whats-new.py` replaces its `package-build` source placeholder with
+`arctic-<Version>-<Release>`. Every stable publish has a new Release, so every packaged update has
+a unique `update_id`; the RPM build fails if the placeholder, notes, or HTTPS notes link are
+invalid. On an installed system, the shell compares the id with
 `${XDG_STATE_HOME:-~/.local/state}/arctic/whats-new-seen`: an existing account sees the card once
 when the packaged id changes, and closing it records that id. A new account with no state file
 records the current id without showing the card because First Login already welcomes that account.

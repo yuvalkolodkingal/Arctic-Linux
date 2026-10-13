@@ -8,7 +8,8 @@ function clipped(value, limit) {
 }
 
 function validId(value) {
-    return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(value);
+    // RPM Version-Release identities may also contain +, ~ and ^.
+    return typeof value === 'string' && /^[A-Za-z0-9][A-Za-z0-9._+~^-]{0,127}$/.test(value);
 }
 
 // Checked notes: {updateId, title, items: [{icon, title, text}], notesUrl}, or null.
