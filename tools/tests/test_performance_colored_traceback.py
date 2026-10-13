@@ -16,7 +16,18 @@ class ColoredTracebackTest(unittest.TestCase):
         self.fixture.setUp(); self.addCleanup(self.fixture.doCleanups)
         self.fixture.prepare_guest()
         self.original = (P.ROOT/'tools/performance/run-paired.py').read_bytes()
-        raw = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', self.original)
+        raw = self.original
+        for feature in (b'performance-prescreen-only', b'performance-prescreen-main-only',
+                        b'performance-prescreen-stage-only'):
+            raw = re.sub(rb'(?ms)^[ ]*# ' + feature + rb'-begin\n.*?^[ ]*# ' + feature + rb'-end\n', b'', raw)
+        raw = b''.join(line for line in raw.splitlines(keepends=True)
+            if b'performance-prescreen-only' not in line)
+        raw = raw.replace(b'\n\n\ndef main():\n', b'\n\ndef main():\n', 1)
+        raw = raw.replace(b'        print(phase, flush=True)\n\n\n    def require_idle_vm_host():\n',
+            b'        print(phase, flush=True)\n\n    def require_idle_vm_host():\n', 1)
+        raw = raw.replace(b'                 planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])\n    def save(phase):\n',
+            b'                 planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])\n\n    def save(phase):\n', 1)
+        raw = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', raw)
         raw = b''.join(line for line in raw.splitlines(keepends=True) if b'# colored-trace-only # envelope-only' not in line)
         raw = raw.replace(b"exception_class='none', format='none'),\n", b"exception_class='none', format='none')),\n", 1)
         # Preserve the original history digest through exact reviewed identity inverses.
