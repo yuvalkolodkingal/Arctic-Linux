@@ -141,6 +141,43 @@ class VM:
             self.press(chord_for(ch), device=device, head=head)
             time.sleep(gap)
 
+    @staticmethod
+    def _absolute_pointer_events(x, y, width, height):
+        if (type(x) is not int or type(y) is not int
+                or type(width) is not int or type(height) is not int
+                or not 2 <= width <= 16384 or not 2 <= height <= 16384
+                or not 0 <= x < width or not 0 <= y < height):
+            raise ValueError("invalid input pointer coordinates")
+        return [
+            {"type": "abs", "data": {"axis": "x", "value": x * 0x7FFF // (width - 1)}},
+            {"type": "abs", "data": {"axis": "y", "value": y * 0x7FFF // (height - 1)}},
+        ]
+
+    def pointer(self, x, y, width, height, *, device=None, head=None):
+        """Move the QEMU absolute pointer on one exact display head."""
+        selected = self._input_selector(device, head)
+        arguments = {"events": self._absolute_pointer_events(x, y, width, height)}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
+        if "error" in r:
+            raise QMPError("selected pointer event failed" if selected else "pointer event failed")
+
+    def click(self, x, y, width, height, *, device=None, head=None):
+        """Move and click on one exact display head without an unselected fallback."""
+        selected = self._input_selector(device, head)
+        events = self._absolute_pointer_events(x, y, width, height)
+        events += [
+            {"type": "btn", "data": {"down": True, "button": "left"}},
+            {"type": "btn", "data": {"down": False, "button": "left"}},
+        ]
+        arguments = {"events": events}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
+        if "error" in r:
+            raise QMPError("selected pointer event failed" if selected else "pointer event failed")
+
     def quit(self):
         if self.alive():
             try:
@@ -304,6 +341,34 @@ def _login_controls(im):
     return _login_geometry(im) is not None
 
 
+def _login_password_roi_change(before_path, after_path):
+    try:
+        before = Image.open(before_path).convert("L")
+        after = Image.open(after_path).convert("L")
+    except OSError:
+        return None
+    if before.size != after.size:
+        return None
+    before_geometry = _login_geometry(Image.open(before_path).convert("RGB"))
+    after_geometry = _login_geometry(Image.open(after_path).convert("RGB"))
+    if before_geometry is None or after_geometry is None:
+        return None
+    before_field, _ = before_geometry
+    after_field, _ = after_geometry
+    if any(abs(a - b) > 2 for a, b in zip(before_field, after_field)):
+        return None
+    x0, y0, x1, y1 = before_field
+    height = y1 - y0
+    # Exclude the amber border/caret, the leading lock icon and trailing padding.
+    roi = (x0 + height, y0 + max(3, height // 6),
+           x1 - max(3, height // 6), y1 - max(3, height // 6))
+    if roi[2] <= roi[0] or roi[3] <= roi[1]:
+        return None
+    a = before.crop(roi)
+    b = after.crop(roi)
+    return sum(abs(x - y) > 24 for x, y in zip(a.getdata(), b.getdata()))
+
+
 def login_password_changed(before_path, after_path):
     """Whether bounded pixels inside the detected password text ROI changed.
 
@@ -311,32 +376,27 @@ def login_password_changed(before_path, after_path):
     recognizing or retaining the password. Changes to wallpaper, clock, focus
     border, lock icon or submit button are excluded.
     """
+    changed = _login_password_roi_change(before_path, after_path)
+    return changed is not None and changed >= 24
+
+
+def login_password_cleared(before_path, after_path):
+    """Whether a probed password ROI returned to its observed empty state."""
+    changed = _login_password_roi_change(before_path, after_path)
+    return changed is not None and changed < 24
+
+
+def login_password_target(path):
+    """Return the observed password-field centre and local head dimensions."""
     try:
-        before = Image.open(before_path).convert("L")
-        after = Image.open(after_path).convert("L")
+        image = Image.open(path).convert("RGB")
     except OSError:
-        return False
-    if before.size != after.size:
-        return False
-    before_geometry = _login_geometry(Image.open(before_path).convert("RGB"))
-    after_geometry = _login_geometry(Image.open(after_path).convert("RGB"))
-    if before_geometry is None or after_geometry is None:
-        return False
-    before_field, _ = before_geometry
-    after_field, _ = after_geometry
-    if any(abs(a - b) > 2 for a, b in zip(before_field, after_field)):
-        return False
-    x0, y0, x1, y1 = before_field
-    height = y1 - y0
-    # Exclude the amber border/caret, the leading lock icon and trailing padding.
-    roi = (x0 + height, y0 + max(3, height // 6),
-           x1 - max(3, height // 6), y1 - max(3, height // 6))
-    if roi[2] <= roi[0] or roi[3] <= roi[1]:
-        return False
-    a = before.crop(roi)
-    b = after.crop(roi)
-    changed = sum(abs(x - y) > 24 for x, y in zip(a.getdata(), b.getdata()))
-    return changed >= 24
+        return None
+    geometry = _login_geometry(image)
+    if geometry is None:
+        return None
+    (x0, y0, x1, y1), _ = geometry
+    return ((x0 + x1) // 2, (y0 + y1) // 2, image.width, image.height)
 
 
 def classify(path):

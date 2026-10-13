@@ -25,9 +25,10 @@ class FakeTime:
 
 
 class FakeVmtest:
-    def __init__(self, kind, changed=True, fraction=0):
+    def __init__(self, kind, changed=True, cleared=True, fraction=0):
         self.kind = kind
         self.changed = changed
+        self.cleared = cleared
         self.fraction = fraction
 
     def classify(self, path):
@@ -35,6 +36,12 @@ class FakeVmtest:
 
     def login_password_changed(self, before, after):
         return self.changed(before, after) if callable(self.changed) else self.changed
+
+    def login_password_cleared(self, before, after):
+        return self.cleared(before, after) if callable(self.cleared) else self.cleared
+
+    def login_password_target(self, _path):
+        return (600, 468, 1280, 720)
 
     def changed_fraction(self, before, after):
         return self.fraction
@@ -57,6 +64,9 @@ class FakeVM:
         self.key_calls = []
         self.typed = 0
         self.type_calls = []
+        self.click_calls = []
+        self.pointer_calls = []
+        self.events = []
         self.shots = []
         self.calls = []
         self.proc = types.SimpleNamespace(pid=4242)
@@ -73,10 +83,20 @@ class FakeVM:
     def keys(self, *keys, **selector):
         self.keys_sent.append(keys)
         self.key_calls.append((keys, selector))
+        self.events.append(('keys', keys, selector))
 
     def type_text(self, value, gap=0, **selector):
         self.typed += 1
         self.type_calls.append((value, gap, selector))
+        self.events.append(('type', value, selector))
+
+    def click(self, x, y, width, height, **selector):
+        self.click_calls.append((x, y, width, height, selector))
+        self.events.append(('click', (x, y, width, height), selector))
+
+    def pointer(self, x, y, width, height, **selector):
+        self.pointer_calls.append((x, y, width, height, selector))
+        self.events.append(('pointer', (x, y, width, height), selector))
 
 
 def display_proof(heads=(0, 1), console_ids=(7, 8)):
@@ -92,7 +112,7 @@ def display_proof(heads=(0, 1), console_ids=(7, 8)):
         heads=rows))
 
 
-def load_functions(kind, changed=True, fraction=0, fake_os=None):
+def load_functions(kind, changed=True, cleared=True, fraction=0, fake_os=None):
     fake_time = FakeTime()
     logs = []
     module = ast.Module(body=[FUNCTIONS[name] for name in (
@@ -101,7 +121,8 @@ def load_functions(kind, changed=True, fraction=0, fake_os=None):
         'installed_login', 'installed_session_settled')],
                         type_ignores=[])
     fake_os = fake_os or FakeOS()
-    namespace = dict(os=fake_os, time=fake_time, vmtest=FakeVmtest(kind, changed, fraction),
+    namespace = dict(os=fake_os, time=fake_time,
+                     vmtest=FakeVmtest(kind, changed, cleared, fraction),
                      password='fixture-password', log=logs.append, out='/out')
     exec(compile(ast.fix_missing_locations(module), '<install-driver-test>', 'exec'), namespace)
     namespace['logs'] = logs
@@ -115,6 +136,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_login(vm))
         self.assertNotIn(('ret',), vm.keys_sent)
         self.assertEqual(vm.typed, 1)
+        self.assertEqual(vm.type_calls[0][0], 'probe')
+        self.assertFalse(any(value == 'fixture-password' for value, _, _ in vm.type_calls))
         self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
@@ -123,9 +146,9 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
-        self.assertEqual(vm.typed, 3)
-        # Three exact 150s transition windows plus one typed and cleanup second each.
-        self.assertEqual(fixture.time.now, 456)
+        self.assertEqual(vm.typed, 6)
+        # Three exact 150s transition windows plus probe, clear, secret and cleanup.
+        self.assertEqual(fixture.time.now, 462)
         self.assertEqual(fixture.logs[-1], 'installed login did not transition (attempt 3)')
 
     def test_perpetual_login_discards_every_password_bearing_frame(self):
@@ -207,19 +230,22 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertTrue(fixture.installed_login(vm, display_proof()))
         private_calls = [call for call in vm.calls if call[0].startswith('boot-42-password-')]
-        self.assertEqual([selector for _, selector in private_calls], [
-            {'device': 'arctic_taskbar_gpu', 'head': 0},
-            {'device': 'arctic_taskbar_gpu', 'head': 1},
-            {'device': 'arctic_taskbar_gpu', 'head': 0},
-            {'device': 'arctic_taskbar_gpu', 'head': 1},
-            {'device': 'arctic_taskbar_gpu', 'head': 0},
-            {'device': 'arctic_taskbar_gpu', 'head': 1},
-        ])
+        self.assertEqual([selector for _, selector in private_calls],
+                         [{'device': 'arctic_taskbar_gpu', 'head': head}
+                          for head in (0, 1) for _phase in (0,)] +
+                         [{'device': 'arctic_taskbar_gpu', 'head': head}
+                          for _phase in range(4) for head in (0, 1)])
+        self.assertEqual([call[0] for call in vm.type_calls], ['probe', 'fixture-password'])
         self.assertEqual([call[2] for call in vm.type_calls], [
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
         self.assertFalse(any(selector.get('head') == 0
                              for _, selector in vm.key_calls))
+        self.assertEqual([call[-1] for call in vm.click_calls], [
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
+        ])
+        self.assertTrue(all(call[-1].get('head') == 1 for call in vm.pointer_calls))
         self.assertEqual(vm.key_calls[-1], (
             ('ret',), {'device': 'arctic_taskbar_gpu', 'head': 1}))
         self.assertTrue(all(selector for _, selector in private_calls))
@@ -240,6 +266,8 @@ class InstalledLoginTests(unittest.TestCase):
             {'device': 'arctic_taskbar_gpu', 'head': 0},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
+        self.assertTrue(all(call[0] == 'probe' for call in vm.type_calls))
+        self.assertFalse(any(call[0] == 'fixture-password' for call in vm.type_calls))
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_non_login_heads_receive_no_password_or_keys(self):
@@ -248,8 +276,84 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.type_calls, [])
         self.assertEqual(vm.key_calls, [])
+        self.assertEqual(vm.click_calls, [])
+        self.assertEqual(vm.pointer_calls, [])
         self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_clear_proof_failure_never_sends_secret(self):
+        def kind(path):
+            return 'dark' if 'head0' in path else 'login'
+        fixture = load_functions(kind, changed=True, cleared=False)
+        vm = FakeVM()
+        self.assertFalse(fixture.installed_login(vm, display_proof()))
+        self.assertEqual([value for value, _, _ in vm.type_calls], ['probe'])
+        self.assertFalse(any(value == 'fixture-password' for value, _, _ in vm.type_calls))
+        self.assertNotIn(('ret',), vm.keys_sent)
+        self.assertFalse(any(call[-1].get('head') == 0 for call in vm.click_calls))
+        self.assertFalse(any(selector.get('head') == 0 for _, selector in vm.key_calls))
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_missing_target_fails_before_pointer_key_probe_or_secret(self):
+        def kind(path):
+            return 'dark' if 'head0' in path else 'login'
+        fixture = load_functions(kind)
+        fixture.vmtest.login_password_target = lambda _path: None
+        vm = FakeVM()
+        self.assertFalse(fixture.installed_login(vm, display_proof()))
+        self.assertEqual(vm.click_calls, [])
+        self.assertEqual(vm.pointer_calls, [])
+        self.assertEqual(vm.key_calls, [])
+        self.assertEqual(vm.type_calls, [])
+        self.assertEqual(fixture.logs, ['installed login controls are not visible'])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_selected_click_failure_cleans_all_frames_and_sends_no_text(self):
+        fixture = load_functions(lambda _path: 'login')
+        vm = FakeVM()
+        def click(*_args, **_selector):
+            raise RuntimeError('synthetic selected click failure')
+        vm.click = click
+        with self.assertRaisesRegex(RuntimeError, 'synthetic selected click failure'):
+            fixture.installed_login(vm, display_proof())
+        self.assertEqual(vm.key_calls, [])
+        self.assertEqual(vm.type_calls, [])
+        self.assertEqual(vm.pointer_calls, [])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_selected_pointer_failure_cleans_probe_frames_and_sends_no_secret(self):
+        fixture = load_functions(lambda _path: 'login')
+        vm = FakeVM()
+        def pointer(*_args, **_selector):
+            raise RuntimeError('synthetic selected pointer failure')
+        vm.pointer = pointer
+        with self.assertRaisesRegex(RuntimeError, 'synthetic selected pointer failure'):
+            fixture.installed_login(vm, display_proof())
+        self.assertEqual([value for value, _, _ in vm.type_calls], ['probe'])
+        self.assertFalse(any(value == 'fixture-password' for value, _, _ in vm.type_calls))
+        self.assertNotIn(('ret',), vm.keys_sent)
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_probe_clear_secret_submit_order_stays_on_one_login_head(self):
+        def kind(path):
+            if Path(path).name.startswith('boot-43-probe-'):
+                return 'other'
+            return 'dark' if 'head0' in path else 'login'
+        fixture = load_functions(kind)
+        vm = FakeVM()
+        self.assertTrue(fixture.installed_login(vm, display_proof()))
+        target = {'device': 'arctic_taskbar_gpu', 'head': 1}
+        relevant = [(kind, value, selector) for kind, value, selector in vm.events
+                    if kind in ('click', 'keys', 'type', 'pointer')]
+        self.assertEqual(relevant[:7], [
+            ('click', (600, 468, 1280, 720), target),
+            ('keys', ('ctrl-a', 'backspace'), target),
+            ('type', 'probe', target),
+            ('keys', ('ctrl-a', 'backspace'), target),
+            ('pointer', (0, 0, 1280, 720), target),
+            ('type', 'fixture-password', target),
+            ('keys', ('ret',), target),
+        ])
 
     def test_selected_input_failure_cleans_all_captured_heads(self):
         fixture = load_functions(lambda _path: 'login')
@@ -342,7 +446,7 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
-        self.assertEqual(fixture.time.now, 456)
+        self.assertEqual(fixture.time.now, 462)
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_transition_selected_head_failure_cleans_all_probe_paths(self):
@@ -492,6 +596,60 @@ class VmShotSelectorTests(unittest.TestCase):
         self.assertTrue(all(name == 'input-send-event' for name, _ in vm.calls))
         self.assertTrue(all(arguments['device'] == 'arctic_taskbar_gpu'
                             and arguments['head'] == 0 for _, arguments in vm.calls))
+
+    def test_selected_click_forwards_exact_head_and_bounded_absolute_pointer(self):
+        vm = self.vm()
+        vm.click(600, 468, 1280, 720, device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 1)
+        name, arguments = vm.calls[0]
+        self.assertEqual(name, 'input-send-event')
+        self.assertEqual((arguments['device'], arguments['head']),
+                         ('arctic_taskbar_gpu', 1))
+        self.assertEqual(arguments['events'][:2], [
+            {'type': 'abs', 'data': {'axis': 'x', 'value': 600 * 0x7fff // 1279}},
+            {'type': 'abs', 'data': {'axis': 'y', 'value': 468 * 0x7fff // 719}},
+        ])
+        self.assertEqual(arguments['events'][2:], [
+            {'type': 'btn', 'data': {'down': True, 'button': 'left'}},
+            {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
+        ])
+
+    def test_selected_pointer_park_forwards_exact_head(self):
+        vm = self.vm()
+        vm.pointer(0, 0, 1280, 720, device='arctic_taskbar_gpu', head=0)
+        self.assertEqual(vm.calls, [('input-send-event', {
+            'events': [
+                {'type': 'abs', 'data': {'axis': 'x', 'value': 0}},
+                {'type': 'abs', 'data': {'axis': 'y', 'value': 0}},
+            ],
+            'device': 'arctic_taskbar_gpu', 'head': 0,
+        })])
+
+    def test_invalid_pointer_coordinates_and_selectors_fail_before_qmp(self):
+        for values in ((-1, 0, 1280, 720), (1280, 0, 1280, 720),
+                       (0, 720, 1280, 720), (0, 0, 1, 720),
+                       (True, 0, 1280, 720)):
+            with self.subTest(values=values):
+                vm = self.vm()
+                with self.assertRaisesRegex(ValueError, 'invalid input pointer coordinates'):
+                    vm.click(*values, device='arctic_taskbar_gpu', head=0)
+                self.assertEqual(vm.calls, [])
+        vm = self.vm()
+        with self.assertRaisesRegex(ValueError, 'invalid input head selector'):
+            vm.pointer(0, 0, 1280, 720, device=None, head=0)
+        self.assertEqual(vm.calls, [])
+
+    def test_selected_pointer_error_never_falls_back(self):
+        for method in ('pointer', 'click'):
+            with self.subTest(method=method):
+                vm = self.vm({'error': {'class': 'GenericError'}})
+                with self.assertRaisesRegex(self.vmtest.QMPError,
+                                             '^selected pointer event failed$'):
+                    getattr(vm, method)(600, 468, 1280, 720,
+                                        device='arctic_taskbar_gpu', head=1)
+                self.assertEqual([name for name, _ in vm.calls], ['input-send-event'])
+                self.assertEqual(vm.calls[0][1]['device'], 'arctic_taskbar_gpu')
+                self.assertEqual(vm.calls[0][1]['head'], 1)
 
     def test_partial_or_invalid_input_selectors_fail_before_qmp(self):
         for device, head in ((None, 0), ('arctic_taskbar_gpu', None), ('bad/device', 0),
