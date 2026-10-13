@@ -1219,47 +1219,53 @@ def installed_login(vm, display=None):
     """Enter the installed password after observing every configured QMP head."""
     selectors = installed_login_heads(vm, display)
     for attempt in (1, 2, 3):
-        before = []
-        typed = []
-        private = []
-        primary = None
-        try:
-            for device, head in selectors:
-                suffix = "" if device is None else f"-head{head}"
-                name = f"boot-42-password-before-{attempt}{suffix}"
-                private.append(f"{out}/{name}.png")
-                path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
-                before.append(path)
-            before_kinds = [vmtest.classify(path) if path else "none" for path in before]
-            if any(kind == "none" for kind in before_kinds):
-                log("installed login controls are not visible")
-                return False
-            vm.keys("ctrl-a", "backspace")
-            vm.type_text(password, gap=0.3)
+        accepted_selector = None
+        for target_index, (target_device, target_head) in enumerate(selectors):
+            before = []
+            typed = []
+            private = []
+            primary = None
+            route = "" if target_device is None else f"-target{target_head}"
+            try:
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-before-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    before.append(path)
+                before_kinds = [vmtest.classify(path) if path else "none" for path in before]
+                if any(kind == "none" for kind in before_kinds):
+                    log("installed login controls are not visible")
+                    return False
+                vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
+                vm.type_text(password, gap=0.3, device=target_device, head=target_head)
+                time.sleep(1)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-typed-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    typed.append(path)
+                typed_kinds = [vmtest.classify(path) if path else "none" for path in typed]
+                accepted = (all(kind != "none" for kind in typed_kinds)
+                            and before_kinds[target_index] == typed_kinds[target_index] == "login"
+                            and vmtest.login_password_changed(
+                                before[target_index], typed[target_index]))
+            except BaseException as error:
+                primary = error
+                raise
+            finally:
+                discard_private_shots_preserving(private, primary)
+            if accepted:
+                accepted_selector = (target_device, target_head)
+                break
+            vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
             time.sleep(1)
-            for device, head in selectors:
-                suffix = "" if device is None else f"-head{head}"
-                name = f"boot-42-password-typed-{attempt}{suffix}"
-                private.append(f"{out}/{name}.png")
-                path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
-                typed.append(path)
-            typed_kinds = [vmtest.classify(path) if path else "none" for path in typed]
-            accepted = (all(kind != "none" for kind in typed_kinds)
-                        and any(old_kind == new_kind == "login"
-                                and vmtest.login_password_changed(old, new)
-                                for old, new, old_kind, new_kind
-                                in zip(before, typed, before_kinds, typed_kinds)))
-        except BaseException as error:
-            primary = error
-            raise
-        finally:
-            discard_private_shots_preserving(private, primary)
-        if not accepted:
-            vm.keys("ctrl-a", "backspace")
-            time.sleep(1)
+        if accepted_selector is None:
             log("installed password field did not accept physical input")
             return False
-        vm.keys("ret")
+        accepted_device, accepted_head = accepted_selector
+        vm.keys("ret", device=accepted_device, head=accepted_head)
         t = time.time()
         probe_index = 0
         while time.time() - t < 150 and vm.alive():
@@ -1288,7 +1294,7 @@ def installed_login(vm, display=None):
                 return True
         # A hung greeter may leave bullets behind. Clear it before any retry or
         # failure, and retain only the textual state transition diagnostic.
-        vm.keys("ctrl-a", "backspace")
+        vm.keys("ctrl-a", "backspace", device=accepted_device, head=accepted_head)
         time.sleep(1)
         log(f"installed login did not transition (attempt {attempt})")
     return False

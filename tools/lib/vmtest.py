@@ -100,27 +100,45 @@ class VM:
             return None
         return path
 
-    def press(self, chord):
+    @staticmethod
+    def _input_selector(device, head):
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid input head selector")
+        return selected
+
+    def press(self, chord, *, device=None, head=None):
         """Press and release a chord (["shift", "a"]) in one input-send-event batch. With
         send-key, QEMU releases the keys on a timer, and a guest lagging under TCG can see
         the key held past its repeat delay ("suuuuudo"); here the release events arrive
         together with the presses."""
+        selected = self._input_selector(device, head)
         down = [{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": c}}} for c in chord]
         up = [{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": c}}} for c in reversed(chord)]
-        r = self.cmd("input-send-event", events=down + up)
+        arguments = {"events": down + up}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
         if "error" in r:
+            if selected:
+                raise QMPError("selected input event failed")
             # Older QEMU or no device for input-send-event: fall back to send-key.
             self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
 
-    def keys(self, *names, gap=0.3):
+    def keys(self, *names, gap=0.3, device=None, head=None):
         """Press keys one after the other; "ctrl-x" style names press a chord."""
+        self._input_selector(device, head)
         for k in names:
-            self.press(k.split("-") if len(k) > 1 and "-" in k else [k])
+            self.press(k.split("-") if len(k) > 1 and "-" in k else [k],
+                       device=device, head=head)
             time.sleep(gap)
 
-    def type_text(self, text, gap=0.15):
+    def type_text(self, text, gap=0.15, *, device=None, head=None):
+        self._input_selector(device, head)
         for ch in text:
-            self.press(chord_for(ch))
+            self.press(chord_for(ch), device=device, head=head)
             time.sleep(gap)
 
     def quit(self):

@@ -54,7 +54,9 @@ class FakeOS:
 class FakeVM:
     def __init__(self):
         self.keys_sent = []
+        self.key_calls = []
         self.typed = 0
+        self.type_calls = []
         self.shots = []
         self.calls = []
         self.proc = types.SimpleNamespace(pid=4242)
@@ -68,11 +70,13 @@ class FakeVM:
         self.calls.append((name, selector))
         return path
 
-    def keys(self, *keys):
+    def keys(self, *keys, **selector):
         self.keys_sent.append(keys)
+        self.key_calls.append((keys, selector))
 
-    def type_text(self, value, gap=0):
+    def type_text(self, value, gap=0, **selector):
         self.typed += 1
+        self.type_calls.append((value, gap, selector))
 
 
 def display_proof(heads=(0, 1), console_ids=(7, 8)):
@@ -208,7 +212,17 @@ class InstalledLoginTests(unittest.TestCase):
             {'device': 'arctic_taskbar_gpu', 'head': 1},
             {'device': 'arctic_taskbar_gpu', 'head': 0},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
+            {'device': 'arctic_taskbar_gpu', 'head': 0},
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
+            {'device': 'arctic_taskbar_gpu', 'head': 0},
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
+        self.assertEqual([call[2] for call in vm.type_calls], [
+            {'device': 'arctic_taskbar_gpu', 'head': 0},
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
+        ])
+        self.assertEqual(vm.key_calls[-1], (
+            ('ret',), {'device': 'arctic_taskbar_gpu', 'head': 1}))
         self.assertTrue(all(selector for _, selector in private_calls))
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
@@ -223,7 +237,27 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertNotIn(('ret',), vm.keys_sent)
+        self.assertEqual([call[2] for call in vm.type_calls], [
+            {'device': 'arctic_taskbar_gpu', 'head': 0},
+            {'device': 'arctic_taskbar_gpu', 'head': 1},
+        ])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_selected_input_failure_cleans_all_captured_heads(self):
+        fixture = load_functions(lambda _path: 'login')
+        vm = FakeVM()
+        original = vm.keys
+        def keys(*names, **selector):
+            if selector.get('head') == 0:
+                raise KeyboardInterrupt('synthetic selected input interruption')
+            return original(*names, **selector)
+        vm.keys = keys
+        with self.assertRaisesRegex(KeyboardInterrupt, 'synthetic selected input interruption'):
+            fixture.installed_login(vm, display_proof())
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+        self.assertEqual(sorted(fixture.os.removed), [
+            '/out/boot-42-password-before-1-target0-head0.png',
+            '/out/boot-42-password-before-1-target0-head1.png'])
 
     def test_dual_head_rejects_missing_wrong_and_duplicate_heads_before_input(self):
         cases = (
@@ -276,11 +310,12 @@ class InstalledLoginTests(unittest.TestCase):
         vm.shot = shot
         with self.assertRaisesRegex(RuntimeError, 'synthetic selected-head failure'):
             fixture.installed_login(vm, display_proof())
-        self.assertEqual(fixture.os.removed, ['/out/boot-42-password-before-1-head0.png',
-                                              '/out/boot-42-password-before-1-head1.png'])
+        self.assertEqual(fixture.os.removed, [
+            '/out/boot-42-password-before-1-target0-head0.png',
+            '/out/boot-42-password-before-1-target0-head1.png'])
 
     def test_private_cleanup_attempts_all_paths_and_reports_fixed_error(self):
-        failure = '/out/boot-42-password-before-1-head0.png'
+        failure = '/out/boot-42-password-before-1-target0-head0.png'
         fake_os = FakeOS(fail=failure)
         fixture = load_functions(lambda _path: 'login', fake_os=fake_os)
         vm = FakeVM()
@@ -299,7 +334,8 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
-        self.assertEqual(fixture.time.now, 456)
+        # Each attempt rejects head 0 before accepting/submitting through head 1.
+        self.assertEqual(fixture.time.now, 462)
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_transition_selected_head_failure_cleans_all_probe_paths(self):
@@ -429,6 +465,48 @@ class VmShotSelectorTests(unittest.TestCase):
                 self.assertEqual(vm.calls[0][1]['head'], 0)
             finally:
                 self.vmtest.OUT = old_out
+
+    def test_selected_input_forwards_exact_device_and_head(self):
+        vm = self.vm()
+        vm.press(['ctrl', 'a'], device='arctic_taskbar_gpu', head=1)
+        self.assertEqual(len(vm.calls), 1)
+        name, arguments = vm.calls[0]
+        self.assertEqual(name, 'input-send-event')
+        self.assertEqual(arguments['device'], 'arctic_taskbar_gpu')
+        self.assertEqual(arguments['head'], 1)
+        self.assertEqual([event['data']['down'] for event in arguments['events']],
+                         [True, True, False, False])
+
+    def test_keys_and_type_text_keep_the_exact_selected_head(self):
+        vm = self.vm()
+        vm.keys('backspace', gap=0, device='arctic_taskbar_gpu', head=0)
+        vm.type_text('a', gap=0, device='arctic_taskbar_gpu', head=0)
+        self.assertEqual(len(vm.calls), 2)
+        self.assertTrue(all(name == 'input-send-event' for name, _ in vm.calls))
+        self.assertTrue(all(arguments['device'] == 'arctic_taskbar_gpu'
+                            and arguments['head'] == 0 for _, arguments in vm.calls))
+
+    def test_partial_or_invalid_input_selectors_fail_before_qmp(self):
+        for device, head in ((None, 0), ('arctic_taskbar_gpu', None), ('bad/device', 0),
+                             ('arctic_taskbar_gpu', -1), ('arctic_taskbar_gpu', True)):
+            with self.subTest(device=device, head=head):
+                vm = self.vm()
+                with self.assertRaisesRegex(ValueError, 'invalid input head selector'):
+                    vm.press(['a'], device=device, head=head)
+                self.assertEqual(vm.calls, [])
+
+    def test_selected_input_error_never_falls_back_to_unselected_send_key(self):
+        vm = self.vm({'error': {'class': 'GenericError'}})
+        with self.assertRaisesRegex(self.vmtest.QMPError, '^selected input event failed$'):
+            vm.press(['a'], device='arctic_taskbar_gpu', head=1)
+        self.assertEqual([name for name, _ in vm.calls], ['input-send-event'])
+        self.assertEqual(vm.calls[0][1]['device'], 'arctic_taskbar_gpu')
+        self.assertEqual(vm.calls[0][1]['head'], 1)
+
+    def test_unselected_input_error_retains_legacy_send_key_fallback(self):
+        vm = self.vm({'error': {'class': 'GenericError'}})
+        vm.press(['a'])
+        self.assertEqual([name for name, _ in vm.calls], ['input-send-event', 'send-key'])
 
 
 if __name__ == '__main__':
