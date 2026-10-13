@@ -117,13 +117,18 @@ def load_functions(kind, changed=True, cleared=True, fraction=0, fake_os=None):
     logs = []
     module = ast.Module(body=[FUNCTIONS[name] for name in (
         'discard_private_shot', 'discard_private_shots', 'discard_private_shots_preserving',
-        'installed_login_heads',
+        'installed_login_heads', 'installed_login_stage',
+        'installed_login_pointer_layout', 'installed_login_pointer_coordinates',
         'installed_login', 'installed_session_settled')],
                         type_ignores=[])
     fake_os = fake_os or FakeOS()
     namespace = dict(os=fake_os, time=fake_time,
                      vmtest=FakeVmtest(kind, changed, cleared, fraction),
-                     password='fixture-password', log=logs.append, out='/out')
+                     password='fixture-password', log=logs.append, out='/out',
+                     INSTALLED_LOGIN_STAGE_CODES=frozenset({
+                         'no-login-head', 'head-capture-invalid', 'target-missing',
+                         'focused-empty-rejected', 'public-probe-rejected', 'clear-rejected',
+                         'secret-roi-rejected'}))
     exec(compile(ast.fix_missing_locations(module), '<install-driver-test>', 'exec'), namespace)
     namespace['logs'] = logs
     return types.SimpleNamespace(**namespace)
@@ -138,7 +143,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertEqual(vm.typed, 1)
         self.assertEqual(vm.type_calls[0][0], 'probe')
         self.assertFalse(any(value == 'fixture-password' for value, _, _ in vm.type_calls))
-        self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
+        self.assertEqual(fixture.logs, ['installed login stage: public-probe-rejected',
+                                        'installed password field did not accept physical input'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_perpetual_login_is_bounded_and_fails(self):
@@ -256,6 +262,12 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertTrue(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.keys_sent.count(('ret',)), 1)
+        self.assertEqual(vm.click_calls, [
+            (600, 468, 2560, 720,
+             {'device': 'arctic_taskbar_gpu', 'head': 0}),
+        ])
+        self.assertTrue(all(call[:4] == (0, 0, 2560, 720)
+                            for call in vm.pointer_calls))
 
     def test_dual_head_no_roi_fails_without_submit(self):
         fixture = load_functions(lambda _path: 'login', changed=False)
@@ -278,7 +290,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertEqual(vm.key_calls, [])
         self.assertEqual(vm.click_calls, [])
         self.assertEqual(vm.pointer_calls, [])
-        self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
+        self.assertEqual(fixture.logs, ['installed login stage: no-login-head',
+                                        'installed password field did not accept physical input'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_clear_proof_failure_never_sends_secret(self):
@@ -307,7 +320,8 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertEqual(vm.pointer_calls, [])
         self.assertEqual(vm.key_calls, [])
         self.assertEqual(vm.type_calls, [])
-        self.assertEqual(fixture.logs, ['installed login controls are not visible'])
+        self.assertEqual(fixture.logs, ['installed login stage: target-missing',
+                                        'installed login controls are not visible'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_selected_click_failure_cleans_all_frames_and_sends_no_text(self):
@@ -365,12 +379,12 @@ class InstalledLoginTests(unittest.TestCase):
         relevant = [(kind, value, selector) for kind, value, selector in vm.events
                     if kind in ('click', 'keys', 'type', 'pointer')]
         self.assertEqual(relevant[:8], [
-            ('click', (600, 468, 1280, 720), target),
+            ('click', (1880, 468, 2560, 720), target),
             ('keys', ('ctrl-a', 'backspace'), target),
-            ('pointer', (0, 0, 1280, 720), target),
+            ('pointer', (1280, 0, 2560, 720), target),
             ('type', 'probe', target),
             ('keys', ('ctrl-a', 'backspace'), target),
-            ('pointer', (0, 0, 1280, 720), target),
+            ('pointer', (1280, 0, 2560, 720), target),
             ('type', 'fixture-password', target),
             ('keys', ('ret',), target),
         ])
@@ -421,6 +435,40 @@ class InstalledLoginTests(unittest.TestCase):
                     fixture.installed_login(vm, display)
                 self.assertEqual(vm.typed, 0)
                 self.assertEqual(vm.calls, [])
+
+    def test_dual_head_rejects_gap_overlap_and_non_rectangular_layout_before_input(self):
+        cases = []
+        for field, value in (('xoff', 1281), ('xoff', 1279), ('yoff', 1)):
+            display = display_proof()
+            display.proof['heads'][1][field] = value
+            cases.append(display)
+        for display in cases:
+            with self.subTest(heads=display.proof['heads']):
+                fixture = load_functions(lambda _path: 'login')
+                vm = FakeVM()
+                with self.assertRaisesRegex(RuntimeError, 'installed login display heads differ'):
+                    fixture.installed_login(vm, display)
+                self.assertEqual(vm.calls, [])
+                self.assertEqual(vm.events, [])
+
+    def test_dual_head_image_geometry_mismatch_fails_before_any_input(self):
+        fixture = load_functions(lambda path: 'dark' if 'head0' in path else 'login')
+        fixture.vmtest.login_password_target = lambda _path: (600, 468, 1279, 720)
+        vm = FakeVM()
+        with self.assertRaisesRegex(RuntimeError, '^installed login pointer geometry differs$'):
+            fixture.installed_login(vm, display_proof())
+        self.assertEqual(vm.events, [])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_stage_diagnostic_accepts_only_closed_codes_and_never_formats_values(self):
+        fixture = load_functions(lambda _path: 'login')
+        fixture.installed_login_stage('secret-roi-rejected')
+        self.assertEqual(fixture.logs, ['installed login stage: secret-roi-rejected'])
+        for value in ('secret-roi-rejected/private', '/out/private.png', None, True):
+            with self.subTest(value=value), self.assertRaisesRegex(
+                    RuntimeError, '^installed login stage code differs$'):
+                fixture.installed_login_stage(value)
+        self.assertEqual(fixture.logs, ['installed login stage: secret-roi-rejected'])
 
     def test_dual_head_rejects_stale_vm_identity_before_default_capture(self):
         display = display_proof()
@@ -649,6 +697,26 @@ class VmShotSelectorTests(unittest.TestCase):
             {'type': 'btn', 'data': {'down': True, 'button': 'left'}},
             {'type': 'btn', 'data': {'down': False, 'button': 'left'}},
         ])
+
+    def test_global_dual_head_clicks_emit_exact_whole_desktop_absolute_values(self):
+        cases = (
+            (0, 600, 600 * 0x7fff // 2559),
+            (1, 1880, 1880 * 0x7fff // 2559),
+        )
+        for head, x, expected_x in cases:
+            with self.subTest(head=head):
+                vm = self.vm()
+                vm.click(x, 468, 2560, 720,
+                         device='arctic_taskbar_gpu', head=head)
+                name, arguments = vm.calls[0]
+                self.assertEqual(name, 'input-send-event')
+                self.assertEqual((arguments['device'], arguments['head']),
+                                 ('arctic_taskbar_gpu', head))
+                self.assertEqual(arguments['events'][:2], [
+                    {'type': 'abs', 'data': {'axis': 'x', 'value': expected_x}},
+                    {'type': 'abs', 'data': {
+                        'axis': 'y', 'value': 468 * 0x7fff // 719}},
+                ])
 
     def test_selected_pointer_park_forwards_exact_head(self):
         vm = self.vm()
