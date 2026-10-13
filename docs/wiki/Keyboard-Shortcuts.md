@@ -17,13 +17,13 @@ screen at any time, and type to find one (`screen`, `window`, `Alt`…).
 | `Super + Enter` | Open your terminal |
 | `Super + Alt + Enter` | The drop-down terminal: shows over your windows; press again to hide it |
 | `Super + B` | Open your browser |
-| `Super + E` | Open your code editor |
+| `Super + E` | Open your selected text editor (FeatherPad by default) |
 | `Super + F` | Open your file manager |
-| `Super + Shift + F` | Open the file manager in the terminal (yazi) |
+| `Super + Shift + F` | Open the optional terminal file manager (yazi, when installed) |
 | `Super + V` | Clipboard history: `Enter` copies an entry again, `Shift + Enter` also pastes it |
 | `Super + Ctrl + E` | Emoji: type to search, `Enter` types it, `Shift + Enter` copies it, `Alt + 1` … `6` picks the skin tone |
 | `Super + S` | [Settings](Settings) |
-| `Super + Shift + A` | Get apps: install or remove apps (Flathub, Fedora, web apps) |
+| `Super + Shift + A` | Get apps: install from Flathub, Fedora, web apps, Nix or terminal tools |
 | `Super + Shift + W` | Wallpapers |
 | `Super + /` | The shortcut sheet |
 
@@ -142,6 +142,17 @@ Keyboard and mouse (**Switch layouts with**), and the bar shows the active layou
 click it for the next one, right-click for the list. If that key is Right Alt, press the
 `Super + Alt` shortcuts with the left Alt. In the notification centre, the arrow keys, `Enter`,
 `Tab` and `Delete` work as described in [Notifications](Notifications#the-notification-centre).
+
+## Local dictation
+
+| Shortcut | Does |
+|---|---|
+| `Super + Ctrl + X` | Start recording; press again to stop and insert into the focused text field |
+| `Super + Ctrl + Backspace` | Cancel recording or transcription without inserting |
+
+Setup must be ready first. **Settings → Dictation** shows the model, readiness, Hebrew/English
+language and acceleration. The visible status survives a hidden taskbar. Locking cancels it.
+See [Local dictation](Local-Dictation).
 
 ## Hardware keys
 

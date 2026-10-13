@@ -31,7 +31,7 @@ have open. On the live USB nothing is downloaded: nothing there survives a resta
 | You see | It means |
 |---|---|
 | **Restart to update** (amber, on the right of the bar) | Updates are downloaded and will be installed the next time the computer starts. Hover for how many; click for the card. |
-| Nothing | No updates are waiting. |
+| Nothing | No downloaded updates are waiting; open Settings for the last check or an error. |
 
 The card says how many updates there are and how big they are. **Restart and install** restarts
 now (save your work first); **Later** closes the card, and the updates wait for your next restart.
@@ -80,6 +80,22 @@ Waiting     12 updates (84.3 MB), installed the next time you restart
 now` is the gentler way.
 
 ## Channels
+
+For normal updates, keep **stable** selected. The enabled repository is **arctic**; **arctic-testing**
+is disabled. **The testing channel is not required.** The final stable package set described in
+the current release notes is pending qualification and publication; leave stable selected and it
+will become available there after it is published. Both RPM signatures and signed repository
+metadata are verified against the Arctic key shipped by `arctic-release`.
+
+```sh
+arctic-update channel stable
+arctic-update now                # stage available signed updates
+arctic-update apply              # asks before restarting; save your work first
+```
+
+The Arctic signing-key fingerprint is
+`80F75DE9A23B632246FD1FF1BD1A642B5436645A`. Fedora's own packages use Fedora's keys.
+The stable repository is [available here](https://yuvalkolodkingal.github.io/Arctic-Linux/repo/stable/fedora-44/x86_64/).
 
 Arctic's own packages come in two channels. Fedora's packages come from Fedora's repositories on
 both.
@@ -251,13 +267,14 @@ for `dnf5 offline reboot`.
 
 ## What's new
 
-The first time you log in after an update brings a new Arctic Linux release (0.2 → 0.3, say), a
-card says what's new in it, with **Read the release notes**. It shows once; `arctic-shell-ipc
-whatsnew open` shows it again. The card's text is `/usr/share/arctic/shell/whats-new.json`.
+The first time you log in after each Arctic update, a card says what changed, with **Read the
+release notes**. Each packaged update has a unique note ID, so every update's card shows once per
+account; a brand-new account gets the welcome card instead. `arctic-shell-ipc whatsnew open`
+shows the current card again. Its text is `/usr/share/arctic/shell/whats-new.json`.
 
 ## Flatpak apps, firmware and Nix
 
-**Flatpak apps** (Zen, Zed, Collabora Office and others from Flathub) are updated every day, about
+**Optional Flatpak apps** (for example Zen, Zed or Collabora Office from Flathub) are updated every day, about
 twenty minutes after the computer starts and then daily (`arctic-flatpak-update.timer`, which
 runs `arctic-update flatpak --auto`). They're updated in place: an app that's open keeps running
 the version it started with and gets the new one the next time you open it. Runtimes no app uses

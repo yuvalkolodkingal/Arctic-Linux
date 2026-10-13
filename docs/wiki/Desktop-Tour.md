@@ -11,7 +11,9 @@ everything also works with the mouse.
 
 ![The desktop with the top bar](images/installed-desktop.png)
 
-A thin bar runs along the top of the screen.
+A thin bar starts at the top of each screen. **Settings → Appearance → Taskbar** moves it to
+the top, bottom, left or right and sets its size. [Hiding the bar](Bar-Menus#hiding-the-bar)
+explains auto-hide and dodge windows.
 
 **Left**
 
@@ -91,7 +93,7 @@ through them. On a touchpad, swipe with four fingers left or right.
 `Enter`. Before you type anything, it offers:
 
 - **Apps**: every app on this computer
-- **Get apps**: install and remove apps (see below)
+- **Get apps**: install apps (see below)
 - **Remove apps**: uninstall Flatpak apps, Fedora packages and web apps
 - **Wallpapers**: change the desktop picture
 - **Settings**: appearance, displays, keyboard, apps and more (`Super + S`)
@@ -145,8 +147,8 @@ in your terminal and keeps the window open so you can read the output.
 ![Get apps: where should the app come from?](images/get-apps.png)
 
 `Super + Shift + A`, or **Get apps** in the launcher, asks where the app should come from:
-**Flathub apps**, **Fedora packages**, **Web apps** (any website as an app), **Terminal apps**,
-**Remove apps** or the **Console**. Search, press `Enter` to install; Flathub needs no password,
+**Flathub apps**, **Fedora packages**, **Web apps** (any website as an app), **Nix packages**, **Terminal apps** or the **Console**.
+Open **Remove apps** separately from the launcher. Search, press `Enter` to install; Flathub needs no password,
 Fedora asks once, in a dialog. Installs carry on when you close the launcher. `Shift + Delete` on
 an app in the launcher removes it, after showing what goes. Full details are on
 [Apps and software](Apps-and-Software#get-apps).
@@ -167,6 +169,7 @@ Pick a page on the left, or start typing to search every setting:
 | **Shortcuts** | Your own shortcuts |
 | **Default apps** | The browser, terminal, file manager and editor the shortcuts open, and the apps for links and files |
 | **Network**, **Bluetooth**, **Sound** | Wi-Fi, Bluetooth devices, speakers and microphones |
+| **Dictation** | Local setup, Hebrew/English language, recording and CPU/Vulkan preference |
 | **Updates** | What's waiting, automatic updates and the channel |
 | **Power and lock** | Power mode, when the screen locks and when the computer sleeps |
 | **Startup apps** | Apps that start when you log in |
@@ -177,19 +180,25 @@ Changes apply straight away, and `Ctrl + Z` undoes the last one. Everything is o
 
 ## Wallpapers
 
-![The wallpaper picker grid](images/wallpapers.png)
+![The wallpaper picker grid from an earlier build](images/wallpapers.png)
 
 `Super + Shift + W` (or **Wallpapers** in the launcher) opens the wallpaper picker. Click a picture
 to use it, or search by name.
 
-- **Arctic wallpapers**: Snowfield, Aurora and Fox. Each has a Winter and a Polar night version,
-  and they switch along with the theme ("Follows the theme").
-- **Your own pictures**: put them in `~/Pictures/Wallpapers`, or click **Choose folder…** to use
-  another folder. Your own picture stays the same when you switch themes.
-- **Match colours to wallpaper** (the switch at the bottom, on by default): with one of your own
-  pictures, the whole desktop takes its colours from it: the accent, the window borders, the
-  terminal and your apps. Arctic's own wallpapers keep the Winter and Polar night colours. See
+- **Arctic wallpapers**: twenty-eight photographs from [the project's gallery](https://yuvalkolodkingal.github.io/Wallpapers/),
+  including *City Afterglow* and *Ember Clouds, City Silhouette*. Fresh defaults use the photo
+  collection. Winter and Polar night palettes stay available.
+- **Your own pictures**: put them in `~/Pictures/Wallpapers`, or click **Choose folder…**.
+  Automatic changes can use your folder, Arctic's collection or **Both**.
+  Your chosen picture stays selected when you switch themes and when Arctic packages update.
+- **Hide and restore packaged photos**: Delete on an Arctic photo hides it only for your account;
+  **Restore hidden Arctic wallpapers** brings it back. The active picture is protected until you
+  choose another. Hidden photos stay out of the picker and Arctic/**Both** rotation across updates.
+- **Match colours to wallpaper** draws colours from a photo when enabled. See
   [Themes and customisation](Themes-and-Customisation#colours-from-your-wallpaper).
+- **Settings → Appearance → Login and lock wallpaper** can publish a separate image for every
+  account, or follow one authorized account's desktop. This asks for administrator authorization
+  and makes the chosen picture public at login and on lock screens.
 
 ## Notifications and do not disturb
 
@@ -241,6 +250,14 @@ There's no lock screen in the live session.
 
 `Super + /` opens a sheet with every shortcut. Press `Esc` to close it. The same list is on
 [Keyboard shortcuts](Keyboard-Shortcuts).
+
+## Local dictation
+
+Focus a text field, press `Super + Ctrl + X` to record, then press it again to stop and insert.
+`Super + Ctrl + Backspace` cancels without inserting. The recording/transcribing indicator stays
+visible while the taskbar is hidden. **Settings → Dictation** shows readiness, setup downloads,
+language and acceleration. Audio is processed locally; a GPU error discards the phrase and
+selects CPU for the next explicit recording. See [Local dictation](Local-Dictation).
 
 ## Capture and the clipboard
 

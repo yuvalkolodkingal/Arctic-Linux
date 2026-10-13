@@ -210,6 +210,8 @@ class CausalControls(unittest.TestCase):
             '67ba9d6d7831e35d028f15acad4cb71575489d26d3e23462f3879b6efa1f7b35':
                 (0x430d0,0x435de,'11a56d467fe7e444f46fa6da1f91a88ecf1a26bc3c54e4965727438e078a47dd'),
             '98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca':
+                (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
+            '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc')}
         self.assertEqual(C.MAPPING_PROFILES,R.comparison.MAPPING_PROFILES)
         admitted={profile['executable_sha256']:profile for profile in C.MAPPING_PROFILES}
@@ -218,10 +220,13 @@ class CausalControls(unittest.TestCase):
             profile=admitted[digest]
             self.assertEqual((profile['function_file_offset'],profile['instruction_file_offset'],
                 profile['function_sha256']),(start,upper,function_digest))
-            self.assertEqual(profile['native_audit_sha256'],
-                'eef982194692b3a10412de30a47afcb3bdc675dec00d29f7840bdaf01d54d80c'
-                if digest=='98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca'
-                else 'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c')
+            audits = {
+                '98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca':
+                    'eef982194692b3a10412de30a47afcb3bdc675dec00d29f7840bdaf01d54d80c',
+                '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab':
+                    '45b14e12747b81f2133d812339267e7460a222d5c9a4e7cb6cc3dd5019c2bba7'}
+            self.assertEqual(profile['native_audit_sha256'], audits.get(digest,
+                'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c'))
             bound=R.causal_bound(.09975,.1,profile_index=C.MAPPING_PROFILES.index(profile))
             proof=bound['causal_lower_bound']
             address=proof['upper_executable_mapping']['start']+upper-proof['upper_executable_mapping']['file_offset']

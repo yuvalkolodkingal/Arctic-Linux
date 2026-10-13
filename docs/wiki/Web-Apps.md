@@ -126,7 +126,7 @@ The Arctic engine exposes ordinary audio/video elements in the app's main page t
 so the desktop media panel and media keys can play/pause and seek when the media supports it.
 It excludes call streams and does not advertise next/previous track actions. Embedded players
 and sites with custom media control may not support these controls. See the
-[compatibility results](../WEBAPP-COMPATIBILITY.md) for what has been tested.
+[compatibility results](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/WEBAPP-COMPATIBILITY.md) for what has been tested.
 
 ## Email links
 

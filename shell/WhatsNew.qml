@@ -5,19 +5,18 @@ import Quickshell.Io
 import Quickshell.Wayland
 import "WhatsNewCore.js" as Core
 
-// "What's new" after an Arctic Linux update: a frosted card (the live welcome's look) shown once,
-// the first time the shell starts on a newer release than ~/.local/state/arctic/whats-new-seen
-// records, with the items of whats-new.json (next to this file) for that release. Enter or "Got it"
-// closes it, Esc too; either way the release is recorded. Never on the live USB. The decision is
-// in WhatsNewCore.js (tests/test-whats-new.cjs). IPC: `whatsnew open` shows it again.
+// "What's new" after an Arctic Linux update: a frosted card (the live welcome's look) shown once
+// for each packaged update-note id that this account has not seen. A fresh account records the
+// current id without showing the card because FirstLogin covers it. Enter, Esc or "Got it" closes
+// the card and records that id. Never on the live USB. The decision is in WhatsNewCore.js
+// (tests/test-whats-new.cjs). IPC: `whatsnew open` shows it again.
 Scope {
     id: root
     property bool cardOpen: false
     property bool cardMapped: false
     property var notes: null
-    property string version: ''
     property string seen: ''
-    property int pending: 3            // the three files still to read
+    property int pending: 2            // notes and the per-account seen id
     readonly property string stateDir: (Quickshell.env('XDG_STATE_HOME') || Session.home + '/.local/state') + '/arctic'
     readonly property var screen: Outputs.focused
 
@@ -29,12 +28,12 @@ Scope {
     }
     function dismiss() {
         cardOpen = false;
-        record(version);
+        record(notes ? notes.updateId : '');
     }
     function record(v) {
         if (!v)
             return;
-        mkdir.version = v;
+        mkdir.updateId = v;
         mkdir.running = true;
     }
     property bool decided: false
@@ -42,19 +41,13 @@ Scope {
         if (decided || --pending > 0)
             return;
         decided = true;
-        const d = Core.decide(version, seen, notes, Session.live);
+        const d = Core.decide(seen, notes, Session.live);
         if (d.record)
             record(d.record);
         if (d.show)
             show();
     }
 
-    FileView {
-        path: '/etc/os-release'
-        printErrors: false
-        onLoaded: { root.version = Core.osVersion(text()); root.settle(); }
-        onLoadFailed: root.settle()
-    }
     FileView {
         path: Quickshell.shellDir + '/whats-new.json'
         printErrors: false
@@ -70,9 +63,9 @@ Scope {
     }
     Process {
         id: mkdir
-        property string version: ''
+        property string updateId: ''
         command: ['mkdir', '-p', root.stateDir]
-        onExited: seenFile.setText(version + '\n')
+        onExited: seenFile.setText(updateId + '\n')
     }
 
     PanelWindow {

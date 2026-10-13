@@ -19,6 +19,7 @@
 - [Drives, phones and cameras](Drives-and-Phones)
 - [Screens and the laptop lid](Screens-and-Laptop-Lid)
 - [Sharing and phones](Sharing-and-Phones)
+- [Local dictation](Local-Dictation)
 - [Apps and software](Apps-and-Software)
 - [Web apps](Web-Apps)
 - [Drivers](Drivers)

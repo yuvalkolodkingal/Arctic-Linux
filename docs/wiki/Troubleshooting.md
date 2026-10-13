@@ -60,7 +60,9 @@ The choice only appears when the disk you picked has all of these:
 
 ### I can't get past the network step
 
-Next stays off until you're online, because the installer downloads your apps.
+Connect to download extra apps now, or choose **Install offline** and **Continue offline**.
+The installed system keeps the apps already on the image and queues extra downloads; dictation
+remains unavailable until local setup is verified.
 
 - Plug in a network cable if you can; the step then passes by itself.
 - *"Wrong password. Check it and try again."* The Wi-Fi password is case-sensitive.
@@ -97,8 +99,8 @@ code 127 in the log: the copied system had no SELinux labels yet, so SELinux sto
 scripts from running. The same bug also made some finished 0.1 installs refuse every login (see
 [The login screen goes straight back](#the-login-screen-goes-straight-back-after-the-password)).
 The 0.2 installer labels the system right after copying it, and again at the end, including
-`/home`, `/var/log`, `/nix` and `/boot`. Download the 0.2 image
-(`Arctic-Linux-1.1-x86_64.iso`) and write the stick again.
+`/home`, `/var/log`, `/nix` and `/boot`. Download a published current image with [the USB instructions](Download-and-Create-a-USB)
+and write the stick again.
 
 ### "The NVIDIA driver couldn't be installed"
 
@@ -273,7 +275,7 @@ instead.
 ### An app is missing after installing
 
 - **You skipped it in the installer:** install it with [Get apps](Apps-and-Software#get-apps).
-- **It was put off during an automated install:** it's in `/var/lib/arctic/pending.json`, and
+- **It was put off during an offline or automated install:** it's in `/var/lib/arctic/pending.json`, and
   `arctic-firstboot` installs it once you're online. Check on it, or try again now:
 
   ```sh
@@ -361,6 +363,24 @@ settings when it starts), or run `systemctl --user restart xdg-desktop-portal-wl
 went wrong is in `$XDG_RUNTIME_DIR/arctic/record.log` (`/run/user/1000/arctic/record.log`), and
 `~/.cache/arctic/record-codec` remembers the encoder that worked (delete it to try them all
 again). `wf-recorder` must be installed.
+
+### Dictation is not ready or recording fails
+
+Open **Settings → Dictation**. Its setup/error message says what is missing; choose
+**Set up / retry…** when online. A failed model download is separate from OS installation.
+For a microphone problem, choose the input and unmute it in Sound settings. Cancel recording
+or transcription with `Super + Ctrl + Backspace`. If Vulkan fails, that phrase is discarded;
+CPU is selected for the next explicit recording. A CPU compatibility error offers
+**Use compatibility model…** and discloses its download first. See [Local dictation](Local-Dictation).
+
+### The bar hides at the wrong time
+
+Check **Settings → Appearance → Taskbar → Visibility**. **Dodge windows** uses the updated
+Mango session's window geometry; log out and back in after its update. It stays visible when
+those facts are unavailable. `Super + Alt + B` reveals and focuses it; `Super + Shift + Space`
+restores a manually hidden bar. A live installer keeps its bar visible. If the issue persists,
+report the edge, output arrangement, scale, active visibility mode and whether a full-screen
+window is involved. See [Hiding the bar](Bar-Menus#hiding-the-bar).
 
 ### A setting doesn't stick
 

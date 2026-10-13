@@ -19,12 +19,26 @@ class UARTEnvelopeTest(unittest.TestCase):
         self.fixture.prepare_guest()
         # Exact byte rollback, not a Git-history dependency in shallow CI.
         raw = (P.ROOT/'tools/performance/run-paired.py').read_bytes()
+        for feature in (b'performance-prescreen-only', b'performance-prescreen-main-only',
+                        b'performance-prescreen-stage-only'):
+            raw = re.sub(rb'(?ms)^[ ]*# ' + feature + rb'-begin\n.*?^[ ]*# ' + feature + rb'-end\n', b'', raw)
+        raw = b''.join(line for line in raw.splitlines(keepends=True)
+            if b'performance-prescreen-only' not in line)
+        raw = raw.replace(b'\n\n\ndef main():\n', b'\n\ndef main():\n', 1)
+        raw = raw.replace(b'        print(phase, flush=True)\n\n\n    def require_idle_vm_host():\n',
+            b'        print(phase, flush=True)\n\n    def require_idle_vm_host():\n', 1)
+        raw = raw.replace(b'                 planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])\n    def save(phase):\n',
+            b'                 planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])\n\n    def save(phase):\n', 1)
         raw = re.sub(rb'(?ms)^[ ]*# envelope-only-begin\n.*?^[ ]*# envelope-only-end\n', b'', raw)
         raw = b''.join(line for line in raw.splitlines(keepends=True)
             if not line.rstrip().endswith(b'# envelope-only'))
-        # Preserve the original history digest through exactly three reviewed identity inverses.
+        # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
         for current, previous in (
+                (b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
+                (b'19fb089b8885a1e0ce6b2827db9b87acade30bef3a331486ca05d0a051ddea8b', b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064'),
+                (b'c16a9947baa293502791af88f60e14bcd8dea0b852286536a75598afef371d1b', b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79'),
+                (b'd3d3ac5dcdf9066b73ac91a48c968dd7f84cd43f3c5571939d7c1041f879a0cf', b'4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9'),
                 (b'4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5', b'5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'),
                 (b'515ff75b394b28c9d2d02f0838612cbb86b06e2a24be25580f19554632abe064', b'1940fc7495315aa6ceff7b5fbff9554b081182404733f1443e2fee5bc8c5c8a2'),
                 (b'9acbe74ffb8c64b63f9f180246c26ba69ae2ba80c620a1cb8baca8d9fdc4fc79', b'7b7890ffdd227ae465ed856440e9bd03a36185a90cadbcb2926ad0eae2204bb7'),

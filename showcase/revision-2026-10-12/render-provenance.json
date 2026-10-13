@@ -1,0 +1,65 @@
+{
+  "status": "validated_unpublished_candidate",
+  "source_commit": "3291477c475f24239db44ece809c4c7658d446c7",
+  "workflow_run": {
+    "id": 38300570733,
+    "url": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733",
+    "conclusion": "success"
+  },
+  "artifact": {
+    "id": 11771111869,
+    "name": "Arctic-Linux-Showcase-River-1080p-candidate",
+    "bytes": 63981992,
+    "sha256": "c569ea70092736eec2d1abca29678211897b6aa665233d396aa38d0f4f5dfe5f"
+  },
+  "video": {
+    "path": "Arctic-Linux-Showcase-River-1080p.mp4",
+    "bytes": 60327673,
+    "sha256": "731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836",
+    "duration_seconds": 507.533333,
+    "width": 1920,
+    "height": 1080,
+    "frame_rate": "30/1",
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "subtitle_codec": "mov_text"
+  },
+  "checks": {
+    "river_master_sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
+    "strict_hyperframes": true,
+    "full_decode_errors": 0,
+    "embedded_english_subtitles": true,
+    "chapters": true,
+    "representative_frame_review": {
+      "count": 15,
+      "status": "passed",
+      "timestamps_seconds": [
+        0.5,
+        24,
+        56,
+        112,
+        198,
+        210,
+        238,
+        266,
+        283,
+        304,
+        322,
+        352,
+        383,
+        394,
+        493
+      ]
+    }
+  },
+  "publication": {
+    "published": false,
+    "reason": "Waiting for the matching Arctic release to finish qualification."
+  },
+  "limitations": [
+    "The video is an animated screenshot and evidence-card showcase, not a continuous installation recording.",
+    "Installer screens use labelled demonstration data.",
+    "Qualification captures come from QEMU and can include demo file names or terminal evidence; their disclosure remains visible.",
+    "The Winter wallpaper picker is a repository UI capture; the adjoining Ember scene shows the published original photograph."
+  ]
+}

@@ -1,35 +1,7 @@
 {
-  "execution_files": {
-    ".github/workflows/image-update-20261008.yml": "427e7311a4e4c4d748eff563b9b27667f8618d6c6047c6503d2ebd0e711ff4b9",
-    "tools/image-update/guard.py": "ac469cfb3df10f7fe3cf3ececcc790ccf3b3be2acb44a9f2ca9d7dea6f9ac185",
-    "tools/image-update/verify-records.py": "99f98f9760f6ddd98a9531b7bb05ce5e329badd29c038b0b384359ef0b8e143e",
-    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "8754ad7f3a97803ce1d84fd889667853dd5d407a8907adfb52afd6a7d41067be",
-    "tools/nix-acceptance/guest.py": "fc172e0d6051d058eb9594c2421eae42283bf8fc61cf6fe23fd666df955047bb",
-    "tools/performance/compose-nix-probe.py": "153df2c42e8af09e42ab9de9d1a3b580b36391ba34c9547938b54b3d0985f3c0",
-    "tools/performance/guest.py": "4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5",
-    "tools/performance/offline-update-boot.py": "9b16c14adbd1129a2bfe01a44c7157f695c68a30956d19c865e8dc66d5d01b09",
-    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
-  },
-  "image": {
-    "archive_bytes": 1934873501,
-    "archive_sha256": "850a6225801cdd84316b883d0e50633966bf5490e1cf5be21e01e9d3001f77a2",
-    "artifact_id": 11756279802,
-    "bytes": 1934686208,
-    "name": "Arctic-Linux-1.2-candidate-38264550818-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "8ca97cd9aecb51c3fdc9401229acf859318eaad9ec872cb32d61edb9697566b9",
-    "run_id": 38264550818,
-    "sha256": "df261c33bb782f4c0e5f4f6d742f2068cd018a98467fe325b6d41fe72dabef4f",
-    "source_sha": "134af2249b3c5d80448208d978ccb1ef238729f5"
-  },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
-  "stable": {
-    "run_id": 38260607379,
-    "source_sha": "99cf611e4784de2217627baeeca8a3e825b8b6e4"
-  }
+  "image": null,
+  "stable": null,
+  "execution_files": {}
 }

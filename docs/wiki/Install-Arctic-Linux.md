@@ -16,8 +16,8 @@ names in them are examples.
 - **Back up** anything you want to keep. Installing can erase the whole disk.
 - **Plug your laptop in.** An install that stops halfway because the battery ran out leaves a
   disk that doesn't start.
-- **Have your Wi-Fi password ready**, or plug in a network cable. The installer needs the
-  internet to download your apps.
+- **Have your Wi-Fi password ready**, or plug in a network cable for downloads. You can also
+  explicitly install offline with the apps already on the image; extra setup is queued.
 - **Keeping Windows?** Make free space for Arctic Linux in Windows first. See
   [Installing alongside Windows](#installing-alongside-windows).
 
@@ -27,6 +27,11 @@ names in them are examples.
   the desktop has started.
 - From the live desktop ([Try Arctic Linux](Try-Arctic-Linux)): press `Super + I`, or click
   **Install** on the top bar, the **Install Arctic Linux** tile or the welcome card.
+
+If you switch to a text console and return to the graphical session, or disconnect the screen
+hosting the installer, it restores one visible installer window on an available screen. Your
+page, keyboard selection and engine state are kept. Opening it again does not create a second
+installation process.
 
 ## Moving around
 
@@ -79,12 +84,15 @@ use."*
 
 ![Installer step 3: Connect to the internet, with the list of Wi-Fi networks](images/installer-03-network.png)
 
-**Connect to the internet.** *"Pick a Wi-Fi network or plug in a cable."*
+**Connect to the internet.** Connect now, or install offline and finish setup later.
 
 - **Asks:** which Wi-Fi network to join, and its password. A lock shows which networks need one.
 - **Skipped automatically** when a network cable is plugged in and you're already online.
-- **Next stays off until you're online.** The **Why do I need the internet?** box explains:
-  Arctic Linux downloads the apps you pick while it installs.
+- **Online:** Next continues after you connect. Extra apps and dependencies are downloaded
+  during installation.
+- **Offline:** choose **Install offline**, then **Continue offline**. Apps already on the image
+  remain available; extra app downloads and dictation setup are queued for first boot. Dictation
+  remains unready until its engine, model and required dependencies have been verified.
 - The Wi-Fi networks you connect to here are copied to your new system, so it's online the first
   time you log in.
 
@@ -184,18 +192,18 @@ is locked.
 **Choose your apps.** *"We've ticked our favourites. Change anything — you can add or remove apps
 later."*
 
-The picker has 126 apps in 21 sections, plus a **Drivers** section when your computer needs one.
+The picker has 132 apps in 21 sections, plus a **Drivers** section when your computer needs one.
 The first seven sections are always open, with our favourites ticked:
 
 | Section | Rule | Ticked for you | Also on offer |
 |---|---|---|---|
-| Browser | Pick one · *becomes your default browser* | Zen Browser | Firefox, Brave, Google Chrome, LibreWolf, Chromium, Vivaldi |
-| Editor | Pick any | Zed | Visual Studio Code, VSCodium, Neovim, Helix, Kate, Emacs, Text Editor |
-| Terminal | Pick one · *opens with `Super + Enter`* | kitty | Ghostty, Alacritty, foot, Konsole |
+| Browser | Pick one · *becomes your default browser* | GNOME Web (Epiphany) | Zen, Firefox, Brave, Google Chrome, LibreWolf, Chromium, Vivaldi |
+| Editor | Pick any | FeatherPad | Zed, Visual Studio Code, VSCodium, Neovim, Helix, Kate, Emacs, Text Editor |
+| Terminal | Pick one · *opens with `Super + Enter`* | Foot | kitty, Ghostty, Alacritty, Konsole |
 | Shell | Pick one · *what runs inside the terminal* | fish | zsh, bash |
-| File manager | Pick any | yazi, Files (Nautilus) | Thunar, Dolphin, Nemo, PCManFM-Qt |
-| Office | Pick one or none | Collabora Office | LibreOffice, ONLYOFFICE |
-| Video | Pick any | VLC | mpv, Celluloid, Haruna, Kodi, Jellyfin Media Player |
+| File manager | Pick any | PCManFM with XArchiver | yazi, Thunar, Files (Nautilus), Dolphin, Nemo, PCManFM-Qt |
+| Office | Pick one or none | None | Collabora Office, LibreOffice, ONLYOFFICE |
+| Video | Pick any | Celluloid | VLC, mpv, Haruna, Kodi, Jellyfin Media Player |
 
 Below them, under **More apps**, fourteen more sections start folded, with nothing ticked:
 Music & audio, Photos, Graphics & design, Recording & editing, Chat & calls, Email & calendar,
@@ -203,7 +211,7 @@ Notes & tasks, PDF & e-books, Games, Passwords & privacy, Downloads & sync, Deve
 Containers & VMs and Utilities. Open one to see its apps; a folded section shows how many you
 picked in it.
 
-- **Search:** type in the **Search 126 apps** box to find an app by name, by what it does
+- **Search:** type in the search box to find an app by name, by what it does
   (*music*, *PDF*, *games*) or by section. Sections with matches open.
 - **Proprietary** marks apps that aren't open source (for example Google Chrome, Visual Studio
   Code, Spotify, Discord and Steam).
@@ -213,11 +221,18 @@ picked in it.
   without the other, Next says so under the section.
 
 The footer adds up how many apps (and drivers) you picked and how much will be downloaded, for
-example *"9 apps + 2 drivers · 3.2 GB download"*. Apps that are already on the USB stick (kitty,
-Fish, Nautilus, VLC) are copied from it instead of downloaded; if you untick them, the installer
+example *"9 apps + 2 drivers · 3.2 GB download"*. The replacement image under qualification
+contains GNOME Web, Foot, Fish, PCManFM/XArchiver, Celluloid, FeatherPad and Nano. Included apps
+are copied from the image; if you untick them, the installer
 removes them from your new system. `bash` is always installed, whatever shell you pick.
 
 Every app, section by section, and where each comes from: [Apps and software](Apps-and-Software).
+
+Local dictation's executable and large Whisper model are excluded from the live image. During
+online installation, a separate bounded setup attempt downloads and verifies them. The selected
+profile needs about **506.2 MB** (Small) or **678.1 MB** (Turbo), plus missing system packages.
+A failed download does not fail the OS installation; the Done screen shows the pending setup.
+See [Local dictation](Local-Dictation) for readiness and recovery.
 
 ### Drivers
 
@@ -318,6 +333,10 @@ be installed. You get three buttons:
 
 **Remove the USB stick**: take it out now, then press **Restart now**. Your computer starts
 Arctic Linux and asks for your disk passphrase. If you skipped an app, this screen lists it.
+
+An offline install lists its deferred downloads. A model download failure says that local
+dictation is not ready yet; connect and open **Settings → Dictation → Set up / retry…** after
+booting the installed system.
 
 If you picked a driver, a **Drivers** card says what happened to each one, for example *"The
 NVIDIA driver for your … starts after you restart"*. A driver that couldn't be installed because

@@ -61,7 +61,9 @@ control…** opens the full mixer for device profiles and routing.
 
 ## Battery and power mode (`Super + Ctrl + P`)
 
-How much charge is left and how long it lasts, the **power mode** (Power saver, Balanced,
+The bar distinguishes **Fully charged** from **Charging**, a partial charge and an unavailable
+reading. Hover to see the state and, when reported, time remaining. The menu shows
+how much charge is left and how long it lasts, the **power mode** (Power saver, Balanced,
 Performance), **Limit charging to 80 %** when your laptop supports a charge limit (the number is
 the one your laptop uses), the battery's health and the batteries of your mouse, keyboard or
 headphones.
@@ -111,6 +113,23 @@ keep awake, a VPN, airplane mode, a muted microphone) show as small icons there;
 it back. Apps that open the camera directly instead of through PipeWire can't be seen.
 
 ## Hiding the bar
+
+**Settings → Appearance → Taskbar** chooses Top, Bottom, Left or Right, thickness and visibility:
+
+| Visibility | Behaviour |
+|---|---|
+| **Always visible** | Reserves room for the bar and frame; tiled windows keep their gaps. |
+| **Auto-hide** | Windows can use the bar area. Point at its physical screen edge to reveal it. |
+| **Dodge windows** | Hides when a visible window overlaps that edge, including full-screen windows; otherwise stays visible. |
+
+`Super + Alt + B` reveals and focuses the bar from the keyboard. An open menu or keyboard
+interaction holds it open. Each output has its own bar; moving the bar changes its edge and
+menus together. Dodge needs an updated Mango session; Settings reports this and leaves the bar
+visible when the required window information is unavailable. Log out and back in after a Mango
+update. Hiding is disabled in the live installer so Install stays reachable.
+
+Dictation's Recording/Transcribing status and the microphone, camera and screen-recording
+indicators stay visible while the bar is hidden.
 
 `Super + Shift + Space` (or **Hide the top bar** in the [command menu](Command-Menu)'s Style
 branch) hides the bar on every screen, and windows move up into its place; press it again to bring

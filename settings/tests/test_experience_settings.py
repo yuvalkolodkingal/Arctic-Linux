@@ -181,6 +181,9 @@ class WallpaperRotateTest(Home):
         data = self.helper('wallpaper-rotate', '1h', '/pics', 'shuffle')
         self.assertEqual((data['every'], data['folder'], data['shuffle']), ('1h', '/pics', True))
         self.assertIn('arctic-wallpaper rotate 1h /pics --shuffle', self.calls())
+        data = self.helper('wallpaper-rotate', '30m', 'both', 'shuffle')
+        self.assertEqual((data['every'], data['folder'], data['shuffle']), ('30m', 'both', True))
+        self.assertIn('arctic-wallpaper rotate 30m both --shuffle', self.calls())
         self.assertEqual(self.helper('wallpaper-rotate', 'off')['every'], 'off')
         self.assertIn('There is no folder', self.helper('wallpaper-rotate', '30m', '/nowhere', ok=False)['error'])
         for bad in (('5m', '/pics'), ('30m',), ('off', '/pics'), ('1h', '/pics', 'twice')):

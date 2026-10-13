@@ -943,9 +943,11 @@ def release_notes(proof, comparison):
         'Arctic Linux 1.2.1 for x86_64, with UEFI and BIOS boot.', '',
         'Lightweight defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash. '
         'Includes the covered/fractional screen-frame fix, installer restoration, battery-full icon, lock-screen clock, '
-        'wallpaper settings, separate Remove Apps menu and reliable update detection.', '',
-        'The author\'s 19 photo wallpapers include **Ember Clouds, City Silhouette**. City Afterglow is the fresh-install default; '
-        'existing custom wallpaper choices are preserved.', '',
+        'wallpaper settings, separate Remove Apps menu and reliable update detection. A What’s New card appears once per '
+        'account after each Arctic update.', '',
+        'The author\'s 28 photo wallpapers include **Ember Clouds, City Silhouette**. City Afterglow is the fresh-install default; '
+        'existing custom wallpaper choices are preserved. **Both** rotation combines Arctic and personal pictures. Packaged '
+        'photos can be hidden per account and restored later without deleting shared RPM-owned files.', '',
         'The exact retained ISO passed Try/Install/Safe startup, enforcing encrypted offline installation, native app/media checks, '
         'six live graphical installer restoration cycles retaining the prepared Hebrew keyboard wizard, '
         'VT and hosting-output restoration while the original root-copy writer continued, completion of that same unencrypted offline install '

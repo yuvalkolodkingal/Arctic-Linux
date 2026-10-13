@@ -1,5 +1,43 @@
 # Release notes
 
+## Current main packages and replacement ISO
+
+The completed desktop, installer and setup changes described here are on `main`. Their final
+signed **stable arctic** publication is pending release qualification. Keep the stable channel
+selected; after publication, existing systems can use `arctic-update now`, then
+`arctic-update apply` (save your work; this asks before restarting). **The testing channel is
+not required.** Existing app and wallpaper choices are preserved.
+
+The pending stable package set includes:
+
+- New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
+  Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
+- Twenty-eight photo wallpapers, including the original *Ember Clouds, City Silhouette* master;
+  fresh defaults use *City Afterglow*. Rotation can combine the Arctic collection and a personal
+  folder with **Both**. Per-account hide/restore tombstones keep packaged photos out of the picker
+  and rotation without deleting RPM-owned files; the active wallpaper is protected.
+- A separate **Remove apps** menu, local Nix profile management, optional gaming setup and
+  explicitly selected Tor/Tailscale/VPN support.
+- Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
+  status, the lock-screen clock, and installer restoration after a console/output change.
+- Local Voxtype 1.1.0 dictation for Hebrew and English: verified online-install downloads,
+  nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
+  selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
+- A **What's New** card keyed by a unique packaged update ID, shown once per account after every
+  Arctic update; it can be reopened manually from the shell IPC command.
+
+The **replacement ISO remains unqualified and unpublished**. Its final download links,
+byte size, checksum, performance results and release notes are pending actual image tests.
+Source checks or a successful artifact build alone do not establish release readiness.
+
+## Arctic Linux 1.2.0
+
+The latest published OS image is [v1.2.0](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.2.0).
+It is immutable and split into two parts; see [Download and create a USB](Download-and-Create-a-USB).
+Its assembled size is **2,322,073,600 bytes**, so it is not the smaller replacement under
+qualification. The release page describes the contents of this image. Package updates can bring
+newer desktop fixes without reinstalling; they do not replace its original ISO assets.
+
 ## Arctic Linux 1.1.0
 
 Download `Arctic-Linux-1.1-x86_64.iso` from the

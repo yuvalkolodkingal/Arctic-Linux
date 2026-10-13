@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "repository": "https://github.com/yuvalkolodkingal/Wallpapers",
-  "revision": "4f0288d170ad505a4f6c7239f85e200b44836621",
+  "revision": "a55cb6942e7ded13288c7b4c8407e77a39589cdf",
   "author": "Yuval Kolodkin-Gal",
   "default": "city-afterglow",
   "wallpapers": [
@@ -213,6 +213,105 @@
       "sha256": "70b4314190ff0c6c5e35a29850e39823f71f064a21a39a1b8a7196f911cafcb2",
       "photographer": "Yuval Kolodkin-Gal",
       "file": "rose-city.jpg"
+    },
+    {
+      "slug": "stone-and-branches",
+      "title": "Stone and Branches",
+      "theme": "ember",
+      "description": "Pale stone architecture and a slate roof seen through winter branches.",
+      "width": 1264,
+      "height": 711,
+      "sha256": "15b19acabe6231511a577b993701ea3a6ddb1932f1a749257f3f93bcd182497f",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "stone-and-branches.jpg"
+    },
+    {
+      "slug": "jellyfish-drift",
+      "title": "Jellyfish Drift",
+      "theme": "lagoon",
+      "description": "Translucent jellyfish drifting through turquoise aquarium light.",
+      "width": 2032,
+      "height": 1143,
+      "sha256": "c93a4c0146c8e02e376e222fbe5bd5f5dbcb090ec11c411018fdef18a824255f",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "jellyfish-drift.jpg"
+    },
+    {
+      "slug": "night-shore",
+      "title": "Night Shore",
+      "theme": "ember",
+      "description": "Warm city lights reflected on dark water beyond a sandy shore.",
+      "width": 2048,
+      "height": 1152,
+      "sha256": "9a023ce683c64ee85368c2db2ba2fc709b55092de495aa75bde22d1ec94d3672",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "night-shore.jpg"
+    },
+    {
+      "slug": "summer-spirals",
+      "title": "Summer Spirals",
+      "theme": "canopy",
+      "description": "Small pale snail shells clustered on dry stems in summer light.",
+      "width": 1600,
+      "height": 900,
+      "sha256": "f951aadcf44f1d8969cd634ccb4d3753f91e03ea62693bff32ef9718aebf7e22",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "summer-spirals.jpg"
+    },
+    {
+      "slug": "moray-in-shelter",
+      "title": "Moray in Shelter",
+      "theme": "lagoon",
+      "description": "A close view of a moray eel framed by a weathered aquarium shelter.",
+      "width": 1136,
+      "height": 639,
+      "sha256": "13dc141739a814601f2de0fa8ce48b8146fb907979e74892167c3626dc1cb3ad",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "moray-in-shelter.jpg"
+    },
+    {
+      "slug": "sand-and-sky",
+      "title": "Sand and Sky",
+      "theme": "ember",
+      "description": "A low view of sunlit sand and dry stems beneath a blue sky.",
+      "width": 1584,
+      "height": 891,
+      "sha256": "429f82b7e3eb5460e8d367385950d3b040ab0183ea2cca74a87fb6e3f9753f53",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "sand-and-sky.jpg"
+    },
+    {
+      "slug": "golden-lichen",
+      "title": "Golden Lichen",
+      "theme": "canopy",
+      "description": "Tiny golden lichen cups on deeply textured weathered wood.",
+      "width": 1584,
+      "height": 891,
+      "sha256": "b14ef2db5037bfa10545f5fef7209f614c605c58bd05428d68e6702a6b0ae754",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "golden-lichen.jpg"
+    },
+    {
+      "slug": "seedpod-still-life",
+      "title": "Seedpod Still Life",
+      "theme": "ember",
+      "description": "A dry seedpod resting among fine twigs and sunlit grains of sand.",
+      "width": 1584,
+      "height": 891,
+      "sha256": "00d809a383161d3b54e6a729c6fb103249a93ec3378a89caa07b039292b4e059",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "seedpod-still-life.jpg"
+    },
+    {
+      "slug": "lavender-light",
+      "title": "Lavender Light",
+      "theme": "dusk",
+      "description": "Violet lavender flowers in soft garden light.",
+      "width": 1584,
+      "height": 891,
+      "sha256": "147b5abb93fb487bf8297250c048d1fea572e243b4a1554aa1d7e41c9ece351e",
+      "photographer": "Yuval Kolodkin-Gal",
+      "file": "lavender-light.jpg"
     }
   ]
 }

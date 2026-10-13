@@ -11,7 +11,14 @@ changing anything, then **install it** when you're ready. The installer asks one
 per screen, encrypts your disk by default, sets up the drivers your computer needs and only
 downloads the apps you pick.
 
-**[Watch the full installer and daily-use showcase](Showcase)** — a narrated 1080p tour with Nautilus and Fish.
+**[Watch the published showcase](Showcase)** — a narrated 1080p walkthrough. Its October 3
+screens show earlier app choices; an updated English showcase is in preparation.
+
+These pages describe the package sources now on `main`. Their final signed stable-package
+publication is pending release qualification. The latest published OS image is
+[1.2.0](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.2.0). The replacement ISO
+is still being tested; it has no qualified download yet. Read the release page for the exact
+contents and test results of the image you download.
 
 ## Start here
 
@@ -32,6 +39,7 @@ downloads the apps you pick.
 | Set up an NVIDIA, Intel, AMD or Broadcom driver | [Drivers](Drivers) |
 | Keep it up to date, or undo an update | [Updates](Updates) |
 | Change colours and wallpaper, or edit the settings files | [Themes and customisation](Themes-and-Customisation) |
+| Type by speaking in Hebrew or English | [Local dictation](Local-Dictation) |
 | Use the terminal | [Terminal and shell](Terminal-and-Shell) |
 | Fix something that isn't working | [Troubleshooting](Troubleshooting) and [FAQ](FAQ) |
 
@@ -40,17 +48,24 @@ downloads the apps you pick.
 - **Mango**, a tiling window manager for Wayland. Windows arrange themselves side by side with
   small gaps and rounded corners, and the window you're using has an amber border.
 - **A desktop shell** made for Arctic Linux: the top bar, a launcher that also works as a
-  calculator and a command runner, a wallpaper picker, **Get apps** (install and remove apps), volume and
+  calculator and a command runner, a wallpaper picker, **Get apps** and a separate **Remove apps** menu, volume and
   brightness pop-ups, a power menu and a lock screen.
-- **Two themes**, Winter (light) and Polar night (dark), and **colours from your wallpaper**: pick
-  a picture of your own and the whole desktop, your apps included, takes its colours from it.
-  `Super + Shift + T` switches between light and dark.
+- **Two built-in themes**, Winter (light) and Polar night (dark), plus **ten extra looks** and
+  **colours from your wallpaper**: pick a picture of your own and the whole desktop, your apps
+  included, takes its colours from it. `Super + Shift + T` switches between light and dark.
 - **Arctic Settings** (`Super + S`): appearance, windows, displays, keyboard and mouse,
   shortcuts, default apps, network, Bluetooth, sound, updates, power and startup apps, in one
   place.
-- **kitty and Fish** with an animated fox greeting in every new terminal.
-- **126 apps to pick from in the installer**, with our favourites ticked: Zen Browser, Zed,
-  kitty, Fish, yazi, Nautilus, Collabora Office and VLC. Flatpak and Nix come preinstalled.
+- **Foot and Fish** with the Arctic fox greeting, plus Bash and Nano.
+- **132 apps in 21 installer sections**: the native defaults include GNOME Web, FeatherPad,
+  Foot, PCManFM with XArchiver, Fish and Celluloid. Larger app choices stay optional.
+  Flatpak and Nix are available.
+- **Twenty-eight photo wallpapers**, including *Ember Clouds, City Silhouette*. Fresh defaults
+  use *City Afterglow*; updates preserve existing users' wallpaper choices. Rotation can use the
+  Arctic collection, your folder or **Both**. Packaged photos can be hidden per account and
+  restored later without deleting RPM-owned files.
+- **Local Hebrew/English dictation**, prepared during online installation or queued for offline
+  first-boot recovery, with explicit recording, cancellation and visible readiness.
 - **Drivers found for you:** NVIDIA, Intel and AMD video acceleration and Broadcom Wi-Fi, ticked
   in the installer when your computer has the hardware, with Secure Boot handled.
 - **Automatic, signed updates**, installed when the computer restarts, with snapshots to go back.

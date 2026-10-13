@@ -546,8 +546,10 @@ def installer_type(G):
                 try:
                     G.require(security is not None, 'active security interval absent')
                     report['security'] = security.finish()
-                except BaseException:
-                    errors.append('active security interval failed')
+                except BaseException as exc:
+                    phase = ('security-init' if security is None else
+                             G.security_interval_diagnostic(exc, self.native))
+                    errors.append(G.masked_active_error(exc, phase))
                 if self.rpc is not None:
                     self.rpc.close()
                 if self.gui_fd is not None:
