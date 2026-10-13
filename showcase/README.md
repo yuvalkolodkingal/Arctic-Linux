@@ -7,53 +7,45 @@ It uses Kokoro's `af_heart` narration and documents the earlier app set.
 
 [![Arctic Linux showcase](poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 
-## River replacement candidate
+## River replacement source
 
-The [12 October source and validation receipt](revision-2026-10-12/) describe the current native
-apps, project photo backgrounds, separate Remove apps, local dictation and signed stable updates.
-The English River candidate is 8 minutes 27.53 seconds long and contains 38 scenes and 128
-sentence-aligned caption cues.
+The [current source and receipts](revision-2026-10-12/) describe the native app set, project
+photo backgrounds, separate Remove apps, Voxtype 1.1.0 local dictation, signed stable updates,
+the one-time What's New summary, and per-account hide/restore for packaged wallpapers.
 
-The candidate passed:
+The source is 8 minutes 38.38 seconds long, with 38 scenes and 130 sentence-aligned caption
+cues. Two bounded ElevenLabs River patches add only the new What's New and wallpaper
+hide/restore narration. The earlier River material remains unchanged around measured splice
+points.
 
-- [local Whisper verification](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545):
-  4.1328% word error rate, 97.048% exact-token coverage, the corrected Winter wording present and
-  the obsolete count absent;
-- [strict render validation](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733):
-  complete decode with no errors, H.264 video, AAC audio, selectable English subtitles and
-  representative-frame review.
+Local source validation passed with faster-whisper 1.2.1: 3.6770% word error rate, 97.6208%
+exact-token coverage, and full phrase coverage for both new sentences. This is automated
+alignment evidence, not a human listening review.
 
-The resulting MP4 is 60,327,673 bytes with SHA-256
-`731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836`.
-It remains an unpublished candidate until the matching Arctic release finishes qualification.
-The public download link therefore still points to the October 3 edition.
+The new source has **not** been rendered or published. Final-image captures for dictation,
+wallpaper management and What's New remain explicitly pending until the matching Arctic image
+finishes qualification. Full decode, subtitle mux, representative-frame review, human listening,
+release binding and public download verification must then run on the final render. The public
+link above therefore continues to point to the 3 October edition.
 
-## What the candidate shows
-
-The current source uses admitted repository screenshots from the exact ISO qualification work.
-Where a current screenshot was unavailable, the composition uses a clearly labelled
-**QUALIFICATION EVIDENCE** card. Installer screens retain their demonstration-data disclosure,
-and QEMU qualification captures retain their evidence labels.
+## What the source shows
 
 The app scenes cover GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
-Fish/Bash. Dictation scenes show the online setup and offline recovery states from authentic
-qualification captures. The Winter scene uses the repository's current wallpaper-picker capture;
-the adjoining Ember scene shows the published original photograph.
+Fish/Bash. Dictation uses Voxtype 1.1.0 with local multilingual Whisper and shows the online
+setup and offline recovery contract. Evidence cards label features whose final-image capture is
+still pending; installer screens retain their demonstration-data disclosure.
+
+The Winter scene explains that Delete hides a packaged wallpaper only for the current account,
+Restore brings hidden defaults back, and personal wallpaper choices remain untouched. The
+Updates scene explains that What's New appears once after each installed update and can be
+reopened from Settings.
 
 This is an animated screenshot and evidence-card showcase, rather than a continuous installation
-recording. [`asset-provenance.json`](asset-provenance.json) records every admitted image and
-transformation. The [project wiki](https://github.com/yuvalkolodkingal/Arctic-Linux/wiki) remains
+recording. [`asset-provenance.json`](asset-provenance.json) records admitted images and
+transformations. The [project wiki](https://github.com/yuvalkolodkingal/Arctic-Linux/wiki) remains
 the full operating guide.
 
-## Preview and render
-
-The reproducible path is [`showcase-river-render.yml`](../.github/workflows/showcase-river-render.yml).
-It installs FFmpeg, Python 3.12, Pillow 11.3.0 and Node.js 22, downloads the River master from the unpublished draft source release and verifies it by
-SHA-256, rebuilds the assets and composition, runs HyperFrames 0.8.114 in strict mode, renders
-1080p at 30 fps, embeds captions and chapters, decodes the complete result, and uploads the
-candidate plus its validation evidence. GitHub hides draft releases from read-scoped workflow
-tokens, so these trusted push/manual-dispatch workflows grant `contents: write`; checkout persistence
-is disabled and the token is used only by `gh release download`.
+## Preview and final render
 
 For source-only layout work:
 
@@ -65,32 +57,32 @@ python build-composition.py
 npm run check -- --samples 38 --strict
 ```
 
-For a local media render, obtain `narration-river-final.mp3` from the maintainer-only draft release tagged `showcase-river-source-2026-10-12`, verify it, and place it at `showcase/audio/narration.mp3`.
-Its required SHA-256 is
-`d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
-Then run:
+The prior River master remains in the unpublished draft source release tagged
+`showcase-river-source-2026-10-12`. The two new patch binaries and locally assembled master are
+not committed or public. The remote workflows now require the non-public draft asset
+`narration-river-final-2026-10-13.mp3` with the recorded SHA-256 and will fail closed until it is
+preserved. [`voice-timing.json`](revision-2026-10-12/voice-timing.json) records
+their exact River voice/model, flow, node, session and generation IDs, bytes, SHA-256 checksums,
+measured durations, splice points, cost and license basis. Preserve those exact binaries in a
+non-public source archive before remote rendering; do not regenerate them.
 
-```sh
-cd showcase
-npm run render -- \
-  --output renders/Arctic-Linux-Showcase-River-1080p.mp4 \
-  --quality high --fps 30
-python finalize-video.py renders/Arctic-Linux-Showcase-River-1080p.mp4
-```
+After final captures are admitted, use the source workflow to rebuild the composition, run
+HyperFrames 0.8.114 in strict mode, render 1080p at 30 fps, embed captions and chapters, decode
+the complete output, and review representative frames. The final MP4 size, SHA-256, release URL
+and matching ISO fields remain pending qualification.
 
-## Edit and verification records
+## Source and verification records
 
-[`storyboard.json`](storyboard.json) contains the 38-scene story.
-[`timing.json`](timing.json), [`captions.srt`](captions.srt),
-[`captions.vtt`](captions.vtt) and [`chapters.txt`](chapters.txt) are the verified alignment
-used by the candidate. [`voice-timing.json`](revision-2026-10-12/voice-timing.json) records the
-three one-time ElevenLabs River generation IDs, measured splice, checksums and exact model.
-Do not rerun those nodes unless a named source segment is proven unusable.
+[`storyboard.json`](storyboard.json) contains the 38-scene story. [`timing.json`](timing.json),
+[`captions.srt`](captions.srt), [`captions.vtt`](captions.vtt) and [`chapters.txt`](chapters.txt)
+contain the locally aligned 518.378980-second source. The local verifier pins faster-whisper
+1.2.1 and PyAV 16.0.1. Transcript-bearing files stay outside Git and logs.
 
-The local verifier pins faster-whisper 1.2.1 and PyAV 16.0.1. Transcript-bearing verification
-files remain only in the 30-day workflow artifact; Git contains the log-safe metrics, timings and
-captions. Whisper supplies an automated intelligibility check and alignment evidence, not a human
-listening review.
+ElevenLabs River is voice ID `SAz9YHcvj6GT2YYXdXww`; both new patches use
+`eleven_multilingual_v2`. Generated-audio use is governed by the connected workspace plan and
+the [ElevenLabs Terms of Service](https://elevenlabs.io/terms-of-use). The final publisher must
+confirm that plan permits the intended public video. No standalone license file accompanied the
+generations.
 
 The Arctic artwork and repository screenshots follow this project's license. Figtree and
 JetBrains Mono use the SIL Open Font License; GSAP uses its upstream Standard License.

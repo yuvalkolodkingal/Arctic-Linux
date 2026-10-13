@@ -117,7 +117,7 @@
   },
   {
     "id": "winter",
-    "text": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule."
+    "text": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule. Built-in wallpapers can be deleted from your view and restored later, without affecting another account."
   },
   {
     "id": "ember",
@@ -141,7 +141,7 @@
   },
   {
     "id": "updates",
-    "text": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates."
+    "text": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. After each update, What's New shows the changes once, with release notes ready to reopen later. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates."
   },
   {
     "id": "lock",

@@ -44,21 +44,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_TAG: showcase-river-source-2026-10-12
-          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+          MASTER_SHA256: ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765
         run: |
           mkdir -p showcase/revision-2026-10-12/work
           gh release download "$SOURCE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern narration-river-final.mp3 \
+            --pattern narration-river-final-2026-10-13.mp3 \
             --dir showcase/revision-2026-10-12/work
           printf '%s  %s\n' "$MASTER_SHA256" \
-            showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
+            showcase/revision-2026-10-12/work/narration-river-final-2026-10-13.mp3 | sha256sum --check -
           python - <<'PY'
           import av
-          path = "showcase/revision-2026-10-12/work/narration-river-final.mp3"
+          path = "showcase/revision-2026-10-12/work/narration-river-final-2026-10-13.mp3"
           with av.open(path) as container:
               measured = float(container.duration / av.time_base)
-          assert abs(measured - 507.559184) <= 0.08, measured
+          assert abs(measured - 518.378980) <= 0.08, measured
           print(f"measured_duration_seconds={measured:.6f}")
           PY
 
@@ -72,9 +72,9 @@ jobs:
           from faster_whisper import WhisperModel
           from faster_whisper.audio import decode_audio
 
-          audio = Path("showcase/revision-2026-10-12/work/narration-river-final.mp3")
+          audio = Path("showcase/revision-2026-10-12/work/narration-river-final-2026-10-13.mp3")
           samples = decode_audio(str(audio), sampling_rate=16000)
-          assert 8_000_000 < len(samples) < 8_300_000, len(samples)
+          assert 8_200_000 < len(samples) < 8_400_000, len(samples)
           model = WhisperModel("base.en", device="cpu", compute_type="int8")
           segments, info = model.transcribe(
               str(audio),
@@ -105,7 +105,7 @@ jobs:
       - name: Run local Whisper verification and alignment
         run: |
           python showcase/revision-2026-10-12/align-river.py \
-            --audio showcase/revision-2026-10-12/work/narration-river-final.mp3 \
+            --audio showcase/revision-2026-10-12/work/narration-river-final-2026-10-13.mp3 \
             --captions showcase/revision-2026-10-12/caption-text.json \
             --storyboard showcase/revision-2026-10-12/storyboard.json \
             --output showcase/revision-2026-10-12/work/aligned \
@@ -122,7 +122,7 @@ jobs:
           summary = json.loads((root / "verification-summary.json").read_text())
           assert report == summary
           assert report["transcript_in_ci_log"] is False
-          assert report["caption_cues"] == 128
+          assert report["caption_cues"] == 130
           assert report["scenes"] == 38
           assert not report["banned_old_phrase_detected"]
           assert (root / "aligned/whisper-transcript.txt").stat().st_size > 1000

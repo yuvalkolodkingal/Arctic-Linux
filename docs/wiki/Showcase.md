@@ -1,9 +1,10 @@
 # Arctic Linux showcase
 
 The video below is the published **3 October 2026** edition. A replacement English walkthrough
-with ElevenLabs narration and current default apps, photo wallpapers and local dictation is being
-prepared. Its audio, captures, captions and final render must be checked before new download
-links are published.
+with ElevenLabs River narration and current default apps, photo wallpapers and Voxtype 1.1.0
+local dictation is being prepared. The source also covers the one-time What's New summary and
+per-account Delete/Restore for packaged wallpapers. Its final-image captures, human listening,
+render and download checks remain pending, so no new video link is published yet.
 
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 

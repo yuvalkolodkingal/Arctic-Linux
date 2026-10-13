@@ -248,10 +248,11 @@
     "narration": "Dictation uses Voxtype and a multilingual Whisper model on this computer. Online installation downloads and verifies the engine and model. Offline installation queues setup for first boot. Settings shows the download size, progress, and any retry needed. Recording stays unavailable until setup is ready.",
     "type": "evidence",
     "evidence": [
-      "Voxtype 0.5.1 · local multilingual Whisper",
+      "Voxtype 1.1.0 · local multilingual Whisper",
       "Online install verifies engine and model",
       "Offline install queues clear first-boot recovery"
-    ]
+    ],
+    "tag": "Final-image capture pending"
   },
   {
     "id": "dictationrecord",
@@ -313,14 +314,17 @@
     "id": "winter",
     "chapter": "05 · Make it yours",
     "title": "A fresh coat.",
-    "body": "Snow-coloured surfaces, with real photo backgrounds.",
-    "image": "theme-winter",
-    "theme": "light",
+    "body": "Photo backgrounds you can hide and restore per account.",
     "shortcut": "Super + Shift + W · Wallpapers",
-    "narration": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
-    "source": "shell/dev/screenshots/wallpapers-winter.png",
-    "capture_required": true,
-    "tag": "Repository UI capture · photo collection"
+    "narration": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule. Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
+    "capture_required": false,
+    "tag": "Final-image capture pending",
+    "type": "evidence",
+    "evidence": [
+      "Delete hides a packaged wallpaper for this account",
+      "Restore brings hidden defaults back",
+      "Personal wallpaper choices stay untouched"
+    ]
   },
   {
     "id": "ember",
@@ -372,9 +376,16 @@
     "id": "updates",
     "chapter": "07 · Keep it running",
     "title": "Updates fit around your work.",
-    "body": "Signed stable packages. Background downloads. Install at restart.",
-    "image": "settings-updates",
-    "narration": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates."
+    "body": "Signed stable updates, with a one-time What's New summary.",
+    "narration": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. After each update, What's New shows the changes once, with release notes ready to reopen later. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates.",
+    "type": "evidence",
+    "capture_required": false,
+    "tag": "Final-image capture pending",
+    "evidence": [
+      "What's New appears once after each installed update",
+      "Release notes remain available from Settings → Updates",
+      "Signed stable packages install at restart"
+    ]
   },
   {
     "id": "lock",

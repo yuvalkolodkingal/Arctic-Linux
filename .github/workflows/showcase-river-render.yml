@@ -60,14 +60,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_TAG: showcase-river-source-2026-10-12
-          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+          MASTER_SHA256: ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765
         run: |
           mkdir -p showcase/audio showcase/renders/validation
           gh release download "$SOURCE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern narration-river-final.mp3 \
+            --pattern narration-river-final-2026-10-13.mp3 \
             --dir showcase/audio
-          mv -f showcase/audio/narration-river-final.mp3 showcase/audio/narration.mp3
+          mv -f showcase/audio/narration-river-final-2026-10-13.mp3 showcase/audio/narration.mp3
           printf '%s  %s\n' "$MASTER_SHA256" showcase/audio/narration.mp3 | sha256sum --check -
 
       - name: Build current evidence composition
@@ -114,7 +114,7 @@ jobs:
           assert visual["avg_frame_rate"] == "30/1", visual
           assert audio["codec_name"] == "aac", audio
           assert subtitle["codec_name"] == "mov_text", subtitle
-          assert abs(duration - 507.512041) <= 0.25, duration
+          assert abs(duration - 518.378980) <= 0.25, duration
           digest = hashlib.sha256(video.read_bytes()).hexdigest()
           receipt = {
               "source_commit": "${{ github.sha }}",
@@ -139,7 +139,7 @@ jobs:
           )
           print(json.dumps(receipt, sort_keys=True))
           PY
-          for item in "000.5:intro" "210.0:files" "304.0:dictation" "383.0:winter" "493.0:outro"; do
+          for item in "000.5:intro" "210.0:files" "304.0:dictation" "393.0:winter" "504.0:outro"; do
             second="${item%%:*}"
             label="${item##*:}"
             ffmpeg -hide_banner -loglevel error -ss "$second" \

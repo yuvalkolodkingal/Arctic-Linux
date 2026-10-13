@@ -67,7 +67,7 @@ def main() -> None:
     cues = approved["cues"]
     storyboard = json.loads(args.storyboard.read_text())
     duration = media_duration(args.audio)
-    if abs(duration - 507.559184) > 0.08:
+    if abs(duration - 518.378980) > 0.08:
         raise SystemExit(f"unexpected master duration: {duration:.6f}")
 
     logging.getLogger("faster_whisper").setLevel(logging.ERROR)
@@ -212,11 +212,16 @@ def main() -> None:
     sequence_ratio = matcher.ratio()
     coverage = matched / max(1, len(expected_words))
     normalized_transcript = " ".join(hypothesis_words)
-    target = "wallpaper picker includes the project's growing photo collection"
-    target_ratio = difflib.SequenceMatcher(
-        None, tokens(target), hypothesis_words,
-        autojunk=False,
-    ).find_longest_match().size / len(tokens(target))
+    targets = {
+        "corrected_winter_phrase_token_coverage": "wallpaper picker includes the project's growing photo collection",
+        "wallpaper_hide_restore_phrase_token_coverage": "built-in wallpapers can be deleted from your view and restored later",
+        "whats_new_phrase_token_coverage": "what's new shows the changes once with release notes ready to reopen later",
+    }
+    target_ratios = {
+        key: difflib.SequenceMatcher(None, tokens(value), hypothesis_words, autojunk=False)
+        .find_longest_match().size / len(tokens(value))
+        for key, value in targets.items()
+    }
     banned = "nineteen project photos" in normalized_transcript
     report = {
         "audio_duration_seconds": round(duration, 6),
@@ -229,7 +234,7 @@ def main() -> None:
         "word_error_rate": round(wer, 6),
         "sequence_ratio": round(sequence_ratio, 6),
         "exact_token_coverage": round(coverage, 6),
-        "corrected_winter_phrase_token_coverage": round(target_ratio, 6),
+        **{key: round(value, 6) for key, value in target_ratios.items()},
         "banned_old_phrase_detected": banned,
         "caption_cues": len(caption_output),
         "scenes": len(timed_scenes),
@@ -240,8 +245,8 @@ def main() -> None:
 
     if wer > 0.12 or sequence_ratio < 0.90 or coverage < 0.85:
         raise SystemExit("Whisper verification thresholds failed")
-    if target_ratio < 0.75 or banned:
-        raise SystemExit("Corrected winter wording verification failed")
+    if min(target_ratios.values()) < 0.75 or banned:
+        raise SystemExit("Required patched wording verification failed")
 
 
 if __name__ == "__main__":

@@ -1,205 +1,163 @@
 {
-  "status": "validated_unpublished_candidate",
-  "source_commit": "a000e91e85c3b584d052c9af589c37047d116af0",
-  "flow": {
-    "id": "AZ4TDAX0jyQtW3LwUlZZ",
-    "voice": {
-      "provider": "ElevenLabs",
-      "name": "River - Relaxed, Neutral, Informative",
-      "voice_id": "SAz9YHcvj6GT2YYXdXww",
-      "model": "eleven_multilingual_v2",
-      "language": "en"
-    },
-    "nodes": {
-      "intro_through_files": "sStDaZE5nlZtiMpU41xw",
-      "terminal_through_outro": "BhJOXKjBcez5004wfLtv",
-      "winter_replacement": "ZoVKeQ1VmiCT7ssOZeXH"
+  "status": "bounded_patches_generated_and_locally_aligned_final_render_pending",
+  "source_commit": null,
+  "source_branch": "codex/showcase-final-source-20261013",
+  "voice": {
+    "provider": "ElevenLabs",
+    "name": "River - Relaxed, Neutral, Informative",
+    "voice_id": "SAz9YHcvj6GT2YYXdXww",
+    "model": "eleven_multilingual_v2",
+    "language": "en",
+    "category": "premade"
+  },
+  "license": {
+    "basis": "Generated through the project maintainer’s connected ElevenLabs workspace; use is governed by that workspace plan and the ElevenLabs Terms of Service.",
+    "terms_url": "https://elevenlabs.io/terms-of-use",
+    "standalone_license_file_supplied": false,
+    "publisher_action_required": "Confirm the connected plan permits the intended public video before publication."
+  },
+  "base_master": {
+    "draft_release_tag": "showcase-river-source-2026-10-12",
+    "asset": "narration-river-final.mp3",
+    "public": false,
+    "bytes": 12182090,
+    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
+    "pyav_duration_seconds": 507.512041,
+    "provenance": {
+      "flow_id": "AZ4TDAX0jyQtW3LwUlZZ",
+      "nodes": {
+        "intro_through_files": "sStDaZE5nlZtiMpU41xw",
+        "terminal_through_outro": "BhJOXKjBcez5004wfLtv",
+        "winter_replacement": "ZoVKeQ1VmiCT7ssOZeXH"
+      },
+      "generated_sources": [
+        {
+          "id": "intro-through-files",
+          "session_id": "KaVBliJ0KTP09mN8GIIj",
+          "generation_id": "ODaaj6ojrG9Pyd7MDwYU",
+          "reported_duration_seconds": 222.77224489795918,
+          "container_duration_seconds": 222.798367,
+          "bytes": 3582361,
+          "sha256": "a66d2b7d95b8722d620fc94883f873dcc0eaf8516771b8d9df18110b95472a9c"
+        },
+        {
+          "id": "terminal-through-outro",
+          "session_id": "BfVGLRcUcRZrwaQ9r3O4",
+          "generation_id": "huGR0ehRkMfrtez37D0M",
+          "reported_duration_seconds": 285.6054421768707,
+          "container_duration_seconds": 285.64898,
+          "bytes": 4587971,
+          "sha256": "61dc43b0a60b52ad3d7b84f363c8ae338053960256106b748b6e138452a08bb1"
+        },
+        {
+          "id": "winter-replacement",
+          "session_id": "oZQQyFVCKUo3q7HSrz2j",
+          "generation_id": "ceAvL8SQsj60c6g1CRvL",
+          "reported_duration_seconds": 12.26013605442177,
+          "container_duration_seconds": 12.303673,
+          "bytes": 214446,
+          "sha256": "95616c286e8539772780a3267966a8d8f7bb4cb942cdd72c221c419682255a39"
+        }
+      ],
+      "prior_alignment_workflow": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
+      "prior_render_workflow": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733"
     }
   },
-  "bounded_generation_authorization": {
-    "variations_per_node": 1,
-    "run_count_per_node": 1,
-    "estimated_credits": 8562,
-    "estimated_usd": 1.7124,
+  "bounded_patch_authorization": {
+    "variations_per_patch": 1,
+    "run_count_per_patch": 1,
+    "estimated_credits": 199,
+    "estimated_usd": 0.0398,
+    "charged_credits": 199,
+    "charged_usd": 0.0398,
     "no_additional_variations_generated": true
   },
-  "generated_sources": [
+  "patches": [
     {
-      "id": "intro-through-files",
-      "session_id": "KaVBliJ0KTP09mN8GIIj",
-      "generation_id": "ODaaj6ojrG9Pyd7MDwYU",
-      "first_scene": "intro",
-      "last_scene": "files",
-      "reported_duration_seconds": 222.77224489795918,
-      "container_duration_seconds": 222.798367,
-      "bytes": 3582361,
-      "sha256": "a66d2b7d95b8722d620fc94883f873dcc0eaf8516771b8d9df18110b95472a9c"
+      "id": "wallpaper-delete-restore",
+      "purpose": "Add packaged-wallpaper Delete=hide and Restore behavior to the Winter scene.",
+      "text": "Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
+      "flow_id": "oF8RXAnv8KcREQ5P32UF",
+      "node_id": "nTX6LRjOoLsTV6QgTQsz",
+      "session_id": "GfyL2XBNi44ig7fJzoqZ",
+      "generation_id": "aBPN0JFwzHoHIzxAUoM6",
+      "created_at_unix_ms": 1791879524734,
+      "reported_duration_seconds": 5.2477097505668935,
+      "ffprobe_duration_seconds": 5.276735,
+      "bytes": 102015,
+      "sha256": "8d6aba63182933ecfd1b5c8c7fa6b178a29c2f7e25666f6e6250fc968a87a1d5",
+      "credits": 104,
+      "price_usd": 0.0208,
+      "published": false,
+      "committed": false
     },
     {
-      "id": "terminal-through-outro",
-      "session_id": "BfVGLRcUcRZrwaQ9r3O4",
-      "generation_id": "huGR0ehRkMfrtez37D0M",
-      "first_scene": "terminal",
-      "last_scene": "outro",
-      "reported_duration_seconds": 285.6054421768707,
-      "container_duration_seconds": 285.64898,
-      "bytes": 4587971,
-      "sha256": "61dc43b0a60b52ad3d7b84f363c8ae338053960256106b748b6e138452a08bb1"
-    },
-    {
-      "id": "winter-replacement",
-      "session_id": "oZQQyFVCKUo3q7HSrz2j",
-      "generation_id": "ceAvL8SQsj60c6g1CRvL",
-      "scene": "winter",
-      "text": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
-      "reported_duration_seconds": 12.26013605442177,
-      "container_duration_seconds": 12.303673,
-      "bytes": 214446,
-      "sha256": "95616c286e8539772780a3267966a8d8f7bb4cb942cdd72c221c419682255a39"
+      "id": "whats-new",
+      "purpose": "Add the one-time per-update What's New summary to the Updates scene.",
+      "text": "After each update, What's New shows the changes once, with release notes ready to reopen later.",
+      "flow_id": "PtpRX7Ow7UbO6D3WekNM",
+      "node_id": "tJy4jy8DoYU97cH4rUOO",
+      "session_id": "D3X3sFlv2cw5Dt9n1uJG",
+      "generation_id": "XCKS1S11ORYIs6CA6cGA",
+      "created_at_unix_ms": 1791879527288,
+      "reported_duration_seconds": 5.61922902494331,
+      "ffprobe_duration_seconds": 5.668571,
+      "bytes": 108285,
+      "sha256": "07608b53381c306d7dc81409e1f8aaaa16533a6ff1264503de0dfa7012817664",
+      "credits": 95,
+      "price_usd": 0.019,
+      "published": false,
+      "committed": false
     }
   ],
   "assembly": {
-    "input_segments": [
-      {
-        "source": "intro-through-files",
-        "start_seconds": 0,
-        "end_seconds": 222.772245
-      },
-      {
-        "source": "terminal-through-outro",
-        "start_seconds": 0,
-        "end_seconds": 156.56585
-      },
-      {
-        "source": "winter-replacement",
-        "start_seconds": 0,
-        "end_seconds": 11.921587
-      },
-      {
-        "source": "terminal-through-outro",
-        "start_seconds": 169.353084,
-        "end_seconds": 285.605442
-      }
-    ],
-    "replaced_terminal_clip_interval_seconds": {
-      "start": 156.56585,
-      "end": 169.353084
+    "script": "assemble-river-patches.py",
+    "cuts_on_base_seconds": {
+      "wallpaper_delete_restore": 391.63,
+      "whats_new": 468.06
     },
-    "final_file": "narration-river-final.mp3",
-    "format": {
-      "codec": "mp3",
-      "sample_rate_hz": 44100,
-      "channels": 1,
-      "bit_rate_bps": 192000
+    "local_reference": {
+      "file": "narration-river-patched.mp3",
+      "bytes": 12442896,
+      "sha256": "ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765",
+      "ffprobe_duration_seconds": 518.426122,
+      "pyav_duration_seconds": 518.37898,
+      "ffmpeg": "7.1.5-0+deb13u1"
     },
-    "duration_seconds": 507.559184,
-    "bytes": 12182090,
-    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb"
+    "published": false,
+    "preserved_in_draft_release": false
   },
   "validation": {
-    "exact_model_and_voice_verified_for_all_sources": true,
-    "source_media_checksums_verified": true,
-    "old_19_photo_winter_wording_removed_by_measured_cut": true,
-    "corrected_winter_text_present_in_replacement_source": true,
-    "sentence_alignment_available": true,
-    "scene_timing_available": true,
-    "local_speech_to_text_verification": "passed",
-    "transcript_leakage_review": "passed_for_verifier_logs",
-    "authentic_capture_review": "passed_with_disclosed_evidence",
-    "render_verified": true,
-    "public_video_published": false,
+    "local_speech_to_text_alignment": "passed",
+    "transcript_leakage_review": "passed_for_local_log",
     "whisper_metrics": {
-      "audio_duration_seconds": 507.512041,
+      "audio_duration_seconds": 518.37898,
       "model": "base.en",
       "detected_language": "en",
       "detected_language_probability": 1,
-      "expected_words": 1355,
-      "asr_words": 1363,
-      "edit_distance": 56,
-      "word_error_rate": 0.041328,
-      "sequence_ratio": 0.967623,
-      "exact_token_coverage": 0.97048,
-      "corrected_winter_phrase_token_coverage": 1,
+      "expected_words": 1387,
+      "asr_words": 1401,
+      "edit_distance": 51,
+      "word_error_rate": 0.03677,
+      "sequence_ratio": 0.971306,
+      "exact_token_coverage": 0.976208,
+      "corrected_winter_phrase_token_coverage": 1.0,
+      "wallpaper_hide_restore_phrase_token_coverage": 1.0,
+      "whats_new_phrase_token_coverage": 1.0,
       "banned_old_phrase_detected": false,
-      "caption_cues": 128,
+      "caption_cues": 130,
       "scenes": 38,
       "transcript_in_ci_log": false
     },
-    "verifier_versions": {
-      "python": "3.12.15",
-      "faster-whisper": "1.2.1",
-      "av": "16.0.1",
-      "ctranslate2": "4.8.2",
-      "huggingface-hub": "2.2.0",
-      "tokenizers": "0.23.3",
-      "preflight_seconds": 1,
-      "preflight_segments": 1,
-      "preflight_words": 3,
-      "transcript_in_ci_log": false
-    },
-    "workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
-    "alignment_artifact": {
-      "id": 11769902895,
-      "name": "showcase-river-whisper-alignment",
-      "bytes": 44296,
-      "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
-    },
-    "render_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733",
-    "render_artifact": {
-      "id": 11771111869,
-      "name": "Arctic-Linux-Showcase-River-1080p-candidate",
-      "bytes": 63981992,
-      "sha256": "c569ea70092736eec2d1abca29678211897b6aa665233d396aa38d0f4f5dfe5f"
-    },
-    "final_video": {
-      "path": "Arctic-Linux-Showcase-River-1080p.mp4",
-      "bytes": 60327673,
-      "sha256": "731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836",
-      "duration_seconds": 507.533333,
-      "width": 1920,
-      "height": 1080,
-      "frame_rate": "30/1",
-      "video_codec": "h264",
-      "audio_codec": "aac",
-      "subtitle_codec": "mov_text"
-    },
-    "full_decode_errors": 0,
-    "representative_frame_review": {
-      "status": "passed",
-      "count": 15,
-      "timestamps_seconds": [
-        0.5,
-        24,
-        56,
-        112,
-        198,
-        210,
-        238,
-        266,
-        283,
-        304,
-        322,
-        352,
-        383,
-        394,
-        493
-      ]
-    }
+    "human_listening_review": "pending",
+    "final_render_verified": false,
+    "public_video_published": false
   },
   "generated_audio_binaries_committed": false,
   "notes": [
     "Signed provider download URLs are intentionally excluded from source control.",
-    "Do not rerun the three nodes unless a named segment is proven unusable.",
-    "The validated candidate remains unpublished until the matching Arctic release finishes qualification.",
-    "The 30-day workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
-  ],
-  "source_archive": {
-    "kind": "draft_github_release",
-    "tag": "showcase-river-source-2026-10-12",
-    "asset": "narration-river-final.mp3",
-    "bytes": 12182090,
-    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
-    "preservation_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38304097685",
-    "public": false
-  }
+    "Do not rerun either patch: both authorized one-time generations succeeded and their immutable receipts are recorded.",
+    "The two patch files and assembled master currently exist only in the task workspace; preserve them in a non-public source archive before relying on remote rendering.",
+    "No raw audio or final MP4 was published by this source-preparation change."
+  ]
 }

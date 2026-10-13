@@ -1,6 +1,6 @@
 {
   "language": "en",
-  "timing_status": "pending_audio_alignment",
+  "timing_status": "pending_patched_audio_alignment",
   "cues": [
     {
       "scene": "intro",
@@ -724,6 +724,13 @@
       "end": null
     },
     {
+      "scene": "winter",
+      "sentence": 4,
+      "text": "Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
+      "start": null,
+      "end": null
+    },
+    {
       "scene": "ember",
       "sentence": 1,
       "text": "One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city.",
@@ -831,20 +838,27 @@
     {
       "scene": "updates",
       "sentence": 3,
-      "text": "Settings shows the latest check and anything waiting.",
+      "text": "After each update, What's New shows the changes once, with release notes ready to reopen later.",
       "start": null,
       "end": null
     },
     {
       "scene": "updates",
       "sentence": 4,
-      "text": "Save your work before choosing Restart and install.",
+      "text": "Settings shows the latest check and anything waiting.",
       "start": null,
       "end": null
     },
     {
       "scene": "updates",
       "sentence": 5,
+      "text": "Save your work before choosing Restart and install.",
+      "start": null,
+      "end": null
+    },
+    {
+      "scene": "updates",
+      "sentence": 6,
       "text": "There is no need to reinstall for desktop package updates.",
       "start": null,
       "end": null

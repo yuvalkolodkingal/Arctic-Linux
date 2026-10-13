@@ -105,11 +105,6 @@
     "crop": null
   },
   {
-    "scene": "winter",
-    "source": "shell/dev/screenshots/wallpapers-winter.png",
-    "crop": null
-  },
-  {
     "scene": "ember",
     "source": "design/backgrounds/ember-clouds-city-silhouette.jpg",
     "crop": null
@@ -132,11 +127,6 @@
   {
     "scene": "shortcuts",
     "source": "docs/wiki/images/keys.png",
-    "crop": null
-  },
-  {
-    "scene": "updates",
-    "source": "docs/wiki/images/settings-updates.png",
     "crop": null
   },
   {

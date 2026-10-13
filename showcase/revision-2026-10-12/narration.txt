@@ -56,7 +56,7 @@ Put the bar on any edge, and choose always visible, auto-hide, or dodge windows.
 
 Choose Winter or Polar night, or let a wallpaper provide the desktop's colours. The palette follows through the shell, window borders, terminal, and supported apps. Your own pictures stay selected when you change themes.
 
-Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.
+Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule. Built-in wallpapers can be deleted from your view and restored later, without affecting another account.
 
 One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city. It's the artist's finished photograph, preserved at its original resolution. Set it from the wallpaper picker, or browse the full collection on the project's gallery.
 
@@ -68,7 +68,7 @@ At your desk, arrange monitors and adjust their resolution, scale, and rotation.
 
 You don't have to memorise every shortcut. Super and slash opens a searchable guide. Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.
 
-Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates.
+Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. After each update, What's New shows the changes once, with release notes ready to reopen later. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates.
 
 Super and L locks the desktop. The clock stays visible, and notifications show a count without their contents. Arctic also locks before sleeping. Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away.
 

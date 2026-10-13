@@ -14,5 +14,19 @@
     "subtitle_codec": "mov_text"
   },
   "full_decode_errors": 0,
-  "published": false
+  "published": false,
+  "status": "superseded_previous_river_candidate",
+  "superseded_by": {
+    "source_branch": "codex/showcase-final-source-20261013",
+    "source_duration_seconds": 518.37898,
+    "caption_cues": 130,
+    "rendered": false,
+    "published": false,
+    "pending": [
+      "final-image captures",
+      "human listening",
+      "strict render validation",
+      "release binding"
+    ]
+  }
 }
