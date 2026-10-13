@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "update_id": "2026.10.12-1",
+  "update_id": "package-build",
   "title": "What’s new in Arctic Linux",
   "items": [
     {"icon": "microphone", "title": "Local dictation", "text": "Set up private on-device Hebrew and English dictation in Settings. Audio stays on this computer."},

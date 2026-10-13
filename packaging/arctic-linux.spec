@@ -1038,6 +1038,13 @@ done
 install -d %{buildroot}%{_datadir}/arctic/shell
 # tests/ and dev/ (design export scripts, Node) are development-only.
 tar -C shell --exclude=./tests --exclude=./dev -cf - . | tar -C %{buildroot}%{_datadir}/arctic/shell -xf -
+# Every published build has a distinct RPM Version-Release. Make it the runtime notes id so an
+# existing account sees this build's notes once even when a release engineer forgets to bump a
+# hand-maintained date. The renderer also rejects empty or insecure notes before packaging them.
+python3 -B tools/render-whats-new.py \
+  --source shell/whats-new.json \
+  --output %{buildroot}%{_datadir}/arctic/shell/whats-new.json \
+  --update-id 'arctic-%{version}-%{release}'
 # The launchers come from dotfiles/.local/bin when the dotfiles have them (installed above
 # with the other helpers); otherwise minimal ones.
 if [ ! -f dotfiles/.local/bin/arctic-shell ]; then
@@ -1174,6 +1181,15 @@ python3 -m unittest discover -s settings/tests -p 'test_*.py'
 # ---- stream 2 (Get apps): apps.py's contracts, the job commands, and that
 # protected-packages.conf covers modules/_system/desktop-base.
 PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s shell/tests -p 'test_apps.py'
+# The installed What's New identity is derived from this package build, and the source placeholder
+# is mandatory so a later release cannot silently revert to one static id.
+PYTHONDONTWRITEBYTECODE=1 python3 shell/tests/test_whats_new_build.py
+python3 -B - %{buildroot}%{_datadir}/arctic/shell/whats-new.json 'arctic-%{version}-%{release}' <<'PY'
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as stream:
+    notes = json.load(stream)
+assert notes['schema'] == 1 and notes['update_id'] == sys.argv[2] and notes['items']
+PY
 # ---- end stream 2
 for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/sessions.d/livesys-arctic \
          %{buildroot}%{_bindir}/arctic-shell %{buildroot}%{_bindir}/arctic-installer %{buildroot}%{_bindir}/arctic-update \
