@@ -765,7 +765,16 @@ def physical_poll(vm,name):
     # Only a complete newline-framed prefix is eligible for transient polling.
     # Raw serial is unchanged and the final host reader remains strict over ALL bytes.
     complete,separator,pending=data.rpartition(b"\n")
-    if len(pending)>65536:raise RuntimeError("physical unfinished line bound exceeded")
+    if len(pending)>65536:
+        # The original functional report is a single complete JSON record and
+        # can legitimately grow beyond the controller request-line bound.
+        # Only that exact prefix gets a separate finite in-progress allowance;
+        # final parsing still requires valid JSON, one newline and the END receipt.
+        if pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL "):
+            if len(pending)>4*1024*1024:
+                raise RuntimeError("physical functional report pending bound exceeded")
+            return True
+        raise RuntimeError("physical unfinished line bound exceeded")
     raw=(complete+b"\n" if separator else b"").decode("utf-8",errors="strict")
     if "ARCTIC-NATIVE-RUNNER-BEGIN " not in raw:return True
     if name not in physical_controllers:
