@@ -32,7 +32,7 @@
     "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
-    "test_native_bulk_transport.py": "73208e72abd39a06f9de2a7a5ad637773c1b59c3eb198cee604b28bcebb4fbb0",
+    "test_native_bulk_transport.py": "8d3324593c7a743bda344a2008d6ba31e3eaf1b9d90b68e6174f7dfe1c3a9e83",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
     "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
@@ -227,6 +227,20 @@
     "clear_proof": "the same selected head must return to its observed empty ROI before the secret is sent",
     "non_login_head_input": false,
     "selected_input_error_fallback": false,
+    "private_frame_retention": false,
+    "login_transition_settle_taskbar_audio_gates_unchanged": true,
+    "release_acceptance": false
+  },
+  "installed_login_global_pointer": {
+    "failure_run": "38391394485",
+    "failure_artifact": "11811132928",
+    "failure_artifact_sha256": "a5f3b2380e0374cde34b2c437bd2a76563c24a6ca8079069dae493da02e895e5",
+    "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
+    "validated_layout": "exact arctic_taskbar_gpu head 0 at 0,0 and head 1 at 1280,0 form one gap-free, non-overlapping 2560x720 rectangle",
+    "pointer_transform": "translate the login-head local target and park point by its validated x/y offset, then scale both over the exact global desktop extent",
+    "keyboard_and_capture_selection_unchanged": true,
+    "password_roi_thresholds_unchanged": true,
+    "privacy_diagnostic": "one closed stage code only; no path, pixel, typed value, or private frame",
     "private_frame_retention": false,
     "login_transition_settle_taskbar_audio_gates_unchanged": true,
     "release_acceptance": false

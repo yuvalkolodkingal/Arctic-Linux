@@ -1215,11 +1215,67 @@ def installed_login_heads(vm, display):
                  for row in sorted(rows, key=lambda row: row["head"]))
 
 
+INSTALLED_LOGIN_STAGE_CODES = frozenset({
+    "no-login-head", "head-capture-invalid", "target-missing",
+    "focused-empty-rejected", "public-probe-rejected", "clear-rejected",
+    "secret-roi-rejected",
+})
+
+
+def installed_login_stage(code):
+    """Emit one closed, path-free diagnostic without pixels or typed values."""
+    if type(code) is not str or code not in INSTALLED_LOGIN_STAGE_CODES:
+        raise RuntimeError("installed login stage code differs") from None
+    log("installed login stage: " + code)
+
+
+def installed_login_pointer_layout(display, selectors):
+    """Bind the single absolute tablet to the exact global two-head layout."""
+    if display is None:
+        return None
+    proof = display.proof
+    rows = sorted(proof["heads"], key=lambda row: row["head"])
+    left = min(row["xoff"] for row in rows)
+    top = min(row["yoff"] for row in rows)
+    right = max(row["xoff"] + row["width"] for row in rows)
+    bottom = max(row["yoff"] + row["height"] for row in rows)
+    area = sum(row["width"] * row["height"] for row in rows)
+    if (left != 0 or top != 0 or right != 2560 or bottom != 720
+            or area != (right - left) * (bottom - top)
+            or tuple((proof["gpu_id"], row["head"]) for row in rows) != selectors):
+        raise RuntimeError("installed login display layout differs")
+    return {(proof["gpu_id"], row["head"]):
+            (row["xoff"], row["yoff"], row["width"], row["height"], right, bottom)
+            for row in rows}
+
+
+def installed_login_pointer_coordinates(layout, selector, target):
+    """Translate one head-local target into the unbound USB tablet's global space."""
+    if (type(target) is not tuple or len(target) != 4
+            or any(type(value) is not int for value in target)):
+        raise RuntimeError("installed login pointer geometry differs")
+    x, y, width, height = target
+    if (not 2 <= width <= 16384 or not 2 <= height <= 16384
+            or not 0 <= x < width or not 0 <= y < height):
+        raise RuntimeError("installed login pointer geometry differs")
+    if layout is None:
+        return (x, y, width, height), (0, 0, width, height)
+    if selector not in layout:
+        raise RuntimeError("installed login pointer selector differs")
+    xoff, yoff, expected_width, expected_height, desktop_width, desktop_height = layout[selector]
+    if width != expected_width or height != expected_height:
+        raise RuntimeError("installed login pointer geometry differs")
+    return ((xoff + x, yoff + y, desktop_width, desktop_height),
+            (xoff, yoff, desktop_width, desktop_height))
+
+
 def installed_login(vm, display=None):
     """Focus and enter the installed password on one observed QMP login head."""
     selectors = installed_login_heads(vm, display)
+    pointer_layout = installed_login_pointer_layout(display, selectors)
     for attempt in (1, 2, 3):
         accepted_selector = None
+        last_stage = "no-login-head"
         for target_index, (target_device, target_head) in enumerate(selectors):
             before = []
             focused = []
@@ -1240,6 +1296,7 @@ def installed_login(vm, display=None):
                     before.append(path)
                 before_kinds = [vmtest.classify(path) if path else "none" for path in before]
                 if any(kind == "none" for kind in before_kinds):
+                    installed_login_stage("head-capture-invalid")
                     log("installed login controls are not visible")
                     return False
                 if before_kinds[target_index] != "login":
@@ -1251,12 +1308,18 @@ def installed_login(vm, display=None):
                 # public probe to change the same bounded ROI before sending a secret.
                 target = vmtest.login_password_target(before[target_index])
                 if target is None:
+                    installed_login_stage("target-missing")
                     log("installed login controls are not visible")
                     return False
-                x, y, width, height = target
-                vm.click(x, y, width, height, device=target_device, head=target_head)
+                # The VM has one unbound USB tablet, whose absolute axes cover
+                # the whole guest output layout. QMP's selected console still
+                # binds capture and keyboard identity, but does not make these
+                # tablet coordinates head-local.
+                focus_pointer, park_pointer = installed_login_pointer_coordinates(
+                    pointer_layout, (target_device, target_head), target)
+                vm.click(*focus_pointer, device=target_device, head=target_head)
                 vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
-                vm.pointer(0, 0, width, height, device=target_device, head=target_head)
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
                 time.sleep(1)
                 for device, head in selectors:
                     suffix = "" if device is None else f"-head{head}"
@@ -1270,6 +1333,7 @@ def installed_login(vm, display=None):
                                  and vmtest.login_password_cleared(
                                      before[target_index], focused[target_index]))
                 if not focused_empty:
+                    last_stage = "focused-empty-rejected"
                     continue
                 vm.type_text("probe", gap=0.3, device=target_device, head=target_head)
                 time.sleep(1)
@@ -1285,9 +1349,10 @@ def installed_login(vm, display=None):
                                   and vmtest.login_password_changed(
                                       focused[target_index], probe[target_index]))
                 vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
-                vm.pointer(0, 0, width, height, device=target_device, head=target_head)
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
                 time.sleep(1)
                 if not probe_accepted:
+                    last_stage = "public-probe-rejected"
                     continue
                 for device, head in selectors:
                     suffix = "" if device is None else f"-head{head}"
@@ -1301,6 +1366,7 @@ def installed_login(vm, display=None):
                                     and vmtest.login_password_cleared(
                                         focused[target_index], cleared[target_index]))
                 if not cleared_accepted:
+                    last_stage = "clear-rejected"
                     continue
                 vm.type_text(password, gap=0.3, device=target_device, head=target_head)
                 time.sleep(1)
@@ -1315,6 +1381,8 @@ def installed_login(vm, display=None):
                             and before_kinds[target_index] == typed_kinds[target_index] == "login"
                             and vmtest.login_password_changed(
                                 cleared[target_index], typed[target_index]))
+                if not accepted:
+                    last_stage = "secret-roi-rejected"
             except BaseException as error:
                 primary = error
                 raise
@@ -1325,10 +1393,10 @@ def installed_login(vm, display=None):
                 break
             vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
             if target is not None:
-                vm.pointer(0, 0, target[2], target[3],
-                           device=target_device, head=target_head)
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
             time.sleep(1)
         if accepted_selector is None:
+            installed_login_stage(last_stage)
             log("installed password field did not accept physical input")
             return False
         accepted_device, accepted_head = accepted_selector
