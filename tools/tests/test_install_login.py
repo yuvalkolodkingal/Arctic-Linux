@@ -92,7 +92,8 @@ def load_functions(kind, changed=True, fraction=0, fake_os=None):
     fake_time = FakeTime()
     logs = []
     module = ast.Module(body=[FUNCTIONS[name] for name in (
-        'discard_private_shot', 'discard_private_shots', 'installed_login_heads',
+        'discard_private_shot', 'discard_private_shots', 'discard_private_shots_preserving',
+        'installed_login_heads',
         'installed_login', 'installed_session_settled')],
                         type_ignores=[])
     fake_os = fake_os or FakeOS()
@@ -348,6 +349,44 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertFalse(fixture.installed_session_settled(vm, display_proof()))
         self.assertEqual(fixture.logs, ['installed session head capture is invalid'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_session_cancellation_during_sleep_cleans_retained_heads(self):
+        failure = '/out/boot-50-session-01-head0.png'
+        fake_os = FakeOS(fail=failure)
+        fixture = load_functions(lambda _path: 'other', fake_os=fake_os)
+        original_sleep = fixture.time.sleep
+        calls = 0
+        def sleep(seconds):
+            nonlocal calls
+            if seconds == 20:
+                calls += 1
+                if calls == 2:
+                    raise KeyboardInterrupt('synthetic cancellation')
+            original_sleep(seconds)
+        fixture.time.sleep = sleep
+        vm = FakeVM()
+        with self.assertRaisesRegex(KeyboardInterrupt, 'synthetic cancellation'):
+            fixture.installed_session_settled(vm, display_proof())
+        self.assertEqual(sorted(set(fake_os.removed)), sorted(vm.shots))
+        self.assertIn('/out/boot-50-session-01-head1.png', fake_os.removed)
+
+    def test_session_loop_condition_error_survives_cleanup_failure(self):
+        failure = '/out/boot-50-session-01-head0.png'
+        fake_os = FakeOS(fail=failure)
+        fixture = load_functions(lambda _path: 'other', fake_os=fake_os)
+        vm = FakeVM()
+        calls = 0
+        def alive():
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise RuntimeError('synthetic alive failure')
+            return True
+        vm.alive = alive
+        with self.assertRaisesRegex(RuntimeError, '^synthetic alive failure$'):
+            fixture.installed_session_settled(vm, display_proof())
+        self.assertEqual(sorted(set(fake_os.removed)), sorted(vm.shots))
+        self.assertIn('/out/boot-50-session-01-head1.png', fake_os.removed)
 
 
 class VmShotSelectorTests(unittest.TestCase):

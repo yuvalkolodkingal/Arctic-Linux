@@ -1171,6 +1171,15 @@ def discard_private_shots(paths):
         raise RuntimeError("private screenshot cleanup failed") from None
 
 
+def discard_private_shots_preserving(paths, primary):
+    """Clean every private frame without replacing an exception already in flight."""
+    try:
+        discard_private_shots(paths)
+    except BaseException:
+        if primary is None:
+            raise
+
+
 def installed_login_heads(vm, display):
     """Return exact QMP head selectors from the already verified display proof."""
     if display is None:
@@ -1213,6 +1222,7 @@ def installed_login(vm, display=None):
         before = []
         typed = []
         private = []
+        primary = None
         try:
             for device, head in selectors:
                 suffix = "" if device is None else f"-head{head}"
@@ -1239,8 +1249,11 @@ def installed_login(vm, display=None):
                                 and vmtest.login_password_changed(old, new)
                                 for old, new, old_kind, new_kind
                                 in zip(before, typed, before_kinds, typed_kinds)))
+        except BaseException as error:
+            primary = error
+            raise
         finally:
-            discard_private_shots(private)
+            discard_private_shots_preserving(private, primary)
         if not accepted:
             vm.keys("ctrl-a", "backspace")
             time.sleep(1)
@@ -1254,6 +1267,7 @@ def installed_login(vm, display=None):
             probe_index += 1
             probes = []
             private = []
+            primary = None
             try:
                 for device, head in selectors:
                     suffix = "" if device is None else f"-head{head}"
@@ -1262,8 +1276,11 @@ def installed_login(vm, display=None):
                     path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
                     probes.append(path)
                 kinds = [vmtest.classify(path) if path else "none" for path in probes]
+            except BaseException as error:
+                primary = error
+                raise
             finally:
-                discard_private_shots(private)
+                discard_private_shots_preserving(private, primary)
             if any(kind == "none" for kind in kinds):
                 log("installed login transition head capture is invalid")
                 return False
@@ -1280,54 +1297,59 @@ def installed_login(vm, display=None):
 def installed_session_settled(vm, display=None):
     """Require a stable installed desktop and reject any return to SDDM."""
     selectors = installed_login_heads(vm, display)
-    t = time.time()
     previous = []
-    stable = 0
-    index = 0
-    while time.time() - t < 900 and vm.alive():
-        time.sleep(20)
-        index += 1
-        current = []
-        private = []
-        try:
-            for device, head in selectors:
-                suffix = "" if device is None else f"-head{head}"
-                name = f"boot-50-session-{index:02d}{suffix}"
-                private.append(f"{out}/{name}.png")
-                path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
-                current.append(path)
-            kinds = [vmtest.classify(path) if path else "none" for path in current]
-        except BaseException:
-            discard_private_shots(previous + private)
-            raise
-        if any(kind == "none" for kind in kinds):
-            discard_private_shots(previous + private)
-            log("installed session head capture is invalid")
-            return False
-        if any(kind == "login" for kind in kinds):
-            discard_private_shots(previous + private)
-            log("installed session returned to the login screen")
-            return False
-        if previous:
+    primary = None
+    try:
+        t = time.time()
+        stable = 0
+        index = 0
+        while time.time() - t < 900 and vm.alive():
+            time.sleep(20)
+            index += 1
+            current = []
+            private = []
             try:
-                stable = stable + 1 if all(vmtest.changed_fraction(old, new) < 0.02
-                                           for old, new in zip(previous, current)) else 0
-            except BaseException:
-                discard_private_shots(previous + private)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-50-session-{index:02d}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    current.append(path)
+                kinds = [vmtest.classify(path) if path else "none" for path in current]
+            except BaseException as error:
+                discard_private_shots_preserving(private, error)
                 raise
-            try:
-                discard_private_shots(previous)
-            except BaseException:
+            if any(kind == "none" for kind in kinds):
                 discard_private_shots(private)
-                raise
-        previous = current
-        if stable >= 2 and time.time() - t > 90:
-            discard_private_shots(previous)
-            log(f"session settled after {time.time() - t:.0f}s")
-            return True
-    discard_private_shots(previous)
-    log("installed session did not settle within 900s")
-    return False
+                log("installed session head capture is invalid")
+                return False
+            if any(kind == "login" for kind in kinds):
+                discard_private_shots(private)
+                log("installed session returned to the login screen")
+                return False
+            if previous:
+                try:
+                    stable = stable + 1 if all(vmtest.changed_fraction(old, new) < 0.02
+                                               for old, new in zip(previous, current)) else 0
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+                try:
+                    discard_private_shots(previous)
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+            previous = current
+            if stable >= 2 and time.time() - t > 90:
+                log(f"session settled after {time.time() - t:.0f}s")
+                return True
+        log("installed session did not settle within 900s")
+        return False
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        discard_private_shots_preserving(previous, primary)
 
 
 def stage_boot():
