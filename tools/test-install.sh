@@ -1222,6 +1222,7 @@ def installed_login(vm, display=None):
         accepted_selector = None
         for target_index, (target_device, target_head) in enumerate(selectors):
             before = []
+            focused = []
             probe = []
             cleared = []
             typed = []
@@ -1255,6 +1256,21 @@ def installed_login(vm, display=None):
                 x, y, width, height = target
                 vm.click(x, y, width, height, device=target_device, head=target_head)
                 vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
+                vm.pointer(0, 0, width, height, device=target_device, head=target_head)
+                time.sleep(1)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-focused-empty-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    focused.append(path)
+                focused_kinds = [vmtest.classify(path) if path else "none" for path in focused]
+                focused_empty = (all(kind != "none" for kind in focused_kinds)
+                                 and before_kinds[target_index] == focused_kinds[target_index] == "login"
+                                 and vmtest.login_password_cleared(
+                                     before[target_index], focused[target_index]))
+                if not focused_empty:
+                    continue
                 vm.type_text("probe", gap=0.3, device=target_device, head=target_head)
                 time.sleep(1)
                 for device, head in selectors:
@@ -1265,9 +1281,9 @@ def installed_login(vm, display=None):
                     probe.append(path)
                 probe_kinds = [vmtest.classify(path) if path else "none" for path in probe]
                 probe_accepted = (all(kind != "none" for kind in probe_kinds)
-                                  and before_kinds[target_index] == probe_kinds[target_index] == "login"
+                                  and focused_kinds[target_index] == probe_kinds[target_index] == "login"
                                   and vmtest.login_password_changed(
-                                      before[target_index], probe[target_index]))
+                                      focused[target_index], probe[target_index]))
                 vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
                 vm.pointer(0, 0, width, height, device=target_device, head=target_head)
                 time.sleep(1)
@@ -1281,9 +1297,9 @@ def installed_login(vm, display=None):
                     cleared.append(path)
                 cleared_kinds = [vmtest.classify(path) if path else "none" for path in cleared]
                 cleared_accepted = (all(kind != "none" for kind in cleared_kinds)
-                                    and before_kinds[target_index] == cleared_kinds[target_index] == "login"
+                                    and focused_kinds[target_index] == cleared_kinds[target_index] == "login"
                                     and vmtest.login_password_cleared(
-                                        before[target_index], cleared[target_index]))
+                                        focused[target_index], cleared[target_index]))
                 if not cleared_accepted:
                     continue
                 vm.type_text(password, gap=0.3, device=target_device, head=target_head)

@@ -148,7 +148,7 @@ class InstalledLoginTests(unittest.TestCase):
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
         self.assertEqual(vm.typed, 6)
         # Three exact 150s transition windows plus probe, clear, secret and cleanup.
-        self.assertEqual(fixture.time.now, 462)
+        self.assertEqual(fixture.time.now, 465)
         self.assertEqual(fixture.logs[-1], 'installed login did not transition (attempt 3)')
 
     def test_perpetual_login_discards_every_password_bearing_frame(self):
@@ -232,9 +232,9 @@ class InstalledLoginTests(unittest.TestCase):
         private_calls = [call for call in vm.calls if call[0].startswith('boot-42-password-')]
         self.assertEqual([selector for _, selector in private_calls],
                          [{'device': 'arctic_taskbar_gpu', 'head': head}
-                          for head in (0, 1) for _phase in (0,)] +
+                          for head in (0, 1)] +
                          [{'device': 'arctic_taskbar_gpu', 'head': head}
-                          for _phase in range(4) for head in (0, 1)])
+                          for _phase in range(5) for head in (0, 1)])
         self.assertEqual([call[0] for call in vm.type_calls], ['probe', 'fixture-password'])
         self.assertEqual([call[2] for call in vm.type_calls], [
             {'device': 'arctic_taskbar_gpu', 'head': 1},
@@ -284,7 +284,9 @@ class InstalledLoginTests(unittest.TestCase):
     def test_clear_proof_failure_never_sends_secret(self):
         def kind(path):
             return 'dark' if 'head0' in path else 'login'
-        fixture = load_functions(kind, changed=True, cleared=False)
+        fixture = load_functions(
+            kind, changed=True,
+            cleared=lambda _before, after: 'password-cleared' not in after)
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual([value for value, _, _ in vm.type_calls], ['probe'])
@@ -324,13 +326,30 @@ class InstalledLoginTests(unittest.TestCase):
     def test_selected_pointer_failure_cleans_probe_frames_and_sends_no_secret(self):
         fixture = load_functions(lambda _path: 'login')
         vm = FakeVM()
+        calls = 0
         def pointer(*_args, **_selector):
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                return
             raise RuntimeError('synthetic selected pointer failure')
         vm.pointer = pointer
         with self.assertRaisesRegex(RuntimeError, 'synthetic selected pointer failure'):
             fixture.installed_login(vm, display_proof())
         self.assertEqual([value for value, _, _ in vm.type_calls], ['probe'])
         self.assertFalse(any(value == 'fixture-password' for value, _, _ in vm.type_calls))
+        self.assertNotIn(('ret',), vm.keys_sent)
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_selected_initial_pointer_failure_cleans_before_frames_and_sends_no_text(self):
+        fixture = load_functions(lambda _path: 'login')
+        vm = FakeVM()
+        def pointer(*_args, **_selector):
+            raise RuntimeError('synthetic selected pointer failure')
+        vm.pointer = pointer
+        with self.assertRaisesRegex(RuntimeError, 'synthetic selected pointer failure'):
+            fixture.installed_login(vm, display_proof())
+        self.assertEqual(vm.type_calls, [])
         self.assertNotIn(('ret',), vm.keys_sent)
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
@@ -345,15 +364,32 @@ class InstalledLoginTests(unittest.TestCase):
         target = {'device': 'arctic_taskbar_gpu', 'head': 1}
         relevant = [(kind, value, selector) for kind, value, selector in vm.events
                     if kind in ('click', 'keys', 'type', 'pointer')]
-        self.assertEqual(relevant[:7], [
+        self.assertEqual(relevant[:8], [
             ('click', (600, 468, 1280, 720), target),
             ('keys', ('ctrl-a', 'backspace'), target),
+            ('pointer', (0, 0, 1280, 720), target),
             ('type', 'probe', target),
             ('keys', ('ctrl-a', 'backspace'), target),
             ('pointer', (0, 0, 1280, 720), target),
             ('type', 'fixture-password', target),
             ('keys', ('ret',), target),
         ])
+
+    def test_public_probe_compares_against_pointer_parked_focused_empty_frame(self):
+        def kind(path):
+            if Path(path).name.startswith('boot-43-probe-'):
+                return 'other'
+            return 'login'
+        comparisons = []
+        fixture = load_functions(
+            kind,
+            changed=lambda before, after: comparisons.append((before, after)) or True)
+        vm = FakeVM()
+        self.assertTrue(fixture.installed_login(vm, display_proof()))
+        self.assertIn('password-focused-empty', comparisons[0][0])
+        self.assertIn('password-public-probe', comparisons[0][1])
+        events = [kind for kind, _, _ in vm.events]
+        self.assertLess(events.index('pointer'), events.index('type'))
 
     def test_selected_input_failure_cleans_all_captured_heads(self):
         fixture = load_functions(lambda _path: 'login')
@@ -446,7 +482,7 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
-        self.assertEqual(fixture.time.now, 462)
+        self.assertEqual(fixture.time.now, 465)
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_transition_selected_head_failure_cleans_all_probe_paths(self):

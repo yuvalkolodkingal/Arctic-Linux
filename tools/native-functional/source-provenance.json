@@ -32,7 +32,7 @@
     "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
-    "test_native_bulk_transport.py": "088d28baeba6552b0d0c4abe6bf06657de289cc517a17a1454baabb06e8b95c3",
+    "test_native_bulk_transport.py": "73208e72abd39a06f9de2a7a5ad637773c1b59c3eb198cee604b28bcebb4fbb0",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
     "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
