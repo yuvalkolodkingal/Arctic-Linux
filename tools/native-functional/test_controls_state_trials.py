@@ -27,9 +27,95 @@ N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 BOUNDED_RETRY_NATIVE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
 STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
+FRESH_PLAYER_RESTART_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
+
+
+def restore_fresh_player_restart_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=FRESH_PLAYER_RESTART_NATIVE_SHA:
+        raise AssertionError('Fresh player restart Native source differs')
+    substitutions=(("""    def visual_media(self, restart=None):
+        player_attempt_limit=2
+        if restart is None:
+            fixture,expected,source_sha=self.visual_fixture()
+            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])
+        else:
+            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}
+                    and type(restart['player_attempts']) is list
+                    and len(restart['player_attempts'])==1,
+                    'visual player restart state differs')
+            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']
+            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']
+                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']
+                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],
+                    'visual player restart fixture identity differs')
+        player_attempt=len(restart['player_attempts'])+1
+        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')
+""","""    def visual_media(self):
+        fixture,expected,source_sha=self.visual_fixture()
+"""),("        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')\n",
+              "        ipc=self.root/'visual-reference-ipc.sock'\n"),("        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')\n",
+              "        image=self.root/'celluloid-reference.png'\n"),("""        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
+                        or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
+                'visual restart did not create a fresh owned player')
+""",''),("                  player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,\n",''),("""        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit
+                          and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
+        player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
+            'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}
+        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
+        restart['player_attempts'].append(player_receipt)
+        info['player_attempts']=restart['player_attempts']
+        info['accepted_player_attempt']=player_attempt if oracle.get('status')=='matched' else None
+""",''),("        if getattr(self,'gui_v6',False) and not restart_eligible:\n",
+              "        if getattr(self,'gui_v6',False):\n"),("""        if restart_eligible:
+            if getattr(self,'gui_v6',False): self.finish_native_protocol()
+            try:
+                player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
+                player_receipt['owned_player_cleanup_completed']=True
+            finally:
+                (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
+            return self.visual_media(restart)
+""",''),("            require(1<=len(players)<=3,'controls trial primary player inventory differs')\n",
+              "            require(1<=len(players)<=2,'controls trial primary player inventory differs')\n"),("""            retired=[row['player'] for row in primary.get('player_attempts',[])
+                     if row.get('owned_player_cleanup_completed') is True]
+            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
+                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
+                    'controls trial prior retired player identity differs')
+            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
+            for player in players:
+                if (player['pid'],player['start_ticks']) not in retired_keys:
+                    retire_renderer_player(player,self.uid)
+""","            for player in players: retire_renderer_player(player,self.uid)\n"),("""def retire_reference_player(proof,uid,ipc,root,attempt):
+    \"\"\"Retire exactly one failed primary player before its sole fresh restart.\"\"\"
+    require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()
+            and isinstance(ipc,Path) and ipc.parent==root and ipc.name=='visual-reference-ipc-1.sock',
+            'visual restart cleanup target differs')
+    retire_renderer_player(proof,uid)
+    removed=False
+    try:
+        info=ipc.lstat()
+        require(stat.S_ISSOCK(info.st_mode) and info.st_uid==uid,
+                'visual restart IPC owner/type differs')
+        ipc.unlink()
+        removed=True
+    except FileNotFoundError:
+        pass
+    require(not ipc.exists() and not ipc.is_symlink(),'visual restart IPC cleanup incomplete')
+    return dict(process_identity_retired=True,owned_ipc_absent=True,
+                owned_ipc_removed=removed,release_acceptance=False)
+
+
+""",''))
+    for new,old in substitutions:
+        if source.count(new)!=1:raise AssertionError('Fresh player restart inverse occurrence differs')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
+        raise AssertionError('Pre-fresh-player-restart Native source differs')
+    return source
 
 
 def restore_bounded_retry_native(source):
+    source=restore_fresh_player_restart_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
         raise AssertionError('Bounded retry Native source differs')
     retry_current="""        attempt_limit=6
@@ -105,6 +191,8 @@ def restore_controls_guest(source):
     head=native[:native.index('def main():\n')]
     source=original[:original.index('def main():\n')]+source[len(head):]
     substitutions=(
+        ("'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb'",
+         "'celluloid-reference.png', 'visual-reference-frame.rgb'"),
         ('0-controls-state-trials.json','0-controlled-renderer-trials.json'),
         ('controls-trial-transition/reference.png','renderer-trial-default/reference.png'),
         ('controls-trial-hidden/reference.png','renderer-trial-gl/reference.png'),
@@ -302,17 +390,36 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual([r['status'] for r in value['trials']],['observed','observed'])
             self.assertEqual(set(p.name for p in Path(temporary).glob('0-*.json')),{'0-controls-state-trials.json'})
 
+    def test_failure_diagnostics_skip_exact_already_retired_restart_player(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);fixture=root/'same-fixture';fixture.write_bytes(b'fixed')
+            expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.stage='live';smoke.launches=[]
+            players=[dict(executable='/usr/bin/celluloid',pid=11+i,start_ticks=21+i) for i in range(3)]
+            smoke.owned=players;smoke.finish_native_protocol=Mock()
+            primary=dict(oracle=dict(status='unmatched'),screenshot=dict(sha256='a'*64),
+                capture_precondition=dict(before_visible=False,after_visible=False),fixture_sha256=N.digest(fixture),
+                expected_rgb_sha256=N.digest(expected),player_attempts=[dict(player=players[1],owned_player_cleanup_completed=True),
+                dict(player=players[2],owned_player_cleanup_completed=False)])
+            trials=[Mock(owned=[],launches=[],observe=Mock(return_value=dict(player=dict(pid=30+i,start_ticks=40+i),
+                    status='observed'))) for i in range(2)]
+            retired=[]
+            with patch.object(N,'ControlsTrialSmoke',side_effect=trials),patch.object(N,'retire_renderer_player',side_effect=lambda p,u:retired.append(p)):
+                smoke.controlled_controls_trials(fixture,expected,'b'*64,primary)
+            self.assertEqual(retired,[players[0],players[2]])
+
     def test_actual_primary_capture_still_fails_after_successful_controls_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);fixture=root/'fixture';fixture.write_bytes(b'source-fixed-synthetic-media')
             expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
-            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.gui_v6=True
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.gui_v6=True;smoke.owned=[]
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'c'*64));smoke.trace=Mock()
-            player=dict(pid=71,start_ticks=3,client_id='10',executable='/usr/bin/celluloid',executable_sha256='a'*64)
-            client=dict(id=10,pid=71,x=0,y=0,width=160,height=120,monitor='synthetic-monitor',
-                        is_focused=True,is_visible=True,is_fullscreen=True)
+            players=[dict(pid=71+i,start_ticks=3+i,client_id=str(10+i),executable='/usr/bin/celluloid',
+                          executable_sha256=chr(97+i)*64) for i in range(2)]
+            def client(player):return dict(id=int(player['client_id']),pid=player['pid'],x=0,y=0,width=160,height=120,
+                        monitor='synthetic-monitor',is_focused=True,is_visible=True,is_fullscreen=True)
             monitors=dict(monitors=[dict(name='synthetic-monitor',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)])
-            smoke.fresh_window=Mock(return_value=player);smoke.alive=Mock(return_value=client)
+            smoke.fresh_window=Mock(side_effect=lambda *args:(smoke.owned.append(players.pop(0)) or smoke.owned[-1]));smoke.alive=Mock(side_effect=lambda player:client(player))
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False))
             smoke.controlled_controls_trials=Mock(return_value=dict(oracle=dict(status='matched'),release_acceptance=False))
@@ -328,23 +435,27 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_calls=[]
+            time_calls={71:0,72:0}
             def prop(path,key,pid,uid):
                 if key!='time-pos':return media[key]
-                time_calls.append(True)
-                return 0 if len(time_calls)==1 else .2
-            endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(root/'visual-reference-ipc.sock'))
+                time_calls[pid]+=1
+                return 0 if time_calls[pid]==1 else .2
+            endpoints=[socket.socket(socket.AF_UNIX) for _ in range(2)]
+            for index,endpoint in enumerate(endpoints,1):endpoint.bind(str(root/f'visual-reference-ipc-{index}.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                with patch.object(N,'retire_reference_player',return_value=dict(process_identity_retired=True,
+                        owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
+                     patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
-                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
                 smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
                 self.assertEqual(smoke.controlled_controls_trials.call_args.args[3]['oracle'],actual['oracle'])
-            finally:endpoint.close()
+            finally:
+                for endpoint in endpoints:endpoint.close()
 
     def test_first_failure_still_attempts_second_fixed_error_and_duplicate_player_unknown(self):
         for failure in ('exception','reused-player'):
@@ -389,17 +500,18 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(path.read_bytes(),before)
             with self.assertRaises(RuntimeError):N.write_controls_receipt(root,os.getuid(),{'test':'x'*(512*1024)})
 
-    def test_finite_public_inventory_swaps_only_three_optional_slots(self):
+    def test_finite_public_inventory_swaps_controls_and_adds_bounded_restart_screenshot(self):
         spec=importlib.util.spec_from_file_location('controls_inventory_guest',HERE/'guest-check-native-v6.py')
         guest=importlib.util.module_from_spec(spec);spec.loader.exec_module(guest)
         new=guest.NATIVE_PUBLIC_EVIDENCE_FILES
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
         removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png',
+               'celluloid-reference-player-2.png'}
         self.assertEqual(set(new)-set(env['NATIVE_PUBLIC_EVIDENCE_FILES']),added)
         self.assertEqual(set(env['NATIVE_PUBLIC_EVIDENCE_FILES'])-set(new),removed)
-        self.assertEqual(len(new),len(env['NATIVE_PUBLIC_EVIDENCE_FILES']))
+        self.assertEqual(len(new),len(env['NATIVE_PUBLIC_EVIDENCE_FILES'])+1)
         for name in added:self.assertTrue(guest.native_public_evidence_member(name))
         for name in removed|{'controls-trial-private/reference.png','controls-trial-transition/private.png'}:
             with self.assertRaises(RuntimeError):guest.native_public_evidence_member(name)
