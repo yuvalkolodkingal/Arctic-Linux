@@ -315,10 +315,57 @@ EXTERNAL_MEMBER_DIAGNOSTICS = {
     'installer/transport-manifest.json': 'installer-transport',
 }
 
+# Performance members are classified only by this finite stage/type grammar. The
+# classification discloses no filename outside the reviewed inventory and gives
+# no scanner exemption. Unknown members retain a closed stage/suffix category.
+PERFORMANCE_MEMBER_CATEGORIES = frozenset(
+    {'performance-status', 'performance-observer-source', 'performance-comparison',
+     'performance-other-text', 'performance-other-binary'} |
+    {'performance-' + image + '-install-' + role
+        for image in ('baseline', 'candidate')
+        for role in ('harness', 'serial', 'toolchain', 'other-text', 'other-binary')} |
+    {'performance-' + image + '-boot-' + str(boot) + '-' + role
+        for image in ('baseline', 'candidate') for boot in (1, 2, 3)
+        for role in ('harness', 'serial', 'context', 'toolchain', 'other-text', 'other-binary')})
+
+
+def performance_external_member_category(relative):
+    """Return one closed public role; never return or interpolate a member path."""
+    if type(relative) is not str:
+        return 'performance-other-text'
+    fixed = {'status.json': 'performance-status',
+             'observer-source.txt': 'performance-observer-source',
+             'comparison.json': 'performance-comparison'}
+    if relative in fixed:
+        return fixed[relative]
+    match = re.fullmatch(r'(baseline|candidate)-install-harness\.log', relative)
+    if match:
+        return 'performance-' + match[1] + '-install-harness'
+    match = re.fullmatch(r'(baseline|candidate)/(.*)', relative)
+    if match:
+        role = {'serial-install.log': 'serial', 'vm-toolchain.txt': 'toolchain'}.get(match[2])
+        if role is None:
+            role = 'other-binary' if Path(match[2]).suffix in BINARY else 'other-text'
+        return 'performance-' + match[1] + '-install-' + role
+    match = re.fullmatch(r'runs/(baseline|candidate)/([123])/(.*)', relative)
+    if match:
+        role = {'harness.log': 'harness', 'serial-boot.log': 'serial',
+                'performance-context.json': 'context', 'vm-toolchain.txt': 'toolchain'}.get(match[3])
+        if role is None:
+            role = 'other-binary' if Path(match[3]).suffix in BINARY else 'other-text'
+        return 'performance-' + match[1] + '-boot-' + match[2] + '-' + role
+    return 'performance-other-binary' if Path(relative).suffix in BINARY else 'performance-other-text'
+
 
 def diagnose_external_member(relative, error):
     """Source-closed member/rejection labels; never print any path or message."""
-    role = EXTERNAL_MEMBER_DIAGNOSTICS.get(relative, 'other-text') if type(relative) is str else 'other-text'
+    role = EXTERNAL_MEMBER_DIAGNOSTICS.get(relative) if type(relative) is str else None
+    performance_member = (type(relative) is str and (relative in {'status.json', 'observer-source.txt', 'comparison.json'}
+        or re.fullmatch(r'(?:baseline|candidate)-install-harness\.log', relative)
+        or re.fullmatch(r'(?:baseline|candidate)/.*', relative)
+        or re.fullmatch(r'runs/(?:baseline|candidate)/[123]/.*', relative)))
+    if role is None:
+        role = performance_external_member_category(relative) if performance_member else 'other-text'
     reason = 'other-error'
     if type(error) is RuntimeError and type(error.args) is tuple and len(error.args) == 1 and type(error.args[0]) is str:
         if error.args[0] == 'Sensitive text in external evidence':
