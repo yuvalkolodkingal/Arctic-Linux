@@ -1,0 +1,147 @@
+name: Verify River showcase master
+
+on:
+  push:
+    branches:
+      - codex/showcase-river-production
+    paths:
+      - .github/workflows/showcase-river-verify.yml
+      - showcase/revision-2026-10-12/align-river.py
+      - showcase/revision-2026-10-12/caption-text.json
+      - showcase/revision-2026-10-12/storyboard.json
+  workflow_dispatch:
+
+permissions:
+  # GitHub hides draft releases from a read-scoped workflow token.
+  # This workflow runs only on a trusted branch push or manual dispatch.
+  contents: write
+
+concurrency:
+  group: showcase-river-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  whisper-alignment:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHONUNBUFFERED: "1"
+      HF_HUB_DISABLE_PROGRESS_BARS: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pinned verifier
+        run: |
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1 av==16.0.1
+
+      - name: Download and verify River master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: showcase-river-source-2026-10-12
+          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+        run: |
+          mkdir -p showcase/revision-2026-10-12/work
+          gh release download "$SOURCE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern narration-river-final.mp3 \
+            --dir showcase/revision-2026-10-12/work
+          printf '%s  %s\n' "$MASTER_SHA256" \
+            showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
+          python - <<'PY'
+          import av
+          path = "showcase/revision-2026-10-12/work/narration-river-final.mp3"
+          with av.open(path) as container:
+              measured = float(container.duration / av.time_base)
+          assert abs(measured - 507.559184) <= 0.08, measured
+          print(f"measured_duration_seconds={measured:.6f}")
+          PY
+
+      - name: Preflight pinned decoder and one-second transcription
+        run: |
+          python - <<'PY'
+          import importlib.metadata
+          import json
+          import platform
+          from pathlib import Path
+          from faster_whisper import WhisperModel
+          from faster_whisper.audio import decode_audio
+
+          audio = Path("showcase/revision-2026-10-12/work/narration-river-final.mp3")
+          samples = decode_audio(str(audio), sampling_rate=16000)
+          assert 8_000_000 < len(samples) < 8_300_000, len(samples)
+          model = WhisperModel("base.en", device="cpu", compute_type="int8")
+          segments, info = model.transcribe(
+              str(audio),
+              language="en",
+              beam_size=1,
+              word_timestamps=True,
+              clip_timestamps="0,1",
+          )
+          segments = list(segments)
+          assert segments and any(segment.words for segment in segments)
+          versions = {
+              "python": platform.python_version(),
+              "faster-whisper": importlib.metadata.version("faster-whisper"),
+              "av": importlib.metadata.version("av"),
+              "ctranslate2": importlib.metadata.version("ctranslate2"),
+              "huggingface-hub": importlib.metadata.version("huggingface-hub"),
+              "tokenizers": importlib.metadata.version("tokenizers"),
+              "preflight_seconds": 1,
+              "preflight_segments": len(segments),
+              "preflight_words": sum(len(segment.words or []) for segment in segments),
+              "transcript_in_ci_log": False,
+          }
+          out = Path("showcase/revision-2026-10-12/work/verifier-versions.json")
+          out.write_text(json.dumps(versions, indent=2) + "\n")
+          print(json.dumps(versions, sort_keys=True))
+          PY
+
+      - name: Run local Whisper verification and alignment
+        run: |
+          python showcase/revision-2026-10-12/align-river.py \
+            --audio showcase/revision-2026-10-12/work/narration-river-final.mp3 \
+            --captions showcase/revision-2026-10-12/caption-text.json \
+            --storyboard showcase/revision-2026-10-12/storyboard.json \
+            --output showcase/revision-2026-10-12/work/aligned \
+            --model base.en \
+            > showcase/revision-2026-10-12/work/verification-summary.json
+
+      - name: Verify log-safe outputs
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          root = Path("showcase/revision-2026-10-12/work")
+          report = json.loads((root / "aligned/whisper-verification.json").read_text())
+          summary = json.loads((root / "verification-summary.json").read_text())
+          assert report == summary
+          assert report["transcript_in_ci_log"] is False
+          assert report["caption_cues"] == 128
+          assert report["scenes"] == 38
+          assert not report["banned_old_phrase_detected"]
+          assert (root / "aligned/whisper-transcript.txt").stat().st_size > 1000
+          print(json.dumps(report, sort_keys=True))
+          PY
+
+      - name: Upload alignment evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: showcase-river-whisper-alignment
+          path: |
+            showcase/revision-2026-10-12/work/aligned/timing.json
+            showcase/revision-2026-10-12/work/aligned/caption-text-aligned.json
+            showcase/revision-2026-10-12/work/aligned/captions.srt
+            showcase/revision-2026-10-12/work/aligned/captions.vtt
+            showcase/revision-2026-10-12/work/aligned/chapters.txt
+            showcase/revision-2026-10-12/work/aligned/whisper-verification.json
+            showcase/revision-2026-10-12/work/aligned/whisper-transcript.txt
+            showcase/revision-2026-10-12/work/aligned/whisper-words.json
+            showcase/revision-2026-10-12/work/verifier-versions.json
+          if-no-files-found: error
+          retention-days: 30

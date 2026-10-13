@@ -1,38 +1,12 @@
 {
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
-  "image": {
-    "archive_bytes": 1934873501,
-    "archive_sha256": "850a6225801cdd84316b883d0e50633966bf5490e1cf5be21e01e9d3001f77a2",
-    "artifact_id": 11756279802,
-    "bytes": 1934686208,
-    "name": "Arctic-Linux-1.2-candidate-38264550818-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "8ca97cd9aecb51c3fdc9401229acf859318eaad9ec872cb32d61edb9697566b9",
-    "run_id": 38264550818,
-    "sha256": "df261c33bb782f4c0e5f4f6d742f2068cd018a98467fe325b6d41fe72dabef4f",
-    "source_sha": "134af2249b3c5d80448208d978ccb1ef238729f5"
-  },
-  "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
-  "fixture_decoder": {
-    "libsndfile": "1.2.2",
-    "pyarrow": "20.0.0",
-    "soundfile": "0.13.1"
-  },
-  "execution_files": {
-    ".github/workflows/dictation-candidate-20261009.yml": "12dc77ea60787704413927eab69d8832ea9cb6396090aa936b7d55a355d2cd31",
-    "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
-    "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
-    "tools/dictation-qualification/contract.py": "1ab44f66d744939d4bd7d6b7034f4c2beac738168d1ae34c2572a1f95a0da3cf",
-    "tools/dictation-qualification/guest_check.py": "2b0bcc30e0606b81c51dadf6dc32d2ea41051dbe93b9e081b7ecc191dc74d9eb",
-    "tools/dictation-qualification/runner.py": "82a9576adb0df3a881236cb2e7936fff49c05f3cd3151062ad485377d1726ead",
-    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/lib/vmtest.py": "25ca7b0eba1a403c28b897edc80939aead976f5809f0865df3d21b44b1615df6",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "119e3b38da9d8a89a1f55a26a4dfcd3979261db7394e86abc6d0be10264f0648"
-  },
+  "image": null,
+  "fixture_manifest_sha256": null,
+  "fixture_decoder": null,
+  "execution_files": {},
   "hardware_profiles": [
+    "small-v2",
     "turbo-q5-v3"
   ]
 }

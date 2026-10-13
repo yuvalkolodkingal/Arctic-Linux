@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f",
+  "native_source_sha256": "0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f",
   "files": {
-    "native_smoke.py": "97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f",
-    "guest-check-native-v6.py": "90c1cd3bcd0151ea980f25e6443dcd5554faac354d5d0e348076b3c63dcb4db7",
+    "native_smoke.py": "0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f",
+    "guest-check-native-v6.py": "c9d92db60f2643d8a040bdf4c5c9eebe26d830a79c93fb329f8185fdc6d786d4",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -27,14 +27,15 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
     "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
-    "test_native_v6.py": "3866ef094ef05818c4f039f312b30c8ea91dbfccc5e7c42773f401d81735c97e",
-    "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
+    "test_native_v6.py": "c9185b3106b81910bf4f2b27f03ce11115627672d7546c224a4186df337ff1c4",
+    "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
     "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "89bdfc6c6888f16f40d45004403234ca5abed4f84eb403cc53c07a1e7dff4b50",
     "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "effb03b77f7b104a27ebab53f73101ddecfbac859bfb3670fed4a765428f9053"
+    "test_controls_state_trials.py": "e6101d6b772ed5983d2919e6fcccfbe02cbd109c8a1443cd1a45df69b2be4107",
+    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {

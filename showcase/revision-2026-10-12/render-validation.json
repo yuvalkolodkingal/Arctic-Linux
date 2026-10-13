@@ -1,0 +1,18 @@
+{
+  "source_commit": "3291477c475f24239db44ece809c4c7658d446c7",
+  "workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733",
+  "video": {
+    "path": "Arctic-Linux-Showcase-River-1080p.mp4",
+    "bytes": 60327673,
+    "sha256": "731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836",
+    "duration_seconds": 507.533333,
+    "width": 1920,
+    "height": 1080,
+    "frame_rate": "30/1",
+    "video_codec": "h264",
+    "audio_codec": "aac",
+    "subtitle_codec": "mov_text"
+  },
+  "full_decode_errors": 0,
+  "published": false
+}

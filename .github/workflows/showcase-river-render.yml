@@ -1,0 +1,166 @@
+name: Render River showcase candidate
+
+on:
+  push:
+    branches:
+      - codex/showcase-river-production
+    paths:
+      - .github/workflows/showcase-river-render.yml
+      - showcase/build-composition.py
+      - showcase/prepare-assets.py
+      - showcase/storyboard.json
+      - showcase/timing.json
+      - showcase/captions.srt
+      - showcase/captions.vtt
+      - showcase/assets/**
+  workflow_dispatch:
+
+permissions:
+  # GitHub hides draft releases from a read-scoped workflow token.
+  # This workflow runs only on a trusted branch push or manual dispatch.
+  contents: write
+
+concurrency:
+  group: showcase-river-render-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      PYTHONUNBUFFERED: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install pinned source dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends ffmpeg
+          python -m pip install --disable-pip-version-check Pillow==11.3.0
+
+      - name: Select runner browser
+        run: |
+          browser="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$browser"
+          printf 'HYPERFRAMES_BROWSER_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+          "$browser" --version
+
+      - name: Download and verify River master
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_TAG: showcase-river-source-2026-10-12
+          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+        run: |
+          mkdir -p showcase/audio showcase/renders/validation
+          gh release download "$SOURCE_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern narration-river-final.mp3 \
+            --dir showcase/audio
+          mv -f showcase/audio/narration-river-final.mp3 showcase/audio/narration.mp3
+          printf '%s  %s\n' "$MASTER_SHA256" showcase/audio/narration.mp3 | sha256sum --check -
+
+      - name: Build current evidence composition
+        run: |
+          python -m py_compile showcase/build-composition.py showcase/prepare-assets.py showcase/finalize-video.py
+          python showcase/prepare-assets.py
+          python showcase/build-composition.py
+
+      - name: Run strict HyperFrames checks
+        working-directory: showcase
+        run: npm run check -- --samples 38 --strict
+
+      - name: Render 1080p candidate
+        working-directory: showcase
+        run: |
+          npm run render -- \
+            --output renders/Arctic-Linux-Showcase-River-1080p.mp4 \
+            --quality high \
+            --fps 30
+          python finalize-video.py renders/Arctic-Linux-Showcase-River-1080p.mp4
+
+      - name: Decode and validate final media
+        run: |
+          ffmpeg -hide_banner -loglevel error \
+            -i showcase/renders/Arctic-Linux-Showcase-River-1080p.mp4 \
+            -f null -
+          ffprobe -v error -show_format -show_streams -of json \
+            showcase/renders/Arctic-Linux-Showcase-River-1080p.mp4 \
+            > showcase/renders/validation/ffprobe.json
+          python - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          video = Path("showcase/renders/Arctic-Linux-Showcase-River-1080p.mp4")
+          probe = json.loads(Path("showcase/renders/validation/ffprobe.json").read_text())
+          streams = probe["streams"]
+          visual = next(stream for stream in streams if stream["codec_type"] == "video")
+          audio = next(stream for stream in streams if stream["codec_type"] == "audio")
+          subtitle = next(stream for stream in streams if stream["codec_type"] == "subtitle")
+          duration = float(probe["format"]["duration"])
+          assert visual["codec_name"] == "h264", visual
+          assert (visual["width"], visual["height"]) == (1920, 1080), visual
+          assert visual["avg_frame_rate"] == "30/1", visual
+          assert audio["codec_name"] == "aac", audio
+          assert subtitle["codec_name"] == "mov_text", subtitle
+          assert abs(duration - 507.512041) <= 0.25, duration
+          digest = hashlib.sha256(video.read_bytes()).hexdigest()
+          receipt = {
+              "source_commit": "${{ github.sha }}",
+              "workflow_run": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}",
+              "video": {
+                  "path": video.name,
+                  "bytes": video.stat().st_size,
+                  "sha256": digest,
+                  "duration_seconds": duration,
+                  "width": visual["width"],
+                  "height": visual["height"],
+                  "frame_rate": visual["avg_frame_rate"],
+                  "video_codec": visual["codec_name"],
+                  "audio_codec": audio["codec_name"],
+                  "subtitle_codec": subtitle["codec_name"],
+              },
+              "full_decode_errors": 0,
+              "published": False,
+          }
+          Path("showcase/renders/validation/render-validation.json").write_text(
+              json.dumps(receipt, indent=2) + "\n"
+          )
+          print(json.dumps(receipt, sort_keys=True))
+          PY
+          for item in "000.5:intro" "210.0:files" "304.0:dictation" "383.0:winter" "493.0:outro"; do
+            second="${item%%:*}"
+            label="${item##*:}"
+            ffmpeg -hide_banner -loglevel error -ss "$second" \
+              -i showcase/renders/Arctic-Linux-Showcase-River-1080p.mp4 \
+              -frames:v 1 "showcase/renders/validation/frame-${label}.png"
+          done
+
+      - name: Upload reviewed candidate and evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arctic-Linux-Showcase-River-1080p-candidate
+          path: |
+            showcase/renders/Arctic-Linux-Showcase-River-1080p.mp4
+            showcase/renders/validation/
+            showcase/captions.srt
+            showcase/captions.vtt
+            showcase/chapters.txt
+            showcase/timing.json
+            showcase/asset-provenance.json
+            showcase/revision-2026-10-12/alignment-provenance.json
+            showcase/revision-2026-10-12/voice-timing.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0

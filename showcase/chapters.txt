@@ -1,8 +1,45 @@
-00:00 Meet Arctic Linux
-00:12 01 · From USB to your desktop
-00:34 02 · The installer
-02:45 03 · A day on Arctic
-04:30 04 · Make it yours
-05:07 05 · The everyday details
-06:03 06 · Keep it running
-06:31 Arctic Linux
+[CHAPTER]
+TIMEBASE=1/1000
+START=0
+END=13500
+title=Meet Arctic Linux
+[CHAPTER]
+TIMEBASE=1/1000
+START=13500
+END=32880
+title=01 · From USB to your desktop
+[CHAPTER]
+TIMEBASE=1/1000
+START=32880
+END=164320
+title=02 · The installer
+[CHAPTER]
+TIMEBASE=1/1000
+START=164320
+END=281940
+title=03 · A day on Arctic
+[CHAPTER]
+TIMEBASE=1/1000
+START=281940
+END=340420
+title=04 · Speak, locally
+[CHAPTER]
+TIMEBASE=1/1000
+START=340420
+END=408460
+title=05 · Make it yours
+[CHAPTER]
+TIMEBASE=1/1000
+START=408460
+END=460410
+title=06 · The everyday details
+[CHAPTER]
+TIMEBASE=1/1000
+START=460410
+END=492100
+title=07 · Keep it running
+[CHAPTER]
+TIMEBASE=1/1000
+START=492100
+END=507512
+title=Arctic Linux

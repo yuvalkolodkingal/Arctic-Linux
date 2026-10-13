@@ -3,58 +3,72 @@
     "id": "intro",
     "chapter": "Meet Arctic Linux",
     "title": "A little calmer. A lot more yours.",
-    "body": "A keyboard-first Fedora desktop, inspired by the arctic fox.",
+    "body": "A calm Fedora desktop, with useful defaults and room to make it yours.",
     "image": "installed-desktop",
     "type": "hero",
-    "narration": "Meet Arctic Linux. A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager. Let's go from the first boot to a day of getting things done."
+    "narration": "Meet Arctic Linux. A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager. Let's take a look at installation, the lighter everyday apps, and a few details that make the desktop your own.",
+    "capture_required": false,
+    "source": "showcase/assets/installed-desktop-exact.jpg",
+    "tag": "Exact-image qualification capture · QEMU"
   },
   {
     "id": "boot",
-    "chapter": "01 \u00b7 From USB to your desktop",
+    "chapter": "01 · From USB to your desktop",
     "title": "Try it first.",
     "body": "One live USB. Two clear choices.",
     "image": "boot-menu",
-    "shortcut": "Try Arctic Linux \u00b7 Install Arctic Linux",
+    "shortcut": "Try Arctic Linux · Install Arctic Linux",
     "narration": "Start with a live USB. The boot menu lets you try Arctic Linux or open the installer. You can explore the desktop before deciding to put it on your computer."
   },
   {
     "id": "live",
-    "chapter": "01 \u00b7 From USB to your desktop",
+    "chapter": "01 · From USB to your desktop",
     "title": "Take a look around.",
     "body": "The live session gives you a working desktop and an easy way to install.",
-    "image": "live-welcome",
     "shortcut": "Super + I",
-    "narration": "The live welcome card gives you a few useful shortcuts. Keep trying the desktop, or choose Install Arctic Linux. The install button is also right there on the top bar."
+    "narration": "The live welcome card gives you a few useful shortcuts. Keep trying the desktop, or choose Install Arctic Linux. The install button is also right there on the top bar.",
+    "capture_required": false,
+    "type": "evidence",
+    "evidence": [
+      "Live-session welcome exercised on the exact candidate",
+      "Installer entry remained available from the bar and Super + I"
+    ]
   },
   {
     "id": "welcome",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "One question at a time.",
     "body": "Choose your language. Go back whenever you need.",
     "image": "installer-01-welcome",
-    "tag": "Installer demonstration \u00b7 sample data",
+    "tag": "Installer demonstration · sample data",
     "narration": "The installer starts with your language. Each screen asks one clear question, and the sidebar shows where you are. These installer screens use sample disks, networks, and account details."
   },
   {
     "id": "keyboard",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Make the keys feel right.",
     "body": "Pick your layout and test it before entering passwords.",
     "image": "installer-02-keyboard",
-    "shortcut": "Enter \u00b7 Next    Alt + \u2190 \u00b7 Back",
-    "narration": "Choose your keyboard layout, then try typing in the test box. Your choice also applies to the live session, so the passwords you enter use the layout you expect."
+    "shortcut": "Enter · Next    Alt + ← · Back",
+    "narration": "Choose your keyboard layout, then try it in the test box. The live session uses your choice too. If you switch to a text console or disconnect a screen, the installer keeps your page and your answers."
   },
   {
     "id": "network",
-    "chapter": "02 \u00b7 The installer",
-    "title": "Get connected.",
-    "body": "Join Wi-Fi or plug in a cable. Your new system remembers the connection.",
-    "image": "installer-03-network",
-    "narration": "Connect to Wi-Fi, or use a network cable. Arctic downloads the apps you choose during installation, and carries your Wi-Fi settings into the installed system."
+    "chapter": "02 · The installer",
+    "title": "Connect now. Or finish setup later.",
+    "body": "Online installation downloads extras. Offline installation keeps a clear setup queue.",
+    "narration": "Connect to Wi-Fi, or plug in a cable. You can also choose Install offline. The apps already on the image remain available, while extra downloads wait until you're connected. Your new system remembers the Wi-Fi connection.",
+    "capture_required": false,
+    "type": "evidence",
+    "evidence": [
+      "Online path installs selected extras",
+      "Offline path keeps a retryable first-boot queue",
+      "A failed optional download does not fail OS installation"
+    ]
   },
   {
     "id": "timezone",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Set your local time.",
     "body": "Check the suggested region and city. Keep the clock in sync.",
     "image": "installer-04-timezone",
@@ -62,7 +76,7 @@
   },
   {
     "id": "disk",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Choose where Arctic lives.",
     "body": "Erase a disk, or use free space alongside another system when available.",
     "image": "installer-05-disk",
@@ -71,7 +85,7 @@
   },
   {
     "id": "encryption",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Private, from the start.",
     "body": "Disk encryption is on by default. Keep your passphrase somewhere safe.",
     "image": "installer-06-encryption",
@@ -79,7 +93,7 @@
   },
   {
     "id": "account",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Make it your computer.",
     "body": "Your name, sign-in password, and computer name.",
     "image": "installer-07-account",
@@ -87,15 +101,21 @@
   },
   {
     "id": "apps",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Choose the apps you want.",
-    "body": "Suggested favourites, swappable defaults, and drivers for detected hardware.",
-    "image": "installer-08-apps",
-    "narration": "The app picker comes with suggested favourites, but the choices are yours. Pick your browser, editor, terminal, file manager, office tools, and more. Relevant hardware drivers appear when they're needed."
+    "body": "GNOME Web, Foot, PCManFM, FeatherPad and Celluloid. Alternatives stay available.",
+    "narration": "The suggested apps now keep the everyday setup lighter: GNOME Web for browsing, Foot for the terminal, PCManFM for files, FeatherPad for text, and Celluloid for media. Choose alternatives if you prefer. Office suites and code editors are optional.",
+    "capture_required": false,
+    "type": "evidence",
+    "evidence": [
+      "GNOME Web · Foot · PCManFM · FeatherPad · Celluloid",
+      "XArchiver · Nano · Fish and Bash",
+      "Alternatives stay available during and after setup"
+    ]
   },
   {
     "id": "summary",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Review. Then install.",
     "body": "Nothing is written to your disk until you confirm on the Summary screen.",
     "image": "installer-09-summary",
@@ -103,31 +123,34 @@
   },
   {
     "id": "installing",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Let Arctic do the setup.",
     "body": "Follow the progress as the system and selected apps are installed.",
     "image": "installer-10-installing",
-    "narration": "The progress screen shows what's happening as Arctic sets up the system and installs your apps. If an optional app download fails, you can retry it or skip it and add it later."
+    "narration": "The progress screen shows the system and your selected apps being installed. An optional app download can be retried or skipped. Dictation has its own setup queue, so a missing model never stops the whole operating system from installing."
   },
   {
     "id": "done",
-    "chapter": "02 \u00b7 The installer",
+    "chapter": "02 · The installer",
     "title": "Your desktop is ready.",
-    "body": "Restart, remove the USB, and follow any driver instructions shown.",
+    "body": "Read the final notes, including any queued downloads or driver approval.",
     "image": "installer-12-done",
-    "narration": "When setup finishes, review the final notes, restart, and remove the USB. If a driver needs a Secure Boot key, the installer gives you the instructions for that first restart."
+    "narration": "When installation finishes, read the final notes. They tell you about queued downloads and any Secure Boot steps for a driver. Remove the USB and restart when you're ready. These screens are a demonstration, rather than a recording of a fresh install."
   },
   {
     "id": "day",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "Room for your day.",
-    "body": "A quiet bar. Five workspaces. Your apps, one shortcut away.",
+    "body": "A quiet bar. Five workspaces. Photo wallpapers from the project collection.",
     "image": "installed-desktop",
-    "narration": "Now for everyday life on Arctic. The desktop keeps the bar small and the workspace open. Five workspaces help you separate tasks, and the apps you picked are ready to use."
+    "narration": "On the desktop, five workspaces give each task some room. The bar stays small, and the backgrounds now come from the project's photo collection. Existing users keep their own wallpaper choices when they update.",
+    "capture_required": false,
+    "source": "showcase/assets/installed-desktop-exact.jpg",
+    "tag": "Exact-image qualification capture · QEMU"
   },
   {
     "id": "launcher",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "Open it. Find it. Keep moving.",
     "body": "Search apps, files, open windows, and settings from one launcher.",
     "image": "launcher",
@@ -136,7 +159,7 @@
   },
   {
     "id": "calculator",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "Small tasks, handled here.",
     "body": "Calculate, convert units, run commands, and set reminders.",
     "image": "launcher-calculator",
@@ -145,83 +168,173 @@
   },
   {
     "id": "tiling",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "Windows make room for each other.",
     "body": "Mango tiles new windows automatically. The amber border shows your focus.",
     "image": "desktop",
-    "shortcut": "Super + arrows \u00b7 Change focus",
+    "shortcut": "Super + arrows · Change focus",
     "narration": "Open a few windows and Mango arranges them automatically. The amber border marks the one you're using. Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.",
-    "source": "showcase/assets/tiling-desktop.png"
+    "capture_required": false,
+    "tag": "Separate exact-image qualification captures · composed layout",
+    "type": "qualification-pair",
+    "evidence": [
+      "PCManFM and FeatherPad on the exact candidate",
+      "Foot with Fish after the signed stable update"
+    ]
   },
   {
     "id": "files",
-    "chapter": "03 \u00b7 A day on Arctic",
-    "title": "Your files, in Nautilus.",
-    "body": "GNOME Files for documents, downloads, and everything you keep.",
-    "image": "nautilus",
-    "shortcut": "Super + F \u00b7 File manager",
-    "narration": "Nautilus, also known as GNOME Files, is the graphical file manager in this walkthrough. Browse documents and downloads beside your other windows. Open your chosen file manager with Super and F.",
-    "source": "showcase/assets/nautilus-capture.png"
+    "chapter": "03 · A day on Arctic",
+    "title": "Your files, in PCManFM.",
+    "body": "Tabs, folders, removable drives and XArchiver for archives.",
+    "image": "pcmanfm",
+    "shortcut": "Super + F · File manager",
+    "narration": "PCManFM is the new graphical file manager, using Fedora's GTK three build. Browse folders and downloads in tabs, and use XArchiver to open or create archives. Super and F opens whichever file manager you've chosen.",
+    "source": "showcase/assets/pcmanfm-qualification.png",
+    "capture_required": false,
+    "tag": "Exact-image qualification capture · demo files"
   },
   {
     "id": "terminal",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "A terminal with a familiar face.",
-    "body": "Kitty, Fish, and the Arctic fox greeting. Flatpak and Nix are ready too.",
-    "image": "kitty-fish",
+    "body": "Foot, Fish and the Arctic fox greeting. Bash, Flatpak and Nix are available too.",
+    "image": "foot-fish",
     "shortcut": "Super + Enter",
-    "narration": "Super and Enter opens your terminal. The default setup pairs Kitty with Fish and the Arctic fox greeting. Flatpak and Nix are preinstalled, alongside Fedora's package tools.",
-    "source": "showcase/assets/kitty-fish-capture.png"
+    "narration": "Super and Enter opens Foot with Fish and the Arctic fox greeting. Bash and Nano are there too. Fedora packages, Flatpak and Nix give you several ways to add tools, without making a large app collection compulsory.",
+    "source": "showcase/assets/foot-fish-current.png",
+    "capture_required": false,
+    "tag": "Exact-image qualification capture · QEMU"
   },
   {
     "id": "everyday",
-    "chapter": "03 \u00b7 A day on Arctic",
-    "title": "Browse. Write. Watch. Build.",
-    "body": "Suggested defaults for the things you do every day.",
+    "chapter": "03 · A day on Arctic",
+    "title": "Browse. Write. Watch.",
+    "body": "Useful native defaults. Choose more apps when you need them.",
     "type": "apps",
-    "narration": "For everyday apps, Arctic suggests Zen for browsing, Zed for editing, Collabora Office for documents, and VLC for media. These are choices, not requirements. You can replace them during installation or later in Settings."
+    "narration": "GNOME Web shares the WebKit engine already used by Arctic's web apps. FeatherPad handles everyday text, and Celluloid plays music and video. Chromium remains available for web apps that need calling support. You can change the defaults in Settings."
   },
   {
     "id": "getapps",
-    "chapter": "03 \u00b7 A day on Arctic",
+    "chapter": "03 · A day on Arctic",
     "title": "Need one more app?",
     "body": "Get apps brings Flathub, Fedora packages, web apps, and terminal tools together.",
     "image": "get-apps",
     "shortcut": "Super + Shift + A",
-    "narration": "Need something else? Open Get apps. Choose Flathub, Fedora packages, a web app, or a terminal tool. Installations keep going when you close the launcher, and you get a notification when an app is ready."
+    "narration": "Need something else? Open Get apps and choose Flathub, Fedora packages, a web app, or a terminal tool. Installations continue when you close the launcher. Removing software has its own menu, so it's easier to find the action you want."
+  },
+  {
+    "id": "removeapps",
+    "chapter": "03 · A day on Arctic",
+    "title": "Remove apps has its own place.",
+    "body": "See what will be removed before you confirm.",
+    "shortcut": "Launcher · Remove apps",
+    "capture_required": false,
+    "narration": "Open Remove apps from the launcher to manage Fedora packages, Flatpaks, web apps, and terminal entries. Arctic shows the proposed removal before you confirm. It protects the desktop, your login shell, and your only terminal from an accidental removal.",
+    "type": "evidence",
+    "evidence": [
+      "Separate launcher entry for removal",
+      "Shows the proposed removal before confirmation",
+      "Protects the desktop, login shell and only terminal"
+    ]
+  },
+  {
+    "id": "dictationsetup",
+    "chapter": "04 · Speak, locally",
+    "title": "Prepare dictation during installation.",
+    "body": "Local Whisper. Hebrew and English. Readiness shown in Settings.",
+    "shortcut": "Settings → Dictation",
+    "capture_required": false,
+    "narration": "Dictation uses Voxtype and a multilingual Whisper model on this computer. Online installation downloads and verifies the engine and model. Offline installation queues setup for first boot. Settings shows the download size, progress, and any retry needed. Recording stays unavailable until setup is ready.",
+    "type": "evidence",
+    "evidence": [
+      "Voxtype 0.5.1 · local multilingual Whisper",
+      "Online install verifies engine and model",
+      "Offline install queues clear first-boot recovery"
+    ]
+  },
+  {
+    "id": "dictationrecord",
+    "chapter": "04 · Speak, locally",
+    "title": "Press. Speak. Press again.",
+    "body": "Start explicitly. Stop to insert. Cancel at any time.",
+    "image": "dictation-recording",
+    "source": "showcase/assets/dictation-recording-current.png",
+    "shortcut": "Super + Ctrl + X · Start / stop\nSuper + Ctrl + Backspace · Cancel",
+    "capture_required": false,
+    "narration": "Focus a text field, press Super, Control and X, and speak. Press the same keys again to stop and insert. A visible indicator follows recording and transcription, even with the bar hidden. Super, Control and Backspace cancels. Audio stays local, and status messages never display the transcript.",
+    "tag": "Exact-image qualification capture · online setup"
+  },
+  {
+    "id": "dictationrecovery",
+    "chapter": "04 · Speak, locally",
+    "title": "Clear status. A way to recover.",
+    "body": "Choose Hebrew or English. CPU is available when acceleration fails.",
+    "image": "dictation-settings",
+    "source": "showcase/assets/dictation-recovery-qualification.png",
+    "capture_required": false,
+    "narration": "Choose Hebrew, English, or local language detection. Supported hardware can use Vulkan acceleration. If the GPU fails, Arctic discards that recording and selects the CPU for your next attempt. Record again explicitly. Accuracy and speed depend on the model, your voice, and the computer.",
+    "tag": "Exact-image qualification capture · offline recovery"
   },
   {
     "id": "settings",
-    "chapter": "04 \u00b7 Make it yours",
+    "chapter": "05 · Make it yours",
     "title": "Find the setting. Change it.",
     "body": "Search across Settings. Changes apply straight away, with undo.",
     "image": "settings-search",
-    "shortcut": "Super + S    Ctrl + Z \u00b7 Undo",
+    "shortcut": "Super + S    Ctrl + Z · Undo",
     "narration": "Super and S opens Arctic Settings. Search for a setting instead of hunting through pages. Changes apply straight away, and Control and Z undoes the last one."
   },
   {
+    "id": "bar",
+    "chapter": "05 · Make it yours",
+    "title": "The bar can move out of the way.",
+    "body": "Four edges. Always visible, auto-hide, or dodge windows.",
+    "shortcut": "Settings → Appearance",
+    "capture_required": false,
+    "narration": "Put the bar on any edge, and choose always visible, auto-hide, or dodge windows. Move the pointer to its edge, or use the keyboard, to reveal it. Recording indicators remain visible. The installer keeps its bar available while you're in the live session.",
+    "type": "evidence",
+    "evidence": [
+      "Top · bottom · left · right",
+      "Always visible · auto-hide · dodge windows",
+      "Exclusive zones and recording indicator retained"
+    ]
+  },
+  {
     "id": "appearance",
-    "chapter": "04 \u00b7 Make it yours",
+    "chapter": "05 · Make it yours",
     "title": "Winter or Polar night.",
-    "body": "Two Arctic themes, with colours that can follow your wallpaper.",
+    "body": "Winter, Polar night, and colours drawn from a photo of your own.",
     "image": "settings-appearance",
     "shortcut": "Super + Shift + T",
-    "narration": "Choose the light Winter theme or dark Polar night. Your own wallpaper can also provide the desktop's colours, carrying them through the shell, window borders, terminal, and supported apps."
+    "narration": "Choose Winter or Polar night, or let a wallpaper provide the desktop's colours. The palette follows through the shell, window borders, terminal, and supported apps. Your own pictures stay selected when you change themes."
   },
   {
     "id": "winter",
-    "chapter": "04 \u00b7 Make it yours",
+    "chapter": "05 · Make it yours",
     "title": "A fresh coat.",
-    "body": "The same desktop, in Winter.",
+    "body": "Snow-coloured surfaces, with real photo backgrounds.",
     "image": "theme-winter",
     "theme": "light",
-    "shortcut": "Super + Shift + W \u00b7 Wallpapers",
-    "narration": "Winter keeps the same layout, with soft snow-coloured surfaces. Open the wallpaper picker to choose Arctic artwork or your own pictures. Built-in wallpapers can follow the theme automatically.",
-    "source": "shell/dev/screenshots/wallpapers-winter.png"
+    "shortcut": "Super + Shift + W · Wallpapers",
+    "narration": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
+    "source": "shell/dev/screenshots/wallpapers-winter.png",
+    "capture_required": true,
+    "tag": "Repository UI capture · photo collection"
+  },
+  {
+    "id": "ember",
+    "chapter": "05 · Make it yours",
+    "title": "Ember Clouds, City Silhouette.",
+    "body": "An original photograph from the Arctic wallpaper collection.",
+    "image": "ember-clouds-city-silhouette",
+    "source": "design/backgrounds/ember-clouds-city-silhouette.jpg",
+    "tag": "Photography © Yuval Kolodkin-Gal",
+    "narration": "One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city. It's the artist's finished photograph, preserved at its original resolution. Set it from the wallpaper picker, or browse the full collection on the project's gallery."
   },
   {
     "id": "quick",
-    "chapter": "05 \u00b7 The everyday details",
+    "chapter": "06 · The everyday details",
     "title": "The controls you reach for.",
     "body": "Volume, brightness, wireless connections, night light, and power mode.",
     "image": "quick-settings",
@@ -230,7 +343,7 @@
   },
   {
     "id": "networkdaily",
-    "chapter": "05 \u00b7 The everyday details",
+    "chapter": "06 · The everyday details",
     "title": "Stay connected.",
     "body": "Join networks and manage connections from the bar.",
     "image": "bar-network-menu",
@@ -239,16 +352,16 @@
   },
   {
     "id": "displays",
-    "chapter": "05 \u00b7 The everyday details",
+    "chapter": "06 · The everyday details",
     "title": "Settle into your desk.",
     "body": "Arrange monitors, adjust scaling, and choose how the laptop screen behaves.",
     "image": "settings-displays",
-    "shortcut": "Super + P \u00b7 Screen modes",
+    "shortcut": "Super + P · Screen modes",
     "narration": "At your desk, arrange monitors and adjust their resolution, scale, and rotation. Super and P switches screen modes. Arctic also handles USB drives, printing, and scanning, with settings when you need them."
   },
   {
     "id": "shortcuts",
-    "chapter": "05 \u00b7 The everyday details",
+    "chapter": "06 · The everyday details",
     "title": "Learn a few keys. Add your own.",
     "body": "Search the shortcut sheet, then tailor the desktop to your routine.",
     "image": "keys",
@@ -257,29 +370,32 @@
   },
   {
     "id": "updates",
-    "chapter": "06 \u00b7 Keep it running",
+    "chapter": "07 · Keep it running",
     "title": "Updates fit around your work.",
-    "body": "Background downloads. Install at restart. Settings shows what's waiting.",
+    "body": "Signed stable packages. Background downloads. Install at restart.",
     "image": "settings-updates",
-    "narration": "Updates download in the background and install when the computer restarts. Settings shows what's waiting and lets you choose the update channel. System snapshots can help restore files after an update, and firmware updates are available when you ask."
+    "narration": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates."
   },
   {
     "id": "lock",
-    "chapter": "06 \u00b7 Keep it running",
+    "chapter": "07 · Keep it running",
     "title": "Step away with peace of mind.",
-    "body": "Lock the desktop, or choose suspend, restart, and shut down.",
+    "body": "The clock stays visible. Notifications keep their text private while locked.",
     "image": "lock-screen",
-    "shortcut": "Super + L \u00b7 Lock",
-    "narration": "When you step away, Super and L locks the screen. The power menu offers suspend, restart, and shut down. Arctic also locks before sleeping, with the timing controlled in Settings."
+    "shortcut": "Super + L · Lock",
+    "narration": "Super and L locks the desktop. The clock stays visible, and notifications show a count without their contents. Arctic also locks before sleeping. Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away."
   },
   {
     "id": "outro",
     "chapter": "Arctic Linux",
     "title": "Make room for your day.",
-    "body": "Try Arctic Linux. Choose your apps. Make it yours.",
+    "body": "Downloads, setup help, shortcuts and the full wiki on GitHub.",
     "image": "installed-desktop",
     "type": "outro",
     "shortcut": "github.com/yuvalkolodkingal/Arctic-Linux",
-    "narration": "That's Arctic Linux: a guided installer, a calm desktop, and useful details for everyday work. Find the project, downloads, and full documentation on GitHub. Try it from a USB, and make it yours."
+    "narration": "That's Arctic Linux: a guided installer, a calm desktop, useful native apps, and local dictation when setup is complete. Find published downloads and the full wiki on GitHub. The release page tells you which image has been published, and which checks were performed.",
+    "capture_required": false,
+    "source": "showcase/assets/installed-desktop-exact.jpg",
+    "tag": "Exact-image qualification capture · QEMU"
   }
 ]

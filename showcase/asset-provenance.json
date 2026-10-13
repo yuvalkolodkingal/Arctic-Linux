@@ -1,17 +1,12 @@
 [
   {
     "scene": "intro",
-    "source": "docs/wiki/images/installed-desktop.png",
+    "source": "showcase/assets/installed-desktop-exact.jpg",
     "crop": null
   },
   {
     "scene": "boot",
     "source": "docs/wiki/images/boot-menu.png",
-    "crop": null
-  },
-  {
-    "scene": "live",
-    "source": "docs/wiki/images/live-welcome.png",
     "crop": null
   },
   {
@@ -22,11 +17,6 @@
   {
     "scene": "keyboard",
     "source": "docs/wiki/images/installer-02-keyboard.png",
-    "crop": null
-  },
-  {
-    "scene": "network",
-    "source": "docs/wiki/images/installer-03-network.png",
     "crop": null
   },
   {
@@ -50,11 +40,6 @@
     "crop": null
   },
   {
-    "scene": "apps",
-    "source": "docs/wiki/images/installer-08-apps.png",
-    "crop": null
-  },
-  {
     "scene": "summary",
     "source": "docs/wiki/images/installer-09-summary.png",
     "crop": null
@@ -71,7 +56,7 @@
   },
   {
     "scene": "day",
-    "source": "docs/wiki/images/installed-desktop.png",
+    "source": "showcase/assets/installed-desktop-exact.jpg",
     "crop": null
   },
   {
@@ -85,23 +70,28 @@
     "crop": null
   },
   {
-    "scene": "tiling",
-    "source": "showcase/assets/tiling-desktop.png",
-    "crop": null
-  },
-  {
     "scene": "files",
-    "source": "showcase/assets/nautilus-capture.png",
+    "source": "showcase/assets/pcmanfm-qualification.png",
     "crop": null
   },
   {
     "scene": "terminal",
-    "source": "showcase/assets/kitty-fish-capture.png",
+    "source": "showcase/assets/foot-fish-current.png",
     "crop": null
   },
   {
     "scene": "getapps",
     "source": "docs/wiki/images/get-apps.png",
+    "crop": null
+  },
+  {
+    "scene": "dictationrecord",
+    "source": "showcase/assets/dictation-recording-current.png",
+    "crop": null
+  },
+  {
+    "scene": "dictationrecovery",
+    "source": "showcase/assets/dictation-recovery-qualification.png",
     "crop": null
   },
   {
@@ -117,6 +107,11 @@
   {
     "scene": "winter",
     "source": "shell/dev/screenshots/wallpapers-winter.png",
+    "crop": null
+  },
+  {
+    "scene": "ember",
+    "source": "design/backgrounds/ember-clouds-city-silhouette.jpg",
     "crop": null
   },
   {
@@ -151,25 +146,67 @@
   },
   {
     "scene": "outro",
-    "source": "docs/wiki/images/installed-desktop.png",
+    "source": "showcase/assets/installed-desktop-exact.jpg",
     "crop": null
   },
   {
     "scene": "tiling",
-    "composition": "Separate real app captures placed over the Arctic desktop in HTML",
+    "composition": "Two separate exact-candidate qualification captures placed side by side in HTML",
     "captures": [
-      "showcase/assets/kitty-fish-capture.png",
-      "showcase/assets/nautilus-tiled-capture.png"
+      "showcase/assets/pcmanfm-qualification.png",
+      "showcase/assets/foot-fish-current.png"
     ]
   },
   {
-    "captures": [
-      "nautilus-capture.png",
-      "nautilus-tiled-capture.png",
-      "kitty-fish-capture.png"
-    ],
-    "environment": "Fedora 44, headless Sway, real Nautilus 50.3 / Kitty 0.47.1 / Fish 4.6.0",
-    "theme": "Repository GTK and Kitty styles; current libadwaita CSS variables set to the Arctic Polar night palette",
-    "continuous_os_recording": false
+    "artifact": {
+      "id": 11759890454,
+      "sha256": "e4ce8011a861b87de1bbfadfd499c27a08257c8eeef9be43c3a188e7c19c1152"
+    },
+    "source": "native-live/gui-02-file-manager-F4-mapped.png",
+    "transformation": "crop x=0 y=0 width=1280 height=720",
+    "output": "showcase/assets/pcmanfm-qualification.png",
+    "output_sha256": "a5ff22f9a5518f53afff0e96ec00138ac5200823a38f1bddb5e904c9f4d471a7"
+  },
+  {
+    "artifact": {
+      "id": 11761152978,
+      "sha256": "8c1a2d34f0b620dec53c6e5efa19f41c2ab9336e3925648540f7b129519c4c4c"
+    },
+    "sources": [
+      {
+        "path": "vm/boot-52-terminal.png",
+        "sha256": "1f79c06d45f6e2df6f1c2b628c23bbdbc3cebd924936f992bdc560f145ad8f00",
+        "output": "showcase/assets/foot-fish-current.png"
+      },
+      {
+        "path": "vm/boot-51-desktop.png",
+        "sha256": "40d7a378b8f727dfff4ae4b7234958329f37f59ed9462417260a3031b8035272",
+        "transformation": "JPEG quality 92, 4:4:4, no crop",
+        "output": "showcase/assets/installed-desktop-exact.jpg",
+        "output_sha256": "9ec51efc605a5a8d144319702dedc9b34d263195ce1b9ce10f3db48c768e65a7"
+      }
+    ]
+  },
+  {
+    "artifact": {
+      "id": 11762348140,
+      "sha256": "26c5d39f914d6d7ae9dcfab558fc37dd593a9d901896e4f8f854b48e535e0126"
+    },
+    "sources": [
+      {
+        "path": "dictation-indicator-online-installed.png",
+        "sha256": "341b144e1f1ee92c0e365de39463946dcddf279db1105c0615680bc3a6a3b853",
+        "output": "showcase/assets/dictation-recording-current.png"
+      },
+      {
+        "path": "dictation-indicator-recovered-offline.png",
+        "sha256": "252c27ecc4c417311ab49913aa060b54034b7fe548eae83f4f3f2ad12274a230",
+        "output": "showcase/assets/dictation-recovery-qualification.png"
+      }
+    ]
+  },
+  {
+    "continuous_os_recording": false,
+    "qualification_capture_disclosures_retained": true
   }
 ]

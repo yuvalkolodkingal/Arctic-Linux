@@ -1,63 +1,96 @@
 # Arctic Linux showcase
 
-A 6 minute 47 second, 1920 × 1080 showcase made with HyperFrames. It walks through the live USB, every installer step, daily desktop use, personalisation, connectivity, displays, shortcuts, updates, and screen locking. Narration uses Kokoro's `af_heart` voice at its natural speed, with embedded sentence-aligned captions and separate SRT/VTT files.
+The published showcase is the 6 minute 47 second, 1920 × 1080 edition from 3 October 2026.
+It uses Kokoro's `af_heart` narration and documents the earlier app set.
 
-[Download the video, captions, and editable source](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/showcase-2026-10-03).
+[Download the published video, captions, and editable source](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/showcase-2026-10-03).
 
 [![Arctic Linux showcase](poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 
-## Replacement in preparation
+## River replacement candidate
 
-The [12 October revision source](revision-2026-10-12/) describes the current native apps, photo
-collection, separate Remove apps, local dictation and stable updates. New River narration has
-been generated through ElevenLabs; downloaded-media validation, sentence alignment, refreshed
-captures and the final render remain pending. The published video below remains the October 3
-edition. No replacement download is claimed yet.
+The [12 October source and validation receipt](revision-2026-10-12/) describe the current native
+apps, project photo backgrounds, separate Remove apps, local dictation and signed stable updates.
+The English River candidate is 8 minutes 27.53 seconds long and contains 38 scenes and 128
+sentence-aligned caption cues.
 
-## What the video shows
+The candidate passed:
 
-The screen images are authentic assets from this repository, using the Arctic brand colors, Figtree, JetBrains Mono, and fox mark. Installer screenshots use demo data; they do not represent an installation performed for this video. Nautilus 50.3 and Kitty running Fish 4.6 were captured as real applications on Fedora 44 with Arctic’s styles. The tiling scene places those separate app captures over the Arctic desktop in HTML. The installer, shell, and Settings screens come from the project’s documented UI previews. The video uses animated screenshots and feature cards, rather than a continuous live screen recording.
+- [local Whisper verification](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545):
+  4.1328% word error rate, 97.048% exact-token coverage, the corrected Winter wording present and
+  the obsolete count absent;
+- [strict render validation](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733):
+  complete decode with no errors, H.264 video, AAC audio, selectable English subtitles and
+  representative-frame review.
 
-`asset-provenance.json` records every source image and any crop. Original screenshots remain unmodified in their existing locations. The Winter scene uses the current shell's wallpaper picker rather than an older screenshot with partially switched themes.
+The resulting MP4 is 60,327,673 bytes with SHA-256
+`731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836`.
+It remains an unpublished candidate until the matching Arctic release finishes qualification.
+The public download link therefore still points to the October 3 edition.
+
+## What the candidate shows
+
+The current source uses admitted repository screenshots from the exact ISO qualification work.
+Where a current screenshot was unavailable, the composition uses a clearly labelled
+**QUALIFICATION EVIDENCE** card. Installer screens retain their demonstration-data disclosure,
+and QEMU qualification captures retain their evidence labels.
+
+The app scenes cover GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
+Fish/Bash. Dictation scenes show the online setup and offline recovery states from authentic
+qualification captures. The Winter scene uses the repository's current wallpaper-picker capture;
+the adjoining Ember scene shows the published original photograph.
+
+This is an animated screenshot and evidence-card showcase, rather than a continuous installation
+recording. [`asset-provenance.json`](asset-provenance.json) records every admitted image and
+transformation. The [project wiki](https://github.com/yuvalkolodkingal/Arctic-Linux/wiki) remains
+the full operating guide.
 
 ## Preview and render
 
-Node.js 22 or newer, FFmpeg, and a supported Chromium browser are needed. HyperFrames is pinned to 0.8.114 in the npm scripts. Fonts, screen assets, GSAP, and the generated narration are bundled locally; a model download is unnecessary for re-rendering.
+The reproducible path is [`showcase-river-render.yml`](../.github/workflows/showcase-river-render.yml).
+It installs FFmpeg, Python 3.12, Pillow 11.3.0 and Node.js 22, downloads the River master from the unpublished draft source release and verifies it by
+SHA-256, rebuilds the assets and composition, runs HyperFrames 0.8.114 in strict mode, renders
+1080p at 30 fps, embeds captions and chapters, decodes the complete result, and uploads the
+candidate plus its validation evidence. GitHub hides draft releases from read-scoped workflow
+tokens, so these trusted push/manual-dispatch workflows grant `contents: write`; checkout persistence
+is disabled and the token is used only by `gh release download`.
+
+For source-only layout work:
 
 ```sh
 cd showcase
-npm run check
-npx --yes hyperframes@0.8.114 preview --background
-# Open the Studio project URL printed by the command.
-# Stop the preview when finished:
-npx --yes hyperframes@0.8.114 preview --stop
-npm run render -- --output renders/Arctic-Linux-Showcase-1080p.mp4 --quality high --fps 30
-python finalize-video.py
+python -m pip install Pillow==11.3.0
+python prepare-assets.py
+python build-composition.py
+npm run check -- --samples 38 --strict
 ```
 
-On a cloud host, configure `HYPERFRAMES_BROWSER_PATH` to an available browser if necessary. Chrome Headless Shell supports the faster capture path. The rendered MP4 is distributed as a GitHub release asset rather than stored in Git history.
-
-## Edit the story or narration
-
-`storyboard.json` contains the screen selection, chapter, title, supporting copy, shortcut, and spoken text for each scene. `timing.json` records the durations measured from the generated voice, and `build-composition.py` generates `index.html`. `captions.srt`, `captions.vtt`, and `chapters.txt` accompany the video.
-
-To change the spoken text, install the voice dependencies in a Python virtual environment, download the Kokoro model files, and run:
+For a local media render, obtain `narration-river-final.mp3` from the maintainer-only draft release tagged `showcase-river-source-2026-10-12`, verify it, and place it at `showcase/audio/narration.mp3`.
+Its required SHA-256 is
+`d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb`.
+Then run:
 
 ```sh
-python -m pip install -r requirements-voice.txt
-python generate-voice.py --model /path/to/kokoro-v1.0.onnx --voices /path/to/voices-v1.0.bin
-python build-composition.py
-npm run check
+cd showcase
+npm run render -- \
+  --output renders/Arctic-Linux-Showcase-River-1080p.mp4 \
+  --quality high --fps 30
+python finalize-video.py renders/Arctic-Linux-Showcase-River-1080p.mp4
 ```
 
-Model files are available from [Kokoro ONNX's model-files-v1.0 release](https://github.com/thewh1teagle/kokoro-onnx/releases/tag/model-files-v1.0). HyperFrames can also download them with its local `tts` command. The voice script caches sentence audio under `.hyperframes/voice/`, measures caption boundaries directly, and normalises the finished narration to -16 LUFS. Model weights and the virtual environment are excluded from the project.
+## Edit and verification records
 
-To refresh the screenshots from a full Arctic Linux checkout, run `python prepare-assets.py` (requires Pillow). For visual layout work, `python build-composition.py --static` creates `.hyperframes/layout.html` before adding animation.
+[`storyboard.json`](storyboard.json) contains the 38-scene story.
+[`timing.json`](timing.json), [`captions.srt`](captions.srt),
+[`captions.vtt`](captions.vtt) and [`chapters.txt`](chapters.txt) are the verified alignment
+used by the candidate. [`voice-timing.json`](revision-2026-10-12/voice-timing.json) records the
+three one-time ElevenLabs River generation IDs, measured splice, checksums and exact model.
+Do not rerun those nodes unless a named source segment is proven unusable.
 
-## Validation
+The local verifier pins faster-whisper 1.2.1 and PyAV 16.0.1. Transcript-bearing verification
+files remain only in the 30-day workflow artifact; Git contains the log-safe metrics, timings and
+captions. Whisper supplies an automated intelligibility check and alignment evidence, not a human
+listening review.
 
-The finished composition passed `hyperframes check --samples 32 --strict`: lint, runtime, layout, and WCAG contrast checks, with zero errors or warnings. The final MP4 is also checked for its resolution, frame rate, audio track, duration, decoding, representative frames, and caption timing before release.
-
-The MP4 includes H.264 video, AAC narration, selectable English subtitles, eight chapters, and fast-start metadata for playback while downloading. `validation.json` records the verification results and voice-model hashes.
-
-The Arctic artwork and repository screenshots follow this project's license. Figtree and JetBrains Mono use the SIL Open Font License; GSAP uses its upstream Standard License. Kokoro model licensing is provided by its upstream model release.
+The Arctic artwork and repository screenshots follow this project's license. Figtree and
+JetBrains Mono use the SIL Open Font License; GSAP uses its upstream Standard License.
