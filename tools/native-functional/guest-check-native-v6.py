@@ -1067,8 +1067,16 @@ class Smoke:
                     'controls trial fixture identity changed')
             self.finish_native_protocol()
             players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
-            require(1<=len(players)<=2,'controls trial primary player inventory differs')
-            for player in players: retire_renderer_player(player,self.uid)
+            require(1<=len(players)<=3,'controls trial primary player inventory differs')
+            retired=[row['player'] for row in primary.get('player_attempts',[])
+                     if row.get('owned_player_cleanup_completed') is True]
+            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
+                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
+                    'controls trial prior retired player identity differs')
+            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
+            for player in players:
+                if (player['pid'],player['start_ticks']) not in retired_keys:
+                    retire_renderer_player(player,self.uid)
             seen=set()
             for index,state in enumerate(states):
                 trial=None
@@ -1588,14 +1596,32 @@ class Smoke:
         self.trace('reference-controls-hidden',receipt=value)
         return value
 
-    def visual_media(self):
-        fixture,expected,source_sha=self.visual_fixture()
+    def visual_media(self, restart=None):
+        player_attempt_limit=2
+        if restart is None:
+            fixture,expected,source_sha=self.visual_fixture()
+            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])
+        else:
+            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}
+                    and type(restart['player_attempts']) is list
+                    and len(restart['player_attempts'])==1,
+                    'visual player restart state differs')
+            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']
+            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']
+                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']
+                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],
+                    'visual player restart fixture identity differs')
+        player_attempt=len(restart['player_attempts'])+1
+        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
-        ipc=self.root/'visual-reference-ipc.sock'
+        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')
         player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
             self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
+        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
+                        or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
+                'visual restart did not create a fresh owned player')
         self.wait(lambda:ipc.is_socket())
         def ready_reference():
             try:
@@ -1637,7 +1663,7 @@ class Smoke:
                 'visual capture client identity differs from owned proof')
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
-        image=self.root/'celluloid-reference.png'
+        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')
         rgb=self.root/'visual-owned-window.rgb'
         attempt_limit=6
         capture_command_timeout_seconds=3
@@ -1708,17 +1734,35 @@ class Smoke:
                   playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
+                  player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
+        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit
+                          and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
+        player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
+            'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}
+        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
+        restart['player_attempts'].append(player_receipt)
+        info['player_attempts']=restart['player_attempts']
+        info['accepted_player_attempt']=player_attempt if oracle.get('status')=='matched' else None
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
-        if getattr(self,'gui_v6',False):
+        if getattr(self,'gui_v6',False) and not restart_eligible:
             self.native_protocol_diagnostic(player,state,screenshot,client)
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
+        if restart_eligible:
+            if getattr(self,'gui_v6',False): self.finish_native_protocol()
+            try:
+                player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
+                player_receipt['owned_player_cleanup_completed']=True
+            finally:
+                (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
+            return self.visual_media(restart)
         if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
             self.controlled_controls_trials(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
@@ -1853,6 +1897,26 @@ def retire_renderer_player(proof,uid):
         except (FileNotFoundError,ProcessLookupError,RuntimeError): return
         time.sleep(.1)
     raise RuntimeError('controlled cleanup player survived bounded retirement')
+
+
+def retire_reference_player(proof,uid,ipc,root,attempt):
+    """Retire exactly one failed primary player before its sole fresh restart."""
+    require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()
+            and isinstance(ipc,Path) and ipc.parent==root and ipc.name=='visual-reference-ipc-1.sock',
+            'visual restart cleanup target differs')
+    retire_renderer_player(proof,uid)
+    removed=False
+    try:
+        info=ipc.lstat()
+        require(stat.S_ISSOCK(info.st_mode) and info.st_uid==uid,
+                'visual restart IPC owner/type differs')
+        ipc.unlink()
+        removed=True
+    except FileNotFoundError:
+        pass
+    require(not ipc.exists() and not ipc.is_symlink(),'visual restart IPC cleanup incomplete')
+    return dict(process_identity_retired=True,owned_ipc_absent=True,
+                owned_ipc_removed=removed,release_acceptance=False)
 
 
 class RendererTrialSmoke(Smoke):
@@ -2324,7 +2388,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
-    'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
+    'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
     'files with spaces/editor fixture.txt',
 )) | frozenset(
@@ -2367,7 +2431,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
+    native_source_sha = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

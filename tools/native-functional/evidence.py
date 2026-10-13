@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
+NATIVE_SOURCE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'eeb4b8e90b516fdba10092a059f6b2ba113c34c734f591e7bf22d109014c9305')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', '31131b4deddb87ea0a7b3f92f78d6ba9785084f929e385d068f87ddf0fe59274')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -280,8 +280,76 @@ def check_fullscreen(target,report,uid):
     captures=json.loads((target/'fullscreen-player-captures.json').read_text())
     moving=json.loads((target/'moving-player-proof.json').read_text())
     visual=json.loads((target/'visual-oracle.json').read_text())
-    expected=[moving['player'],visual['player']]
-    R.require(type(turns) is list and len(turns)==4 and type(captures) is list and len(captures)==2,'Fullscreen exact turn/capture count differs')
+    attempts=visual.get('player_attempts');accepted=visual.get('accepted_player_attempt')
+    base_keys={'player_attempt','player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
+               'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit','capture_deadline_seconds',
+               'accepted_capture_attempt','oracle','screenshot','owned_player_cleanup_completed','restart_eligible','release_acceptance'}
+    R.require(type(accepted) is int and accepted in (1,2) and visual.get('player_attempt')==accepted
+              and visual.get('player_attempt_limit')==2
+              and type(attempts) is list and len(attempts)==accepted,
+              'Fullscreen visual player-attempt inventory differs')
+    for index,row in enumerate(attempts,1):
+        expected_keys=base_keys|({'cleanup'} if index==1 and accepted==2 else set())
+        R.require(type(row) is dict and set(row)==expected_keys and row['player_attempt']==index
+                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==6
+                  and row['capture_deadline_seconds']==visual['capture_deadline_seconds']
+                  and row['release_acceptance'] is False
+                  and all(row[key]==visual[key] for key in ('fixture_sha256','input_rgb_sha256','expected_rgb_sha256')),
+                  'Fullscreen visual player-attempt schema/binding differs')
+        rows=row['capture_attempts']
+        capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
+                      'playback_time_seconds','owned_identity_geometry_unchanged'}
+        R.require(type(rows) is list and 1<=len(rows)<=6
+                  and all(type(item) is dict and set(item)==capture_keys
+                          and item['attempt']==number
+                          and type(item['screenshot_sha256']) is str
+                          and re.fullmatch(r'[0-9a-f]{64}',item['screenshot_sha256']) is not None
+                          and type(item['actual_rgb_sha256']) is str
+                          and re.fullmatch(r'[0-9a-f]{64}',item['actual_rgb_sha256']) is not None
+                          and type(item['playback_time_seconds']) in (int,float)
+                          and math.isfinite(item['playback_time_seconds'])
+                          and 0<=item['playback_time_seconds']<=2
+                          and item['owned_identity_geometry_unchanged'] is True
+                          for number,item in enumerate(rows,1))
+                  and row['actual_rgb_sha256']==rows[-1]['actual_rgb_sha256']
+                  and row['accepted_capture_attempt']==(
+                  len(rows) if row['oracle'].get('status')=='matched' else None)
+                  and row['oracle']==rows[-1].get('oracle')
+                  and row['screenshot'].get('sha256')==rows[-1].get('screenshot_sha256'),
+                  'Fullscreen visual capture-attempt binding differs')
+        if index<accepted:
+            cleanup=row['cleanup']
+            R.require(len(rows)==6 and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows)
+                      and row['oracle'].get('status')=='unmatched' and row['restart_eligible'] is True
+                      and row['owned_player_cleanup_completed'] is True and type(cleanup) is dict
+                      and set(cleanup)=={'process_identity_retired','owned_ipc_absent','owned_ipc_removed','release_acceptance'}
+                      and cleanup['process_identity_retired'] is True and cleanup['owned_ipc_absent'] is True
+                      and type(cleanup['owned_ipc_removed']) is bool and cleanup['release_acceptance'] is False,
+                      'Fullscreen failed visual player restart proof differs')
+        else:
+            accepted_fields=('player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
+                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
+                'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')
+            R.require(all(row[key]==visual[key] for key in accepted_fields)
+                      and row['oracle'].get('status')=='matched' and row['restart_eligible'] is False
+                      and row['owned_player_cleanup_completed'] is False
+                      and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows[:-1]),
+                      'Fullscreen accepted visual player proof differs')
+    if accepted==2:
+        failed_shot,accepted_shot=[row['screenshot'] for row in attempts]
+        R.require(Path(failed_shot['path']).name=='celluloid-reference.png'
+                  and Path(accepted_shot['path']).name=='celluloid-reference-player-2.png'
+                  and failed_shot['path']!=accepted_shot['path']
+                  and failed_shot['sha256']!=accepted_shot['sha256'],
+                  'Fullscreen retry screenshots are not distinct exact attempts')
+    expected=[moving['player'],*[row['player'] for row in attempts]]
+    shots=[moving['screenshot'],*[row['screenshot'] for row in attempts]]
+    R.require(len({(p.get('pid'),p.get('start_ticks')) for p in expected})==len(expected)
+              and len({p.get('client_id') for p in expected})==len(expected),
+              'Fullscreen moving/visual player identities are not distinct')
+    R.require(type(turns) is list and len(turns)==2*len(expected)
+              and type(captures) is list and len(captures)==len(expected),
+              'Fullscreen exact turn/capture count differs')
     trace=[C.strict_json(line) for line in (target/'gui-trace.log').read_text().splitlines()]
     R.require([x['receipt'] for x in trace if x.get('event')=='owned-player-fullscreen']==turns
               and [x['receipt'] for x in trace if x.get('event')=='owned-fullscreen-capture']==captures,'Fullscreen raw trace/file differs')
@@ -310,7 +378,7 @@ def check_fullscreen(target,report,uid):
             and all(bm.get(k)==am.get(k) for k in ('name','x','y','width','height','scale','is_hdr')),'Fullscreen binding/monitor/state differs')
         if enabled:R.require(crop==dict(x=0,y=0,width=am['width'],height=am['height']),'Actual complete fullscreen viewport absent')
     for index,item in enumerate(captures):
-        player=expected[index];shot=moving['screenshot'] if index==0 else visual['screenshot']
+        player=expected[index];shot=shots[index]
         R.require(item['player']==dict(player,uid=uid) and item['release_acceptance'] is False and item['screenshot']==shot,'Fullscreen capture owner/shot differs')
         before,after=item['before'],item['after']
         R.require(all(before.get(k)==after.get(k) for k in ('id','pid','appid','foreign_toplevel_id','monitor',
@@ -321,10 +389,11 @@ def check_fullscreen(target,report,uid):
             'monitor','is_focused','is_visible','is_fullscreen','x','y','width','height')),'Fullscreen capture differs from entered viewport')
         relative=Path(shot['path']).relative_to(report['evidence_root']);p=target/relative
         R.require(p.is_file() and R.digest(p)==shot['sha256'],'Fullscreen screenshot hash differs')
-    R.require(turns[0]['completed_monotonic_ns']<=turns[1]['monotonic_ns']
-              <=turns[1]['completed_monotonic_ns']<=turns[2]['monotonic_ns']
-              <=turns[2]['completed_monotonic_ns']<=turns[3]['monotonic_ns'],'Fullscreen enter/restore order differs')
-    return dict(owned_players=2,fullscreen_actions=4,captures=2,oracle_unchanged=True,release_acceptance=False)
+    R.require(all(first['completed_monotonic_ns']<=second['monotonic_ns']
+                  for first,second in zip(turns,turns[1:])),
+              'Fullscreen enter/restore order differs')
+    return dict(owned_players=len(expected),fullscreen_actions=len(turns),captures=len(captures),
+                accepted_visual_player_attempt=accepted,oracle_unchanged=True,release_acceptance=False)
 
 def exactly_zero(serial,label):
     values=re.findall(r'^'+re.escape(label)+r'=(.*)$',serial,re.M)
