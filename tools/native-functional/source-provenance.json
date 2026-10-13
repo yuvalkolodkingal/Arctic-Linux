@@ -32,7 +32,7 @@
     "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
-    "test_native_bulk_transport.py": "5426b2d13b80c068b191ba9ba88e6b4cd509bf1891124e097160fc5887e6b617",
+    "test_native_bulk_transport.py": "7a787a3e5a08b951181d29d7c1067066c9125d3dcd26c16915cac9f3bc1c4664",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
     "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
@@ -194,5 +194,16 @@
     "deadline_basis": "six attempts times two existing three-second command maxima, five half-second settles, and a 3.5-second bounded margin",
     "deadline_failure_run": "38343014126",
     "deadline_failure_diagnosis": "five strict-oracle captures remained unmatched; the 8-second wall budget expired before the unchanged sixth attempt could run"
+  },
+  "installed_login_head_observation": {
+    "failure_run": "38350659932",
+    "failure_artifact": "11791791235",
+    "diagnosis": "the dual-output fixture exposed two SDDM scanouts while the host compared only QEMU's default head before and after physical keyboard input",
+    "head_inventory": "exact arctic_taskbar_gpu heads 0 and 1 from the owned QMP and D-Bus display proof",
+    "capture_selection": "explicit QMP screendump device and head for every before and after frame; no default-head fallback",
+    "acceptance": "every selected capture must be valid and at least one login surface must satisfy the unchanged password ROI oracle",
+    "private_frame_retention": false,
+    "login_transition_settle_taskbar_audio_gates_unchanged": true,
+    "release_acceptance": false
   }
 }

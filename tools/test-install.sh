@@ -1146,33 +1146,114 @@ def wait_for(vm, prefix, want, limit, every=5):
 
 def discard_private_shot(path):
     """Remove a transient screenshot that may reveal typed-length or session data."""
-    if not path:
-        return
-    try:
-        os.remove(path)
-    except FileNotFoundError:
-        pass
+    discard_private_shots((path,))
 
 
-def installed_login(vm):
-    """Enter the installed password without retaining password-bearing frames."""
-    for attempt in (1, 2, 3):
-        before = None
-        typed = None
+def discard_private_shots(paths):
+    """Attempt every private-frame removal before reporting a path-free failure."""
+    failed = False
+    interrupted = None
+    for path in paths:
+        if not path:
+            continue
         try:
-            before = vm.shot(f"boot-42-password-before-{attempt}")
-            if not before or vmtest.classify(before) != "login":
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except (KeyboardInterrupt, SystemExit) as error:
+            if interrupted is None:
+                interrupted = error
+        except Exception:
+            failed = True
+    if interrupted is not None:
+        raise interrupted
+    if failed:
+        raise RuntimeError("private screenshot cleanup failed") from None
+
+
+def discard_private_shots_preserving(paths, primary):
+    """Clean every private frame without replacing an exception already in flight."""
+    try:
+        discard_private_shots(paths)
+    except BaseException:
+        if primary is None:
+            raise
+
+
+def installed_login_heads(vm, display):
+    """Return exact QMP head selectors from the already verified display proof."""
+    if display is None:
+        return ((None, None),)
+    proof = getattr(display, "proof", None)
+    process = getattr(vm, "proc", None)
+    if (type(proof) is not dict
+            or proof.get("schema") != "arctic-qemu-taskbar-display-v1"
+            or proof.get("status") != "uiinfo_applied_pending_guest_two_output_evidence"
+            or type(proof.get("qemu_uid")) is not int or proof["qemu_uid"] != 0
+            or type(getattr(process, "pid", None)) is not int
+            or type(proof.get("qemu_pid")) is not int or proof["qemu_pid"] != process.pid
+            or proof.get("gpu_id") != "arctic_taskbar_gpu"
+            or proof.get("display_backend") != "dbus"
+            or proof.get("guest_monitor_verification_required") is not True
+            or type(proof.get("heads")) is not list or len(proof["heads"]) != 2):
+        raise RuntimeError("installed login display proof differs")
+    rows = proof["heads"]
+    if (any(type(row) is not dict or type(row.get("head")) is not int
+            or type(row.get("console_id")) is not int or row["console_id"] < 0
+            or type(row.get("device_address")) is not str
+            or type(row.get("width_mm")) is not int or row["width_mm"] != 340
+            or type(row.get("height_mm")) is not int or row["height_mm"] != 190
+            or type(row.get("xoff")) is not int or row["xoff"] != row["head"] * 1280
+            or type(row.get("yoff")) is not int or row["yoff"] != 0
+            or type(row.get("width")) is not int or row["width"] != 1280
+            or type(row.get("height")) is not int or row["height"] != 720 for row in rows)
+            or {row["head"] for row in rows} != {0, 1}
+            or len({row["console_id"] for row in rows}) != 2
+            or len({row["device_address"] for row in rows}) != 1):
+        raise RuntimeError("installed login display heads differ")
+    return tuple((proof["gpu_id"], row["head"])
+                 for row in sorted(rows, key=lambda row: row["head"]))
+
+
+def installed_login(vm, display=None):
+    """Enter the installed password after observing every configured QMP head."""
+    selectors = installed_login_heads(vm, display)
+    for attempt in (1, 2, 3):
+        before = []
+        typed = []
+        private = []
+        primary = None
+        try:
+            for device, head in selectors:
+                suffix = "" if device is None else f"-head{head}"
+                name = f"boot-42-password-before-{attempt}{suffix}"
+                private.append(f"{out}/{name}.png")
+                path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                before.append(path)
+            before_kinds = [vmtest.classify(path) if path else "none" for path in before]
+            if any(kind == "none" for kind in before_kinds):
                 log("installed login controls are not visible")
                 return False
             vm.keys("ctrl-a", "backspace")
             vm.type_text(password, gap=0.3)
             time.sleep(1)
-            typed = vm.shot(f"boot-42-password-typed-{attempt}")
-            accepted = (typed and vmtest.classify(typed) == "login"
-                        and vmtest.login_password_changed(before, typed))
+            for device, head in selectors:
+                suffix = "" if device is None else f"-head{head}"
+                name = f"boot-42-password-typed-{attempt}{suffix}"
+                private.append(f"{out}/{name}.png")
+                path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                typed.append(path)
+            typed_kinds = [vmtest.classify(path) if path else "none" for path in typed]
+            accepted = (all(kind != "none" for kind in typed_kinds)
+                        and any(old_kind == new_kind == "login"
+                                and vmtest.login_password_changed(old, new)
+                                for old, new, old_kind, new_kind
+                                in zip(before, typed, before_kinds, typed_kinds)))
+        except BaseException as error:
+            primary = error
+            raise
         finally:
-            discard_private_shot(typed)
-            discard_private_shot(before)
+            discard_private_shots_preserving(private, primary)
         if not accepted:
             vm.keys("ctrl-a", "backspace")
             time.sleep(1)
@@ -1180,14 +1261,30 @@ def installed_login(vm):
             return False
         vm.keys("ret")
         t = time.time()
+        probe_index = 0
         while time.time() - t < 150 and vm.alive():
             time.sleep(10)
-            probe = vm.shot("boot-43-probe")
+            probe_index += 1
+            probes = []
+            private = []
+            primary = None
             try:
-                kind = vmtest.classify(probe) if probe else "none"
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-43-probe-{probe_index}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    probes.append(path)
+                kinds = [vmtest.classify(path) if path else "none" for path in probes]
+            except BaseException as error:
+                primary = error
+                raise
             finally:
-                discard_private_shot(probe)
-            if kind != "login" and kind != "none":
+                discard_private_shots_preserving(private, primary)
+            if any(kind == "none" for kind in kinds):
+                log("installed login transition head capture is invalid")
+                return False
+            if all(kind != "login" for kind in kinds):
                 return True
         # A hung greeter may leave bullets behind. Clear it before any retry or
         # failure, and retain only the textual state transition diagnostic.
@@ -1197,45 +1294,62 @@ def installed_login(vm):
     return False
 
 
-def installed_session_settled(vm):
+def installed_session_settled(vm, display=None):
     """Require a stable installed desktop and reject any return to SDDM."""
-    t = time.time()
-    previous = None
-    stable = 0
-    index = 0
-    while time.time() - t < 900 and vm.alive():
-        time.sleep(20)
-        index += 1
-        current = vm.shot(f"boot-50-session-{index:02d}")
-        if not current:
-            continue
-        try:
-            kind = vmtest.classify(current)
-        except BaseException:
-            discard_private_shot(previous)
-            discard_private_shot(current)
-            raise
-        if kind == "login":
-            discard_private_shot(previous)
-            discard_private_shot(current)
-            log("installed session returned to the login screen")
-            return False
-        if previous:
+    selectors = installed_login_heads(vm, display)
+    previous = []
+    primary = None
+    try:
+        t = time.time()
+        stable = 0
+        index = 0
+        while time.time() - t < 900 and vm.alive():
+            time.sleep(20)
+            index += 1
+            current = []
+            private = []
             try:
-                stable = stable + 1 if vmtest.changed_fraction(previous, current) < 0.02 else 0
-            except BaseException:
-                discard_private_shot(previous)
-                discard_private_shot(current)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-50-session-{index:02d}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    current.append(path)
+                kinds = [vmtest.classify(path) if path else "none" for path in current]
+            except BaseException as error:
+                discard_private_shots_preserving(private, error)
                 raise
-            discard_private_shot(previous)
-        previous = current
-        if stable >= 2 and time.time() - t > 90:
-            discard_private_shot(previous)
-            log(f"session settled after {time.time() - t:.0f}s")
-            return True
-    discard_private_shot(previous)
-    log("installed session did not settle within 900s")
-    return False
+            if any(kind == "none" for kind in kinds):
+                discard_private_shots(private)
+                log("installed session head capture is invalid")
+                return False
+            if any(kind == "login" for kind in kinds):
+                discard_private_shots(private)
+                log("installed session returned to the login screen")
+                return False
+            if previous:
+                try:
+                    stable = stable + 1 if all(vmtest.changed_fraction(old, new) < 0.02
+                                               for old, new in zip(previous, current)) else 0
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+                try:
+                    discard_private_shots(previous)
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+            previous = current
+            if stable >= 2 and time.time() - t > 90:
+                log(f"session settled after {time.time() - t:.0f}s")
+                return True
+        log("installed session did not settle within 900s")
+        return False
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        discard_private_shots_preserving(previous, primary)
 
 
 def stage_boot():
@@ -1304,12 +1418,12 @@ def stage_boot():
             log("no login screen detected; typing the password anyway")
             ok = False
         dictation_host_stage("boot-login")
-        if not installed_login(vm):
+        if not installed_login(vm, display):
             log("installed login failed; private greeter capture suppressed")
             return 1
         # The desktop must stay off the login card and settle before collection.
         dictation_host_stage("boot-settle")
-        if not installed_session_settled(vm):
+        if not installed_session_settled(vm, display):
             log("installed session did not settle; private session capture suppressed")
             return 1
         time.sleep(30)
