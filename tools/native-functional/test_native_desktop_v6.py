@@ -35,7 +35,19 @@ def fullscreen_fixture(value,visual,moving_shot):
   for j,enabled in enumerate((True,False)):
    turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(argv=['mmsg','dispatch','togglefullscreen','client,'+p['client_id']],returncode=0,stdout='{"success":true}',stderr=''),monotonic_ns=100+i*100+j*20,completed_monotonic_ns=110+i*100+j*20,release_acceptance=False))
   shot=moving_shot if i==0 else visual['screenshot'];caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
- visual['player']=owned[1];value['proven_new_processes']=owned
+ visual.update(player=owned[1],player_attempt=1,player_attempt_limit=2,accepted_player_attempt=1,capture_attempt_limit=6,
+  capture_deadline_seconds=42,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
+ matched=dict(status='matched');capture=dict(attempt=1,screenshot_sha256=visual['screenshot']['sha256'],
+  actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
+ accepted=dict(player_attempt=1,player=owned[1],player_state={},fixture_sha256=visual['fixture_sha256'],
+  input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
+  playback_clock={},capture_attempts=[capture],capture_attempt_limit=6,capture_deadline_seconds=42,
+  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],owned_player_cleanup_completed=False,
+  restart_eligible=False,release_acceptance=False)
+ visual['player_attempts']=[accepted]
+ visual.update({key:accepted[key] for key in ('player','player_state','actual_rgb_sha256','playback_clock','capture_attempts',
+  'accepted_capture_attempt','oracle','screenshot')})
+ value['proven_new_processes']=owned
  value['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
  trace=[dict(event='owned-player-fullscreen',receipt=x) for x in turns]+[dict(event='owned-fullscreen-capture',receipt=x) for x in caps]
  return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot)).encode()}
@@ -177,6 +189,90 @@ class FullscreenControls(unittest.TestCase):
     (d/'fullscreen-player-receipts.json').write_text(json.dumps(ts));(d/'fullscreen-player-captures.json').write_text(json.dumps(cs));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,v,1000)
    for mutate in [lambda v,t,c:t[0]['action'].update(argv=['mmsg','dispatch','focusid','client,7']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action'].update(returncode=1)]:rerun(mutate)
+
+ def test_actual_fullscreen_methods_and_validator_bind_failed_then_accepted_player(self):
+  N=load('desktop_host_fullscreen_restart','evidence.py')
+  with tempfile.TemporaryDirectory() as d:
+   d=Path(d);root='/tmp/arctic-native-smoke-restart';trace=[]
+   smoke=S.Smoke.__new__(S.Smoke);smoke.root=d;smoke.uid=1000
+   smoke.trace=lambda event,**value:trace.append(dict(event=event,**value))
+   monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
+   players=[dict(client_id=str(7+i),pid=70+i,start_ticks=700+i,executable='/usr/bin/celluloid',
+                 executable_sha256=str(i+1)*64,is_xwayland=False) for i in range(3)]
+   states={p['pid']:dict(id=int(p['client_id']),pid=p['pid'],appid='celluloid',foreign_toplevel_id='owned-'+str(i),
+          monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=False,
+          x=0,y=0,width=160,height=120) for i,p in enumerate(players)}
+   smoke.alive=lambda proof:copy.deepcopy(states[proof['pid']]);smoke.wait=lambda fn,*a:fn()
+   def command(argv):
+    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[monitor])),''
+    client=int(argv[-1].split(',')[-1]);state=next(x for x in states.values() if x['id']==client)
+    state['is_fullscreen']=not state['is_fullscreen'];return 0,'{"success":true}',''
+   smoke.cmd=command
+   names=('moving.png','celluloid-reference.png','celluloid-reference-player-2.png');shots=[]
+   for index,name in enumerate(names):
+    png=b'\x89PNG\r\n\x1a\nrestart-validator-'+bytes([index]);(d/name).write_bytes(png)
+    shots.append(dict(path=root+'/'+name,sha256=hashlib.sha256(png).hexdigest()))
+   for player,shot in zip(players,shots):
+    smoke.player_fullscreen(player,True);full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False)
+   unmatched=dict(status='unmatched',reason='No bounded 16-color ROI matched')
+   matched=dict(status='matched',mismatched_pixels=0)
+   hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
+   failed_captures=[dict(attempt=i,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='7'*64,
+      oracle=copy.deepcopy(unmatched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True) for i in range(1,7)]
+   accepted_captures=[dict(attempt=1,screenshot_sha256=shots[2]['sha256'],actual_rgb_sha256='8'*64,
+      oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)]
+   failed=dict(player_attempt=1,player=players[1],player_state={},**hashes,actual_rgb_sha256='7'*64,
+      playback_clock={},capture_attempts=failed_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
+      accepted_capture_attempt=None,oracle=unmatched,screenshot=shots[1],owned_player_cleanup_completed=True,
+      restart_eligible=True,release_acceptance=False,cleanup=dict(process_identity_retired=True,owned_ipc_absent=True,
+      owned_ipc_removed=True,release_acceptance=False))
+   accepted=dict(player_attempt=2,player=players[2],player_state={},**hashes,actual_rgb_sha256='8'*64,
+      playback_clock={},capture_attempts=accepted_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
+      accepted_capture_attempt=1,oracle=matched,screenshot=shots[2],owned_player_cleanup_completed=False,
+      restart_eligible=False,release_acceptance=False)
+   visual=dict(player=players[2],player_attempt=2,player_attempt_limit=2,accepted_player_attempt=2,capture_attempt_limit=6,
+      capture_deadline_seconds=42,screenshot=shots[2],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
+      playback_clock=accepted['playback_clock'],capture_attempts=accepted_captures,accepted_capture_attempt=1,
+      oracle=matched,player_attempts=[failed,accepted],**hashes)
+   report=dict(evidence_root=root,proven_new_processes=players,
+      diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
+   (d/'moving-player-proof.json').write_text(json.dumps(dict(player=players[0],screenshot=shots[0])))
+   (d/'visual-oracle.json').write_text(json.dumps(visual));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
+   (d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
+   result=N.check_fullscreen(d,report,1000)
+   self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(3,6,3,2))
+   self.assertEqual(len({x['path'] for x in shots}),3)
+   self.assertIn('celluloid-reference-player-2.png',load('restart_public_inventory','guest-check-native-v6.py').NATIVE_PUBLIC_EVIDENCE_FILES)
+   original_turns=(d/'fullscreen-player-receipts.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text();original_visual=(d/'visual-oracle.json').read_text()
+   def rejected(change):
+    (d/'fullscreen-player-receipts.json').write_text(original_turns);(d/'fullscreen-player-captures.json').write_text(original_captures);(d/'visual-oracle.json').write_text(original_visual)
+    change()
+    with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,report,1000)
+   rejected(lambda:(lambda x:(x[0]['cleanup'].update(owned_ipc_absent=False),(d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(d/'fullscreen-player-captures.json').write_text(json.dumps(json.loads(original_captures)[:-1])))
+   rejected(lambda:(lambda x:(x[0].update(restart_eligible=False),(d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[0].update(screenshot=copy.deepcopy(x[1]['screenshot'])),
+      x[0]['capture_attempts'][-1].update(screenshot_sha256=x[1]['screenshot']['sha256']),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(attempt=2),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
+       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(private_value='forbidden'),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
+       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(screenshot_sha256='A'*64),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
+       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(playback_time_seconds=float('nan')),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
+       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(owned_identity_geometry_unchanged=False),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
+       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1].update(actual_rgb_sha256='9'*64),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['player'].update(client_id=x[0]['player']['client_id']),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player=copy.deepcopy(x[1]['player']),player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
 
 class HarnessControls(unittest.TestCase):
  def test_original_five_controller_and_default_false_guest_remain_exact(self):

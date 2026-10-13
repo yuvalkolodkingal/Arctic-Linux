@@ -27,7 +27,7 @@ N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 BOUNDED_RETRY_NATIVE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
 STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
-FRESH_PLAYER_RESTART_NATIVE_SHA = 'e5b0cec282dc87f92125a2dbad1bb0696f5dee6317a81af47427e707f9dcaede'
+FRESH_PLAYER_RESTART_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 
 
 def restore_fresh_player_restart_native(source):
@@ -53,14 +53,15 @@ def restore_fresh_player_restart_native(source):
 ""","""    def visual_media(self):
         fixture,expected,source_sha=self.visual_fixture()
 """),("        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')\n",
-              "        ipc=self.root/'visual-reference-ipc.sock'\n"),("""        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
+              "        ipc=self.root/'visual-reference-ipc.sock'\n"),("        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')\n",
+              "        image=self.root/'celluloid-reference.png'\n"),("""        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
                         or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
                 'visual restart did not create a fresh owned player')
 """,''),("                  player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,\n",''),("""        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit
                           and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle')}
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}
         player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
         restart['player_attempts'].append(player_receipt)
         info['player_attempts']=restart['player_attempts']
@@ -70,15 +71,21 @@ def restore_fresh_player_restart_native(source):
             if getattr(self,'gui_v6',False): self.finish_native_protocol()
             try:
                 player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
-                matches=[row for row in self.owned if row is player]
-                require(len(matches)==1,'visual restart owned player inventory differs')
-                self.owned.remove(player)
-                player_receipt['cleanup']['owned_inventory_removed']=True
                 player_receipt['owned_player_cleanup_completed']=True
             finally:
                 (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
             return self.visual_media(restart)
-""",''),("""def retire_reference_player(proof,uid,ipc,root,attempt):
+""",''),("            require(1<=len(players)<=3,'controls trial primary player inventory differs')\n",
+              "            require(1<=len(players)<=2,'controls trial primary player inventory differs')\n"),("""            retired=[row['player'] for row in primary.get('player_attempts',[])
+                     if row.get('owned_player_cleanup_completed') is True]
+            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
+                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
+                    'controls trial prior retired player identity differs')
+            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
+            for player in players:
+                if (player['pid'],player['start_ticks']) not in retired_keys:
+                    retire_renderer_player(player,self.uid)
+""","            for player in players: retire_renderer_player(player,self.uid)\n"),("""def retire_reference_player(proof,uid,ipc,root,attempt):
     \"\"\"Retire exactly one failed primary player before its sole fresh restart.\"\"\"
     require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()
             and isinstance(ipc,Path) and ipc.parent==root and ipc.name=='visual-reference-ipc-1.sock',
@@ -184,6 +191,8 @@ def restore_controls_guest(source):
     head=native[:native.index('def main():\n')]
     source=original[:original.index('def main():\n')]+source[len(head):]
     substitutions=(
+        ("'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb'",
+         "'celluloid-reference.png', 'visual-reference-frame.rgb'"),
         ('0-controls-state-trials.json','0-controlled-renderer-trials.json'),
         ('controls-trial-transition/reference.png','renderer-trial-default/reference.png'),
         ('controls-trial-hidden/reference.png','renderer-trial-gl/reference.png'),
@@ -381,6 +390,24 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual([r['status'] for r in value['trials']],['observed','observed'])
             self.assertEqual(set(p.name for p in Path(temporary).glob('0-*.json')),{'0-controls-state-trials.json'})
 
+    def test_failure_diagnostics_skip_exact_already_retired_restart_player(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);fixture=root/'same-fixture';fixture.write_bytes(b'fixed')
+            expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.stage='live';smoke.launches=[]
+            players=[dict(executable='/usr/bin/celluloid',pid=11+i,start_ticks=21+i) for i in range(3)]
+            smoke.owned=players;smoke.finish_native_protocol=Mock()
+            primary=dict(oracle=dict(status='unmatched'),screenshot=dict(sha256='a'*64),
+                capture_precondition=dict(before_visible=False,after_visible=False),fixture_sha256=N.digest(fixture),
+                expected_rgb_sha256=N.digest(expected),player_attempts=[dict(player=players[1],owned_player_cleanup_completed=True),
+                dict(player=players[2],owned_player_cleanup_completed=False)])
+            trials=[Mock(owned=[],launches=[],observe=Mock(return_value=dict(player=dict(pid=30+i,start_ticks=40+i),
+                    status='observed'))) for i in range(2)]
+            retired=[]
+            with patch.object(N,'ControlsTrialSmoke',side_effect=trials),patch.object(N,'retire_renderer_player',side_effect=lambda p,u:retired.append(p)):
+                smoke.controlled_controls_trials(fixture,expected,'b'*64,primary)
+            self.assertEqual(retired,[players[0],players[2]])
+
     def test_actual_primary_capture_still_fails_after_successful_controls_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);fixture=root/'fixture';fixture.write_bytes(b'source-fixed-synthetic-media')
@@ -473,17 +500,18 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(path.read_bytes(),before)
             with self.assertRaises(RuntimeError):N.write_controls_receipt(root,os.getuid(),{'test':'x'*(512*1024)})
 
-    def test_finite_public_inventory_swaps_only_three_optional_slots(self):
+    def test_finite_public_inventory_swaps_controls_and_adds_bounded_restart_screenshot(self):
         spec=importlib.util.spec_from_file_location('controls_inventory_guest',HERE/'guest-check-native-v6.py')
         guest=importlib.util.module_from_spec(spec);spec.loader.exec_module(guest)
         new=guest.NATIVE_PUBLIC_EVIDENCE_FILES
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
         removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png',
+               'celluloid-reference-player-2.png'}
         self.assertEqual(set(new)-set(env['NATIVE_PUBLIC_EVIDENCE_FILES']),added)
         self.assertEqual(set(env['NATIVE_PUBLIC_EVIDENCE_FILES'])-set(new),removed)
-        self.assertEqual(len(new),len(env['NATIVE_PUBLIC_EVIDENCE_FILES']))
+        self.assertEqual(len(new),len(env['NATIVE_PUBLIC_EVIDENCE_FILES'])+1)
         for name in added:self.assertTrue(guest.native_public_evidence_member(name))
         for name in removed|{'controls-trial-private/reference.png','controls-trial-transition/private.png'}:
             with self.assertRaises(RuntimeError):guest.native_public_evidence_member(name)

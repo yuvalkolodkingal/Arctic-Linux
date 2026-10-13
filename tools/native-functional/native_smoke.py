@@ -1067,8 +1067,16 @@ class Smoke:
                     'controls trial fixture identity changed')
             self.finish_native_protocol()
             players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
-            require(1<=len(players)<=2,'controls trial primary player inventory differs')
-            for player in players: retire_renderer_player(player,self.uid)
+            require(1<=len(players)<=3,'controls trial primary player inventory differs')
+            retired=[row['player'] for row in primary.get('player_attempts',[])
+                     if row.get('owned_player_cleanup_completed') is True]
+            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
+                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
+                    'controls trial prior retired player identity differs')
+            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
+            for player in players:
+                if (player['pid'],player['start_ticks']) not in retired_keys:
+                    retire_renderer_player(player,self.uid)
             seen=set()
             for index,state in enumerate(states):
                 trial=None
@@ -1655,7 +1663,7 @@ class Smoke:
                 'visual capture client identity differs from owned proof')
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
-        image=self.root/'celluloid-reference.png'
+        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')
         rgb=self.root/'visual-owned-window.rgb'
         attempt_limit=6
         capture_command_timeout_seconds=3
@@ -1736,7 +1744,7 @@ class Smoke:
                           and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle')}
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}
         player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
         restart['player_attempts'].append(player_receipt)
         info['player_attempts']=restart['player_attempts']
@@ -1751,10 +1759,6 @@ class Smoke:
             if getattr(self,'gui_v6',False): self.finish_native_protocol()
             try:
                 player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
-                matches=[row for row in self.owned if row is player]
-                require(len(matches)==1,'visual restart owned player inventory differs')
-                self.owned.remove(player)
-                player_receipt['cleanup']['owned_inventory_removed']=True
                 player_receipt['owned_player_cleanup_completed']=True
             finally:
                 (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))

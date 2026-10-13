@@ -240,13 +240,18 @@ class NewControls(unittest.TestCase):
                                  ['unmatched','matched' if case=='restart-match' else 'unmatched'])
                 self.assertTrue(receipt['player_attempts'][0]['owned_player_cleanup_completed'])
                 self.assertEqual(receipt['accepted_player_attempt'],2 if case=='restart-match' else None)
+                paths=[Path(x['screenshot']['path']) for x in receipt['player_attempts']]
+                self.assertEqual([x.name for x in paths],['celluloid-reference.png','celluloid-reference-player-2.png'])
+                self.assertNotEqual(paths[0],paths[1]);self.assertTrue(all(x.is_file() for x in paths))
+                if case=='restart-match':
+                    self.assertNotEqual(receipt['player_attempts'][0]['screenshot']['sha256'],receipt['player_attempts'][1]['screenshot']['sha256'])
                 self.assertEqual(launched[0][:3],launched[1][:3])
                 self.assertEqual(launched[0][4:],launched[1][4:])
                 self.assertEqual(launched[0][3].rsplit('-',1)[0],launched[1][3].rsplit('-',1)[0])
             if case=='all-black':smoke.controlled_controls_trials.assert_called_once()
             elif case!='cleanup-failed':
                 if case!='all-black':smoke.controlled_controls_trials.assert_not_called()
-            if case=='all-black':self.assertEqual(smoke.owned,[proofs[1]])
+            if case=='all-black':self.assertEqual(smoke.owned,proofs)
 
     def test_reference_restart_cleanup_is_exact_and_fail_closed(self):
         with tempfile.TemporaryDirectory() as t:
