@@ -214,13 +214,12 @@ class InstalledLoginTests(unittest.TestCase):
             {'device': 'arctic_taskbar_gpu', 'head': 1},
             {'device': 'arctic_taskbar_gpu', 'head': 0},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
-            {'device': 'arctic_taskbar_gpu', 'head': 0},
-            {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
         self.assertEqual([call[2] for call in vm.type_calls], [
-            {'device': 'arctic_taskbar_gpu', 'head': 0},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
+        self.assertFalse(any(selector.get('head') == 0
+                             for _, selector in vm.key_calls))
         self.assertEqual(vm.key_calls[-1], (
             ('ret',), {'device': 'arctic_taskbar_gpu', 'head': 1}))
         self.assertTrue(all(selector for _, selector in private_calls))
@@ -241,6 +240,15 @@ class InstalledLoginTests(unittest.TestCase):
             {'device': 'arctic_taskbar_gpu', 'head': 0},
             {'device': 'arctic_taskbar_gpu', 'head': 1},
         ])
+        self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
+
+    def test_non_login_heads_receive_no_password_or_keys(self):
+        fixture = load_functions(lambda path: 'dark' if 'head0' in path else 'other')
+        vm = FakeVM()
+        self.assertFalse(fixture.installed_login(vm, display_proof()))
+        self.assertEqual(vm.type_calls, [])
+        self.assertEqual(vm.key_calls, [])
+        self.assertEqual(fixture.logs, ['installed password field did not accept physical input'])
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_selected_input_failure_cleans_all_captured_heads(self):
@@ -334,8 +342,7 @@ class InstalledLoginTests(unittest.TestCase):
         vm = FakeVM()
         self.assertFalse(fixture.installed_login(vm, display_proof()))
         self.assertEqual(vm.keys_sent.count(('ret',)), 3)
-        # Each attempt rejects head 0 before accepting/submitting through head 1.
-        self.assertEqual(fixture.time.now, 462)
+        self.assertEqual(fixture.time.now, 456)
         self.assertEqual(sorted(fixture.os.removed), sorted(vm.shots))
 
     def test_transition_selected_head_failure_cleans_all_probe_paths(self):

@@ -1237,6 +1237,8 @@ def installed_login(vm, display=None):
                 if any(kind == "none" for kind in before_kinds):
                     log("installed login controls are not visible")
                     return False
+                if before_kinds[target_index] != "login":
+                    continue
                 vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
                 vm.type_text(password, gap=0.3, device=target_device, head=target_head)
                 time.sleep(1)
