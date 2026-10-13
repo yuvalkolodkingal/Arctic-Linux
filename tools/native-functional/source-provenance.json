@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816",
+  "native_source_sha256": "e5b0cec282dc87f92125a2dbad1bb0696f5dee6317a81af47427e707f9dcaede",
   "files": {
-    "native_smoke.py": "e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816",
-    "guest-check-native-v6.py": "eeb4b8e90b516fdba10092a059f6b2ba113c34c734f591e7bf22d109014c9305",
+    "native_smoke.py": "e5b0cec282dc87f92125a2dbad1bb0696f5dee6317a81af47427e707f9dcaede",
+    "guest-check-native-v6.py": "42c7f5958027dc0321de1a889451706145cfbd5964de58a46f9ac435d77b5f0a",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -27,14 +27,14 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
     "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
-    "test_native_v6.py": "c9185b3106b81910bf4f2b27f03ce11115627672d7546c224a4186df337ff1c4",
+    "test_native_v6.py": "c3d2431887696b5929edfc520e914d6f1bd57d203b31441804832c81b7c571ae",
     "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
-    "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
+    "test_native_protocol_diagnostics.py": "06d8feb918d66c9aab3aa0d728c2b38b095d3489fa6a65bee3de4f78e5d8395c",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
     "test_native_bulk_transport.py": "8d3324593c7a743bda344a2008d6ba31e3eaf1b9d90b68e6174f7dfe1c3a9e83",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
+    "test_controls_state_trials.py": "2f6fd1f236d57b0b750b3f647f267cdad18299805d5358afec8694feb7b58fe3",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -270,6 +270,18 @@
     "receipt": "one exact finite source-owned preflight stage on UART; no raw exception, path, device metadata, pixel, typed value, or private frame",
     "host_validation": "strict schema, finite stage inventory, failed status, release_acceptance false, one receipt, empty protected transport, and no completion marker",
     "taskbar_port_product_geometry_and_acceptance_unchanged": true,
+    "release_acceptance": false
+  },
+  "fresh_primary_player_restart": {
+    "trigger": "six strict primary captures all unmatched",
+    "maximum_owned_player_attempts": 2,
+    "same_command_fixture_playback_clock_focus_fullscreen_geometry_and_oracle": true,
+    "prior_owned_process_and_ipc_retired_before_restart": true,
+    "controlled_diagnostic_trials_cannot_admit": true,
+    "oracle_thresholds_unchanged": true,
+    "causal_run_id": 38447656906,
+    "causal_artifact_id": 11839152694,
+    "causal_artifact_sha256": "b50a91f57e087726cf28f914ff12cb4608cf01b65711d0d4579e75aef91d434f",
     "release_acceptance": false
   }
 }
