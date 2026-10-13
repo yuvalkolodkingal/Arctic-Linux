@@ -7,18 +7,18 @@
     "tools/lib/vmtest.py": "8dbfabdb550dc4a72b38228b27e0d6aefb2709fa2c0d5055cfc8a28b24828f93",
     "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
-    "tools/native-functional/evidence.py": "dd47ef1bc23a2dd088522fbef7c0d98438785057074795681a414dccff482df4",
+    "tools/native-functional/evidence.py": "b930ae89d979e21d3d09cb74400fcf4feb1d72ffce690981534c30e9b9a8305e",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
     "tools/native-functional/runner.py": "1b203bea39e94a8befb344cf0e9cc6c20619fe69af848e95f2c160bfa2117932",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/native-functional/source-provenance.json": "72fff5ae87ad84065d812c7c4a6371b1ec254ef291d42f7f34d8dffbb241052b",
+    "tools/native-functional/source-provenance.json": "5d6cd15672e241b193d42066e7a2f35353a3bfe63a6812a9121709bbef3e852c",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "be332f829fb35a09d42c8b1cbfd94df214ac1a87f10dcec0328dc19de77a346d",
     "tools/native-functional/taskbar-runtime.py": "3fa47a14fadb7618900ab3ab01c708f013de8abf9c5beedaab350478c96e620e",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/native-functional/taskbar.py": "458a9ec5f8ebc0b7c612163c29fa5c372cd3c03010d146217b1aa7215ff7a1df",
-    "tools/test-install.sh": "628441ef927ff2d0dc23412dda8f047787c7269c2c684912705c0d77e85507e5"
+    "tools/test-install.sh": "5b4fdea17190b4d73c2765f76a499e2ca79b92b8d297c4cdfd08aed6d4cf1c99"
   },
   "image": {
     "archive_bytes": 1934828445,
