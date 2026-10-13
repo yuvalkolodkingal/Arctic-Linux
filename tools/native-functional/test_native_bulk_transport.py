@@ -101,7 +101,7 @@ class BulkTransportControls(unittest.TestCase):
         driver = shell.split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
         restored = restore_native_bulk_driver(driver)
         original = shell.replace(driver, restored, 1)
-        self.assertEqual(sha(original.encode()), 'e8e5e7e3db092c03d1354fc46262dfafcb3cbecc6527138ee9896ac69d4c7d85')
+        self.assertEqual(sha(original.encode()), '1b51c4242b2ace099af284aa01c8f1b5617c02049a42dbd5fad137767ba5b744')
         for before, after in [('name=arctic-native-evidence', 'name=arctic-native-evidence-mutated'),
                               ('def record_native_stop(', 'def record_native_stop_mutated('),
                               ('            record_native_stop(vm,"install",t,install_timeout,rc)\n', ''),

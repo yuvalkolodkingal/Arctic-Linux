@@ -262,6 +262,12 @@ if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
     [[ -f "$NATIVE_TASKBAR_BUNDLE/$name" && ! -L "$NATIVE_TASKBAR_BUNDLE/$name" ]] || arctic_die "missing taskbar fixture file"
     cp -a "$NATIVE_TASKBAR_BUNDLE/$name" "$DATA/$name"
   done
+  # Do not let the workflow runner's umask become Rock Ridge policy.  The
+  # installed desktop can also automount this CD before the root collector,
+  # so the boot stub stages these normalized bytes into a protected read-only
+  # root-owned bind mount below.
+  chmod 0644 "$DATA/taskbar.py" "$DATA/taskbar-runtime.py" "$DATA/native_smoke.py" "$DATA/taskbar-context.json"
+  chmod 0755 "$DATA/virtual-pointer" "$DATA/raw-screencopy"
   [[ -f "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" && ! -L "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]] ||
     arctic_die "taskbar fixture requires its pinned host display controller"
   taskbar_host_args=(-v "$NATIVE_TASKBAR_DISPLAY_CONTROLLER:/arctic-taskbar-display.py:ro")
@@ -494,6 +500,50 @@ chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
 # unused), so the command typed into the VM is only `sudo sh /dev/sr0`: under TCG a busy guest
 # can lose keys (QEMU's PS/2 queue holds 16 bytes), and the shorter the command the better.
 # bash stops at the exec, before the NUL padding and the file system behind it.
+if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
+cat > "$OUT/sysarea.sh" <<'EOF'
+#!/bin/bash
+# tools/test-install.sh: protected taskbar fixture bootstrap.  The desktop may
+# already have mounted the optical media with per-user ownership, so never run
+# the reviewed bundle directly from that shared superblock view.
+[ "$(id -u)" = 0 ] || exit 1
+umask 022
+media=/dev/disk/by-label/ARCTICTEST
+source=/run/arctic-test-source
+stage=/run/arctic-test-stage
+target=/run/t
+[ ! -e "$source" ] && [ ! -L "$source" ] || exit 1
+[ ! -e "$stage" ] && [ ! -L "$stage" ] || exit 1
+[ ! -e "$target" ] && [ ! -L "$target" ] || exit 1
+mkdir -m 0700 "$source" "$stage" || exit 1
+mkdir -m 0755 "$target" || exit 1
+mountpoint -q "$source" && exit 1
+mountpoint -q "$target" && exit 1
+mount -t iso9660 -o ro,nodev,nosuid "$media" "$source" || exit 1
+expected="$(readlink -f "$media")" || exit 1
+actual="$(findmnt -nro SOURCE -T "$source")" || exit 1
+[ -n "$expected" ] && [ "$(readlink -f "$actual")" = "$expected" ] || exit 1
+[ "$(findmnt -nro FSTYPE -T "$source")" = iso9660 ] || exit 1
+case ",$(findmnt -nro OPTIONS -T "$source")," in *,ro,*) ;; *) exit 1 ;; esac
+[ -z "$(find "$source" -xdev ! -type d ! -type f -print -quit)" ] || exit 1
+cp -R --no-preserve=ownership "$source"/. "$stage"/ || exit 1
+chown -R 0:0 "$stage" || exit 1
+chmod -R go-w "$stage" || exit 1
+chmod -R a-s "$stage" || exit 1
+chmod 0755 "$stage" || exit 1
+[ -z "$(find "$stage" -xdev ! -type d ! -type f -print -quit)" ] || exit 1
+[ -z "$(find "$stage" -xdev \( ! -uid 0 -o ! -gid 0 -o -perm /6022 \) -print -quit)" ] || exit 1
+mount --bind "$stage" "$target" || exit 1
+mount -o remount,bind,ro,nodev,nosuid "$target" || exit 1
+target_options=",$(findmnt -nro OPTIONS -T "$target"),"
+case "$target_options" in *,ro,*) ;; *) exit 1 ;; esac
+case "$target_options" in *,nodev,*) ;; *) exit 1 ;; esac
+case "$target_options" in *,nosuid,*) ;; *) exit 1 ;; esac
+if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py; fi
+if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
+exit 1
+EOF
+else
 cat > "$OUT/sysarea.sh" <<'EOF'
 #!/bin/bash
 # tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
@@ -503,6 +553,7 @@ if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py
 if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
 exit 1
 EOF
+fi
 
 if [[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && "$COLLECT_VIA" == terminal ]] || arctic_die "physical fixture requires native launcher/checker/audio"
