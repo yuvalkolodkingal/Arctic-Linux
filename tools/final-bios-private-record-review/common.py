@@ -4,8 +4,8 @@ import hashlib,importlib.util,re,types
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 BASE='fbe533529ac913435e8026c313a20aab4549c78a'
-BRANCH='codex/final-bios-private-review-v4-20261013'
-MARKER='.github/final-bios-private-record-review-v4-20261013.activate'
+BRANCH='codex/final-bios-private-review-v5-20261013'
+MARKER='.github/final-bios-private-record-review-v5-20261013.activate'
 WORKFLOW='Final exact-image BIOS encrypted private record review v2'
 SOURCE_COMMIT='2035d5ee1979b92a9126278a633971c240ea00a1'
 SOURCE_TREE='07f2bb878f49b4fb91d5fe58ae3ec6d3f622ca3a'

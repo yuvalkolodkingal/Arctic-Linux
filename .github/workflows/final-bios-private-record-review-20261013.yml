@@ -2,8 +2,8 @@ name: Final exact-image BIOS encrypted private record review v2
 
 on:
   push:
-    branches: [codex/final-bios-private-review-v4-20261013]
-    paths: [.github/final-bios-private-record-review-v4-20261013.activate]
+    branches: [codex/final-bios-private-review-v5-20261013]
+    paths: [.github/final-bios-private-record-review-v5-20261013.activate]
 
 permissions:
   contents: read

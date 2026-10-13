@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import contextlib,importlib.util,io,json,subprocess,sys,tempfile,types,unittest
+import contextlib,importlib.util,io,json,os,subprocess,sys,tempfile,types,unittest
 from pathlib import Path
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parents[1]
 spec=importlib.util.spec_from_file_location('private_review_common',HERE/'common.py')
@@ -34,6 +34,43 @@ class Tests(unittest.TestCase):
         output=io.StringIO()
         with contextlib.redirect_stdout(output):self.assertEqual(P.report_seal_failure(types.SimpleNamespace(closed_failure_label=fail),Foreign()),P.SEAL_STAGE_UNKNOWN)
         self.assertNotIn('private-value',output.getvalue())
+    def test_closed_host_stage_is_finite_metadata_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/'private/vm').mkdir(parents=True);(root/'public').mkdir()
+            for expected,rel,unused_kind in R.CLOSED_HOST_STAGE_PATHS:
+                self.assertEqual(R.closed_host_stage(root),expected)
+                path=root/rel;path.parent.mkdir(parents=True,exist_ok=True);path.write_bytes(b'private bytes')
+            self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_AFTER)
+            value=C.strict_json((HERE/'execution-manifest.json').read_bytes())
+            label=R.publish_closed_host_stage(root,value)
+            report=json.loads((root/'public'/R.CLOSED_HOST_STAGE_FILE).read_bytes())
+            self.assertEqual(label,R.CLOSED_HOST_STAGE_AFTER)
+            self.assertEqual(set(report),{'schema','label','release_acceptance'})
+            self.assertEqual(report['schema'],R.CLOSED_HOST_STAGE_SCHEMA)
+            self.assertIn(report['label'],R.CLOSED_HOST_STAGE_LABELS)
+            self.assertFalse(report['release_acceptance'])
+            raw=json.dumps(report,sort_keys=True)
+            for forbidden in ('private bytes','vm-toolchain.txt','data.iso','target.qcow2',
+                              'qemu-install.log','serial-install.log','digest','length'):
+                self.assertNotIn(forbidden,raw)
+
+    def test_closed_host_stage_rejects_nonregular_symlink_and_hostile_lstat(self):
+        class Hostile(OSError):
+            def __str__(self):raise AssertionError('foreign error rendered')
+            def __repr__(self):raise AssertionError('foreign error represented')
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);(root/'private/vm').mkdir(parents=True);(root/'public').mkdir()
+            first=root/R.CLOSED_HOST_STAGE_PATHS[0][1]
+            first.symlink_to(root/'private/missing')
+            self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_UNKNOWN)
+            first.unlink();first.mkdir()
+            self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_UNKNOWN)
+            original=R.os.lstat
+            try:
+                R.os.lstat=lambda unused:(_ for _ in ()).throw(Hostile())
+                self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_UNKNOWN)
+            finally:R.os.lstat=original
+
     def test_real_adapter_builds_only_with_exact_prior_execution_tree(self):
         value=C.strict_json((HERE/'execution-manifest.json').read_bytes())
         with self.assertRaisesRegex(RuntimeError,'prior execution checkout differs'):
