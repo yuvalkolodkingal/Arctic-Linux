@@ -1639,15 +1639,19 @@ class Smoke:
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
         image=self.root/'celluloid-reference.png'
         rgb=self.root/'visual-owned-window.rgb'
-        capture_deadline=time.monotonic()+8
         attempt_limit=6
+        capture_command_timeout_seconds=3
+        retry_settle_seconds=.5
+        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
+                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline=time.monotonic()+capture_deadline_seconds
         attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
         oracle=dict(status='unmatched',reason='No capture attempted')
         for attempt in range(1,attempt_limit+1):
             if attempt>1:
                 remaining=capture_deadline-time.monotonic()
                 require(remaining>.5,'visual capture retry deadline exhausted')
-                time.sleep(.5)
+                time.sleep(retry_settle_seconds)
                 client_now=self.alive(player)
                 monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
                 monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
@@ -1657,7 +1661,7 @@ class Smoke:
                         'owned player identity/geometry/focus or monitor changed before recapture')
             remaining=capture_deadline-time.monotonic()
             require(remaining>.1,'visual capture retry deadline exhausted')
-            self.cmd(['grim','-o',monitor['name'],str(image)],timeout=min(3,remaining))
+            self.cmd(['grim','-o',monitor['name'],str(image)],timeout=min(capture_command_timeout_seconds,remaining))
             screenshot=dict(path=str(image),sha256=digest(image),
                 review='static content oracle plus human review; screencopy can request repaint')
             # The PNG header supplies actual physical pixel dimensions, not a config guess.
@@ -1676,7 +1680,7 @@ class Smoke:
             remaining=capture_deadline-time.monotonic()
             require(remaining>.1,'visual capture retry deadline exhausted')
             self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
-                             '-pix_fmt','rgb24','-f','rawvideo',str(rgb)],timeout=min(3,remaining))
+                             '-pix_fmt','rgb24','-f','rawvideo',str(rgb)],timeout=min(capture_command_timeout_seconds,remaining))
             try:
                 oracle=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
             except Exception as exc:
@@ -1688,6 +1692,12 @@ class Smoke:
             attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
                 actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
                 owned_identity_geometry_unchanged=True))
+            # Preserve bounded, content-free attempt evidence even when a later
+            # deadline check fails before the final full oracle is assembled.
+            (self.root/'visual-oracle.json').write_text(json.dumps(dict(
+                schema='arctic-native-visual-attempts-v1',release_acceptance=False,
+                capture_attempts=attempts,capture_attempt_limit=attempt_limit,
+                capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\n')
             if oracle.get('status')=='matched': break
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,client,after,screenshot)
@@ -1696,7 +1706,7 @@ class Smoke:
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
                   playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
-                  capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=8,
+                  capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')

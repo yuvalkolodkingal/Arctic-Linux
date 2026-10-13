@@ -24,11 +24,44 @@ spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
+BOUNDED_RETRY_NATIVE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
 STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
 
 
+def restore_bounded_retry_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
+        raise AssertionError('Bounded retry Native source differs')
+    retry_current="""        attempt_limit=6
+        capture_command_timeout_seconds=3
+        retry_settle_seconds=.5
+        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
+                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline=time.monotonic()+capture_deadline_seconds
+"""
+    retry_original="""        capture_deadline=time.monotonic()+8
+        attempt_limit=6
+"""
+    receipt="""            # Preserve bounded, content-free attempt evidence even when a later
+            # deadline check fails before the final full oracle is assembled.
+            (self.root/'visual-oracle.json').write_text(json.dumps(dict(
+                schema='arctic-native-visual-attempts-v1',release_acceptance=False,
+                capture_attempts=attempts,capture_attempt_limit=attempt_limit,
+                capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\\n')
+"""
+    if source.count(retry_current)!=1 or source.count(receipt)!=1:
+        raise AssertionError('Bounded retry inverse additions differ')
+    source=source.replace(retry_current,retry_original,1).replace(receipt,'',1)
+    source=source.replace('time.sleep(retry_settle_seconds)','time.sleep(.5)',1)
+    source=source.replace('min(capture_command_timeout_seconds,remaining)','min(3,remaining)',2)
+    source=source.replace('capture_deadline_seconds=capture_deadline_seconds,','capture_deadline_seconds=8,',1)
+    if hashlib.sha256(source.encode()).hexdigest()!=STREAM_NATIVE_SHA:
+        raise AssertionError('Pre-bounded-retry Native source differs')
+    return source
+
+
 def restore_security_stream_native(source):
+    source=restore_bounded_retry_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=STREAM_NATIVE_SHA:
         raise AssertionError('Streaming journal Native source differs')
     constants = ('JOURNAL_LINE_LIMIT = 1024 * 1024\n'
@@ -104,8 +137,14 @@ class ControlsStateTrials(unittest.TestCase):
         self.assertEqual(segment(new,'RendererTrialSmoke'),segment(old,'RendererTrialSmoke'))
         for name in ('launch_reference_player','hide_reference_controls','cleanup','setup'):
             self.assertEqual(segment(new,name,'Smoke'),segment(old,name,'Smoke'))
-        self.assertEqual(segment(new,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
-        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),new+'\n# unknown mutation\n'):
+        bounded=restore_bounded_retry_native(new)
+        self.assertEqual(segment(bounded,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
+        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),
+                     new.replace('(attempt_limit-1) * retry_settle_seconds + 3.5',
+                                 '(attempt_limit-1) * retry_settle_seconds + 4.5',1),
+                     new.replace("schema='arctic-native-visual-attempts-v1'",
+                                 "schema='arctic-native-visual-attempts-mutated'",1),
+                     new+'\n# unknown mutation\n'):
             with self.assertRaises(AssertionError):restore_controls_native(text)
 
     def test_private_seed_exact_commands_and_nonzero_or_poison_readbacks_abort(self):
