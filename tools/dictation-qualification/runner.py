@@ -71,6 +71,17 @@ TRUSTED_CONTRACT_ERRORS = frozenset({
     'gate-safe-code', 'gate-observation-fields', 'report-status-derived',
     'image-dictation-gates-incomplete'})
 
+COLLECTOR_SETUP_STAGES = (
+    'resource-limits', 'arguments', 'environment', 'context', 'source-integrity',
+    'controller', 'profile', 'hardware', 'report', 'desktop', 'workspace',
+    'journal', 'audit', 'execution')
+COLLECTOR_ERROR_LABELS = (
+    'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error')
+COLLECTOR_DIAGNOSTIC_CODES = frozenset(
+    {'collector-unknown'} |
+    {'collector-' + stage + '-' + label
+     for stage in COLLECTOR_SETUP_STAGES for label in COLLECTOR_ERROR_LABELS})
+
 
 def diagnostic(phase, stage, error, contract):
     if phase not in PHASES or stage not in CATCH_STAGES:
@@ -126,6 +137,60 @@ def relay_host_stages(path, token, phase):
         if fd is not None:
             try:
                 os.close(fd)
+            except OSError:
+                pass
+
+
+def relay_collector_diagnostic(vm, phase):
+    """Relay one finite guest setup code without exposing the private serial log."""
+    if phase not in PHASES:
+        return
+    descriptor = None
+    try:
+        path = Path(vm) / 'serial-boot.log'
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, 'rb') as stream:
+            descriptor = None
+            before = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid not in (0, os.geteuid())
+                    or before.st_mode & 0o022 or not 0 < before.st_size < 128 * 1024 * 1024):
+                return
+            raw = stream.read(128 * 1024 * 1024)
+            after = os.fstat(stream.fileno())
+        fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
+                               info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+        if (fields(before) != fields(after)
+                or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                or len(raw) != before.st_size):
+            return
+        prefix = b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+        selected = [line for line in raw.splitlines(keepends=True) if line.startswith(prefix)]
+        if not selected:
+            return
+        code = 'collector-invalid-record'
+        if (len(selected) == 1 and len(selected[0]) <= 512
+                and selected[0].endswith(b'\n') and not selected[0].endswith(b'\r\n')):
+            def strict_object(pairs):
+                value = {}
+                for key, item in pairs:
+                    if key in value:
+                        raise ValueError('duplicate')
+                    value[key] = item
+                return value
+            record = json.loads(selected[0][len(prefix):-1].decode('ascii'),
+                                object_pairs_hook=strict_object)
+            if (type(record) is dict and set(record) == {'code', 'release_acceptance'}
+                    and type(record.get('code')) is str
+                    and record['code'] in COLLECTOR_DIAGNOSTIC_CODES
+                    and record.get('release_acceptance') is False):
+                code = record['code']
+        print('ARCTIC-DICTATION-HOST-FAILURE ' + phase + ' collector ' + code, flush=True)
+    except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
+        pass
+    finally:
+        if descriptor is not None:
+            try:
+                os.close(descriptor)
             except OSError:
                 pass
 
@@ -464,6 +529,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
+                relay_collector_diagnostic(vm, phase)
                 preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.

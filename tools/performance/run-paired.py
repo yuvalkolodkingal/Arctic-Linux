@@ -14,6 +14,7 @@ import signal
 import stat
 import subprocess
 import sys
+import tempfile  # performance-prescreen-only
 import uuid
 import types
 
@@ -707,6 +708,124 @@ def sha256(path):
     return digest.hexdigest()
 
 
+# performance-prescreen-only-begin
+SCREENING_FAILURE_CODES = frozenset({'sensitive_text', 'terminal_escape', 'member_count',
+    'member_type', 'member_size', 'ownership', 'unclassified'})
+
+
+class EarlyEvidenceScreeningError(RuntimeError):
+    """A fixed rejection whose attributes are normalized before any status write."""
+    def __init__(self, category, failure):
+        self.category = category
+        self.screening_failure = failure
+        super().__init__('Early performance evidence screening rejected')
+
+
+def normalized_screening_status(error, screen):
+    """Close untrusted/future caller attributes before they can enter status.json."""
+    category = getattr(error, 'category', None) if type(error) is EarlyEvidenceScreeningError else None
+    failure = getattr(error, 'screening_failure', None) if type(error) is EarlyEvidenceScreeningError else None
+    if type(category) is not str or category not in screen.PERFORMANCE_MEMBER_CATEGORIES:
+        category = 'performance-other-text'
+    if type(failure) is not str or failure not in SCREENING_FAILURE_CODES:
+        failure = 'unclassified'
+    return category, failure
+
+
+def screen_source_failure_status():
+    """The source-integrity failure record is finite and contains no path or exception value."""
+    return 'performance-other-text', 'member_type'
+
+
+def fixed_screening_failure(error):
+    if type(error) is not RuntimeError or type(error.args) is not tuple or len(error.args) != 1 \
+            or type(error.args[0]) is not str:
+        return 'unclassified'
+    return {'Sensitive text in external evidence': 'sensitive_text',
+            'Incomplete terminal escape in external evidence': 'terminal_escape',
+            'Too many diagnostic members': 'member_count',
+            'Diagnostic symlinks are forbidden': 'member_type',
+            'Diagnostic members must be regular files': 'member_type',
+            'Diagnostic byte bounds exceeded': 'member_size',
+            'Diagnostics must be an owned directory and upload path unused': 'ownership'}.get(
+                error.args[0], 'unclassified')
+
+
+def pre_screen_evidence_members(out, members, screen):
+    """Apply the unchanged external scanner to each new member before the next VM stage."""
+    out = Path(out).resolve()
+    seen = set()
+    for relative, path in sorted(members, key=lambda item: item[0]):
+        category = screen.performance_external_member_category(relative)
+        if (type(relative) is not str or not relative or relative in seen
+                or Path(relative).is_absolute() or '..' in Path(relative).parts
+                or category not in screen.PERFORMANCE_MEMBER_CATEGORIES):
+            raise EarlyEvidenceScreeningError('performance-other-text', 'member_type')
+        seen.add(relative)
+        path = Path(path)
+        try:
+            info = path.lstat()
+            safe = (stat.S_ISREG(info.st_mode) and not path.is_symlink()
+                    and path.resolve().is_relative_to(out))
+        except OSError:
+            safe = False
+        if not safe:
+            raise EarlyEvidenceScreeningError(category, 'member_type')
+        try:
+            with tempfile.TemporaryDirectory(prefix='arctic-paired-prescreen-', dir=out.parent) as temporary:
+                source = Path(temporary)/'source'
+                target = Path(temporary)/'screened'
+                member = source/relative
+                member.parent.mkdir(parents=True)
+                shutil.copyfile(path, member)
+                screen.screen_external(source, target)
+        except Exception as error:
+            if type(error) is EarlyEvidenceScreeningError:
+                raise
+            raise EarlyEvidenceScreeningError(category, fixed_screening_failure(error)) from None
+
+
+def stage_evidence_members(out, roots):
+    """Return the exact collectable members newly closed by one install or boot stage."""
+    out = Path(out).resolve()
+    result = []
+    for root in roots:
+        root = Path(root)
+        paths = [root] if root.is_file() or root.is_symlink() else sorted(root.rglob('*'))
+        for path in paths:
+            if path.is_dir() and not path.is_symlink():
+                continue
+            if path.suffix not in {'.json', '.log', '.txt', '.tsv', '.png'}:
+                continue
+            try:
+                relative = path.relative_to(out).as_posix()
+            except ValueError:
+                raise EarlyEvidenceScreeningError('performance-other-text', 'member_type') from None
+            result.append((relative, path))
+    return result
+
+
+def load_screen_source():
+    """Load the Git-bound scanner already pinned as an execution source."""
+    lexical = ROOT/'tools/native-functional/screen-evidence.py'
+    if lexical.is_symlink():
+        raise RuntimeError('Performance evidence scanner differs from Git HEAD')
+    try:
+        path = lexical.resolve()
+    except (OSError, RuntimeError):
+        raise RuntimeError('Performance evidence scanner differs from Git HEAD') from None
+    if (path != lexical.absolute() or not path.is_file() or not path.is_relative_to(ROOT.resolve())
+            or path.read_bytes() != subprocess.check_output(
+                ['git', '-C', str(ROOT), 'show', 'HEAD:tools/native-functional/screen-evidence.py'])):
+        raise RuntimeError('Performance evidence scanner differs from Git HEAD')
+    module = types.ModuleType('paired_early_screen')
+    module.__file__ = str(path)
+    exec(compile(path.read_bytes(), str(path), 'exec'), module.__dict__)
+    return module
+
+
+# performance-prescreen-only-end
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--baseline', type=Path, required=True)
@@ -760,13 +879,34 @@ def main():
     state = dict(acceleration='kvm', memory_mib=4096, vcpus=2, restricted_network=True,
                  observer_sha256=sha256(probe), images={n: dict(path=str(p), bytes=p.stat().st_size,
                  sha256=sha256(p)) for n, p in images.items()}, runs=[],
+                 screening_member_category='not_observed', screening_failure='not_observed',  # performance-prescreen-only
                  planned_boot_order=[dict(image=name, boot=number) for number, name in paired_boot_order()])
-
     def save(phase):
         state['phase'] = phase
         state['timestamp_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
         (args.out / 'status.json').write_text(json.dumps(state, indent=2) + '\n')
         print(phase, flush=True)
+
+    # performance-prescreen-main-only-begin
+    try:
+        evidence_screen = load_screen_source()
+    except Exception:
+        state['screening_member_category'], state['screening_failure'] = screen_source_failure_status()
+        save('early_evidence_screen_rejected')
+        raise RuntimeError('Performance evidence scanner source rejected') from None
+
+    def pre_screen(roots, observer=False):
+        members = stage_evidence_members(args.out, roots)
+        if observer:
+            members.append(('observer-source.txt', probe))
+        try:
+            pre_screen_evidence_members(args.out, members, evidence_screen)
+        except EarlyEvidenceScreeningError as error:
+            state['screening_member_category'], state['screening_failure'] = normalized_screening_status(
+                error, evidence_screen)
+            save('early_evidence_screen_rejected')
+            raise
+    # performance-prescreen-main-only-end
 
     def require_idle_vm_host():
         if external:
@@ -960,6 +1100,10 @@ def main():
             verify_toolchain(args.out / name)
             if 'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' not in (args.out/(name+'-install-harness.log')).read_text():
                 raise RuntimeError('Installed source did not cleanly power off; first-use snapshot refused')
+            # performance-prescreen-stage-only-begin
+            pre_screen([args.out/'status.json', args.out/(name+'-install-harness.log'), args.out/name],
+                       observer=name == 'baseline')
+            # performance-prescreen-stage-only-end
             pristine[name] = {file: sha256(args.out/name/file) for file in ('target.qcow2', 'OVMF_VARS.fd')}
         state['pristine_installed_sources'] = pristine
         for number, name in paired_boot_order():
@@ -989,6 +1133,7 @@ def main():
                 # but discard only this fresh overlay/data CD to bound disk use.
                 for file in ('target.qcow2', 'data.iso'):
                     (archive/file).unlink(missing_ok=True)
+            pre_screen([args.out/'status.json', archive])  # performance-prescreen-only
             state['runs'].append(dict(image=name, boot=number, archive=str(archive), harness_exit=0))
         for name, expected in pristine.items():
             if {file: sha256(args.out/name/file) for file in expected} != expected:
