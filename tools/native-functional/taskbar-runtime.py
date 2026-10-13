@@ -29,6 +29,36 @@ BUNDLE = {'taskbar.py': 'checker_sha256', 'taskbar-runtime.py': 'runtime_sha256'
           'native_smoke.py': 'native_sha256', 'virtual-pointer': 'pointer_sha256',
           'raw-screencopy': 'capture_sha256'}
 PORT_NAME = 'arctic-taskbar-evidence'
+PREFLIGHT_STAGES = frozenset({
+    'runtime-path', 'runtime-authorization', 'context', 'bundle-taskbar',
+    'bundle-runtime', 'bundle-native', 'bundle-pointer', 'bundle-capture',
+    'helpers', 'guest-guard', 'desktop', 'account', 'session',
+    'session-type', 'session-active', 'session-user', 'boot-id',
+    'port-alias', 'port-metadata', 'port-identity', 'port-open',
+    'port-device', 'begin-write', 'provenance-write',
+})
+_preflight_stage = 'runtime-path'
+
+
+def preflight_stage(stage):
+    """Select one source-owned, privacy-safe preflight diagnostic code."""
+    require(type(stage) is str and stage in PREFLIGHT_STAGES,
+            'taskbar collector preflight stage differs')
+    global _preflight_stage
+    _preflight_stage = stage
+
+
+def preflight_failure():
+    """Return the only public failure receipt allowed before protected transport."""
+    return dict(schema='arctic-taskbar-preflight-v1', stage=_preflight_stage,
+                status='failed', release_acceptance=False)
+
+
+def emit_preflight_failure(stream=None):
+    """Emit no caught exception data, paths, metadata, or guest values."""
+    print('ARCTIC-TASKBAR-COLLECTOR-ERROR ' +
+          json.dumps(preflight_failure(), sort_keys=True, allow_nan=False),
+          file=stream if stream is not None else sys.stdout, flush=True)
 
 
 def require(condition, message):
@@ -126,6 +156,7 @@ class PortWriter:
 
 
 def open_port():
+    preflight_stage('port-alias')
     alias = Path('/dev/virtio-ports') / PORT_NAME
     canonical = alias.resolve(strict=True)
     require(canonical.parent == Path('/dev') and re.fullmatch('vport[0-9]+p[0-9]+', canonical.name),
@@ -133,16 +164,20 @@ def open_port():
     attrs = Path('/sys/class/virtio-ports') / canonical.name
     # Sysfs class entries are kernel-owned symlinks; their attributes bind the
     # named channel to the exact opened device, rather than trusting a dev alias.
+    preflight_stage('port-metadata')
     for path in (alias.parent, attrs / 'name', attrs / 'dev'):
         info = path.stat()
         require(info.st_uid == 0 and not info.st_mode & 0o022, 'taskbar device/sysfs metadata is unprotected')
+    preflight_stage('port-identity')
     name = (attrs / 'name').read_text().strip()
     device = (attrs / 'dev').read_text().strip()
     require(name == PORT_NAME and re.fullmatch('[0-9]{1,5}:[0-9]{1,5}', device),
             'taskbar sysfs channel name/device differs')
     major, minor = (int(v) for v in device.split(':'))
+    preflight_stage('port-open')
     fd = os.open(canonical, os.O_WRONLY | os.O_NOFOLLOW | os.O_NOCTTY | os.O_NONBLOCK)
     try:
+        preflight_stage('port-device')
         info = os.fstat(fd)
         require(stat.S_ISCHR(info.st_mode) and info.st_uid == 0 and not info.st_mode & 0o022
                 and (os.major(info.st_rdev), os.minor(info.st_rdev)) == (major, minor),
@@ -202,36 +237,52 @@ def export(root, uid, token, stream=None):
 
 
 def main(argv=None):
+    preflight_stage('runtime-path')
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--disposable-guest', action='store_true', required=True)
     args = parser.parse_args(argv)
     require(Path(__file__).absolute() == Path('/run/t/taskbar-runtime.py')
             and Path(__file__).resolve() == Path('/run/t/taskbar-runtime.py'),
             'requires the reviewed /run/t/taskbar-runtime.py bundle')
+    preflight_stage('runtime-authorization')
     require(os.geteuid() == 0 and args.disposable_guest, 'requires explicit disposable root guest')
+    preflight_stage('context')
     context = validate_context(strict_json(read_regular('/run/t/taskbar-context.json', 16384, True)))
     for name, key in BUNDLE.items():
+        preflight_stage('bundle-' + {
+            'taskbar.py': 'taskbar', 'taskbar-runtime.py': 'runtime',
+            'native_smoke.py': 'native', 'virtual-pointer': 'pointer',
+            'raw-screencopy': 'capture'}[name])
         require(digest(read_regular(Path('/run/t') / name, root_owned=True)) == context[key],
                 'taskbar reviewed bundle hash differs: ' + name)
+    preflight_stage('helpers')
     require(all(os.access('/run/t/' + name, os.X_OK) for name in ('virtual-pointer', 'raw-screencopy')),
             'taskbar native helper is not executable')
     sys.path.insert(0, '/run/t')
     import native_smoke as native
+    preflight_stage('guest-guard')
     native.guest_guard('installed', True)
+    preflight_stage('desktop')
     prefix = native.discover_desktop()
+    preflight_stage('account')
     uid = pwd.getpwnam(prefix[2]).pw_uid
+    preflight_stage('session')
     sessions = [x.split('=', 1)[1] for x in prefix if x.startswith('XDG_SESSION_ID=')]
     require(len(sessions) == 1 and bool(sessions[0]), 'actual desktop session missing')
     session = sessions[0]
     for key, expected in (('Type', 'wayland'), ('Active', 'yes'), ('User', str(uid))):
+        preflight_stage('session-' + key.lower())
         require(native.execute(['loginctl', 'show-session', session, '-p', key, '--value'])[1] == expected,
                 'actual desktop session identity differs')
+    preflight_stage('boot-id')
     boot_id = Path('/proc/sys/kernel/random/boot_id').read_text().strip()
     require(re.fullmatch('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', boot_id), 'boot ID differs')
     identity = dict(boot_id=boot_id, desktop_uid=uid, active_desktop_session=session)
     port, transport = open_port()  # No guest fallback to the slow UART evidence path.
+    preflight_stage('begin-write')
     emit('BEGIN', dict(schema='arctic-taskbar-runner-v1', stage='installed', context=context,
                        **identity, transport=transport, release_acceptance=False), port)
+    preflight_stage('provenance-write')
     emit('PROVENANCE', dict(schema='arctic-taskbar-provenance-v1', stage='installed',
                             context=context, **identity, cmdline=Path('/proc/cmdline').read_text().strip(),
                             virtualization=native.execute(['systemd-detect-virt'])[1],
@@ -302,5 +353,5 @@ if __name__ == '__main__':
     try:
         raise SystemExit(main())
     except Exception:
-        print('ARCTIC-TASKBAR-COLLECTOR-ERROR', flush=True)
+        emit_preflight_failure()
         raise SystemExit(1)
