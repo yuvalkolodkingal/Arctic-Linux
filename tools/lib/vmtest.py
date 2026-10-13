@@ -6,6 +6,7 @@ socket; screenshots are PNG files written by QMP screendump; keys go in with QMP
 """
 import json
 import os
+import re
 import socket
 import subprocess
 import time
@@ -76,13 +77,21 @@ class VM:
         except (OSError, ValueError) as e:
             raise QMPError(str(e))
 
-    def shot(self, name):
+    def shot(self, name, *, device=None, head=None):
         """Screendump to <out>/<name>.png; returns the path or None."""
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid screendump head selector")
         path = f"{OUT}/{name}.png"
         if not self.alive():
             return None
         try:
-            r = self.cmd("screendump", filename=path, format="png")
+            arguments = {"filename": path, "format": "png"}
+            if selected:
+                arguments.update(device=device, head=head)
+            r = self.cmd("screendump", **arguments)
         except QMPError as e:
             log(f"screendump failed: {e}")
             return None
@@ -91,27 +100,45 @@ class VM:
             return None
         return path
 
-    def press(self, chord):
+    @staticmethod
+    def _input_selector(device, head):
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid input head selector")
+        return selected
+
+    def press(self, chord, *, device=None, head=None):
         """Press and release a chord (["shift", "a"]) in one input-send-event batch. With
         send-key, QEMU releases the keys on a timer, and a guest lagging under TCG can see
         the key held past its repeat delay ("suuuuudo"); here the release events arrive
         together with the presses."""
+        selected = self._input_selector(device, head)
         down = [{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": c}}} for c in chord]
         up = [{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": c}}} for c in reversed(chord)]
-        r = self.cmd("input-send-event", events=down + up)
+        arguments = {"events": down + up}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
         if "error" in r:
+            if selected:
+                raise QMPError("selected input event failed")
             # Older QEMU or no device for input-send-event: fall back to send-key.
             self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
 
-    def keys(self, *names, gap=0.3):
+    def keys(self, *names, gap=0.3, device=None, head=None):
         """Press keys one after the other; "ctrl-x" style names press a chord."""
+        self._input_selector(device, head)
         for k in names:
-            self.press(k.split("-") if len(k) > 1 and "-" in k else [k])
+            self.press(k.split("-") if len(k) > 1 and "-" in k else [k],
+                       device=device, head=head)
             time.sleep(gap)
 
-    def type_text(self, text, gap=0.15):
+    def type_text(self, text, gap=0.15, *, device=None, head=None):
+        self._input_selector(device, head)
         for ch in text:
-            self.press(chord_for(ch))
+            self.press(chord_for(ch), device=device, head=head)
             time.sleep(gap)
 
     def quit(self):
@@ -211,19 +238,13 @@ def amber_runs(path, scale=2):
     return runs, scale
 
 
-def _login_controls(im):
-    """Find the SDDM submit button beside both edges of its password field.
-
-    Wallpaper colours can produce much longer amber runs than the controls. Match
-    their local geometry instead of letting unrelated rows hide the login card.
-    The card is horizontally centred; its exact vertical position depends on the
-    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
-    """
+def _login_geometry(im):
+    """Return the password-field and submit-button boxes for the SDDM card."""
     w, h = im.size
     if w < 320 or h < 200:
-        return False
-    region = im.crop((max(0, w // 2 - 400), h // 4,
-                      min(w, w // 2 + 400), h))
+        return None
+    rx0, ry0 = max(0, w // 2 - 400), h // 4
+    region = im.crop((rx0, ry0, min(w, w // 2 + 400), h))
     rw, rh = region.size
     mask = bytearray(_is_amber(p) for p in region.getdata())
     components = []
@@ -259,15 +280,63 @@ def _login_controls(im):
                     and 0 < bx0 - x1 <= bw):
                 edges.append((x0, y0, x1, y1))
         for tx0, ty0, tx1, ty1 in edges:
-            if not (abs(ty0 - by0) <= 0.2 * bh):
+            if abs(ty0 - by0) > 0.2 * bh:
                 continue
             for lx0, ly0, lx1, ly1 in edges:
                 if (abs(ly1 - by1) <= 0.2 * bh
                         and ly0 - ty1 >= 0.7 * bh
                         and abs(tx0 - lx0) <= 0.2 * bw
                         and abs(tx1 - lx1) <= 0.2 * bw):
-                    return True
-    return False
+                    field = (tx0 + rx0, ty0 + ry0, tx1 + rx0, ly1 + ry0)
+                    button = (bx0 + rx0, by0 + ry0, bx1 + rx0, by1 + ry0)
+                    return field, button
+    return None
+
+
+def _login_controls(im):
+    """Find the SDDM submit button beside both edges of its password field.
+
+    Wallpaper colours can produce much longer amber runs than the controls. Match
+    their local geometry instead of letting unrelated rows hide the login card.
+    The card is horizontally centred; its exact vertical position depends on the
+    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
+    """
+    return _login_geometry(im) is not None
+
+
+def login_password_changed(before_path, after_path):
+    """Whether bounded pixels inside the detected password text ROI changed.
+
+    This checks that physical input reached the editable field without reading,
+    recognizing or retaining the password. Changes to wallpaper, clock, focus
+    border, lock icon or submit button are excluded.
+    """
+    try:
+        before = Image.open(before_path).convert("L")
+        after = Image.open(after_path).convert("L")
+    except OSError:
+        return False
+    if before.size != after.size:
+        return False
+    before_geometry = _login_geometry(Image.open(before_path).convert("RGB"))
+    after_geometry = _login_geometry(Image.open(after_path).convert("RGB"))
+    if before_geometry is None or after_geometry is None:
+        return False
+    before_field, _ = before_geometry
+    after_field, _ = after_geometry
+    if any(abs(a - b) > 2 for a, b in zip(before_field, after_field)):
+        return False
+    x0, y0, x1, y1 = before_field
+    height = y1 - y0
+    # Exclude the amber border/caret, the leading lock icon and trailing padding.
+    roi = (x0 + height, y0 + max(3, height // 6),
+           x1 - max(3, height // 6), y1 - max(3, height // 6))
+    if roi[2] <= roi[0] or roi[3] <= roi[1]:
+        return False
+    a = before.crop(roi)
+    b = after.crop(roi)
+    changed = sum(abs(x - y) > 24 for x, y in zip(a.getdata(), b.getdata()))
+    return changed >= 24
 
 
 def classify(path):

@@ -37,6 +37,10 @@ MIMES = {'inode/directory': 'pcmanfm.desktop', 'text/plain': 'featherpad.desktop
          'application/zip': 'xarchiver.desktop'}
 AVC = re.compile(r'avc:\s*denied|type=(?:USER_)?AVC\b', re.I)
 LIMIT = 4 * 1024 * 1024
+JOURNAL_LINE_LIMIT = 1024 * 1024
+JOURNAL_RECORD_LIMIT = 250000
+JOURNAL_STDERR_LIMIT = 64 * 1024
+JOURNAL_READ_SIZE = 64 * 1024
 
 
 def require(value, message):
@@ -141,12 +145,157 @@ def parse_audit_status(text):
     return dict(enabled=int(fields['enabled']), lost=int(fields['lost']))
 
 
-def verify_security(before, after, new_messages):
+def _unique_json_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError('duplicate journal JSON key')
+        result[key] = value
+    return result
+
+
+def _invalid_json_constant(_value):
+    raise ValueError('nonfinite journal JSON number')
+
+
+def journal_avc_count(cursor, timeout=60):
+    """Scan every bounded journal JSON record without retaining message text."""
+    process = None
+    try:
+        if (type(cursor) is not str or re.fullmatch(r'[A-Za-z0-9_=.;:-]{1,4096}', cursor) is None
+                or type(timeout) not in (int, float) or isinstance(timeout, bool)
+                or not math.isfinite(timeout) or not 0 < timeout <= 600):
+            raise ValueError('invalid journal stream request')
+        process = subprocess.Popen(
+            ['journalctl', '-b', '--no-pager', '--after-cursor', cursor,
+             '-o', 'json', '--output-fields=MESSAGE', '--all'],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            start_new_session=True)
+        if process.stdout is None or process.stderr is None:
+            raise RuntimeError('journal stream pipes unavailable')
+        streams = {process.stdout.fileno(): ('stdout', bytearray()),
+                   process.stderr.fileno(): ('stderr', bytearray())}
+        for descriptor in streams:
+            os.set_blocking(descriptor, False)
+        deadline = time.monotonic() + timeout
+        records = avcs = stderr_bytes = 0
+        with selectors.DefaultSelector() as poller:
+            for descriptor in streams:
+                poller.register(descriptor, selectors.EVENT_READ)
+            while poller.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise subprocess.TimeoutExpired('journalctl', timeout)
+                for key, _mask in poller.select(min(1.0, remaining)):
+                    descriptor = key.fd
+                    try:
+                        chunk = os.read(descriptor, JOURNAL_READ_SIZE)
+                    except BlockingIOError:
+                        continue
+                    if not chunk:
+                        poller.unregister(descriptor)
+                        continue
+                    kind, buffer = streams[descriptor]
+                    if kind == 'stderr':
+                        stderr_bytes += len(chunk)
+                        if stderr_bytes > JOURNAL_STDERR_LIMIT:
+                            raise ValueError('journal stderr exceeded bound')
+                        continue
+                    buffer.extend(chunk)
+                    while b'\n' in buffer:
+                        line, _, remainder = buffer.partition(b'\n')
+                        buffer[:] = remainder
+                        if len(line) > JOURNAL_LINE_LIMIT:
+                            raise ValueError('journal record exceeded bound')
+                        if not line:
+                            continue
+                        records += 1
+                        if records > JOURNAL_RECORD_LIMIT:
+                            raise ValueError('journal record count exceeded bound')
+                        record = json.loads(
+                            line.decode('utf-8'), object_pairs_hook=_unique_json_object,
+                            parse_constant=_invalid_json_constant)
+                        if type(record) is not dict:
+                            raise ValueError('journal record is not an object')
+                        message = record.get('MESSAGE', '')
+                        if type(message) is list:
+                            if (len(message) > JOURNAL_LINE_LIMIT
+                                    or any(type(value) is not int or not 0 <= value <= 255
+                                           for value in message)):
+                                raise ValueError('invalid binary journal message')
+                            message = bytes(message).decode(errors='replace')
+                        if type(message) is not str:
+                            raise ValueError('invalid journal message')
+                        if len(message.encode('utf-8')) > JOURNAL_LINE_LIMIT:
+                            raise ValueError('journal message exceeded bound')
+                        if AVC.search(message):
+                            avcs += 1
+                    if len(buffer) > JOURNAL_LINE_LIMIT:
+                        raise ValueError('journal record exceeded bound')
+        if streams[process.stdout.fileno()][1]:
+            raise ValueError('unterminated journal record')
+        remaining = deadline - time.monotonic()
+        if remaining <= 0 or process.wait(timeout=remaining) != 0:
+            raise RuntimeError('journalctl failed')
+        return dict(records=records, avcs=avcs)
+    except (OSError, ValueError, TypeError, UnicodeError, subprocess.SubprocessError, RuntimeError):
+        raise RuntimeError('journal stream validation failed') from None
+    finally:
+        if process is not None:
+            # The journalctl leader may exit while an inherited pipe is held by
+            # a descendant. The process group is ours because Popen created a
+            # new session; always terminate that owned group before returning.
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            cleanup_deadline = time.monotonic() + 5
+            try:
+                process.wait(timeout=5)
+            except (OSError, subprocess.SubprocessError):
+                pass
+            group_live = True
+            while time.monotonic() < cleanup_deadline:
+                group_live = False
+                for member in Path('/proc').glob('[0-9]*'):
+                    try:
+                        fields = member.joinpath('stat').read_text().rpartition(')')[2].split()
+                    except FileNotFoundError:
+                        continue
+                    except (OSError, UnicodeError):
+                        group_live = True
+                        break
+                    if len(fields) < 3:
+                        group_live = True
+                        break
+                    try:
+                        member_group = int(fields[2])
+                    except ValueError:
+                        group_live = True
+                        break
+                    if member_group == process.pid and fields[0] not in ('Z', 'X'):
+                        group_live = True
+                        break
+                if not group_live:
+                    break
+                time.sleep(.01)
+            for stream in (process.stdout, process.stderr):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
+            if group_live:
+                raise RuntimeError('journal stream validation failed')
+
+
+def verify_security(before, after, journal_avcs, audit_messages=''):
     require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
     require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
     require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
-    denied = [line for line in new_messages.splitlines() if AVC.search(line)]
-    require(not denied, 'new AVC requires investigation: ' + '\n'.join(denied[:20]))
+    require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
+    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
+    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
     return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
                 audit_enabled=after['audit']['enabled'] in (1,2),
                 scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
@@ -172,10 +321,8 @@ class SecurityInterval:
 
     def finish(self):
         after = self.state()
-        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,
-                           '-o', 'json'], timeout=60)[1]
-        messages = '\n'.join(str(json.loads(line).get('MESSAGE', ''))
-                             for line in journal.splitlines() if line)
+        journal = journal_avc_count(self.cursor, timeout=60)
+        audit_messages = ''
         if self.audit_offset:
             info = self.audit_file.stat()
             dev, ino, offset = self.audit_offset
@@ -184,13 +331,12 @@ class SecurityInterval:
             require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
             with self.audit_file.open('rb') as stream:
                 stream.seek(offset)
-                messages += '\n' + stream.read(LIMIT).decode(errors='replace')
+                audit_messages = stream.read(LIMIT).decode(errors='replace')
         elif self.audit_file.exists():
             # The new file may include records not forwarded to the journal.
             require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
-            messages += '\n' + self.audit_file.read_text(errors='replace')
-        return verify_security(self.before, after, messages)
-
+            audit_messages = self.audit_file.read_text(errors='replace')
+        return verify_security(self.before, after, journal['avcs'], audit_messages)
 
 def discover_desktop():
     """Actual login environment, including post-exec Mango IPC and Xwayland DISPLAY."""
@@ -1470,6 +1616,19 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
+        initial_time=state['time-pos']
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'initial visual playback clock is invalid')
+        def playback_advanced():
+            observed=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+            require(type(observed) in (int,float) and not isinstance(observed,bool)
+                    and math.isfinite(observed) and 0<=observed<=2,
+                    'visual playback clock is invalid')
+            delta=observed-initial_time
+            if delta<0: delta+=2
+            return observed if delta>=.05 else None
+        advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
         time.sleep(.5)
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -1479,38 +1638,81 @@ class Smoke:
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
         image=self.root/'celluloid-reference.png'
-        self.cmd(['grim','-o',monitor['name'],str(image)])
-        screenshot=dict(path=str(image),sha256=digest(image),review='static content oracle plus human review; screencopy can request repaint')
-        # The PNG header supplies actual physical pixel dimensions, not a config guess.
-        header=image.read_bytes()[:24]
-        require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR','invalid reference capture PNG')
-        size=list(struct.unpack('>II',header[16:24]))
-        require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
-        after=self.alive(player)
-        monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
-        self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after)
+        rgb=self.root/'visual-owned-window.rgb'
+        attempt_limit=6
+        capture_command_timeout_seconds=3
+        retry_settle_seconds=.5
+        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
+                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline=time.monotonic()+capture_deadline_seconds
+        attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
+        oracle=dict(status='unmatched',reason='No capture attempted')
+        for attempt in range(1,attempt_limit+1):
+            if attempt>1:
+                remaining=capture_deadline-time.monotonic()
+                require(remaining>.5,'visual capture retry deadline exhausted')
+                time.sleep(retry_settle_seconds)
+                client_now=self.alive(player)
+                monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+                monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
+                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                        and geometry_now==geometry and crop_now==crop
+                        and all(monitor_now.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                        'owned player identity/geometry/focus or monitor changed before recapture')
+            remaining=capture_deadline-time.monotonic()
+            require(remaining>.1,'visual capture retry deadline exhausted')
+            self.cmd(['grim','-o',monitor['name'],str(image)],timeout=min(capture_command_timeout_seconds,remaining))
+            screenshot=dict(path=str(image),sha256=digest(image),
+                review='static content oracle plus human review; screencopy can request repaint')
+            # The PNG header supplies actual physical pixel dimensions, not a config guess.
+            header=image.read_bytes()[:24]
+            require(header[:8]==b'\x89PNG\r\n\x1a\n' and header[12:16]==b'IHDR','invalid reference capture PNG')
+            size=list(struct.unpack('>II',header[16:24]))
+            require(size==[monitor['width'],monitor['height']],'actual screencopy/monitor dimensions differ')
+            after=self.alive(player)
+            monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            self.trace('visual-capture-after',player=player,client=after,monitors=monitors_after,attempt=attempt)
+            monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
+            require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                    and geometry_after==geometry and crop_after==crop
+                    and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                    'owned player identity/geometry/focus or monitor changed across capture')
+            remaining=capture_deadline-time.monotonic()
+            require(remaining>.1,'visual capture retry deadline exhausted')
+            self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
+                             '-pix_fmt','rgb24','-f','rawvideo',str(rgb)],timeout=min(capture_command_timeout_seconds,remaining))
+            try:
+                oracle=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
+            except Exception as exc:
+                oracle=dict(status='failed',error=type(exc).__name__+': '+str(exc))
+            attempt_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+            require(type(attempt_time) in (int,float) and not isinstance(attempt_time,bool)
+                    and math.isfinite(attempt_time) and 0<=attempt_time<=2,
+                    'capture-attempt playback clock is invalid')
+            attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
+                actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
+                owned_identity_geometry_unchanged=True))
+            # Preserve bounded, content-free attempt evidence even when a later
+            # deadline check fails before the final full oracle is assembled.
+            (self.root/'visual-oracle.json').write_text(json.dumps(dict(
+                schema='arctic-native-visual-attempts-v1',release_acceptance=False,
+                capture_attempts=attempts,capture_attempt_limit=attempt_limit,
+                capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\n')
+            if oracle.get('status')=='matched': break
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,client,after,screenshot)
-        monitor_after,geometry_after,crop_after=visual_capture_geometry(after,monitors_after)
-        require(all(after.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
-                and geometry_after==geometry and crop_after==crop
-                and all(monitor_after.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
-                'owned player identity/geometry/focus or monitor changed across capture')
-        rgb=self.root/'visual-owned-window.rgb'
-        self.cmd(common+['-i',str(image),'-frames:v','1','-vf',f'crop={w}:{h}:{x}:{y}',
-                         '-pix_fmt','rgb24','-f','rawvideo',str(rgb)])
         info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
+                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+                  capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
+                  accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
-        try:
-            info['oracle']=evaluate_reference_rgb(rgb.read_bytes(),w,h,expected.read_bytes())
-        except Exception as exc:
-            info['oracle']=dict(status='failed',error=type(exc).__name__+': '+str(exc))
+        info['oracle']=oracle
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
@@ -2165,7 +2367,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'd7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8'
+    native_source_sha = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

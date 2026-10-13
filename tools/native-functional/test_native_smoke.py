@@ -116,17 +116,18 @@ class Controls(unittest.TestCase):
 
     def test_security_enforcing_avc_loss_and_disabled_telemetry_controls(self):
         before=dict(selinux='Enforcing',audit=dict(enabled=1,lost=0))
-        self.assertEqual(s.verify_security(before,copy.deepcopy(before),'normal startup')['observed_new_avcs'],0)
-        for after,text in (
-            (dict(selinux='Permissive',audit=before['audit']),''),
-            (dict(selinux='Enforcing',audit=dict(enabled=0,lost=0)),''),
-            (dict(selinux='Enforcing',audit=dict(enabled=1,lost=1)),''),
-            (copy.deepcopy(before),'kernel: avc: denied { read } for app=featherpad'),
-            (copy.deepcopy(before),'type=USER_AVC msg=audit(42): denied'),
+        self.assertEqual(s.verify_security(before,copy.deepcopy(before),0,'normal startup')['observed_new_avcs'],0)
+        for after,journal_avcs,audit_text in (
+            (dict(selinux='Permissive',audit=before['audit']),0,''),
+            (dict(selinux='Enforcing',audit=dict(enabled=0,lost=0)),0,''),
+            (dict(selinux='Enforcing',audit=dict(enabled=1,lost=1)),0,''),
+            (copy.deepcopy(before),1,''),
+            (copy.deepcopy(before),0,'type=USER_AVC msg=audit(42): denied'),
         ):
-            with self.assertRaises(RuntimeError):s.verify_security(before,after,text)
+            with self.assertRaises(RuntimeError):
+                s.verify_security(before,after,journal_avcs,audit_text)
         disabled=dict(selinux='Enforcing',audit=dict(enabled=0,lost=0))
-        self.assertFalse(s.verify_security(disabled,copy.deepcopy(disabled),'')['audit_enabled'])
+        self.assertFalse(s.verify_security(disabled,copy.deepcopy(disabled),0)['audit_enabled'])
         with self.assertRaises(RuntimeError):s.parse_audit_status('enabled 1\n')
 
     def test_audit_file_only_avc_and_rotation_are_not_missed(self):
@@ -136,7 +137,7 @@ class Controls(unittest.TestCase):
         interval.audit_file.write_text('old record\n')
         info=interval.audit_file.stat();interval.audit_offset=(info.st_dev,info.st_ino,info.st_size)
         with patch.object(interval,'state',return_value=copy.deepcopy(interval.before)):
-            with patch.object(s,'execute',return_value=(0,json.dumps(dict(MESSAGE='normal')),'')):
+            with patch.object(s,'journal_avc_count',return_value={'records': 1, 'avcs': 0}):
                 with interval.audit_file.open('a') as f:f.write('type=AVC denied\n')
                 with self.assertRaisesRegex(RuntimeError,'new AVC'):interval.finish()
                 old=self.root/'old.log';interval.audit_file.rename(old);interval.audit_file.write_text('replacement')

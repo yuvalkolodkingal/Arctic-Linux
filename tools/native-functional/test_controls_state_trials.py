@@ -18,13 +18,70 @@ from unittest.mock import Mock, patch
 import zlib
 
 HERE=Path(__file__).resolve().parent
-BASE_NATIVE_SHA='51198d994db37cf4b6df95b25d25e8e7aa83e66fa525968eab37bc2211da9532'
-BASE_GUEST_SHA='5cbf0c6385465cfa5f94fd3addaa36729e030a10b2864af5424f09438c4580ec'
+BASE_NATIVE_SHA='e7a0018c02b0d8fb78db3187db5155544e7462841fb5da841eb5cf1c8a80279f'
+BASE_GUEST_SHA='29ccacbe04be9306de58f275762a4f0b0dd60220d6ea51e40ad805a8b9485926'
 spec=importlib.util.spec_from_file_location('controls_trial_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
+BOUNDED_RETRY_NATIVE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816'
+STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
+PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
+
+
+def restore_bounded_retry_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
+        raise AssertionError('Bounded retry Native source differs')
+    retry_current="""        attempt_limit=6
+        capture_command_timeout_seconds=3
+        retry_settle_seconds=.5
+        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
+                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline=time.monotonic()+capture_deadline_seconds
+"""
+    retry_original="""        capture_deadline=time.monotonic()+8
+        attempt_limit=6
+"""
+    receipt="""            # Preserve bounded, content-free attempt evidence even when a later
+            # deadline check fails before the final full oracle is assembled.
+            (self.root/'visual-oracle.json').write_text(json.dumps(dict(
+                schema='arctic-native-visual-attempts-v1',release_acceptance=False,
+                capture_attempts=attempts,capture_attempt_limit=attempt_limit,
+                capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\\n')
+"""
+    if source.count(retry_current)!=1 or source.count(receipt)!=1:
+        raise AssertionError('Bounded retry inverse additions differ')
+    source=source.replace(retry_current,retry_original,1).replace(receipt,'',1)
+    source=source.replace('time.sleep(retry_settle_seconds)','time.sleep(.5)',1)
+    source=source.replace('min(capture_command_timeout_seconds,remaining)','min(3,remaining)',2)
+    source=source.replace('capture_deadline_seconds=capture_deadline_seconds,','capture_deadline_seconds=8,',1)
+    if hashlib.sha256(source.encode()).hexdigest()!=STREAM_NATIVE_SHA:
+        raise AssertionError('Pre-bounded-retry Native source differs')
+    return source
+
+
+def restore_security_stream_native(source):
+    source=restore_bounded_retry_native(source)
+    if hashlib.sha256(source.encode()).hexdigest()!=STREAM_NATIVE_SHA:
+        raise AssertionError('Streaming journal Native source differs')
+    constants = ('JOURNAL_LINE_LIMIT = 1024 * 1024\n'
+                 'JOURNAL_RECORD_LIMIT = 250000\n'
+                 'JOURNAL_STDERR_LIMIT = 64 * 1024\n'
+                 'JOURNAL_READ_SIZE = 64 * 1024\n')
+    if source.count(constants)!=1:raise AssertionError('Streaming journal constants differ')
+    source=source.replace(constants,'')
+    a=source.index('def _unique_json_object');z=source.index('class SecurityInterval:',a)
+    source=source[:a]+"def verify_security(before, after, new_messages):\n    require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')\n    require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')\n    require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')\n    denied = [line for line in new_messages.splitlines() if AVC.search(line)]\n    require(not denied, 'new AVC requires investigation: ' + '\\n'.join(denied[:20]))\n    return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,\n                audit_enabled=after['audit']['enabled'] in (1,2),\n                scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')\n\n\n"+source[z:]
+    a=source.index('    def finish(self):',source.index('class SecurityInterval:'))
+    z=source.index('\ndef discover_desktop',a)
+    source=source[:a]+"    def finish(self):\n        after = self.state()\n        journal = execute(['journalctl', '-b', '--no-pager', '--after-cursor', self.cursor,\n                           '-o', 'json'], timeout=60)[1]\n        messages = '\\n'.join(str(json.loads(line).get('MESSAGE', ''))\n                             for line in journal.splitlines() if line)\n        if self.audit_offset:\n            info = self.audit_file.stat()\n            dev, ino, offset = self.audit_offset\n            require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,\n                    'audit log rotated/truncated; interval must be reviewed separately')\n            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')\n            with self.audit_file.open('rb') as stream:\n                stream.seek(offset)\n                messages += '\\n' + stream.read(LIMIT).decode(errors='replace')\n        elif self.audit_file.exists():\n            # The new file may include records not forwarded to the journal.\n            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')\n            messages += '\\n' + self.audit_file.read_text(errors='replace')\n        return verify_security(self.before, after, messages)\n\n"+source[z:]
+    if hashlib.sha256(source.encode()).hexdigest()!=PRE_STREAM_NATIVE_SHA:
+        raise AssertionError('Pre-streaming Native source differs')
+    return source
+
+
 def restore_controls_native(source):
+    source=restore_security_stream_native(source)
     for start,end in (
         ('    # BEGIN CONTROLLED_CONTROLS_INVOCATION\n','    # END CONTROLLED_CONTROLS_INVOCATION\n\n'),
         ('# BEGIN CONTROLLED_CONTROLS_STUDY\n','# END CONTROLLED_CONTROLS_STUDY\n\n\n'),
@@ -80,8 +137,14 @@ class ControlsStateTrials(unittest.TestCase):
         self.assertEqual(segment(new,'RendererTrialSmoke'),segment(old,'RendererTrialSmoke'))
         for name in ('launch_reference_player','hide_reference_controls','cleanup','setup'):
             self.assertEqual(segment(new,name,'Smoke'),segment(old,name,'Smoke'))
-        self.assertEqual(segment(new,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
-        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),new+'\n# unknown mutation\n'):
+        bounded=restore_bounded_retry_native(new)
+        self.assertEqual(segment(bounded,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
+        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),
+                     new.replace('(attempt_limit-1) * retry_settle_seconds + 3.5',
+                                 '(attempt_limit-1) * retry_settle_seconds + 4.5',1),
+                     new.replace("schema='arctic-native-visual-attempts-v1'",
+                                 "schema='arctic-native-visual-attempts-mutated'",1),
+                     new+'\n# unknown mutation\n'):
             with self.assertRaises(AssertionError):restore_controls_native(text)
 
     def test_private_seed_exact_commands_and_nonzero_or_poison_readbacks_abort(self):
@@ -264,13 +327,19 @@ class ControlsStateTrials(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3));return 0,'',''
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
-            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv','time-pos':0.0}
+            media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
+            time_calls=[]
+            def prop(path,key,pid,uid):
+                if key!='time-pos':return media[key]
+                time_calls.append(True)
+                return 0 if len(time_calls)==1 else .2
             endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=lambda path,key,pid,uid:media[key]),patch.object(N.time,'sleep') as sleep:
-                    with self.assertRaisesRegex(RuntimeError,'^actual static visual fixture content unmatched; rendered-content gate remains open$'):
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
-                sleep.assert_called_once_with(.5);smoke.controlled_controls_trials.assert_called_once()
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*6)
+                smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')

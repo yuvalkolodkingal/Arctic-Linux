@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
+  "native_source_sha256": "e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816",
   "files": {
-    "native_smoke.py": "d7c69563a4a9908d4e4c8c937222f7e814440bfbb6c06de07fbd32b7e0caa4f8",
-    "guest-check-native-v6.py": "e9135f35df4fc3c39ff825e2e37bee253158623b5a9a81cbf841db1f8df7a93b",
+    "native_smoke.py": "e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de24011ec825078816",
+    "guest-check-native-v6.py": "eeb4b8e90b516fdba10092a059f6b2ba113c34c734f591e7bf22d109014c9305",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -26,15 +26,16 @@
   "release_acceptance": false,
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "a3f5b1e6acc81b759a0dfa723012ea4db9deb45577514825de6090762d85f6b1",
-    "test_native_physical_v6.py": "7c43a5d1cc0ab1084fc6e0ea0629bdc845bc36f709efe6d64e6db151cf31e183",
-    "test_native_v6.py": "1ee2213393b4974bae151192bc354361ed2eed77be8f382b6580741fb7adba17",
-    "test_native_smoke.py": "3a6398c5cca0d0d80f3376eb045424083fd5f16a86b24642f64e5e049a5535b3",
-    "test_native_protocol_diagnostics.py": "c9435541f95460131e047866256ce105705dce0e6dc230d0bcbf1a4bf37fc114",
-    "test_renderer_trials.py": "30df3e5d8d07f73075c1be8d38008af836667d7e5bdaaafe780aedfa8d655133",
-    "test_native_capture_controls.py": "869ad0785fd8fb981d618aed1d3cd0845ba0a52d893f1bc7e99d8b6eb735c1ef",
-    "test_native_bulk_transport.py": "5da5e45a6989e64e36ff2f0b2bb650550d5b3761e252e432b1bafac0f9984a42",
-    "test_native_public_evidence.py": "6d82d955b67b613e9ebd891bbbd49288598eec15e2a76ac5ed4e619dbeaa1ed0",
-    "test_controls_state_trials.py": "6d9fe7db865cba02788e627448c0f01276fd66f9bf7349083bfdfc976077ec74"
+    "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
+    "test_native_v6.py": "c9185b3106b81910bf4f2b27f03ce11115627672d7546c224a4186df337ff1c4",
+    "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
+    "test_native_protocol_diagnostics.py": "075fb93db9d92e2c118f54867e56b7978bd1ed1e0fb585bd9e682b3c91600343",
+    "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
+    "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
+    "test_native_bulk_transport.py": "34e5c1a208fb734db958b4416824a3ccd0a361b2c208eebd9461b2e4d9f0a58b",
+    "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
+    "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
+    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -44,7 +45,7 @@
     "release_acceptance": false
   },
   "controlled_renderer_trials": {
-    "trigger": "original static oracle unmatched only",
+    "trigger": "bounded primary static oracle attempts unmatched only",
     "interventions": [
       "GSK_RENDERER unset",
       "GSK_RENDERER=gl"
@@ -84,7 +85,9 @@
     "upstream_glib_source_sha256": {
       "gkeyfilesettingsbackend.c": "51a5d48003567ffb89f6b365f871fe2e16d9483c89d6bce7d3ad208465fcfc98",
       "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
-    }
+    },
+    "playback_clock_advancement_required": true,
+    "capture_retry_bound": "six fresh captures within eight seconds"
   },
   "bulk_evidence_transport": {
     "UART_records_unchanged": [
@@ -148,7 +151,7 @@
     "acceptance_validators_unchanged": true
   },
   "controls_state_trials": {
-    "trigger": "original static oracle unmatched only; replaces the optional default/gl invocation",
+    "trigger": "bounded primary static oracle attempts unmatched only; replaces the optional default/gl invocation",
     "ordered_interventions": [
       "private show-controls true to false",
       "private show-controls false to false"
@@ -169,5 +172,49 @@
     "three_optional_public_slots_replaced_not_added": true,
     "release_acceptance": false,
     "rendering_cause_proven": false
+  },
+  "capture_retry": {
+    "observed_failure_run": "38275826520",
+    "diagnosis": "first fullscreen screencopy contained transiently incomplete scaled palette content; two subsequent fresh owned-player trials matched the unchanged exact oracle",
+    "playback_clock_minimum_advance_seconds": 0.05,
+    "playback_clock_timeout_seconds": 5,
+    "capture_attempt_limit": 6,
+    "capture_deadline_seconds": 42,
+    "recapture_settle_seconds": 0.5,
+    "fresh_grim_capture_each_attempt": true,
+    "owned_identity_geometry_focus_monitor_unchanged_each_attempt": true,
+    "oracle_thresholds_unchanged": true,
+    "final_fixed_capture_paths": [
+      "celluloid-reference.png",
+      "visual-owned-window.rgb"
+    ],
+    "bounded_attempt_receipt": "visual-oracle.json rewritten after each completed attempt before any later deadline check",
+    "product_or_codec_failure_inferred": false,
+    "release_acceptance": false,
+    "deadline_basis": "six attempts times two existing three-second command maxima, five half-second settles, and a 3.5-second bounded margin",
+    "deadline_failure_run": "38343014126",
+    "deadline_failure_diagnosis": "five strict-oracle captures remained unmatched; the 8-second wall budget expired before the unchanged sixth attempt could run"
+  },
+  "installed_login_head_observation": {
+    "failure_run": "38350659932",
+    "failure_artifact": "11791791235",
+    "diagnosis": "the dual-output fixture exposed two SDDM scanouts while the host compared only QEMU's default head before and after physical keyboard input",
+    "head_inventory": "exact arctic_taskbar_gpu heads 0 and 1 from the owned QMP and D-Bus display proof",
+    "capture_selection": "explicit QMP screendump device and head for every before and after frame; no default-head fallback",
+    "acceptance": "every selected capture must be valid and at least one login surface must satisfy the unchanged password ROI oracle",
+    "private_frame_retention": false,
+    "login_transition_settle_taskbar_audio_gates_unchanged": true,
+    "release_acceptance": false
+  },
+  "installed_login_input_routing": {
+    "failure_run": "38360710193",
+    "failure_artifact": "11795297955",
+    "diagnosis": "dual-head captures selected exact QMP heads but physical keyboard input omitted the matching input-send-event device/head selector and remained routed to the default console",
+    "input_selection": "try only exact ordered arctic_taskbar_gpu head selectors classified as login in their pre-input capture; non-login heads receive no input, while clear, type, submit, and retry remain bound to the accepted selector",
+    "selected_input_error_fallback": false,
+    "acceptance": "unchanged password ROI change must occur on the same selected login head before Return is sent through that selector",
+    "all_head_capture_transition_and_session_gates_unchanged": true,
+    "private_frame_retention": false,
+    "release_acceptance": false
   }
 }

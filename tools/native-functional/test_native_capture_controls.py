@@ -62,27 +62,38 @@ class CompactFunctionalReport(unittest.TestCase):
         self.assertEqual(json.loads(row.split(b' ',1)[1]),report)
         self.assertEqual(row,b'ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False,separators=(',',':')).encode('utf8')+b'\n')
 
-    def test_actual_physical_poll_keeps_original_pending_boundary(self):
+    def test_actual_physical_poll_scopes_larger_pending_bound_to_functional_report(self):
         driver=(HERE.parent/'test-install.sh').read_text().split("read -r -d '' DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
         node=next(n for n in ast.parse(driver).body if isinstance(n,ast.FunctionDef) and n.name=='physical_poll')
         code=compile(ast.fix_missing_locations(ast.Module(body=[node],type_ignores=[])),'original-physical-poll','exec')
-        report={'schema':'synthetic','release_acceptance':False,'steps':[]}
-        step={'argv':['mmsg','get','all'],'returncode':0,'stdout':'synthetic observer data','stderr':''}
-        while len(('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False)+'\n').encode())<=65536:
-            report['steps'].append(dict(step))
-        old=('ARCTIC-NATIVE-FUNCTIONAL '+json.dumps(report,ensure_ascii=False)+'\n').encode()
-        compact=self.emit(report)
-        self.assertGreater(len(old),65536);self.assertLessEqual(len(compact),65536)
-        self.assertEqual(json.loads(compact.split(b' ',1)[1]),report)
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'synthetic-uart';env={'os':os,'physical_module':object(),'serial':lambda name:str(path)}
             exec(code,env)
-            path.write_bytes(old[:-1])
-            with self.assertRaisesRegex(RuntimeError,'physical unfinished line bound exceeded'):env['physical_poll'](None,'install')
-            path.write_bytes(compact[:-1]);self.assertTrue(env['physical_poll'](None,'install'))
             path.write_bytes(b'x'*65536);self.assertTrue(env['physical_poll'](None,'install'))
             path.write_bytes(b'x'*65537)
-            with self.assertRaisesRegex(RuntimeError,'physical unfinished line bound exceeded'):env['physical_poll'](None,'install')
+            with self.assertRaisesRegex(RuntimeError,'physical unfinished line bound exceeded'):
+                env['physical_poll'](None,'install')
+            report=b'ARCTIC-NATIVE-FUNCTIONAL '+b'{"steps":"'+b'x'*70000+b'"}'
+            path.write_bytes(report)
+            self.assertTrue(env['physical_poll'](None,'install'))
+            path.write_bytes(b'ARCTIC-NATIVE-FUNCTIONAL '+b'x'*(4*1024*1024))
+            with self.assertRaisesRegex(RuntimeError,'physical functional report pending bound exceeded'):
+                env['physical_poll'](None,'install')
+
+    def test_truncated_or_malformed_recognized_report_never_becomes_valid(self):
+        driver=(HERE.parent/'test-install.sh').read_text().split("read -r -d '' DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
+        node=next(n for n in ast.parse(driver).body if isinstance(n,ast.FunctionDef) and n.name=='physical_poll')
+        code=compile(ast.fix_missing_locations(ast.Module(body=[node],type_ignores=[])),'original-physical-poll','exec')
+        for body in (b'{"steps":',b'not-json'):
+            with self.subTest(body=body),tempfile.TemporaryDirectory() as temp:
+                path=Path(temp)/'synthetic-uart'
+                env={'os':os,'physical_module':object(),'serial':lambda name:str(path)}
+                exec(code,env)
+                row=b'ARCTIC-NATIVE-FUNCTIONAL '+body+b'x'*70000
+                path.write_bytes(row);self.assertTrue(env['physical_poll'](None,'install'))
+                with self.assertRaises((json.JSONDecodeError,UnicodeDecodeError)):
+                    json.loads(row.split(b' ',1)[1])
+
 
 
 class CaptureControls(unittest.TestCase):
@@ -90,7 +101,7 @@ class CaptureControls(unittest.TestCase):
         source=(HERE/'native_smoke.py').read_text()
         restored=restore_capture_source(source)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
-                         '63ef27ec411ba6c629143e318ef6fab2cd17e3c1f827ae374ebbb374b30d6507')
+                         'ae385702782083bd658f034d735fac539ba96d81abcd935ccaefc631f20a8043')
         ast.parse(restored)
         for name in ('visual_reference_frame','visual_capture_geometry','evaluate_reference_rgb','mpv_property'):
             def segment(text):
@@ -246,8 +257,17 @@ class CaptureControls(unittest.TestCase):
             self.assertLess(method.index('self.hide_reference_controls(player,ipc)'),method.index('time.sleep(.5)'))
             self.assertLess(method.index('time.sleep(.5)'),method.index("['grim'"))
             self.assertEqual(method.count('time.sleep(.5)'),1)
+            if klass=='Smoke':
+                self.assertEqual(method.count('time.sleep(retry_settle_seconds)'),1)
             self.assertEqual(method.count('self.hide_reference_controls(player,ipc)'),1)
             self.assertIn('evaluate_reference_rgb(',method)
+            if klass=='Smoke':
+                self.assertIn('capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds',method)
+                self.assertIn("schema='arctic-native-visual-attempts-v1'",method)
+                self.assertLess(method.index('attempts.append('),
+                                method.index("(self.root/'visual-oracle.json').write_text"))
+                self.assertLess(method.index("(self.root/'visual-oracle.json').write_text"),
+                                method.index("if oracle.get('status')=='matched': break"))
 
 
 if __name__=='__main__':unittest.main()
