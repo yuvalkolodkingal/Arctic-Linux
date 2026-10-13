@@ -29,6 +29,16 @@ DOCUMENTATION = {'README.md', 'iso/kiwi/README.md'}
 # arctic-linux.spec excludes shell/dev from the installed shell payload. This
 # private compositor fixture has no runtime or image-build invocation.
 TEST_ONLY = {'shell/dev/test-lock-clock.py'}
+# The showcase is publication media, not an ISO/RPM input. Keep this exemption
+# fail-closed: it is valid only while the ISO checkout and Source0 archive both
+# exclude the tree and none of the product build definitions refers to it.
+SHOWCASE_BUILD_DEFINITIONS = {
+    'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
+    'tools/lib/container.sh',
+    'packaging/arctic-linux.spec', 'packaging/mangowm.spec', 'packaging/scenefx.spec',
+    'iso/kiwi/config.kiwi', 'iso/kiwi/config.sh',
+    'iso/kiwi/grub-arctic.cfg.iso-template', 'iso/kiwi/iso-esp-excludes.yaml',
+}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
@@ -55,12 +65,56 @@ def git(*args):
     return subprocess.check_output(['git', '-C', str(ROOT), *args], text=True, timeout=120).strip()
 
 
+def _literal_block_values(text, key):
+    """Return values from YAML literal blocks named *key* without accepting comments."""
+    lines = text.splitlines()
+    result = []
+    for index, line in enumerate(lines):
+        if line.strip() != key + ': |':
+            continue
+        indent = len(line) - len(line.lstrip())
+        values = []
+        for item in lines[index + 1:]:
+            if not item.strip():
+                continue
+            item_indent = len(item) - len(item.lstrip())
+            if item_indent <= indent:
+                break
+            values.append(item.strip())
+        result.append(values)
+    return result
+
+
+def showcase_is_non_product():
+    """Prove that showcase/ cannot enter the built ISO or binary/source RPM payload."""
+    try:
+        iso_workflow = (ROOT / '.github/workflows/iso.yml').read_text()
+        attributes = (ROOT / '.gitattributes').read_text().splitlines()
+        definitions = [(name, (ROOT / name).read_text()) for name in SHOWCASE_BUILD_DEFINITIONS]
+    except (OSError, UnicodeError):
+        return False
+    sparse_blocks = _literal_block_values(iso_workflow, 'sparse-checkout')
+    matching_blocks = [values for values in sparse_blocks
+                       if '/*' in values and values.count('!/showcase/') == 1]
+    if len(matching_blocks) != 1 or iso_workflow.lower().count('showcase') != 1:
+        return False
+    attribute_rows = [line.split() for line in attributes
+                      if line.strip() and not line.lstrip().startswith('#')]
+    showcase_rows = [row for row in attribute_rows
+                     if row and 'showcase' in row[0].lower()]
+    if showcase_rows != [['/showcase', 'export-ignore']]:
+        return False
+    return all('showcase' not in text.lower() for name, text in definitions)
+
+
 def product_changes(names):
     # Unknown roots are product changes too: a new vendor/go.sum/runtime asset
     # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
+    showcase_exempt = showcase_is_non_product()
     return [name for name in names if name in BUILD_INPUTS or
             not (name in DOCUMENTATION or name in TEST_ONLY
-                 or name.startswith(('docs/', '.github/', 'tools/')))]
+                 or name.startswith(('docs/', '.github/', 'tools/'))
+                 or (showcase_exempt and name.startswith('showcase/')))]
 
 
 def changed_product_files(source, target):
