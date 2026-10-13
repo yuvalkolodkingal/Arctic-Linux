@@ -60,6 +60,15 @@ class Tests(unittest.TestCase):
             def __repr__(self):raise AssertionError('foreign error represented')
         with tempfile.TemporaryDirectory() as td:
             root=Path(td);(root/'private/vm').mkdir(parents=True);(root/'public').mkdir()
+            prepared=root/R.CLOSED_HOST_STAGE_PATHS[0][1]
+            prepared.write_bytes(b'prepared')
+            (root/'private/vm').rmdir()
+            self.assertEqual(R.closed_host_stage(root),'bios-host-before-toolchain')
+            (root/'private/vm').mkdir()
+            (root/'public').rmdir()
+            self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_UNKNOWN)
+            (root/'public').mkdir()
+            prepared.unlink()
             first=root/R.CLOSED_HOST_STAGE_PATHS[0][1]
             first.symlink_to(root/'private/missing')
             self.assertEqual(R.closed_host_stage(root),R.CLOSED_HOST_STAGE_UNKNOWN)

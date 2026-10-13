@@ -33,11 +33,17 @@ def _closed_path_kind(path):
 def closed_host_stage(out):
     """Return only a finite fixed-path stage label; never inspect file data or size."""
     root=Path(out)
-    for rel in ('','private','private/vm','public'):
-        kind=_closed_path_kind(root/rel if rel else root)
-        if kind!='directory':
-            return CLOSED_HOST_STAGE_UNKNOWN if kind!='missing' or rel=='' else 'bios-host-before-prepared-image'
-    for label,rel,required_kind in CLOSED_HOST_STAGE_PATHS:
+    for rel in ('','private','public'):
+        if _closed_path_kind(root/rel if rel else root)!='directory':
+            return CLOSED_HOST_STAGE_UNKNOWN
+    prepared_label,prepared_rel,prepared_kind=CLOSED_HOST_STAGE_PATHS[0]
+    kind=_closed_path_kind(root/prepared_rel)
+    if kind=='missing':return prepared_label
+    if kind!=prepared_kind:return CLOSED_HOST_STAGE_UNKNOWN
+    kind=_closed_path_kind(root/'private/vm')
+    if kind=='missing':return CLOSED_HOST_STAGE_PATHS[1][0]
+    if kind!='directory':return CLOSED_HOST_STAGE_UNKNOWN
+    for label,rel,required_kind in CLOSED_HOST_STAGE_PATHS[1:]:
         kind=_closed_path_kind(root/rel)
         if kind=='missing':return label
         if kind!=required_kind:return CLOSED_HOST_STAGE_UNKNOWN
