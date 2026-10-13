@@ -6,6 +6,7 @@ socket; screenshots are PNG files written by QMP screendump; keys go in with QMP
 """
 import json
 import os
+import re
 import socket
 import subprocess
 import time
@@ -76,13 +77,21 @@ class VM:
         except (OSError, ValueError) as e:
             raise QMPError(str(e))
 
-    def shot(self, name):
+    def shot(self, name, *, device=None, head=None):
         """Screendump to <out>/<name>.png; returns the path or None."""
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid screendump head selector")
         path = f"{OUT}/{name}.png"
         if not self.alive():
             return None
         try:
-            r = self.cmd("screendump", filename=path, format="png")
+            arguments = {"filename": path, "format": "png"}
+            if selected:
+                arguments.update(device=device, head=head)
+            r = self.cmd("screendump", **arguments)
         except QMPError as e:
             log(f"screendump failed: {e}")
             return None
