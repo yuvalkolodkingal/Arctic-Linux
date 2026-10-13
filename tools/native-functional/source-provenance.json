@@ -35,7 +35,8 @@
     "test_native_bulk_transport.py": "8d3324593c7a743bda344a2008d6ba31e3eaf1b9d90b68e6174f7dfe1c3a9e83",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
     "test_controls_state_trials.py": "9ca36e9100895c9c63db545ac76645c5238dbb2bf8673c96bae00ecfa3f48c22",
-    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec"
+    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
+    "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "owned_protocol_diagnostics": {
@@ -259,6 +260,16 @@
     "button_release_cleanup": "after button-down send intent begins, the exact selected release is attempted in finally even when the reply is interrupted or rejected; a primary cancellation or failure is preserved",
     "selected_input_error_fallback": false,
     "keyboard_capture_roi_privacy_and_product_gates_unchanged": true,
+    "release_acceptance": false
+  },
+  "taskbar_preflight_observability": {
+    "failure_run": "38427809531",
+    "failure_artifact": "11830572893",
+    "failure_artifact_sha256": "da2a819f4805ea078e1e97521718f95633f33f43a02e1c237797f70bd95f2169",
+    "diagnosis": "installed native smoke passed all eight gates, then the taskbar collector failed before its first protected-port BEGIN record while the existing generic UART token concealed the failing preflight gate",
+    "receipt": "one exact finite source-owned preflight stage on UART; no raw exception, path, device metadata, pixel, typed value, or private frame",
+    "host_validation": "strict schema, finite stage inventory, failed status, release_acceptance false, one receipt, empty protected transport, and no completion marker",
+    "taskbar_port_product_geometry_and_acceptance_unchanged": true,
     "release_acceptance": false
   }
 }
