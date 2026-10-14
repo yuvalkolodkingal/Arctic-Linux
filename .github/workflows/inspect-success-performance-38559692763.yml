@@ -1,0 +1,149 @@
+name: Inspect successful final-image paired performance
+
+on:
+  push:
+    branches: [codex/inspect-success-performance-38559692763]
+    paths: [.github/workflows/inspect-success-performance-38559692763.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/inspect-success-performance-38559692763' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Replay and report the exact successful artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, importlib.util, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+
+          repository = 'yuvalkolodkingal/Arctic-Linux'
+          run_id = 38559692763
+          execution_source = '26c087252fdf9b9263db5df1eabea13ca8a00300'
+          reviewed_parent = 'a1b4c220f842a32a755812b20da48e059539e96b'
+          artifact_id = 11899107749
+          archive_bytes = 19431747
+          archive_sha256 = 'b3864987126640cb494ef5be50cc084d747ece365e8240d29046f46db33eb0e5'
+          workflow_path = '.github/workflows/inspect-success-performance-38559692763.yml'
+          assert os.environ['GITHUB_REPOSITORY'] == repository
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-success-performance-38559692763'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == execution_source
+          assert subprocess.check_output(['git', 'diff', '--name-only', 'HEAD^', 'HEAD'], text=True).splitlines() == [workflow_path]
+          assert re.fullmatch(r'[0-9a-f]{64}', archive_sha256)
+
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repository}{path}']))
+
+          run = api(f'/actions/runs/{run_id}')
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['run_attempt'] == 1 and run['head_sha'] == execution_source
+          assert run['event'] == 'push' and run['path'] == '.github/workflows/paired-candidate-20261009.yml'
+          endpoint = f'/actions/artifacts/{artifact_id}'
+          artifact = api(endpoint)
+          assert artifact['name'] == 'external-paired-performance' and artifact['expired'] is False
+          assert artifact['workflow_run']['id'] == run_id
+          assert artifact['workflow_run']['head_sha'] == execution_source
+          assert artifact['size_in_bytes'] == archive_bytes
+          assert artifact['digest'] == 'sha256:' + archive_sha256
+
+          with tempfile.TemporaryDirectory(prefix='arctic-success-performance-') as folder:
+              archive_path = Path(folder) / 'evidence.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', f'repos/{repository}{endpoint}/zip'], stdout=output,
+                                 check=True, timeout=8 * 60)
+              raw = archive_path.read_bytes()
+              assert len(raw) == archive_bytes
+              assert hashlib.sha256(raw).hexdigest() == archive_sha256
+              with zipfile.ZipFile(archive_path) as evidence:
+                  entries = evidence.infolist()
+                  assert len(entries) <= 1000 and sum(item.file_size for item in entries) <= 512 * 1024 * 1024
+                  assert len({item.filename for item in entries}) == len(entries)
+                  for item in entries:
+                      path = Path(item.filename)
+                      assert not path.is_absolute() and '..' not in path.parts
+                      assert stat.S_IFMT(item.external_attr >> 16) in (0, stat.S_IFREG, stat.S_IFDIR)
+
+                  root = Path.cwd()
+                  manifest_path = root / 'tools/performance/execution-manifest.json'
+                  plan = json.loads(manifest_path.read_text())
+                  manifest_sha256 = hashlib.sha256(manifest_path.read_bytes()).hexdigest()
+
+                  def load(name, path):
+                      spec = importlib.util.spec_from_file_location(name, path)
+                      module = importlib.util.module_from_spec(spec)
+                      spec.loader.exec_module(module)
+                      return module
+
+                  contract = load('arctic_exact_performance_contract', root / 'tools/performance/contract.py')
+                  fetch = load('arctic_exact_image_fetch', root / 'tools/native-functional/fetch-image.py')
+                  comparator = load('arctic_exact_performance_compare', root / 'tools/performance/compare.py')
+                  receipt = fetch.read_receipt(evidence.read('producer-receipt.json'), plan['image'])
+                  replay = contract.validate_evidence(
+                      evidence, plan=plan, plan_sha256=manifest_sha256, image=plan['image'],
+                      execution_source_sha=execution_source, reviewed_parent_sha=reviewed_parent,
+                      execution_run_id=run_id, comparator=comparator, producer_receipt=receipt)
+
+          comparison = replay['comparison']
+          summary = {
+              'schema': 'arctic-final-performance-inspection-v1',
+              'status': comparison['status'],
+              'run_id': run_id,
+              'run_attempt': 1,
+              'execution_source_sha': execution_source,
+              'artifact_id': artifact_id,
+              'archive_bytes': archive_bytes,
+              'archive_sha256': archive_sha256,
+              'image': plan['image'],
+              'metrics': comparison['metrics'],
+              'measurement_precision': comparison['measurement_precision'],
+              'application_role_comparison': comparison.get('application_role_comparison'),
+              'limitations': comparison['limitations'],
+              'original_serials_replayed': replay['original_serials_replayed'],
+              'release_acceptance': False,
+          }
+          compact = json.dumps(summary, sort_keys=True, separators=(',', ':'))
+          assert len(compact.encode()) <= 500_000
+          print('ARCTIC-FINAL-PERFORMANCE-SUMMARY-BEGIN')
+          print(json.dumps(summary, indent=2, sort_keys=True))
+          print('ARCTIC-FINAL-PERFORMANCE-SUMMARY-END')
+          precision = comparison['measurement_precision']
+          checks = [check for boots in precision['checks'].values() for boot in boots for check in boot]
+          notice = {
+              'status': comparison['status'],
+              'run_id': run_id,
+              'run_attempt': 1,
+              'execution_source_sha': execution_source,
+              'artifact_id': artifact_id,
+              'archive_bytes': archive_bytes,
+              'archive_sha256': archive_sha256,
+              'metrics': comparison['metrics'],
+              'precision': {
+                  'valid': precision['valid'],
+                  'threshold_enclosure_valid': precision['threshold_enclosure_valid'],
+                  'rule': precision['rule'],
+                  'enclosure_rule': precision['enclosure_rule'],
+                  'observations': len(checks),
+                  'minimum_interval_seconds': min(check['interval_seconds'] for check in checks),
+                  'maximum_interval_seconds': max(check['interval_seconds'] for check in checks),
+              },
+              'application_role_comparison': comparison.get('application_role_comparison'),
+              'limitations': comparison['limitations'],
+              'original_serials_replayed': replay['original_serials_replayed'],
+              'release_acceptance': False,
+          }
+          notice_text = json.dumps(notice, sort_keys=True, separators=(',', ':'))
+          assert len(notice_text.encode()) <= 60_000
+          escaped = notice_text.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::notice title=ARCTIC_FINAL_PERFORMANCE_SUMMARY::{escaped}')
+          PY
