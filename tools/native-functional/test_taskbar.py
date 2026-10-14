@@ -22,6 +22,9 @@ class Controls(unittest.TestCase):
         self.assertEqual(command[:4], ['/usr/bin/foot', '-c', '/dev/null',
                                       '--app-id=ArcticTaskbarAcceptance'])
         self.assertEqual(command[-3:], ['-e', '/usr/bin/sleep', '1800'])
+        self.assertIn('colors-dark.background=21834f', command)
+        self.assertIn('colors-light.background=21834f', command)
+        self.assertNotIn('colors.background=21834f', command)
         self.assertEqual(command.count('-e'), 1)
         self.assertNotIn('/bin/sh', command)
         self.assertNotIn('/usr/bin/fish', command)

@@ -16,7 +16,7 @@
     "tools/native-functional/taskbar-evidence.py": "285c67aa190535ea68e9c7451ac8cccd245f511e36d33960ead2956fc6a5eafb",
     "tools/native-functional/taskbar-runtime.py": "297ee48eac1cea021713830f625f47453e84da0abf2bdcd1856c7b4e8082bbb4",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
-    "tools/native-functional/taskbar.py": "6ae630884f18a617c431b2a8f5dd07f81cda55678bdcabbf16580c144f0b2ade",
+    "tools/native-functional/taskbar.py": "80cfba045134fc5ba3fcda0e78b2bea338f8b46df603b9f9b03f05885e37b489",
     "tools/native-functional/virtual-pointer.c": "f00fc6e10250f62e2b0f531cc3becf433cc6e65b002b95432ca30b3800947bd4",
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
   },

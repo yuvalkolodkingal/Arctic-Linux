@@ -36,7 +36,8 @@ FOOT_COLOR = (33, 131, 79)
 def proof_window_command():
     """Launch the owned solid-colour client without invoking Foot's default shell."""
     return ['/usr/bin/foot', '-c', '/dev/null', '--app-id=ArcticTaskbarAcceptance',
-            '-o', 'colors.background=21834f', '-o', 'main.pad=0x0',
+            '-o', 'colors-dark.background=21834f',
+            '-o', 'colors-light.background=21834f', '-o', 'main.pad=0x0',
             '-e', '/usr/bin/sleep', '1800']
 
 
