@@ -1,6 +1,7 @@
 """Source controls for the direct official VoxType qualification client."""
 import ast
 import grp
+import hashlib
 import importlib.util
 import json
 import os
@@ -221,7 +222,11 @@ on_transcription = false
                     'packaging/systemd/arctic-dictation-setup.service',
                     'packaging/systemd/arctic-dictation-setup.timer')):
                 path = root / str(index)
-                path.write_text(str(index))
+                if index < 6:
+                    shell = 'bash' if index == 3 else 'sh'
+                    path.write_text('#!/usr/bin/' + shell + '\n' + str(index))
+                else:
+                    path.write_text(str(index))
                 path.chmod(0o600)
                 paths.append(path)
             with patch.object(guest, 'owned_file', side_effect=lambda path, size=None: Path(path).stat()), \
@@ -239,8 +244,57 @@ on_transcription = false
                     patch.object(guest, 'SETUP_SERVICE', paths[13]), \
                     patch.object(guest, 'SETUP_TIMER', paths[14]):
                 first = guest.installed_integration_sha()
-                paths[1].write_text('changed')
+                paths[1].write_text('#!/usr/bin/sh\nchanged')
                 self.assertNotEqual(first, guest.installed_integration_sha())
+
+    def test_installed_integration_hash_reverses_only_rpm_shebang_mangling(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            paths = []
+            shells = ('sh', 'sh', 'sh', 'bash', 'sh', 'sh')
+            source_hash = hashlib.sha256()
+            for index, (name, shell) in enumerate(zip((
+                    'packaging/dictation/arctic-dictation',
+                    'packaging/dictation/arctic-dictation-toggle',
+                    'packaging/dictation/voxtype',
+                    'packaging/dictation/arctic-voxtype-setup',
+                    'packaging/dictation/arctic-voxtype-host-profile',
+                    'packaging/dictation/arctic-voxtype-configure'), shells)):
+                path = root / str(index)
+                source = ('#!/bin/' + shell + '\npayload-' + str(index) + '\n').encode()
+                installed = source.replace(b'#!/bin/', b'#!/usr/bin/', 1)
+                path.write_bytes(installed); path.chmod(0o600); paths.append(path)
+                encoded = name.encode()
+                source_hash.update(len(encoded).to_bytes(4, 'big'))
+                source_hash.update(encoded); source_hash.update(source)
+            remaining = (
+                'packaging/dictation/voxtype-release-key.asc',
+                'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt',
+                'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc',
+                'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc',
+                'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc',
+                'packaging/dictation/org.arcticlinux.dictation.policy',
+                'packaging/systemd/voxtype.service',
+                'packaging/systemd/arctic-dictation-setup.service',
+                'packaging/systemd/arctic-dictation-setup.timer')
+            for index, name in enumerate(remaining, start=6):
+                path = root / str(index); content = ('payload-' + str(index)).encode()
+                path.write_bytes(content); path.chmod(0o600); paths.append(path)
+                encoded = name.encode()
+                source_hash.update(len(encoded).to_bytes(4, 'big'))
+                source_hash.update(encoded); source_hash.update(content)
+            patches = dict(ADAPTER=paths[0], TOGGLE=paths[1], VOXTYPE=paths[2],
+                           SETUP=paths[3], HOST_PROFILE=paths[4], CONFIGURE=paths[5],
+                           KEY=paths[6], PROVENANCE_SUMS=paths[7],
+                           PROVENANCE_SUMS_SIG=paths[8], PROVENANCE_BASELINE_SIG=paths[9],
+                           PROVENANCE_AVX2_SIG=paths[10], POLICY=paths[11], UNIT=paths[12],
+                           SETUP_SERVICE=paths[13], SETUP_TIMER=paths[14])
+            with patch.object(guest, 'owned_file', side_effect=lambda path, size=None: Path(path).stat()), \
+                    patch.multiple(guest, **patches):
+                self.assertEqual(guest.installed_integration_sha(), source_hash.hexdigest())
+                paths[0].write_bytes(b'#!/bin/sh\npayload-0\n')
+                with self.assertRaisesRegex(guest.Invalid, 'installed-integration-shebang-mismatch'):
+                    guest.installed_integration_sha()
 
     def test_status_adapter_has_exact_bounded_public_contract(self):
         checker = self.checker()

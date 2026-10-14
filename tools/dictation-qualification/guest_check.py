@@ -414,12 +414,30 @@ def installed_integration_sha():
         ('packaging/systemd/arctic-dictation-setup.timer', SETUP_TIMER),
     )
     result = hashlib.sha256()
+    # Fedora's brp-mangle-shebangs rewrites these six executable source
+    # shebangs while building the RPM.  Hash their exact source form so the
+    # installed-byte identity can be compared with the reviewed source tree;
+    # every other byte, and every non-executable integration file, remains
+    # byte-for-byte bound.
+    shebangs = {
+        ADAPTER: (b'#!/usr/bin/sh\n', b'#!/bin/sh\n'),
+        TOGGLE: (b'#!/usr/bin/sh\n', b'#!/bin/sh\n'),
+        VOXTYPE: (b'#!/usr/bin/sh\n', b'#!/bin/sh\n'),
+        SETUP: (b'#!/usr/bin/bash\n', b'#!/bin/bash\n'),
+        HOST_PROFILE: (b'#!/usr/bin/sh\n', b'#!/bin/sh\n'),
+        CONFIGURE: (b'#!/usr/bin/sh\n', b'#!/bin/sh\n'),
+    }
     for name, path in files:
         owned_file(path)
         encoded = name.encode()
+        content = path.read_bytes()
+        if path in shebangs:
+            installed, source = shebangs[path]
+            require(content.startswith(installed), 'installed-integration-shebang-mismatch')
+            content = source + content[len(installed):]
         result.update(len(encoded).to_bytes(4, 'big'))
         result.update(encoded)
-        result.update(path.read_bytes())
+        result.update(content)
     return result.hexdigest()
 
 

@@ -142,6 +142,38 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertEqual(error.args, ('installed user identity response differs',))
         self.assertEqual([call[0] for call in calls], ['text', 'keys'])
 
+    def test_disjoint_row_errors_reconstruct_only_by_full_digit_consensus(self):
+        records = list(D.installed_user_records(self.nonce))
+        first = 4
+        second = 11
+        records[1] = records[1][:first] + ('0' if records[1][first] != '0' else '1') + records[1][first + 1:]
+        records[2] = records[2][:second] + ('0' if records[2][second] != '0' else '1') + records[2][second + 1:]
+        response = ('\n\n         '.join(records) + '\n').encode()
+        proof, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', response])
+        self.assertIs(type(proof), dict)
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+        self.assertEqual(proof['observed_line_sha256'],
+                         hashlib.sha256(('\n'.join(D.installed_user_records(self.nonce))).encode()).hexdigest())
+
+    def test_same_column_wrong_majority_and_duplicate_markers_are_rejected(self):
+        expected = list(D.installed_user_records(self.nonce))
+        column = 7
+        wrong = '0' if expected[1][column] != '0' else '1'
+        expected[1] = expected[1][:column] + wrong + expected[1][column + 1:]
+        expected[2] = expected[2][:column] + wrong + expected[2][column + 1:]
+        wrong_majority = ('\n'.join(expected) + '\n').encode()
+        error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', wrong_majority])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+
+        records = list(D.installed_user_records(self.nonce))
+        duplicate_markers = ('\n'.join((records[0], records[0], records[2])) + '\n').encode()
+        error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', duplicate_markers])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+
     def test_duplicate_single_record_cannot_satisfy_two_of_three(self):
         record = D.installed_user_records(self.nonce)[0]
         response = ((record + '\n') * D.IDENTITY_RECORDS).encode()

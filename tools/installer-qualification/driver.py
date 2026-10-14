@@ -463,10 +463,35 @@ def _identity_ocr_observation(stdout, expected, sent):
     numeric = [line for line in lines if re.fullmatch('[0-9]{' + str(len(expected[0])) + '}', line)]
     marked = [line for line in numeric if line[:1] in IDENTITY_MARKERS]
     exact = set(marked).intersection(expected)
+    # The three rows are an error-correcting rendering of the same 60-bit
+    # response.  Tesseract can damage a different glyph in each long row even
+    # though the fresh response is plainly present (the exact VM observation
+    # was three distinct markers, one exact row).  Reconstruct only when every
+    # expected marker occurs exactly once and at least two independently read
+    # rows agree on every response digit.  This retains the full expected
+    # response comparison and rejects duplicated rows, split votes and stale
+    # values; it does not authorize a merely close OCR string.
+    consensus = None
+    if len(marked) == IDENTITY_RECORDS and {line[0] for line in marked} == set(IDENTITY_MARKERS):
+        response_rows = [line[1:] for line in marked]
+        voted = []
+        for digits in zip(*response_rows):
+            digit = next((candidate for candidate in set(digits)
+                          if digits.count(candidate) >= 2), None)
+            if digit is None:
+                break
+            voted.append(digit)
+        if len(voted) == len(expected[0]) - 1:
+            consensus = ''.join(voted)
     observation = (_identity_count(len(numeric)), _identity_count(len(marked)),
                    _identity_count(len(exact)), 'true' if sent else 'false')
-    accepted = sent and 2 <= len(exact) <= IDENTITY_RECORDS and \
-        len(numeric) <= IDENTITY_RECORDS and len(marked) <= IDENTITY_RECORDS
+    expected_response = expected[0][1:]
+    require(all(record[1:] == expected_response for record in expected) and
+            tuple(record[0] for record in expected) == IDENTITY_MARKERS,
+            'installed user identity records differ')
+    accepted = sent and len(numeric) <= IDENTITY_RECORDS and len(marked) <= IDENTITY_RECORDS and \
+        len({line[0] for line in marked}) == len(marked) and \
+        (2 <= len(exact) <= IDENTITY_RECORDS or consensus == expected_response)
     return accepted, observation
 
 

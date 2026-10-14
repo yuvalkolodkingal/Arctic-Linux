@@ -141,30 +141,34 @@ def relay_host_stages(path, token, phase):
                 pass
 
 
-def relay_collector_diagnostic(vm, phase):
+def relay_collector_diagnostic(vm, phase, stage):
     """Relay one finite guest setup code without exposing the private serial log."""
-    if phase not in PHASES:
+    if phase not in PHASES or stage not in ('all', 'boot'):
         return
-    descriptor = None
     try:
-        path = Path(vm) / 'serial-boot.log'
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, 'rb') as stream:
-            descriptor = None
-            before = os.fstat(stream.fileno())
-            if (not stat.S_ISREG(before.st_mode) or before.st_uid not in (0, os.geteuid())
-                    or before.st_mode & 0o022 or not 0 < before.st_size < 128 * 1024 * 1024):
-                return
-            raw = stream.read(128 * 1024 * 1024)
-            after = os.fstat(stream.fileno())
         fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
                                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if (fields(before) != fields(after)
-                or fields(after) != fields(os.stat(path, follow_symlinks=False))
-                or len(raw) != before.st_size):
-            return
         prefix = b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-        selected = [line for line in raw.splitlines(keepends=True) if line.startswith(prefix)]
+        selected = []
+        names = ('serial-install.log', 'serial-boot.log') if stage == 'all' else ('serial-boot.log',)
+        for name in names:
+            path = Path(vm) / name
+            try:
+                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            except FileNotFoundError:
+                continue
+            with os.fdopen(descriptor, 'rb') as stream:
+                before = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(before.st_mode) or before.st_uid not in (0, os.geteuid())
+                        or before.st_mode & 0o022 or not 0 < before.st_size < 128 * 1024 * 1024):
+                    return
+                raw = stream.read(128 * 1024 * 1024)
+                after = os.fstat(stream.fileno())
+            if (fields(before) != fields(after)
+                    or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                    or len(raw) != before.st_size):
+                return
+            selected.extend(line for line in raw.splitlines(keepends=True) if line.startswith(prefix))
         if not selected:
             return
         code = 'collector-invalid-record'
@@ -187,12 +191,6 @@ def relay_collector_diagnostic(vm, phase):
         print('ARCTIC-DICTATION-HOST-FAILURE ' + phase + ' collector ' + code, flush=True)
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
         pass
-    finally:
-        if descriptor is not None:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
 
 
 def launch_diagnostic_read(root, name, maximum):
@@ -560,7 +558,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
-                relay_collector_diagnostic(vm, phase)
+                relay_collector_diagnostic(vm, phase, stage)
                 preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.
