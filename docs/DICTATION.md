@@ -48,6 +48,28 @@ every binary. Models come from immutable Whisper.cpp revisions and receive the
 same byte-count and SHA-256 checks. Downloads use root-owned resumable partial
 files and are published atomically only after verification.
 
+An update from Arctic's retired controller reuses its exact official VoxType
+binary and model when they still match these pins. The RPM carries the signed
+1.1.0 release manifest and detached CPU signatures, so this migration does not
+need GitHub or Hugging Face to be reachable. The direct-integration receipt and
+`upstream-direct-v1` marker are written only after the reused binary signature,
+model hash and new per-user configuration verify. Legacy payload files remain
+in place if that local migration fails; the normal online repair queue is then
+enabled without deleting them. A trusted, root-owned legacy receipt selects the
+previously working profile even when both payload sets exist or a later profile
+change was interrupted; the trusted profile-selection file is used only when
+there is no receipt. The pending queue, config, receipt and marker are published
+with file and directory fsyncs. The marker is the durable commit point, and
+legacy cleanup cannot run before it.
+
+If the old root-owned receipt is malformed or no longer matches its exact
+schema, the transaction-time offline migration leaves it and the old payload
+untouched. The queued online resume quarantines that invalid state, retrieves
+and verifies current signed metadata, and repairs the host's supported profile.
+A current-session systemd activation failure after the durable marker does not
+roll the completed migration back; readiness reports the stopped service and it
+starts through the globally enabled unit at the next graphical session.
+
 Installed binaries are under `/opt/arctic/voxtype/1.1.0`; models are under
 `/opt/arctic/voxtype/models`. `/usr/bin/voxtype` selects the verified CPU or
 Vulkan binary. Public setup state is under `/var/lib/arctic/dictation`:

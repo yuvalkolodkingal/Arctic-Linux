@@ -1,7 +1,7 @@
 #!/bin/bash
 # Fetch signed official VoxType 1.1.0 binaries plus one pinned local Whisper
 # model. This setup bootstrap never records audio or handles transcripts.
-set -euo pipefail
+set -Eeuo pipefail
 umask 077
 readonly VERSION=1.1.0 SOURCE_COMMIT=e2638ca63f566f1682bcedc0abea8e4b25211c21
 readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.0
@@ -19,29 +19,135 @@ readonly SMALL_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8b
 readonly TURBO_NAME=ggml-large-v3-turbo-q5_0.bin TURBO_BYTES=574041195 TURBO_SHA=394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
 readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin
 readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.0 MODELS=/opt/arctic/voxtype/models
+readonly STATE_ROOT=/var/lib STORAGE_ROOT=/opt
 readonly CACHE=/var/cache/arctic/voxtype
 readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
+readonly PROVENANCE=/usr/share/arctic/dictation/provenance/1.1.0
 cleanup_tmp=
 cleanup() { [ -z "$cleanup_tmp" ] || rm -rf -- "$cleanup_tmp"; }
+prepare_state_dir() {
+    [[ ! -L $STATE ]] || return 1
+    install -d -m 0755 -o root -g root "$STATE"
+    [[ -d $STATE && ! -L $STATE && $(stat -c %u:%a "$STATE") == 0:755 ]]
+    # Publish a newly created state path through the stable /var/lib anchor
+    # before any queue, receipt or error file is written beneath it.
+    durable_sync_tree "$STATE" "$STATE_ROOT"
+}
+durable_atomic_text() {
+    python3 - "$1" "$2" "$3" <<'PY'
+import os, stat, sys, tempfile
+path, raw_mode, value = sys.argv[1:]
+parent = os.path.dirname(path)
+info = os.lstat(parent)
+if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+    raise SystemExit(1)
+fd, temporary = tempfile.mkstemp(prefix='.' + os.path.basename(path) + '.', dir=parent)
+try:
+    with os.fdopen(fd, 'wb') as stream:
+        os.fchmod(stream.fileno(), int(raw_mode, 8))
+        stream.write(value.encode('utf-8') + b'\n')
+        stream.flush()
+        os.fsync(stream.fileno())
+    os.replace(temporary, path)
+    directory = os.open(parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+except BaseException:
+    try:
+        os.unlink(temporary)
+    except FileNotFoundError:
+        pass
+    raise
+PY
+}
+durable_sync_file() {
+    python3 - "$1" <<'PY'
+import os, stat, sys
+path = sys.argv[1]
+fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+try:
+    info = os.fstat(fd)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+        raise SystemExit(1)
+    os.fsync(fd)
+finally:
+    os.close(fd)
+parent = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(parent)
+finally:
+    os.close(parent)
+PY
+}
+durable_sync_dir() {
+    python3 - "$1" <<'PY'
+import os, sys
+fd = os.open(sys.argv[1], os.O_RDONLY | os.O_DIRECTORY)
+try:
+    os.fsync(fd)
+finally:
+    os.close(fd)
+PY
+}
+durable_sync_tree() {
+    python3 - "$1" "$2" <<'PY'
+import os, stat, sys
+path, anchor = map(os.path.abspath, sys.argv[1:])
+if os.path.commonpath((path, anchor)) != anchor or path == anchor:
+    raise SystemExit(1)
+directories = []
+current = path
+while True:
+    directories.append(current)
+    if current == anchor:
+        break
+    current = os.path.dirname(current)
+for directory in directories:
+    before = os.lstat(directory)
+    if not stat.S_ISDIR(before.st_mode) or before.st_uid != 0 or before.st_mode & 0o022:
+        raise SystemExit(1)
+    fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        info = os.fstat(fd)
+        if ((info.st_dev, info.st_ino) != (before.st_dev, before.st_ino)
+                or not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022):
+            raise SystemExit(1)
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+PY
+}
+prepare_storage_dir() {
+    [[ ! -L $1 ]] || return 1
+    install -d -m 0755 -o root -g root "$1"
+    [[ -d $1 && ! -L $1 && $(stat -c %u:%a "$1") == 0:755 ]]
+    durable_sync_tree "$1" "$STORAGE_ROOT"
+}
+durable_remove() {
+    rm -f -- "$@"
+    durable_sync_dir "$STATE"
+}
 fail() {
     trap - ERR
-    mkdir -p "$STATE"
-    printf '%s\n' failed | install -m 0644 /dev/stdin "$STATE/setup.state"
-    printf '%s\n' setup | install -m 0644 /dev/stdin "$STATE/setup.error"
+    prepare_state_dir
+    durable_atomic_text "$STATE/setup.state" 0644 failed
+    durable_atomic_text "$STATE/setup.error" 0644 setup
     printf '%s\n' 'VoxType setup did not finish. Check the connection and retry in Settings.' >&2
     exit 1
 }
 backend_fail() {
     trap - ERR
-    mkdir -p "$STATE"
-    printf '%s\n' backend-vulkan | install -m 0644 /dev/stdin "$STATE/setup.error"
+    prepare_state_dir
+    durable_atomic_text "$STATE/setup.error" 0644 backend-vulkan
     printf '%s\n' 'Vulkan could not initialize the verified local model. CPU remains selected.' >&2
     exit 1
 }
 trap cleanup EXIT
 trap fail ERR
 usage() {
-    echo 'usage: arctic-voxtype-setup --install USER [--offline] | --resume | --retry | --backend cpu|vulkan | --disclosure' >&2
+    echo 'usage: arctic-voxtype-setup --install USER [--offline] | --migrate-legacy USER | --resume | --retry | --backend cpu|vulkan | --disclosure' >&2
     exit 2
 }
 acquire_setup_lock() {
@@ -71,10 +177,12 @@ user_from_uid() {
     getent passwd "$uid" | cut -d: -f1
 }
 queue_user() {
-    mkdir -p "$STATE"
-    printf '%s\n' "$1" | install -m 0600 /dev/stdin "$STATE/user"
-    printf '%s\n' queued | install -m 0644 /dev/stdin "$STATE/setup.state"
-    printf '%s\n' "$VERSION" | install -m 0644 /dev/stdin "$STATE/pending"
+    prepare_state_dir
+    durable_atomic_text "$STATE/user" 0600 "$1"
+    # Pending is durable before setup starts. Until the direct marker is also
+    # durable, a crash therefore leaves both a retry and every legacy byte.
+    durable_atomic_text "$STATE/pending" 0644 "$VERSION"
+    durable_atomic_text "$STATE/setup.state" 0644 queued
 }
 read_queued_user() {
     local user=
@@ -86,6 +194,11 @@ read_queued_user() {
 verify_file() {
     [[ $(stat -c %s "$1") = "$2" ]]
     printf '%s  %s\n' "$3" "$1" | sha256sum --check --status
+}
+trusted_exact_file() {
+    local path=$1 mode=$2 bytes=$3 sha=$4
+    [[ -f $path && ! -L $path && $(stat -c %u:%a "$path") == "0:$mode" ]] || return 1
+    verify_file "$path" "$bytes" "$sha"
 }
 download_pinned() {
     local url=$1 dest=$2 bytes=$3 sha=$4 part="$2.part" rc=0
@@ -135,8 +248,8 @@ install_asset() {
     grep -Fq "$sha  $name" "$tmp/SHA256SUMS.txt"
     target="$DEST/voxtype-$variant"
     case "$variant" in baseline) legacy="$DEST/voxtype-cpu" ;; avx2) legacy="$DEST/voxtype-cpu-avx2" ;; esac
-    if [[ -x $target ]] && verify_file "$target" "$bytes" "$sha"; then return; fi
-    if [[ -n $legacy && -f $legacy && ! -L $legacy && $(stat -c %u:%a "$legacy") == 0:755 ]] && verify_file "$legacy" "$bytes" "$sha"; then
+    if trusted_exact_file "$target" 755 "$bytes" "$sha"; then return; fi
+    if [[ -n $legacy ]] && trusted_exact_file "$legacy" 755 "$bytes" "$sha"; then
         cp --reflink=auto -- "$legacy" "$target.new"
         chmod 0755 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
         mv -f "$target.new" "$target"
@@ -158,6 +271,201 @@ prepare_release_metadata() {
     verify_file "$1/SHA256SUMS.txt.asc" "$SUMS_SIG_BYTES" "$SUMS_SIG_SHA"
     verify_signature "$1/SHA256SUMS.txt.asc" "$1/SHA256SUMS.txt" "$2"
 }
+legacy_binary_path() {
+    case "$1" in
+        baseline) printf '%s\n' "$DEST/voxtype-cpu" ;;
+        avx2) printf '%s\n' "$DEST/voxtype-cpu-avx2" ;;
+        *) return 1 ;;
+    esac
+}
+legacy_profile() {
+    local host_profile=$1
+    python3 - "$STATE" "$DEST" "$host_profile" <<'PY'
+import json, os, re, stat, sys
+
+state, payload, host_profile = sys.argv[1:]
+profiles = {
+    'small-v2': {
+        'profile_sha256': 'd4b9326169fe0773b36857ce4b2c52d31294c4c421933c5fbb41422227e92756',
+        'model': 'small', 'cpu_variant': 'baseline',
+        'model_download_bytes': 487601967, 'download_bytes': 506181191,
+        'files': {
+            'cpu': ('voxtype-cpu', 18579224, '1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a', 0o755),
+            'model': ('ggml-small.bin', 487601967, '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b', 0o644),
+        },
+    },
+    'turbo-q5-v3': {
+        'profile_sha256': 'dfc1e2252ca033888fd0262f73fd4643066c736b9d696e4b7481875e76ed4191',
+        'model': 'large-v3-turbo-q5_0', 'cpu_variant': 'avx2',
+        'model_download_bytes': 574041195, 'download_bytes': 678117115,
+        'files': {
+            'cpu': ('voxtype-cpu', 18579224, '1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a', 0o755),
+            'avx2': ('voxtype-cpu-avx2', 19153728, 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28', 0o755),
+            'vulkan': ('voxtype-vulkan', 66342968, 'db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2', 0o755),
+            'model': ('ggml-large-v3-turbo-q5_0.bin', 574041195, '394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2', 0o644),
+        },
+    },
+}
+
+def root_json(path):
+    try:
+        info = os.lstat(path)
+        if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644 or not 0 < info.st_size <= 65536:
+            return None, True
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            current = os.fstat(fd)
+            if (current.st_dev, current.st_ino, current.st_size) != (info.st_dev, info.st_ino, info.st_size):
+                return None, True
+            raw = os.read(fd, info.st_size + 1)
+        finally:
+            os.close(fd)
+        if len(raw) != info.st_size:
+            return None, True
+        def unique(pairs):
+            value = {}
+            for key, item in pairs:
+                if key in value:
+                    raise ValueError
+                value[key] = item
+            return value
+        value = json.loads(raw, object_pairs_hook=unique)
+        return (value if type(value) is dict else None), True
+    except FileNotFoundError:
+        return None, False
+    except (OSError, UnicodeError, ValueError, RecursionError):
+        return None, True
+
+def safe_for_host(profile):
+    return profile == 'small-v2' or host_profile == 'turbo-q5-v3'
+
+receipt, receipt_exists = root_json(os.path.join(state, 'verified.json'))
+if receipt_exists:
+    if receipt is None:
+        raise SystemExit(1)
+    profile = receipt.get('profile')
+    expected = profiles.get(profile)
+    if expected is None or not safe_for_host(profile):
+        raise SystemExit(1)
+    legacy_keys = {'version', 'source_commit', 'profile_sha256', 'profile', 'model',
+                   'cpu_variant', 'model_download_bytes', 'download_bytes', 'files'}
+    direct_keys = {'integration', 'version', 'source_commit', 'release_signing_fingerprint',
+                   'user', 'profile', 'binary', 'binary_bytes', 'binary_sha256',
+                   'model_path', 'model', 'model_bytes', 'model_sha256', 'backend'}
+    if set(receipt) == legacy_keys:
+        fixed = {key: expected[key] for key in ('profile_sha256', 'model', 'cpu_variant',
+                                                'model_download_bytes', 'download_bytes')}
+        fixed.update(version='1.1.0', source_commit='e2638ca63f566f1682bcedc0abea8e4b25211c21', profile=profile)
+        if any(receipt.get(key) != value for key, value in fixed.items()):
+            raise SystemExit(1)
+        files = receipt.get('files')
+        if type(files) is not dict or set(files) != set(expected['files']):
+            raise SystemExit(1)
+        for key, (name, size, digest, mode) in expected['files'].items():
+            path = os.path.join(payload, name)
+            try:
+                info = os.lstat(path)
+            except OSError:
+                raise SystemExit(1) from None
+            recorded = files.get(key)
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != mode
+                    or info.st_size != size or type(recorded) is not dict
+                    or set(recorded) != {'sha256', 'size', 'mtime_ns'}
+                    or recorded != {'sha256': digest, 'size': size, 'mtime_ns': info.st_mtime_ns}):
+                raise SystemExit(1)
+    elif set(receipt) == direct_keys:
+        cpu = expected['cpu_variant']
+        binary_size = 18579224 if cpu == 'baseline' else 19153728
+        binary_sha = ('1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'
+                      if cpu == 'baseline' else 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28')
+        model_name = 'ggml-' + expected['model'] + '.bin'
+        model_size = expected['model_download_bytes']
+        model_sha = expected['files']['model'][2]
+        fixed = dict(integration='upstream-direct-v1', version='1.1.0',
+                     source_commit='e2638ca63f566f1682bcedc0abea8e4b25211c21',
+                     release_signing_fingerprint='9CCF7915B750CAE8B095ED1AA3FC9F33FD209279',
+                     profile=profile, binary='voxtype-' + cpu, binary_bytes=binary_size,
+                     binary_sha256=binary_sha, model_path='/opt/arctic/voxtype/models/' + model_name,
+                     model=expected['model'] + '.bin', model_bytes=model_size,
+                     model_sha256=model_sha, backend='cpu')
+        if any(receipt.get(key) != value for key, value in fixed.items()):
+            raise SystemExit(1)
+        user = receipt.get('user')
+        if type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None:
+            raise SystemExit(1)
+    else:
+        raise SystemExit(1)
+    print(profile)
+    raise SystemExit(0)
+
+selection, selection_exists = root_json(os.path.join(state, 'profile-selection.json'))
+if selection_exists:
+    if selection is None or set(selection) != {'selection'} or selection.get('selection') not in ('compatibility', 'recommended'):
+        raise SystemExit(1)
+    print('small-v2' if selection['selection'] == 'compatibility' else host_profile)
+    raise SystemExit(0)
+raise SystemExit(2)
+PY
+}
+quarantine_invalid_legacy_state() {
+    python3 - "$STATE" <<'PY'
+import os, stat, sys
+state = sys.argv[1]
+sources = []
+for name in ('verified.json', 'profile-selection.json'):
+    path = os.path.join(state, name)
+    try:
+        info = os.lstat(path)
+    except FileNotFoundError:
+        continue
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644:
+        raise SystemExit(1)
+    sources.append(path)
+if not sources:
+    raise SystemExit(1)
+for path in sources:
+    target = path + '.rejected-upstream-direct-v1'
+    os.replace(path, target)
+directory = os.open(state, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+try:
+    os.fsync(directory)
+finally:
+    os.close(directory)
+PY
+}
+legacy_payload_usable() {
+    local variant=$1 model_name=$2 model_bytes=$3 model_sha=$4 binary_bytes binary_sha
+    local binary
+    local -a values
+    mapfile -t values < <(asset_values "$variant")
+    binary_bytes=${values[0]}; binary_sha=${values[1]}
+    binary=$(legacy_binary_path "$variant")
+    if ! trusted_exact_file "$DEST/voxtype-$variant" 755 "$binary_bytes" "$binary_sha"; then
+        trusted_exact_file "$binary" 755 "$binary_bytes" "$binary_sha" || return 1
+    fi
+    if ! trusted_exact_file "$MODELS/$model_name" 644 "$model_bytes" "$model_sha"; then
+        trusted_exact_file "$DEST/$model_name" 644 "$model_bytes" "$model_sha" || return 1
+    fi
+}
+prepare_packaged_release_metadata() {
+    local tmp=$1 keyring=$2 variant=$3 source name bytes sha sig_bytes sig_sha
+    local -a values
+    name="voxtype-$VERSION-linux-x86_64-$variant"
+    mapfile -t values < <(asset_values "$variant")
+    bytes=${values[0]}; sha=${values[1]}; sig_bytes=${values[2]}; sig_sha=${values[3]}
+    prepare_keyring "$keyring"
+    verify_file "$PROVENANCE/SHA256SUMS.txt" "$SUMS_BYTES" "$SUMS_SHA"
+    verify_file "$PROVENANCE/SHA256SUMS.txt.asc" "$SUMS_SIG_BYTES" "$SUMS_SIG_SHA"
+    verify_signature "$PROVENANCE/SHA256SUMS.txt.asc" "$PROVENANCE/SHA256SUMS.txt" "$keyring"
+    grep -Fxq "$sha  $name" "$PROVENANCE/SHA256SUMS.txt"
+    verify_file "$PROVENANCE/$name.asc" "$sig_bytes" "$sig_sha"
+    source="$DEST/voxtype-$variant"
+    trusted_exact_file "$source" 755 "$bytes" "$sha" || source=$(legacy_binary_path "$variant")
+    trusted_exact_file "$source" 755 "$bytes" "$sha"
+    verify_signature "$PROVENANCE/$name.asc" "$source" "$keyring"
+    cp -- "$PROVENANCE/SHA256SUMS.txt" "$tmp/SHA256SUMS.txt"
+    cp -- "$PROVENANCE/SHA256SUMS.txt.asc" "$tmp/SHA256SUMS.txt.asc"
+}
 as_user() {
     local user=$1 home=$2
     shift 2
@@ -170,10 +478,9 @@ configure_user() {
 
 reuse_legacy_model() {
     local name=$1 bytes=$2 sha=$3 source="$DEST/$1" target="$MODELS/$1"
-    [[ -f $target ]] && verify_file "$target" "$bytes" "$sha" && return 0
-    [[ -f $source && ! -L $source && $(stat -c %u:%a "$source") == 0:644 ]] || return 1
-    verify_file "$source" "$bytes" "$sha" || return 1
-    mkdir -p "$MODELS"
+    trusted_exact_file "$target" 644 "$bytes" "$sha" && return 0
+    trusted_exact_file "$source" 644 "$bytes" "$sha" || return 1
+    prepare_storage_dir "$MODELS"
     cp --reflink=auto -- "$source" "$target.new"
     chmod 0644 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
     mv -f "$target.new" "$target"
@@ -182,24 +489,61 @@ reuse_legacy_model() {
 cleanup_legacy_payload() {
     # Keep the old controller payload usable until the direct receipt and marker
     # are both durable. Exact compatible bytes were copied/reflinked above.
-    [[ -r $STATE/verified.json && -r $STATE/upstream-direct-v1 ]] || return
+    [[ -f $STATE/verified.json && ! -L $STATE/verified.json && $(stat -c %u:%a "$STATE/verified.json") == 0:644 ]] || return
+    trusted_exact_file "$STATE/upstream-direct-v1" 644 19 f488e43c61459fd06e37fe8d5590ed9bc844806f1e703fba8a2de65dd945e8d8 || return
     rm -f -- "$DEST/voxtype-cpu" "$DEST/voxtype-cpu-avx2" "$DEST/voxtype-vulkan" \
         "$DEST/$SMALL_NAME" "$DEST/$TURBO_NAME"
+    durable_sync_dir "$DEST"
 }
 
 setup_user() {
-    local user=$1 home tmp keyring cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha
+    local user=$1 mode=${2:-online} home tmp keyring host_profile selected_profile profile_status legacy_state=valid cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha packaged=0 receipt_json uid
     home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
-    printf '%s\n' downloading | install -m 0644 /dev/stdin "$STATE/setup.state"
+    durable_atomic_text "$STATE/setup.state" 0644 downloading
     tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
-    prepare_release_metadata "$tmp" "$keyring"
-    if [[ $(/usr/libexec/arctic/arctic-voxtype-host-profile) == turbo-q5-v3 ]]; then
+    host_profile=$(/usr/libexec/arctic/arctic-voxtype-host-profile)
+    if selected_profile=$(legacy_profile "$host_profile"); then
+        :
+    else
+        profile_status=$?
+        if [[ $profile_status == 2 ]]; then
+            # A fresh install has no legacy state and follows the host profile.
+            # The migration-only entry point must never infer a legacy choice.
+            [[ $mode != legacy-only ]] || return 1
+            legacy_state=absent
+        else
+            # The synchronous RPM migration stays fail closed and leaves every
+            # old byte. Its later online resume may quarantine structurally
+            # trusted but invalid state and perform the ordinary signed repair.
+            [[ $mode != legacy-only ]] || return 1
+            quarantine_invalid_legacy_state
+            legacy_state=quarantined
+        fi
+        selected_profile=$host_profile
+    fi
+    if [[ $selected_profile == turbo-q5-v3 ]]; then
         cpu=avx2; profile=turbo-q5-v3; model_name=$TURBO_NAME; model_bytes=$TURBO_BYTES; model_sha=$TURBO_SHA; model_url=$TURBO_URL
         binary_bytes=$AVX2_BYTES; binary_sha=$AVX2_SHA
-    else
+    elif [[ $selected_profile == small-v2 ]]; then
         cpu=baseline; profile=small-v2; model_name=$SMALL_NAME; model_bytes=$SMALL_BYTES; model_sha=$SMALL_SHA; model_url=$SMALL_URL
         binary_bytes=$BASELINE_BYTES; binary_sha=$BASELINE_SHA
+    else
+        return 1
     fi
+    if [[ $legacy_state == valid ]] && legacy_payload_usable "$cpu" "$model_name" "$model_bytes" "$model_sha"; then
+        packaged=1
+    fi
+    if [[ $packaged == 1 ]]; then
+        # An update from Arctic's former controller already has these exact
+        # upstream bytes. Authenticate the binary with provenance shipped in
+        # the signed RPM and complete the direct migration without a network.
+        prepare_packaged_release_metadata "$tmp" "$keyring" "$cpu"
+    else
+        [[ $mode != legacy-only ]] || return 1
+        prepare_release_metadata "$tmp" "$keyring"
+    fi
+    prepare_storage_dir "$DEST"
+    prepare_storage_dir "$MODELS"
     install_asset "$cpu" "$tmp" "$keyring"
     model_path="$MODELS/$model_name"
     if ! reuse_legacy_model "$model_name" "$model_bytes" "$model_sha"; then
@@ -207,23 +551,36 @@ setup_user() {
         install -D -m 0644 "$CACHE/$model_name" "$model_path.new"
         mv -f "$model_path.new" "$model_path"
     fi
+    # Persist the direct payload before a receipt can attest it. Both calls also
+    # fsync the containing directories so a power loss cannot retain a receipt
+    # while losing the renamed binary or model.
+    durable_sync_file "$DEST/voxtype-$cpu"
+    durable_sync_file "$model_path"
+    durable_sync_tree "$DEST" "$STORAGE_ROOT"
+    durable_sync_tree "$MODELS" "$STORAGE_ROOT"
     configure_user "$user" "$home" "$model_path"
     systemctl --global enable voxtype.service >/dev/null
-    printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
-    receipt="$STATE/verified.json.new"
-    printf '{"integration":"upstream-direct-v1","version":"%s","source_commit":"%s","release_signing_fingerprint":"%s","user":"%s","profile":"%s","binary":"voxtype-%s","binary_bytes":%s,"binary_sha256":"%s","model_path":"%s","model":"%s","model_bytes":%s,"model_sha256":"%s","backend":"cpu"}\n' \
-        "$VERSION" "$SOURCE_COMMIT" "$FINGERPRINT" "$user" "$profile" "$cpu" "$binary_bytes" "$binary_sha" "$model_path" "${model_name#ggml-}" "$model_bytes" "$model_sha" >"$receipt"
-    chmod 0644 "$receipt"; mv -f "$receipt" "$STATE/verified.json"
-    printf '%s\n' upstream-direct-v1 | install -m 0644 /dev/stdin "$STATE/upstream-direct-v1"
-    cleanup_legacy_payload
-    rm -f "$STATE/pending" "$STATE/setup.error"; printf '%s\n' ready | install -m 0644 /dev/stdin "$STATE/setup.state"
     uid=$(id -u "$user")
+    durable_atomic_text "$STATE/backend" 0644 cpu
+    printf -v receipt_json '{"integration":"upstream-direct-v1","version":"%s","source_commit":"%s","release_signing_fingerprint":"%s","user":"%s","profile":"%s","binary":"voxtype-%s","binary_bytes":%s,"binary_sha256":"%s","model_path":"%s","model":"%s","model_bytes":%s,"model_sha256":"%s","backend":"cpu"}' \
+        "$VERSION" "$SOURCE_COMMIT" "$FINGERPRINT" "$user" "$profile" "$cpu" "$binary_bytes" "$binary_sha" "$model_path" "${model_name#ggml-}" "$model_bytes" "$model_sha"
+    durable_atomic_text "$STATE/verified.json" 0644 "$receipt_json"
+    # This is the commit point. Pending remains durable until after this marker
+    # and its directory entry are fsynced; cleanup is forbidden before it.
+    durable_atomic_text "$STATE/upstream-direct-v1" 0644 upstream-direct-v1
+    # The durable marker commits direct integration. No later housekeeping or
+    # current-session activation failure may run the pre-commit error handler.
+    trap - ERR
+    cleanup_legacy_payload || :
+    durable_remove "$STATE/pending" "$STATE/setup.error" || :
+    durable_atomic_text "$STATE/setup.state" 0644 ready || :
     if [ -S "/run/user/$uid/bus" ]; then
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-            systemctl --user daemon-reload
+            systemctl --user daemon-reload >/dev/null 2>&1 || :
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-            systemctl --user enable --now voxtype.service
+            systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :
     fi
+    return 0
 }
 update_receipt_backend() {
     python3 - "$STATE/verified.json" "$1" <<'PY'
@@ -298,6 +655,9 @@ case ${1:-} in
         [[ $# = 2 || $# = 3 ]] || usage; valid_user "$2" || usage; queue_user "$2"
         if [[ ${3:-} = --offline ]]; then exit 0; fi
         [[ $# = 2 ]] || usage; setup_user "$2" ;;
+    --migrate-legacy)
+        [[ $# = 2 ]] || usage; valid_user "$2" || usage; queue_user "$2"
+        setup_user "$2" legacy-only ;;
     --resume) [[ $# = 1 ]] || usage; setup_user "$(read_queued_user)" ;;
     --retry)
         [[ $# = 1 ]] || usage; retry_user=$(user_from_uid) || retry_user=$(read_queued_user)

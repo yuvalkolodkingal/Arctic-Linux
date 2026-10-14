@@ -212,6 +212,10 @@ on_transcription = false
                     'packaging/dictation/arctic-voxtype-host-profile',
                     'packaging/dictation/arctic-voxtype-configure',
                     'packaging/dictation/voxtype-release-key.asc',
+                    'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt',
+                    'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc',
+                    'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc',
+                    'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc',
                     'packaging/dictation/org.arcticlinux.dictation.policy',
                     'packaging/systemd/voxtype.service',
                     'packaging/systemd/arctic-dictation-setup.service',
@@ -227,9 +231,13 @@ on_transcription = false
                     patch.object(guest, 'HOST_PROFILE', paths[4]), \
                     patch.object(guest, 'CONFIGURE', paths[5]), \
                     patch.object(guest, 'KEY', paths[6]), \
-                    patch.object(guest, 'POLICY', paths[7]), patch.object(guest, 'UNIT', paths[8]), \
-                    patch.object(guest, 'SETUP_SERVICE', paths[9]), \
-                    patch.object(guest, 'SETUP_TIMER', paths[10]):
+                    patch.object(guest, 'PROVENANCE_SUMS', paths[7]), \
+                    patch.object(guest, 'PROVENANCE_SUMS_SIG', paths[8]), \
+                    patch.object(guest, 'PROVENANCE_BASELINE_SIG', paths[9]), \
+                    patch.object(guest, 'PROVENANCE_AVX2_SIG', paths[10]), \
+                    patch.object(guest, 'POLICY', paths[11]), patch.object(guest, 'UNIT', paths[12]), \
+                    patch.object(guest, 'SETUP_SERVICE', paths[13]), \
+                    patch.object(guest, 'SETUP_TIMER', paths[14]):
                 first = guest.installed_integration_sha()
                 paths[1].write_text('changed')
                 self.assertNotEqual(first, guest.installed_integration_sha())
