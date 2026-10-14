@@ -183,6 +183,8 @@ class WorkflowControls(unittest.TestCase):
         text = self.workflow
         self.assertIn('paths: [.github/qualification-20261010.reliability]', text)
         self.assertNotIn('workflow_dispatch:', text)
+        self.assertNotIn('${{ runner.temp }}', text)
+        self.assertIn('EVIDENCE: /tmp/arctic-reliability-${{ github.run_id }}-${{ matrix.firmware }}', text)
         self.assertIn('matrix:\n        firmware: [uefi, bios]', text)
         self.assertIn('max-parallel: 1', text)
         self.assertIn('tools/native-functional/fetch-image.py --manifest', text)
