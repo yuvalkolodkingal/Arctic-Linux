@@ -785,6 +785,90 @@ def pre_screen_evidence_members(out, members, screen):
             raise EarlyEvidenceScreeningError(category, fixed_screening_failure(error)) from None
 
 
+INSTALL_SERIAL_PROJECTION = b'ARCTIC-INSTALL-SERIAL-PROJECTION=arctic-performance-install-v1\n'
+INSTALL_SERIAL_OMITTED = b'ARCTIC-INSTALL-SERIAL-OMITTED='
+INSTALL_EXIT = b'ARCTIC-INSTALL-EXIT=0\n'
+
+
+def public_install_serial_projection(data):
+    """Keep only the validated install result, with positions of private lines.
+
+    The complete UART is consumed locally before this function returns. It is
+    not release evidence: Fedora boot diagnostics can contain account-shaped
+    unit names and other machine text. The retained projection has a closed
+    grammar and still proves that exactly one successful installer exit was
+    observed; omission counts preserve its position without copying or hashing
+    any omitted content.
+    """
+    if type(data) is not bytes or not data or len(data) > 128 * 1024 * 1024:
+        raise RuntimeError('Performance install UART is empty or oversized')
+    output = [INSTALL_SERIAL_PROJECTION]
+    omitted = 0
+    exits = 0
+
+    def flush_omitted():
+        nonlocal omitted
+        if omitted:
+            output.append(INSTALL_SERIAL_OMITTED + str(omitted).encode('ascii') + b'\n')
+            omitted = 0
+
+    for line in data.splitlines(keepends=True):
+        if b'ARCTIC-INSTALL-EXIT=' in line:
+            if line not in (b'ARCTIC-INSTALL-EXIT=0\n', b'ARCTIC-INSTALL-EXIT=0\r\n'):
+                raise RuntimeError('Performance install UART exit record differs')
+            flush_omitted()
+            output.append(INSTALL_EXIT)
+            exits += 1
+        else:
+            omitted += 1
+    if exits != 1:
+        raise RuntimeError('Performance install UART requires one successful exit record')
+    flush_omitted()
+    result = b''.join(output)
+    if len(result) > 4096:
+        raise RuntimeError('Performance install UART projection exceeds bound')
+    return result
+
+
+def publish_install_serial_projection(path, out):
+    """Replace one owned regular UART with its public projection fail-closed."""
+    path, out = Path(path).absolute(), Path(out).resolve()
+    try:
+        before = path.lstat()
+        contained = path.resolve().is_relative_to(out)
+    except OSError:
+        before, contained = None, False
+    if (before is None or not stat.S_ISREG(before.st_mode) or path.is_symlink()
+            or before.st_uid != os.geteuid() or not contained
+            or before.st_size <= 0 or before.st_size > 128 * 1024 * 1024):
+        raise RuntimeError('Performance install UART is not an owned bounded regular file')
+    data = path.read_bytes()
+    after = path.lstat()
+    identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    if len(data) != before.st_size or identity(before) != identity(after):
+        raise RuntimeError('Performance install UART changed while being validated')
+    projection = public_install_serial_projection(data)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(prefix='.arctic-install-uart-', dir=path.parent,
+                                         delete=False) as output:
+            temporary = Path(output.name)
+            os.fchmod(output.fileno(), stat.S_IMODE(before.st_mode) & 0o600)
+            output.write(projection)
+            output.flush()
+            os.fsync(output.fileno())
+        if identity(before) != identity(path.lstat()) or path.is_symlink():
+            raise RuntimeError('Performance install UART changed before publication')
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+    if path.read_bytes() != projection:
+        raise RuntimeError('Performance install UART projection publication differs')
+    return projection
+
+
 def stage_evidence_members(out, roots):
     """Return the exact collectable members newly closed by one install or boot stage."""
     out = Path(out).resolve()
@@ -1101,6 +1185,9 @@ def main():
             if 'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' not in (args.out/(name+'-install-harness.log')).read_text():
                 raise RuntimeError('Installed source did not cleanly power off; first-use snapshot refused')
             # performance-prescreen-stage-only-begin
+            # Validate the complete private UART, then retain only its closed
+            # install-result projection before any screening or publication.
+            publish_install_serial_projection(args.out/name/'serial-install.log', args.out)
             pre_screen([args.out/'status.json', args.out/(name+'-install-harness.log'), args.out/name],
                        observer=name == 'baseline')
             # performance-prescreen-stage-only-end

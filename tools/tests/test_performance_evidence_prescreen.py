@@ -70,6 +70,42 @@ class PerformanceEvidencePrescreenTest(unittest.TestCase):
         runner.pre_screen_evidence_members(self.out, [member], screen)
         self.assertEqual(member[1].read_bytes(), content)
 
+    def test_private_install_uart_is_replaced_by_closed_public_projection(self):
+        private = (b'booting mystery@unknown.service\nprivate.person@example.invalid\n'
+                   b'ARCTIC-INSTALL-EXIT=0\r\nshutdown private detail\n')
+        projection = runner.public_install_serial_projection(private)
+        self.assertEqual(projection,
+            b'ARCTIC-INSTALL-SERIAL-PROJECTION=arctic-performance-install-v1\n'
+            b'ARCTIC-INSTALL-SERIAL-OMITTED=2\nARCTIC-INSTALL-EXIT=0\n'
+            b'ARCTIC-INSTALL-SERIAL-OMITTED=1\n')
+        self.assertNotIn(b'unknown.service', projection)
+        self.assertNotIn(b'example.invalid', projection)
+        member = self.member('baseline/serial-install.log', projection)
+        runner.pre_screen_evidence_members(self.out, [member], screen)
+
+    def test_install_uart_projection_rejects_failure_duplicate_and_embedded_exit(self):
+        for private in (b'ARCTIC-INSTALL-EXIT=1\n',
+                        b'ARCTIC-INSTALL-EXIT=0\nARCTIC-INSTALL-EXIT=0\n',
+                        b'prefix ARCTIC-INSTALL-EXIT=0\n',
+                        b'ordinary serial only\n'):
+            with self.subTest(private=private), self.assertRaises(RuntimeError):
+                runner.public_install_serial_projection(private)
+
+    def test_install_uart_projection_refuses_symlink_and_replaces_owned_file(self):
+        serial = self.out/'baseline/serial-install.log'
+        serial.parent.mkdir(parents=True)
+        serial.write_bytes(b'private@example.invalid\nARCTIC-INSTALL-EXIT=0\n')
+        projection = runner.publish_install_serial_projection(serial, self.out)
+        self.assertEqual(serial.read_bytes(), projection)
+        outside = Path(self.temp.name)/'outside.log'
+        outside.write_bytes(b'ARCTIC-INSTALL-EXIT=0\n')
+        link = self.out/'candidate/serial-install.log'
+        link.parent.mkdir(parents=True)
+        link.symlink_to(outside)
+        with self.assertRaises(RuntimeError):
+            runner.publish_install_serial_projection(link, self.out)
+        self.assertEqual(outside.read_bytes(), b'ARCTIC-INSTALL-EXIT=0\n')
+
     def test_unknown_private_filename_is_never_emitted(self):
         relative = 'runs/baseline/2/private-person@example.invalid.log'
         error, output = self.rejected(relative, b'another@unknown.invalid\n')
