@@ -1,5 +1,6 @@
 """Independent Unix-socket fixture checks actual worker transport and timing bounds."""
 import importlib.util
+import hashlib
 import json
 import os
 import pwd
@@ -21,6 +22,10 @@ controller_spec = importlib.util.spec_from_file_location(
     'performance_controller', Path(__file__).parents[1]/'performance/run-paired.py')
 controller = importlib.util.module_from_spec(controller_spec)
 controller_spec.loader.exec_module(controller)
+screen_spec = importlib.util.spec_from_file_location(
+    'performance_evidence_screen', Path(__file__).parents[1]/'native-functional/screen-evidence.py')
+screen = importlib.util.module_from_spec(screen_spec)
+screen_spec.loader.exec_module(screen)
 
 
 class MangoFixture:
@@ -343,6 +348,54 @@ class NativeObserverTest(unittest.TestCase):
         self.assertEqual(len(result['graphics_text_and_apps']), 2)
         self.assertEqual(run.call_args.args[0][:2], ['rpm', '-qa'])
         self.assertEqual(len(result['sha256']), 64)
+
+    def test_private_systemd_diagnostics_export_only_fixed_counts_and_public_summary_hash(self):
+        private_values = ('user@1000.service\n', 'private.person@example.invalid\n',
+                          'Transcript: private Hebrew control שלום\n',
+                          '/home/private/password=secret/recording.wav\n')
+        replacement_values = ('unit@2000.service\n', 'other.person@else.invalid\n',
+                              'Transcription: different private value\n',
+                              '/home/other/access_token=hidden/voice.wav\n')
+        for value in private_values + replacement_values:
+            with self.assertRaisesRegex(RuntimeError, 'Sensitive text'):
+                screen.external_text(value.encode())
+        private = ''.join(private_values)
+        replacement = ''.join(replacement_values)
+        first = guest.private_diagnostic_summary('systemd-critical-chain', private)
+        second = guest.private_diagnostic_summary('systemd-critical-chain', replacement)
+        self.assertEqual(first, second)
+        self.assertEqual(set(first), {'schema', 'category', 'status', 'record_count', 'summary_sha256'})
+        self.assertEqual(first['record_count'], 4)
+        public = dict(first)
+        digest = public.pop('summary_sha256')
+        encoded = json.dumps(public, sort_keys=True, separators=(',', ':'),
+                             ensure_ascii=True, allow_nan=False).encode()
+        self.assertEqual(digest, hashlib.sha256(encoded).hexdigest())
+        rendered = json.dumps(first, ensure_ascii=True)
+        for secret in ('user@1000.service', 'private.person', 'Transcript', 'שלום', '/home/private'):
+            self.assertNotIn(secret, rendered)
+        public_evidence = (rendered + '\n').encode()
+        self.assertIs(screen.external_text(public_evidence), public_evidence)
+
+    def test_private_diagnostic_command_failure_never_reflects_output(self):
+        private = 'private.person@example.invalid Transcript: secret /home/private'
+        with patch.object(guest, 'run', return_value=private):
+            summary = guest.collect_private_diagnostic(
+                'systemd-failed-units', ['systemctl', '--failed'])
+        self.assertNotIn(private, json.dumps(summary))
+        for error in (RuntimeError(private), subprocess.TimeoutExpired(['systemctl'], 1, output=private)):
+            with self.subTest(error=type(error).__name__), patch.object(guest, 'run', side_effect=error), \
+                    self.assertRaisesRegex(RuntimeError, '^Private diagnostic command unavailable$') as caught:
+                guest.collect_private_diagnostic('systemd-failed-units', ['systemctl', '--failed'])
+            self.assertNotIn(private, str(caught.exception))
+
+    def test_private_diagnostic_summary_rejects_unknown_categories_and_oversize(self):
+        for category, content in (('private.person@example.invalid', 'public'),
+                                  ('systemd-failed-units', 7),
+                                  ('systemd-critical-chain', 'x' * (1024 * 1024 + 1))):
+            with self.subTest(category=category), self.assertRaisesRegex(
+                    RuntimeError, 'Invalid private diagnostic|exceeds bounded'):
+                guest.private_diagnostic_summary(category, content)
 
     def test_counterbalanced_order_has_exact_three_unique_boots_each(self):
         actual = controller.paired_boot_order()

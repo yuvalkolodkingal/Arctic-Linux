@@ -30,6 +30,25 @@ R = load('legacy_appid_receipts', ROOT / 'tools/tests/test_performance_roles.py'
 PARENT_GUEST_SHA = '5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'
 
 
+def before_private_diagnostic_summary(data):
+    """Remove the reviewed supplemental-diagnostic append for old source controls."""
+    replacements = (
+        (b"emit('system_failed_units', collect_private_diagnostic('systemd-failed-units', ['systemctl', '--failed', '--no-legend', '--plain', '--no-pager']))",
+         b"emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))"),
+        (b"emit('critical_chain', collect_private_diagnostic('systemd-critical-chain', ['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))",
+         b"emit('critical_chain', run(['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))"),
+        (b"except RuntimeError:\n        emit('critical_chain_unmeasured', dict(schema='arctic-private-diagnostic-summary-v1', category='systemd-critical-chain', status='unavailable', raw_error_included=False))",
+         b"except (RuntimeError, subprocess.TimeoutExpired) as error:\n        emit('critical_chain_unmeasured', str(error))"),
+    )
+    for current, previous in replacements:
+        if data.count(current) != 1:
+            raise AssertionError('Current private diagnostic source shape changed')
+        data = data.replace(current, previous)
+    start = data.index(b'\nPRIVATE_DIAGNOSTIC_CATEGORIES = ')
+    end = data.index(b"\n\nif __name__ == '__main__':", start)
+    return data[:start] + data[end + 1:]
+
+
 class LegacyAppidControls(unittest.TestCase):
     def owned_probe(self, directory, appid):
         original = R.causal_bound(.09975, .1, appids=(appid,))
@@ -130,7 +149,7 @@ class LegacyAppidControls(unittest.TestCase):
                 self.assertEqual(events[-1], ('done', True))
 
     def test_exact_parent_whole_byte_rollback_reproduces_string_predicate_rejection(self):
-        data = (ROOT / 'tools/performance/guest.py').read_bytes()
+        data = before_private_diagnostic_summary((ROOT / 'tools/performance/guest.py').read_bytes())
         declared_tuple = b"appids=tuple(app['appids'])"
         self.assertEqual(data.count(declared_tuple), 2)
         data = data.replace(declared_tuple, b"appids=list(app['appids'])")
