@@ -25,6 +25,7 @@ class CandidateMangoProfileControls(unittest.TestCase):
         additions = (
             (b'\n# candidate-profile-315bc-begin\n', b'# candidate-profile-315bc-end\n'),
             (b'\n# candidate-profile-f19e-begin\n', b'# candidate-profile-f19e-end\n'),
+            (b'\n# candidate-profile-9c442-begin\n', b'# candidate-profile-9c442-end\n'),
         )
         old_hashes = {
             'causal.py': '3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9',

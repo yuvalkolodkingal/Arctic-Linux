@@ -33,6 +33,10 @@ class ColoredTracebackTest(unittest.TestCase):
         # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
         for current, previous in (
+                (b'a99761ab522b20285a07b282102c63adcc3caf63e1ec99f7fddf9f66aca95ac5', b'94a0c4a8a46a16889db9568aae9b1dc2a7f3eda87f071bb47ba2f78dcc399122'),
+                (b'3b51ccffa915f059cea8527f426c9c3200356cbb73d6955e910d8518f8cfbb0d', b'2ef2f36a5056193b657985b5a494e2d8586df3ab704745e3e5d71f69d4a8e9b2'),
+                (b'5cc98198d4ca2a6a19736f2fd32b0c002964e2b6d95b1d86d11a5149f56aab91', b'8477a009b0a6adf0981e47380c3d18089b8400d177d58ad017597b2907cb53b1'),
+                (b'bc9e83e35616c68b9776184c69920908fcb490ac7a822d705964f85d55e68c1f', b'c3fbd2a43aedb4c795b78cfb5afd3738ae7a35ad2a3cb21e4de6282770c865b3'),
                 (b'94a0c4a8a46a16889db9568aae9b1dc2a7f3eda87f071bb47ba2f78dcc399122', b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562'),
                 (b'2ef2f36a5056193b657985b5a494e2d8586df3ab704745e3e5d71f69d4a8e9b2', b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed'),
                 (b'8477a009b0a6adf0981e47380c3d18089b8400d177d58ad017597b2907cb53b1', b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7'),
