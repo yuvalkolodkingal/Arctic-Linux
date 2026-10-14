@@ -129,6 +129,101 @@ on_transcription = false
             with self.assertRaisesRegex(guest.Invalid, '^desktop-user-has-input-group$'):
                 checker.no_input()
 
+    def test_microphone_disconnect_restores_route_and_restarts_clean_daemon(self):
+        checker = self.checker()
+        checker.select = Mock()
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.observe = Mock(side_effect=lambda _target, fn, _seconds=20: fn())
+        checker.capture_link = Mock(return_value=True)
+        checker.destroy_route = Mock()
+        checker.route = Mock()
+        checker.state = Mock(return_value='idle')
+        checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
+        checker.adapter = Mock(return_value={
+            'state': 'error', 'error': 'VoxType could not open the microphone.'})
+        with tempfile.TemporaryDirectory() as temp:
+            checker.root = Path(temp)
+            (checker.root / 'received.private').write_bytes(b'')
+            def command(argv, check=True):
+                if argv == ['/usr/bin/pw-dump']:
+                    return SimpleNamespace(stdout=b'[]', stderr=b'', returncode=0)
+                if argv == ['systemctl', '--user', 'is-active', 'voxtype.service']:
+                    return SimpleNamespace(stdout=b'active\n', stderr=b'', returncode=0)
+                return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+            checker.cmd = Mock(side_effect=command)
+            self.assertEqual(checker.microphone(),
+                             {'count': 0, 'drained': True, 'restored': True})
+        checker.destroy_route.assert_called_once_with(restore=False)
+        checker.route.assert_called_once_with()
+        restart = ['systemctl', '--user', 'restart', 'voxtype.service']
+        self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
+
+    def test_microphone_failed_assertion_still_restores_independent_gate_state(self):
+        checker = self.checker()
+        checker.select = Mock()
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.observe = Mock(side_effect=lambda _target, fn, _seconds=20: fn())
+        checker.capture_link = Mock(return_value=True)
+        checker.destroy_route = Mock()
+        checker.route = Mock()
+        checker.state = Mock(return_value='idle')
+        checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
+        checker.adapter = Mock(return_value={'state': 'ready', 'error': ''})
+        with tempfile.TemporaryDirectory() as temp:
+            checker.root = Path(temp)
+            (checker.root / 'received.private').write_bytes(b'')
+            checker.cmd = Mock(side_effect=lambda argv, check=True: SimpleNamespace(
+                stdout=(b'[]' if argv == ['/usr/bin/pw-dump'] else
+                        b'active\n' if argv == ['systemctl', '--user', 'is-active',
+                                                'voxtype.service'] else b''),
+                stderr=b'', returncode=0))
+            with self.assertRaisesRegex(guest.Invalid, '^microphone-failure-not-actionable$'):
+                checker.microphone()
+        checker.route.assert_called_once_with()
+        restart = ['systemctl', '--user', 'restart', 'voxtype.service']
+        self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
+
+    def test_failed_lock_assertion_unlocks_and_restores_service_for_later_gates(self):
+        checker = self.checker()
+        checker.empty = Mock()
+        checker.select = Mock()
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.capture_link = Mock(return_value=True)
+        checker.play = Mock()
+        checker.kill = Mock()
+        checker.player = None
+        checker.fixtures = [{}]
+        checker.state = Mock(side_effect=['recording', 'stopped', 'idle'])
+        checker.engines = Mock(side_effect=[[], [(123, 456, Path('/usr/bin/voxtype'))]])
+        lock_states = iter((b'true\n', b'false\n'))
+        service_states = iter((b'inactive\n', b'active\n'))
+        def command(argv, check=True):
+            if argv == ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']:
+                output = next(lock_states)
+            elif argv == ['systemctl', '--user', 'is-active', 'voxtype.service']:
+                output = next(service_states)
+            else:
+                output = b''
+            return SimpleNamespace(stdout=output, stderr=b'', returncode=0)
+        checker.cmd = Mock(side_effect=command)
+        def observe(_target, fn, _seconds=20):
+            value = fn()
+            if not value:
+                raise guest.Invalid('observation-timeout')
+            return value
+        checker.observe = Mock(side_effect=observe)
+        with tempfile.TemporaryDirectory() as temp, patch('builtins.print') as output:
+            checker.root = Path(temp)
+            (checker.root / 'received.private').write_bytes(b'unexpected')
+            with self.assertRaisesRegex(guest.Invalid, '^lock-inserted-text$'):
+                checker.locked()
+        output.assert_called_once_with('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
+        start = ['systemctl', '--user', 'start', 'voxtype.service']
+        self.assertTrue(any(call.args == (start,) and call.kwargs == {'check': False}
+                            for call in checker.cmd.call_args_list))
+        self.assertEqual(checker.state.call_count, 3)
+        self.assertEqual(checker.engines.call_count, 2)
+
     def test_command_contract_requires_direct_mango_binds_and_rejecting_adapter(self):
         checker = self.checker()
         def command(argv, check=True):
