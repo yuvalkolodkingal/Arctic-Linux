@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e",
+  "native_source_sha256": "ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02",
   "files": {
-    "native_smoke.py": "2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e",
-    "guest-check-native-v6.py": "9e61df24664e0da3e37effb822e34f023ea27d518932a4a5427f586d68a3bcbb",
+    "native_smoke.py": "ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02",
+    "guest-check-native-v6.py": "8c57d4e9342f1962fbc8e8311a2d8a5397f89ba9cb80b4588430174fc867d003",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -28,14 +28,14 @@
     "test_native_desktop_v6.py": "22506c6f0e66ac22e5b2d8f927971247a83d9fb5e55143d072bc4e8325790bc1",
     "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
     "test_native_v6.py": "563d5c4c0e6f5418b7b30401f8488143ba1f98e8e06a68aad549c56fe8d5128b",
-    "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
+    "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
     "test_native_protocol_diagnostics.py": "3613e8fd265b42c4b45e642c04ab3dfac8d227840534a7d62bbe0fb46275d798",
     "test_renderer_trials.py": "ccaccb647578f7d304fe1e37881a141531346fc145cb2f17eda5422a45c156b7",
     "test_native_capture_controls.py": "f4b152b8d557cdb3a65bbfe6056088c4bd65e05f8bf16bbd6e941e3134e21937",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "50fd596bf81bed1e5f55ff4317cbeca83f60c5b726546fcbbf1851317fb7e284",
-    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
+    "test_controls_state_trials.py": "cf9df56edb0276cd420dbb25b667dc6098bae6cf7d97642fa7932faa17ed45a8",
+    "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
@@ -370,5 +370,25 @@
     "taskbar_matrix_pointer_product_and_iso_unchanged": true,
     "release_acceptance": false,
     "rendering_cause_proven": false
+  },
+  "audit_file_interval_streaming": {
+    "failure_run": 38582141613,
+    "failure_artifact_id": 11905708214,
+    "failure_artifact_sha256": "f5cb71662b4576c434b743db5146c84b025018938e63124c7fd855e4ba299412",
+    "diagnosis": "the completed 24-case taskbar matrix accumulated an audit interval above the prior 4 MiB aggregate cap, so the reader rejected it before scanning that interval",
+    "scan": "every byte through the fixed end-of-interval snapshot is streamed through SHA-256 and the AVC detector; record content is not retained or reported",
+    "summary_fields": [
+      "bytes",
+      "records",
+      "sha256"
+    ],
+    "line_bytes_limit": 1048576,
+    "record_count_limit": 500000,
+    "total_bytes_limit": 134217728,
+    "read_bytes": 65536,
+    "rotation_truncation_inode_and_exact_length_fail_closed": true,
+    "selinux_enforcing_audit_mode_audit_lost_and_zero_avc_requirements_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
   }
 }

@@ -1,5 +1,6 @@
 """Host controls only. No guest, GUI, network, package installs or dispatch."""
 import copy
+import hashlib
 import importlib.util
 import json
 import os
@@ -116,18 +117,20 @@ class Controls(unittest.TestCase):
 
     def test_security_enforcing_avc_loss_and_disabled_telemetry_controls(self):
         before=dict(selinux='Enforcing',audit=dict(enabled=1,lost=0))
-        self.assertEqual(s.verify_security(before,copy.deepcopy(before),0,'normal startup')['observed_new_avcs'],0)
-        for after,journal_avcs,audit_text in (
-            (dict(selinux='Permissive',audit=before['audit']),0,''),
-            (dict(selinux='Enforcing',audit=dict(enabled=0,lost=0)),0,''),
-            (dict(selinux='Enforcing',audit=dict(enabled=1,lost=1)),0,''),
-            (copy.deepcopy(before),1,''),
-            (copy.deepcopy(before),0,'type=USER_AVC msg=audit(42): denied'),
+        clean=dict(bytes=15,records=1,sha256='1'*64,avcs=0)
+        self.assertEqual(s.verify_security(before,copy.deepcopy(before),0,clean)['observed_new_avcs'],0)
+        for after,journal_avcs,audit_summary in (
+            (dict(selinux='Permissive',audit=before['audit']),0,clean),
+            (dict(selinux='Enforcing',audit=dict(enabled=0,lost=0)),0,clean),
+            (dict(selinux='Enforcing',audit=dict(enabled=1,lost=1)),0,clean),
+            (copy.deepcopy(before),1,clean),
+            (copy.deepcopy(before),0,dict(clean,avcs=1)),
+            (copy.deepcopy(before),0,dict(clean,sha256='invalid')),
         ):
             with self.assertRaises(RuntimeError):
-                s.verify_security(before,after,journal_avcs,audit_text)
+                s.verify_security(before,after,journal_avcs,audit_summary)
         disabled=dict(selinux='Enforcing',audit=dict(enabled=0,lost=0))
-        self.assertFalse(s.verify_security(disabled,copy.deepcopy(disabled),0)['audit_enabled'])
+        self.assertFalse(s.verify_security(disabled,copy.deepcopy(disabled),0,clean)['audit_enabled'])
         with self.assertRaises(RuntimeError):s.parse_audit_status('enabled 1\n')
 
     def test_audit_file_only_avc_and_rotation_are_not_missed(self):
@@ -142,6 +145,20 @@ class Controls(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'new AVC'):interval.finish()
                 old=self.root/'old.log';interval.audit_file.rename(old);interval.audit_file.write_text('replacement')
                 with self.assertRaisesRegex(RuntimeError,'rotated/truncated'):interval.finish()
+
+    def test_security_interval_streams_large_audit_delta_into_fixed_summary(self):
+        interval=s.SecurityInterval.__new__(s.SecurityInterval)
+        interval.before=dict(selinux='Enforcing',audit=dict(enabled=1,lost=0))
+        interval.cursor='cursor';interval.audit_file=self.root/'large-audit.log'
+        interval.audit_file.write_bytes(b'old\n')
+        info=interval.audit_file.stat();interval.audit_offset=(info.st_dev,info.st_ino,info.st_size)
+        added=b'benign audit record\n'*230000
+        with interval.audit_file.open('ab') as stream:stream.write(added)
+        with patch.object(interval,'state',return_value=copy.deepcopy(interval.before)), \
+             patch.object(s,'journal_avc_count',return_value={'records':1,'avcs':0}):
+            result=interval.finish()
+        self.assertEqual(result['audit_interval'],dict(bytes=len(added),records=230000,
+            sha256=hashlib.sha256(added).hexdigest()))
 
     def good_samples(self):
         return [dict(path='/tmp/fixture.mkv',**{'time-pos':v,'pause':False,'current-vo':'libmpv',

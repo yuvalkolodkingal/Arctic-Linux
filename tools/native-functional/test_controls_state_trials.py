@@ -32,7 +32,59 @@ PRIMARY_CONTROLS_SEED_NATIVE_SHA = '3be50ebd772b6e2f775b1eaca052c896b9e238ef5e61
 PRIMARY_RENDERER_REALIZATION_NATIVE_SHA = '2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e'
 
 
+def restore_audit_file_stream_native(source):
+    def replace_marked(text, start, end, replacement):
+        if text.count(start) != 1 or text.count(end) != 1:
+            raise AssertionError('Streaming audit file inverse marker differs')
+        first = text.index(start)
+        last = text.index(end, first) + len(end)
+        return text[:first] + replacement + text[last:]
+
+    source = replace_marked(source, '# BEGIN STREAMING_AUDIT_FILE_INTERVAL\n',
+        '# END STREAMING_AUDIT_FILE_INTERVAL\n', '')
+    old_verify = """def verify_security(before, after, journal_avcs, audit_messages=''):
+    require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
+    require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
+    require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
+    require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
+    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
+    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
+    return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
+                audit_enabled=after['audit']['enabled'] in (1,2),
+                scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
+"""
+    source = replace_marked(source, '# BEGIN STREAMING_AUDIT_FILE_VERIFICATION\n',
+        '# END STREAMING_AUDIT_FILE_VERIFICATION\n', old_verify)
+    source = replace_marked(source, '\n\n# BEGIN STREAMING_AUDIT_FILE_SCANNER\n',
+        '# END STREAMING_AUDIT_FILE_SCANNER\n\n\n', '\n\n')
+    old_finish = """    def finish(self):
+        after = self.state()
+        journal = journal_avc_count(self.cursor, timeout=60)
+        audit_messages = ''
+        if self.audit_offset:
+            info = self.audit_file.stat()
+            dev, ino, offset = self.audit_offset
+            require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,
+                    'audit log rotated/truncated; interval must be reviewed separately')
+            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
+            with self.audit_file.open('rb') as stream:
+                stream.seek(offset)
+                audit_messages = stream.read(LIMIT).decode(errors='replace')
+        elif self.audit_file.exists():
+            # The new file may include records not forwarded to the journal.
+            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
+            audit_messages = self.audit_file.read_text(errors='replace')
+        return verify_security(self.before, after, journal['avcs'], audit_messages)
+"""
+    source = replace_marked(source, '    # BEGIN STREAMING_AUDIT_FILE_FINISH\n',
+        '    # END STREAMING_AUDIT_FILE_FINISH\n', old_finish)
+    if hashlib.sha256(source.encode()).hexdigest() != PRIMARY_RENDERER_REALIZATION_NATIVE_SHA:
+        raise AssertionError('Pre-streaming-audit-file Native source differs')
+    return source
+
+
 def restore_primary_renderer_realization_native(source):
+    source=restore_audit_file_stream_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=PRIMARY_RENDERER_REALIZATION_NATIVE_SHA:
         raise AssertionError('Primary renderer realization Native source differs')
     start='    # BEGIN PRIMARY_RENDERER_REALIZATION\n';end='    # END PRIMARY_RENDERER_REALIZATION\n\n'

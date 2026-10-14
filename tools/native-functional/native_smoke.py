@@ -41,6 +41,13 @@ JOURNAL_LINE_LIMIT = 1024 * 1024
 JOURNAL_RECORD_LIMIT = 250000
 JOURNAL_STDERR_LIMIT = 64 * 1024
 JOURNAL_READ_SIZE = 64 * 1024
+# BEGIN STREAMING_AUDIT_FILE_INTERVAL
+AUDIT_LINE_LIMIT = 1024 * 1024
+AUDIT_RECORD_LIMIT = 500000
+AUDIT_TOTAL_LIMIT = 128 * 1024 * 1024
+AUDIT_READ_SIZE = 64 * 1024
+AUDIT_AVC = re.compile(br'avc:\s*denied|type=(?:USER_)?AVC\b', re.I)
+# END STREAMING_AUDIT_FILE_INTERVAL
 
 
 def require(value, message):
@@ -289,16 +296,59 @@ def journal_avc_count(cursor, timeout=60):
                 raise RuntimeError('journal stream validation failed')
 
 
-def verify_security(before, after, journal_avcs, audit_messages=''):
+# BEGIN STREAMING_AUDIT_FILE_VERIFICATION
+def verify_security(before, after, journal_avcs, audit_summary):
     require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
     require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
     require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
     require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
-    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
-    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
+    require(type(audit_summary) is dict and set(audit_summary) == {'bytes','records','sha256','avcs'}
+            and all(type(audit_summary[key]) is int and audit_summary[key] >= 0
+                    for key in ('bytes','records','avcs'))
+            and re.fullmatch('[0-9a-f]{64}', audit_summary['sha256']), 'invalid audit interval summary')
+    require(journal_avcs + audit_summary['avcs'] == 0, 'new AVC requires investigation')
     return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
+                audit_interval={key:audit_summary[key] for key in ('bytes','records','sha256')},
                 audit_enabled=after['audit']['enabled'] in (1,2),
                 scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
+# END STREAMING_AUDIT_FILE_VERIFICATION
+
+
+# BEGIN STREAMING_AUDIT_FILE_SCANNER
+def scan_audit_interval(stream, byte_count):
+    """Scan an exact bounded file interval without retaining its record text."""
+    require(type(byte_count) is int and 0 <= byte_count <= AUDIT_TOTAL_LIMIT,
+            'audit interval total byte bound exceeded')
+    digestor = hashlib.sha256()
+    pending = bytearray()
+    scanned = records = avcs = 0
+
+    def record(line):
+        nonlocal records, avcs
+        require(len(line) <= AUDIT_LINE_LIMIT, 'audit record exceeded line bound')
+        records += 1
+        require(records <= AUDIT_RECORD_LIMIT, 'audit record count exceeded bound')
+        if AUDIT_AVC.search(line):
+            avcs += 1
+
+    while scanned < byte_count:
+        chunk = stream.read(min(AUDIT_READ_SIZE, byte_count - scanned))
+        require(type(chunk) is bytes and chunk, 'audit interval ended before declared byte count')
+        require(len(chunk) <= byte_count - scanned, 'audit interval reader exceeded declared byte count')
+        scanned += len(chunk)
+        digestor.update(chunk)
+        pending.extend(chunk)
+        while True:
+            newline = pending.find(b'\n')
+            if newline < 0:
+                break
+            record(bytes(pending[:newline]))
+            del pending[:newline + 1]
+        require(len(pending) <= AUDIT_LINE_LIMIT, 'audit record exceeded line bound')
+    if pending:
+        record(bytes(pending))
+    return dict(bytes=scanned, records=records, sha256=digestor.hexdigest(), avcs=avcs)
+# END STREAMING_AUDIT_FILE_SCANNER
 
 
 class SecurityInterval:
@@ -319,24 +369,33 @@ class SecurityInterval:
         return dict(selinux=execute(['getenforce'])[1],
                     audit=parse_audit_status(execute(['auditctl', '-s'])[1]))
 
+    # BEGIN STREAMING_AUDIT_FILE_FINISH
     def finish(self):
         after = self.state()
         journal = journal_avc_count(self.cursor, timeout=60)
-        audit_messages = ''
+        audit_summary = dict(bytes=0, records=0, sha256=hashlib.sha256(b'').hexdigest(), avcs=0)
         if self.audit_offset:
             info = self.audit_file.stat()
             dev, ino, offset = self.audit_offset
             require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,
                     'audit log rotated/truncated; interval must be reviewed separately')
-            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
             with self.audit_file.open('rb') as stream:
+                opened = os.fstat(stream.fileno())
+                require((opened.st_dev, opened.st_ino) == (dev, ino) and opened.st_size >= info.st_size,
+                        'audit log rotated/truncated; interval must be reviewed separately')
                 stream.seek(offset)
-                audit_messages = stream.read(LIMIT).decode(errors='replace')
+                audit_summary = scan_audit_interval(stream, info.st_size - offset)
         elif self.audit_file.exists():
             # The new file may include records not forwarded to the journal.
-            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
-            audit_messages = self.audit_file.read_text(errors='replace')
-        return verify_security(self.before, after, journal['avcs'], audit_messages)
+            info = self.audit_file.stat()
+            with self.audit_file.open('rb') as stream:
+                opened = os.fstat(stream.fileno())
+                require((opened.st_dev, opened.st_ino) == (info.st_dev, info.st_ino)
+                        and opened.st_size >= info.st_size,
+                        'audit log rotated/truncated; interval must be reviewed separately')
+                audit_summary = scan_audit_interval(stream, info.st_size)
+        return verify_security(self.before, after, journal['avcs'], audit_summary)
+    # END STREAMING_AUDIT_FILE_FINISH
 
 def discover_desktop():
     """Actual login environment, including post-exec Mango IPC and Xwayland DISPLAY."""
