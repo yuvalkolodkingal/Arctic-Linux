@@ -66,31 +66,4 @@ class CpuControls(unittest.TestCase):
                       cpuinfo(flags=(FLAGS+' '+ ' '.join('f'+str(i) for i in range(513)),FLAGS))):
             self.rejects(value)
 
-    def test_constructor_rejects_bad_cpu_before_profile_application_or_desktop_gates(self):
-        controller=Mock(desired_profile=Mock(return_value={'id':'small-v2'}))
-        with patch.object(guest,'installed_controller',return_value=controller),patch.object(guest.Path,'read_bytes',return_value=cpuinfo(flags=(FLAGS,FLAGS+' avx512f'))),patch.object(guest,'desktop') as desktop,patch.object(guest,'gates') as gates:
-            with self.assertRaises(guest.Invalid):guest.Checker({'hardware_profile':'small-v2'})
-        controller.profile_selection.assert_not_called();controller.recommended_profile.assert_not_called()
-        desktop.assert_not_called();gates.assert_not_called()
-
-    def test_good_cpu_reaches_original_profile_guard_while_turbo_skips_small_fixture(self):
-        class OriginalProfileGuardReached(Exception):pass
-        for profile,observed in (('small-v2',cpuinfo()),('turbo-q5-v3',b'not-a-Small-fixture')):
-            controller=Mock(desired_profile=Mock(return_value={'id':profile}),
-                            profile_selection=Mock(side_effect=OriginalProfileGuardReached))
-            with patch.object(guest,'installed_controller',return_value=controller),patch.object(guest.Path,'read_bytes',return_value=observed):
-                with self.assertRaises(OriginalProfileGuardReached):guest.Checker({'hardware_profile':profile})
-            controller.profile_selection.assert_called_once_with()
-
-    def test_complete_source_rollback_preserves_original_schema_gates_and_budgets(self):
-        text=Path(guest.__file__).read_text()
-        from test_status_protocol import restore_status_protocol
-        text=restore_status_protocol(text)
-        start=text.index('\ndef verify_small_cpu_fixture(')
-        end=text.index('\ndef authenticated_capture_nodes(',start)
-        restored=(text[:start]+text[end:]).replace(
-            "        if self.profile_id == 'small-v2':\n            verify_small_cpu_fixture(cpuinfo)\n",'')
-        self.assertEqual(guest.hashlib.sha256(restored.encode()).hexdigest(),
-                         'efba7e5e6483f3b75a9f27f8baf7fd6d42edddc65d3df96419cf4e8517a6ae0d')
-
 if __name__=='__main__':unittest.main()

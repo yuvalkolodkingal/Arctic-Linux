@@ -336,7 +336,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
     image, pin = manifest['image'], manifest['dictation'][hardware_profile]
-    require(state['schema'] == 'arctic-dictation-execution-v2' and state['hardware_profile'] == hardware_profile
+    require(state['schema'] == 'arctic-voxtype-execution-v3' and state['hardware_profile'] == hardware_profile
             and state['status'] == 'exact_image_dictation_online_offline_local_sessions_passed'
             and state['image'] == image and state['execution_checker_head'] == pin['source_sha']
             and state['release_acceptance'] is False
@@ -366,8 +366,23 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
         ('contract_sha256', 'tools/dictation-qualification/contract.py'),
         ('accuracy_sha256', 'tools/dictation-accuracy/accuracy.py'),
         ('pins_sha256', 'tools/dictation-accuracy/pins.json'))}
-    hashes['controller_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/dictation.py')
-    hashes['child_exec_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/child_exec.py')
+    integration_files = (
+        'packaging/dictation/arctic-dictation',
+        'packaging/dictation/voxtype',
+        'packaging/dictation/arctic-voxtype-setup',
+        'packaging/dictation/voxtype-release-key.asc',
+        'packaging/dictation/org.arcticlinux.dictation.policy',
+        'packaging/systemd/voxtype.service',
+        'packaging/systemd/arctic-dictation-setup.service',
+        'packaging/systemd/arctic-dictation-setup.timer',
+    )
+    integration = hashlib.sha256()
+    for name in integration_files:
+        encoded = name.encode()
+        integration.update(len(encoded).to_bytes(4, 'big'))
+        integration.update(encoded)
+        integration.update(source_bytes(image['source_sha'], name))
+    hashes['integration_sha256'] = integration.hexdigest()
     reports = {}
     for name in sorted(required):
         info = state['reports'][name]
@@ -378,7 +393,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                 'Dictation checked report path, bytes or status differs')
         phase = 'live' if name.endswith('-live') else name
         kind = 'online' if name.startswith('online-') else 'offline'
-        expected = dict(schema='arctic-dictation-context-v2', phase=phase, hardware_profile=hardware_profile,
+        expected = dict(schema='arctic-voxtype-context-v3', phase=phase, hardware_profile=hardware_profile,
                         source_sha=image['source_sha'], iso_sha256=image['sha256'], iso_bytes=image['bytes'],
                         installation_id=state['installations'][kind],
                         fixture_manifest_sha256=pin['fixture_manifest_sha256'], **hashes)

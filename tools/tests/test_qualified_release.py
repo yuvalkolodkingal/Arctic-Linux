@@ -231,7 +231,7 @@ class PublicationGuardTest(unittest.TestCase):
     def test_failed_or_wrong_image_dictation_report_never_qualifies_release(self):
         image = dict(sha256='a' * 64, source_sha='b' * 40)
         manifest = dict(image=image, dictation={'turbo-q5-v3':dict(source_sha='c' * 40, fixture_manifest_sha256='d' * 64)})
-        state = dict(schema='arctic-dictation-execution-v2', hardware_profile='turbo-q5-v3', status='failed_or_unrun', image=image,
+        state = dict(schema='arctic-voxtype-execution-v3', hardware_profile='turbo-q5-v3', status='failed_or_unrun', image=image,
                      execution_checker_head='c' * 40, release_acceptance=False,
                      fixture_manifest_sha256='d' * 64)
         for change in ({}, {'status': 'exact_image_dictation_online_offline_local_sessions_passed',

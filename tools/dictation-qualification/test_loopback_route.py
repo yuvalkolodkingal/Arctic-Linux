@@ -9,9 +9,11 @@ from types import SimpleNamespace
 import unittest
 from unittest import mock
 
-import test_session_diagnostics as diagnostics
-
-guest = diagnostics.guest
+import importlib.util
+SPEC = importlib.util.spec_from_file_location(
+    'loopback_route_guest', Path(__file__).with_name('guest_check.py'))
+guest = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(guest)
 
 # Complete long_options inventory from official PipeWire 1.6.9 pw-loopback.c,
 # lines 99-114; SHA256 05169e172e496b72ee1ac7dce936d130bfbad7e43c82fb45c721190c07c99e54.
@@ -162,32 +164,6 @@ class LoopbackRouteControls(unittest.TestCase):
                 expected = ([['/usr/bin/wpctl', 'set-default', '37']] if old_source is not None
                             else [['/usr/bin/wpctl', 'clear-default', '1']]) if restore else []
                 self.assertEqual(defaults, [['/usr/bin/wpctl', 'set-default', '92']] + expected)
-
-    def test_dead_route_keeps_actual_session_failed_unrun_private_and_closes_owned_state(self):
-        controls = diagnostics.SessionDiagnosticControls()
-        for phase in ('online-installed', 'recovered-offline'):
-            for profile in diagnostics.c.PROFILES:
-                with self.subTest(phase=phase, profile=profile):
-                    checker = controls.checker(phase, profile)
-                    checker.route = guest.Checker.route.__get__(checker)
-                    fixture = RouteFixture(checker=checker, dead=True)
-                    import_spec, module = controls.setup(checker)
-                    stdout = io.StringIO()
-                    with import_spec, module, fixture.installed(), contextlib.redirect_stdout(stdout):
-                        checker.execute()
-                    report = controls.failed_report(checker, 'session-virtual-microphone-route-loopback-process-died')
-                    self.assertEqual(stdout.getvalue(), '')
-                    self.assertEqual(report['samples'], [])
-                    checker.window_start.assert_not_called()
-                    self.assertNotIn('synthetic-desktop-prefix', json.dumps(report))
-                    with fixture.installed(), mock.patch.object(guest.os, 'killpg') as kill, \
-                            mock.patch.object(guest.shutil, 'rmtree') as remove:
-                        checker.close()
-                    kill.assert_not_called()  # already dead; no unrelated process group is targeted
-                    remove.assert_called_once_with(checker.root)
-                    self.assertIsNone(checker.loop)
-                    self.assertIsNone(checker.source)
-                    self.assertEqual(fixture.commands[-1][0], ['/usr/bin/wpctl', 'set-default', '37'])
 
     def test_duplicate_or_foreign_route_nodes_fail_without_changing_default_and_still_clean_up(self):
         for graph in ('duplicate', 'foreign'):

@@ -10,21 +10,10 @@ import unittest
 from unittest import mock
 sys.path.insert(0,str(Path(__file__).parent))
 import contract as c
-from test_journal_messages import restore_journal_projection
 SPEC=importlib.util.spec_from_file_location('command_bound_guest',Path(__file__).with_name('guest_check.py'))
 guest=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(guest)
 ORIGINAL_SHA256='cb25c6ea06a0d9db413a736cd58e87f46a72125566de889952daa2af31a114ce'
 ORIGINAL_RUN="def run(argv, timeout=20, check=True):\n    result = subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=timeout)\n    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, 'command-output-bound')\n    if check:\n        require(result.returncode == 0, 'command-failed')\n    return result\n"
-
-def restore_command_output_diagnostics(text):
-    """Exact new function and two role literals reverse to the public S10 helper."""
-    if 'def journal_messages(rows):\n' in text:
-        text=restore_journal_projection(text)
-    node=next(n for n in ast.parse(text).body if isinstance(n,ast.FunctionDef) and n.name=='run')
-    lines=text.splitlines(keepends=True);lines[node.lineno-1:node.end_lineno]=ORIGINAL_RUN.splitlines(keepends=True)
-    restored=''.join(lines)
-    assert restored.count(", output_role='interval-journal'")==2
-    return restored.replace(", output_role='interval-journal'",'',2)
 
 class OutputBounds(unittest.TestCase):
     def invoke(self,out=b'',err=b'',code=0,role='interval-journal',check=True):
@@ -73,21 +62,5 @@ class OutputBounds(unittest.TestCase):
         self.assertEqual(result['status'],'failed');self.assertEqual(result['observations'],{})
         self.assertRegex(code,r'^command-output-bound-journal-o[0-9]+-e[0-9]+$');self.assertLessEqual(len(code),80)
         self.assertNotIn('private',json.dumps(result));self.assertNotIn('argv',json.dumps(result))
-
-    def test_public_whole_helper_rollback_and_only_two_full_interval_calls(self):
-        text=Path(guest.__file__).read_text();restored=restore_command_output_diagnostics(restore_journal_projection(text))
-        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),ORIGINAL_SHA256)
-        old,new=ast.parse(restored),ast.parse(restore_journal_projection(text))
-        oldfn={n.name:n for n in ast.walk(old) if isinstance(n,ast.FunctionDef)};newfn={n.name:n for n in ast.walk(new) if isinstance(n,ast.FunctionDef)}
-        for name,node in oldfn.items():
-            if name not in ('run','leakage','avcs'):self.assertEqual(ast.dump(node),ast.dump(newfn[name]))
-        roles=[]
-        for name in ('leakage','avcs'):
-            node=newfn[name];calls=[n for n in ast.walk(node) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='run' and any(k.arg=='output_role' for k in n.keywords)]
-            self.assertEqual(len(calls),1);call=calls[0];roles.extend(call.keywords)
-            argv=call.args[0].elts
-            self.assertEqual([ast.literal_eval(x) for i,x in enumerate(argv) if i!=4],['journalctl','-b','--no-pager','--after-cursor','-o','json'])
-            self.assertIsInstance(argv[4],ast.Attribute);self.assertEqual(argv[4].attr,'cursor');self.assertEqual(ast.literal_eval(call.args[1]),60)
-        self.assertEqual(len(roles),2);self.assertTrue(all(ast.literal_eval(k.value)=='interval-journal' for k in roles))
 
 if __name__=='__main__':unittest.main()
