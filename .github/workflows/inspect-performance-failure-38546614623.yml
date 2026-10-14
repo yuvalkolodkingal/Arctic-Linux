@@ -74,7 +74,13 @@ jobs:
           assert summary['original_evidence_uploaded'] is False
           receipt = screening['files']['unqualified-failure-phase.json']
           assert receipt['bytes'] == len(summary_raw)
-          assert receipt['sha256'] == hashlib.sha256(summary_raw).hexdigest()
+          summary_sha256 = hashlib.sha256(summary_raw).hexdigest()
+          assert receipt == {
+              'original_sha256': summary_sha256,
+              'uploaded_sha256': summary_sha256,
+              'bytes': len(summary_raw),
+              'redactions': 0,
+          }
           compact = json.dumps(summary, sort_keys=True, separators=(',', ':'))
           assert len(compact.encode()) <= 4096
           escaped = compact.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
