@@ -3,6 +3,7 @@ import contextlib
 import hashlib
 import importlib.util
 import io
+import json
 import os
 from pathlib import Path
 import re
@@ -45,11 +46,11 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
 
             def shot(_label):
                 Image.new('RGB', size).save(probe)
+                previous[0] = next(rows, previous[0])
                 return probe
 
             def ocr(*args, **kwargs):
                 self.ocr_arguments.append((args, kwargs))
-                previous[0] = next(rows, previous[0])
                 return types.SimpleNamespace(stdout=previous[0])
 
             vm = types.SimpleNamespace(
@@ -67,8 +68,91 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
                         vm, types.SimpleNamespace(console_screen=lambda _path: console),
                         root, self.nonce, self.secret)
                 except BaseException as error:
+                    self.retained = {p.name: p.read_bytes() for p in root.iterdir()
+                                     if p.name.startswith('installed-identity-challenge')}
                     return error, calls, probe.exists()
+                self.retained = {p.name: p.read_bytes() for p in root.iterdir()
+                                 if p.name.startswith('installed-identity-challenge')}
                 return proof, calls, probe.exists()
+
+    def test_two_exact_rows_never_bypass_the_full_three_row_consensus(self):
+        expected = D.installed_user_records(self.nonce)
+        for rows in (expected[:2], (expected[0], expected[1], expected[1])):
+            with self.subTest(rows=rows):
+                accepted, _ = D._identity_ocr_observation(('\n'.join(rows)).encode(), expected, True)
+                self.assertFalse(accepted)
+
+    def test_zero_exact_rows_can_only_pass_with_every_digit_correct_by_consensus(self):
+        expected = D.installed_user_records(self.nonce)
+        rows = list(expected)
+        for index, column in enumerate((2, 8, 15)):
+            digit = '0' if rows[index][column] != '0' else '1'
+            rows[index] = rows[index][:column] + digit + rows[index][column + 1:]
+        accepted, observation = D._identity_ocr_observation(('\n'.join(rows)).encode(), expected, True)
+        self.assertTrue(accepted)
+        self.assertEqual(observation, ('three', 'three', 'zero', 'true'))
+        # A column with three different digits has no consensus, even with two
+        # exact rows in other columns. A fourth numeric record also denies.
+        rows[1] = rows[1][:2] + ('2' if rows[0][2] != '2' else '3') + rows[1][3:]
+        rows[2] = rows[2][:2] + ('4' if rows[0][2] != '4' else '5') + rows[2][3:]
+        self.assertFalse(D._identity_ocr_observation(('\n'.join(rows)).encode(), expected, True)[0])
+        self.assertFalse(D._identity_ocr_observation(('\n'.join((*expected, expected[0]))).encode(), expected, True)[0])
+
+    def test_mismatch_keeps_at_most_three_original_failure_only_frames(self):
+        error, _, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', self.response(uid=0)])
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual(set(self.retained), {*D.IDENTITY_CHALLENGE_IMAGES, D.IDENTITY_CHALLENGE_METADATA})
+        raw = self.retained[D.IDENTITY_CHALLENGE_METADATA]
+        metadata = json.loads(raw)
+        self.assertIs(metadata['authentication'], False)
+        self.assertIs(metadata['release_acceptance'], False)
+        for name, record in zip(D.IDENTITY_CHALLENGE_IMAGES, metadata['captures']):
+            self.assertEqual(record['path'], name)
+            self.assertEqual(record['bytes'], len(self.retained[name]))
+            self.assertEqual(record['sha256'], hashlib.sha256(self.retained[name]).hexdigest())
+            self.assertEqual(record['size'], [1280, 720])
+        self.assertNotIn(self.nonce.encode(), raw)
+        self.assertNotIn(self.secret.encode(), raw)
+        self.assertNotIn(self.response(uid=0).strip(), raw)
+        guards = [args for args, _ in self.ocr_arguments[1:] if '-c' not in args[0]]
+        self.assertEqual(len(guards), 3)
+
+    def test_later_exact_consensus_removes_all_failure_only_members(self):
+        proof, _, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', self.response(uid=0), self.response()])
+        self.assertIs(type(proof), dict)
+        self.assertEqual(self.retained, {})
+
+    def test_private_input_in_unwhitelisted_guard_is_never_retained(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); probe = root / 'probe.png'
+            Image.new('RGB', (1280, 720)).save(probe)
+            with patch.object(D.subprocess, 'run', return_value=types.SimpleNamespace(stdout=self.secret.upper().encode())) as guard:
+                with self.assertRaisesRegex(RuntimeError, 'image withheld'):
+                    D.identity_challenge_capture(probe, root, self.secret, [], D.time.monotonic() + 20)
+            self.assertNotIn('-c', guard.call_args.args[0])
+            self.assertEqual({p.name for p in root.iterdir()}, {'probe.png'})
+
+    def test_changed_frame_and_foreign_metadata_generation_fail_closed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory); probe = root / 'probe.png'
+            Image.new('RGB', (1280, 720)).save(probe)
+            def change(*_args, **_kwargs):
+                Image.new('RGB', (1280, 720), 'red').save(probe)
+                return types.SimpleNamespace(stdout=b'')
+            with patch.object(D.subprocess, 'run', side_effect=change), self.assertRaises(RuntimeError):
+                D.identity_challenge_capture(probe, root, self.secret, [], D.time.monotonic() + 20)
+            self.assertFalse((root / D.IDENTITY_CHALLENGE_METADATA).exists())
+            captures = []
+            with patch.object(D.subprocess, 'run', return_value=types.SimpleNamespace(stdout=b'')):
+                D.identity_challenge_capture(probe, root, self.secret, captures, D.time.monotonic() + 20)
+                metadata = root / D.IDENTITY_CHALLENGE_METADATA
+                foreign = root / 'foreign.json'; foreign.write_bytes(metadata.read_bytes())
+                os.replace(foreign, metadata)
+                with self.assertRaisesRegex(RuntimeError, 'ownership differs'):
+                    D.identity_challenge_capture(probe, root, self.secret, captures, D.time.monotonic() + 20)
+                with self.assertRaisesRegex(RuntimeError, 'ownership differs'):
+                    D.discard_identity_challenges(root, captures)
+            self.assertTrue(metadata.exists())
 
     def test_command_cannot_contain_its_exact_response(self):
         command = D.installed_user_command(self.nonce)

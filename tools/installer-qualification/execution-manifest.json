@@ -5,11 +5,11 @@
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
-    "tools/installer-qualification/driver.py": "8f6b145ab4492d26a738844811491aafc8a7485f26f95e556db5fc34bc85a552",
+    "tools/installer-qualification/driver.py": "6aba7842d48d250d4588aa119bbcf8934233e15640be1abf82d4f92d05f2b9e4",
     "tools/installer-qualification/evidence.py": "de5e491879b457414965cc9ad81051d622a50d3c9306cebd77ae11107642564d",
     "tools/installer-qualification/guest.py": "18e1ddd54a39195a2a78dfb45d5308207932e3d3b3f071809fd42e85d34fd93c",
     "tools/installer-qualification/run-live.sh": "7e2eb556ce49ecda84d464a814179ffccf96d715202607ca441c74ae27950ec9",
-    "tools/installer-qualification/runner.py": "2811eab95c9d4588080c3bf98c1b83e00fab02c2acfcf8cceb1b0ef888083fa9",
+    "tools/installer-qualification/runner.py": "3bdcab28028f66c1b4b457e81206b4b9155266afef08cb92f55a305605b250de",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
@@ -34,6 +34,6 @@
     "producer_mode": "frozen-external-paired-v1",
     "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false
 }

@@ -23,6 +23,29 @@ steps/InstallStep.qml steps/KeyboardStep.qml steps/NetworkStep.qml steps/StepPag
 steps/WelcomeStep.qml steps/qmldir'''.split())
 
 
+def project_security(value):
+    """Export verified safe telemetry without inspecting the private audit interval."""
+    fields = {'selinux', 'audit', 'observed_new_avcs', 'audit_enabled', 'scope'}
+    if not (type(value) is dict and all(type(key) is str for key in value)
+            and set(value) in (fields, fields | {'audit_interval'})):
+        raise RuntimeError('active security telemetry projection differs')
+    audit = value['audit']
+    if not (type(audit) is dict and all(type(key) is str for key in audit)
+            and set(audit) == {'enabled', 'lost'}
+            and type(audit['enabled']) is int and audit['enabled'] in (0, 1, 2)
+            and type(audit['lost']) is int and audit['lost'] >= 0
+            and type(value['selinux']) is str and value['selinux'] == 'Enforcing'
+            and type(value['observed_new_avcs']) is int and value['observed_new_avcs'] == 0
+            and type(value['audit_enabled']) is bool
+            and value['audit_enabled'] is (audit['enabled'] in (1, 2))
+            and type(value['scope']) is str and value['scope'] ==
+            'journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit'):
+        raise RuntimeError('active security telemetry projection differs')
+    return dict(selinux=value['selinux'], audit=dict(enabled=audit['enabled'], lost=audit['lost']),
+                observed_new_avcs=value['observed_new_avcs'], audit_enabled=value['audit_enabled'],
+                scope=value['scope'])
+
+
 def ram_attribute(path, limit=4096):
     """Bounded nofollow read; sysfs attributes do not report content length."""
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -545,7 +568,7 @@ def installer_type(G):
                 report['cleanup'] = self.cleanup(); errors.extend(report['cleanup']['errors'])
                 try:
                     G.require(security is not None, 'active security interval absent')
-                    report['security'] = security.finish()
+                    report['security'] = project_security(security.finish())
                 except BaseException as exc:
                     phase = ('security-init' if security is None else
                              G.security_interval_diagnostic(exc, self.native))

@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -290,6 +291,62 @@ def verify(args, execution):
     return manifest, iso
 
 
+def preserve_identity_failure(vm, target):
+    """Retain only the exact bounded, guarded failure-only physical inventory."""
+    names = _driver.IDENTITY_CHALLENGE_IMAGES
+    metadata_name = _driver.IDENTITY_CHALLENGE_METADATA
+    found = {path.name for path in vm.iterdir() if path.name.startswith('installed-identity-challenge')}
+    if not found:
+        return
+    C.require(metadata_name in found, 'Installed identity diagnostic metadata absent')
+    raw, metadata_generation = _driver.identity_diagnostic_read(vm / metadata_name, 8192)
+    value = E.strict_json(raw)
+    C.require(type(value) is dict and set(value) == {'schema', 'status', 'authentication', 'release_acceptance', 'captures'} and
+              type(value['schema']) is str and value['schema'] == 'arctic-installed-identity-challenge-failure-v1' and
+              type(value['status']) is str and value['status'] == 'failure-observation-only' and
+              value['authentication'] is False and value['release_acceptance'] is False and
+              type(value['captures']) is list and 1 <= len(value['captures']) <= 3,
+              'Installed identity diagnostic public fields differ')
+    expected = {metadata_name, *names[:len(value['captures'])]}
+    C.require(found == expected and not os.path.lexists(vm / 'installed-boot.json'),
+              'Installed identity diagnostic failure inventory differs')
+    images = []
+    for index, record in enumerate(value['captures']):
+        C.require(type(record) is dict and set(record) == {'path', 'bytes', 'sha256', 'size',
+                    'post_command', 'pre_sudo', 'private_input_guard_passed'} and
+                  type(record['path']) is str and record['path'] == names[index] and
+                  type(record['bytes']) is int and 0 < record['bytes'] <= 8 * 1024 * 1024 and
+                  type(record['sha256']) is str and re.fullmatch('[0-9a-f]{64}', record['sha256']) and
+                  type(record['size']) is list and len(record['size']) == 2 and
+                  all(type(number) is int for number in record['size']) and record['size'] == [1280, 720] and
+                  record['post_command'] is True and record['pre_sudo'] is True and
+                  record['private_input_guard_passed'] is True,
+                  'Installed identity diagnostic capture fields differ')
+        pixels, generation = _driver.identity_diagnostic_read(vm / names[index], 8 * 1024 * 1024)
+        C.require(generation[3] == metadata_generation[3] and len(pixels) == record['bytes'] and
+                  hashlib.sha256(pixels).hexdigest() == record['sha256'],
+                  'Installed identity diagnostic original pixels differ')
+        from PIL import Image
+        with Image.open(io.BytesIO(pixels)) as image:
+            C.require(image.format == 'PNG' and image.size == (1280, 720),
+                      'Installed identity diagnostic physical dimensions differ')
+            image.verify()
+        images.append((names[index], pixels, generation))
+    # Validate the complete inventory before retaining any member. The existing
+    # workflow must screen all original bytes before any artifact is uploaded.
+    C.require({path.name for path in vm.iterdir() if path.name.startswith('installed-identity-challenge')} == found,
+              'Installed identity diagnostic inventory changed')
+    _driver.identity_diagnostic_read(vm / metadata_name, 8192, metadata_generation)
+    for name, pixels, generation in images:
+        current, _ = _driver.identity_diagnostic_read(vm / name, 8 * 1024 * 1024, generation)
+        C.require(current == pixels, 'Installed identity diagnostic original pixels changed')
+    for name, pixels, _ in images:
+        with (target / name).open('xb') as stream:
+            stream.write(pixels)
+    with (target / metadata_name).open('xb') as stream:
+        stream.write(raw)
+
+
 def preserve_host(vm, target, active=False):
     target.mkdir()
     for name in ('host-execution.json', 'installer-host-transitions.json',
@@ -306,6 +363,7 @@ def preserve_host(vm, target, active=False):
             else:
                 shutil.copyfile(path, target / name)
     if active:
+        preserve_identity_failure(vm, target)
         for name in ('installed-boot.json', 'installed-getty-password.png', 'installed-sudo-password.png'):
             path = vm / name
             if path.is_file() and not path.is_symlink():

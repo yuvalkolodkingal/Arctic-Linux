@@ -23,8 +23,8 @@ BACKEND_OBSERVER_ADDITIONS = (
 
 INSTALLED_IDENTITY_START = b"IDENTITY_MARKERS = ('2', '4', '6')\n"
 INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
-INSTALLED_IDENTITY_BYTES = 10165
-INSTALLED_IDENTITY_SHA256 = '677d82f7ce661ad7c4696934274894d0dbc6915abc9cfb2954282b2745a43022'
+INSTALLED_IDENTITY_BYTES = 16912
+INSTALLED_IDENTITY_SHA256 = '801fcfa2ea92d5367955bd3f0d30e8784f848ecf86d7622334c2b3500006a11e'
 IDENTITY_OBSERVER_ADDITIONS = (
     b'''_IDENTITY_OBSERVATION_TOKEN = object()
 IDENTITY_OBSERVATION_LABELS = (
@@ -118,6 +118,10 @@ def restore_installed_proof(driver):
     if len(block) != INSTALLED_IDENTITY_BYTES or hashlib.sha256(block).hexdigest() != INSTALLED_IDENTITY_SHA256:
         raise AssertionError('Installed identity block bytes differ')
     driver = driver[:start] + driver[end:]
+    for addition in (b'import io\n', b'import stat\n'):
+        if driver.count(addition) != 1:
+            raise AssertionError('Installed identity failure-export import differs')
+        driver = driver.replace(addition, b'', 1)
     for current, original in INSTALLED_PROOF_REPLACEMENTS:
         if driver.count(current) != 1:
             raise AssertionError('Expected one exact installed proof replacement')

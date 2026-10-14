@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import re
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -401,6 +403,9 @@ def ocr_provenance():
 IDENTITY_MARKERS = ('2', '4', '6')
 IDENTITY_TOKEN_DIGITS = 19
 IDENTITY_RECORDS = 3
+IDENTITY_CHALLENGE_IMAGES = tuple('installed-identity-challenge-' + str(index) + '.png'
+                                  for index in range(IDENTITY_RECORDS))
+IDENTITY_CHALLENGE_METADATA = 'installed-identity-challenges.json'
 
 
 def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual'):
@@ -489,9 +494,8 @@ def _identity_ocr_observation(stdout, expected, sent):
     require(all(record[1:] == expected_response for record in expected) and
             tuple(record[0] for record in expected) == IDENTITY_MARKERS,
             'installed user identity records differ')
-    accepted = sent and len(numeric) <= IDENTITY_RECORDS and len(marked) <= IDENTITY_RECORDS and \
-        len({line[0] for line in marked}) == len(marked) and \
-        (2 <= len(exact) <= IDENTITY_RECORDS or consensus == expected_response)
+    accepted = sent and len(numeric) == len(marked) == IDENTITY_RECORDS and \
+        {line[0] for line in marked} == set(IDENTITY_MARKERS) and consensus == expected_response
     return accepted, observation
 
 
@@ -499,6 +503,116 @@ def _identity_mismatch_error(observation):
     error = RuntimeError('installed user identity response differs')
     error._arctic_installer_identity_observation = (_IDENTITY_OBSERVATION_TOKEN, *observation)
     return error
+
+
+def identity_diagnostic_read(path, bound, generation=None):
+    """Read a bounded unchanged single-link regular file without following links."""
+    path = Path(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    stamp = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                          info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    try:
+        before = os.fstat(fd)
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and not (before.st_mode & 0o022) and
+                0 < before.st_size <= bound, 'installed identity diagnostic file differs')
+        require(generation is None or stamp(before) == generation,
+                'installed identity diagnostic ownership differs')
+        chunks, remaining = [], before.st_size + 1
+        while remaining:
+            chunk = os.read(fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk); remaining -= len(chunk)
+        raw = b''.join(chunks)
+        require(len(raw) == before.st_size and stamp(before) == stamp(os.fstat(fd)) == stamp(path.lstat()),
+                'installed identity diagnostic file changed')
+        return raw, stamp(before)
+    finally:
+        os.close(fd)
+
+
+def identity_challenge_metadata(captures):
+    return dict(schema='arctic-installed-identity-challenge-failure-v1', status='failure-observation-only',
+                authentication=False, release_acceptance=False, captures=[entry[0] for entry in captures])
+
+
+def identity_challenge_capture(path, out, private_password, captures, deadline):
+    """Keep bounded original post-command pixels; never authorize from them."""
+    require(type(captures) is list and len(captures) < IDENTITY_RECORDS,
+            'installed identity diagnostic inventory differs')
+    require(type(private_password) is str and re.fullmatch('[a-z0-9]{32}', private_password),
+            'installed identity private-input guard differs')
+    path, out = Path(path), Path(out)
+    metadata = out / IDENTITY_CHALLENGE_METADATA
+    if captures:
+        prior, _ = identity_diagnostic_read(metadata, 8192, captures[-1][2])
+        require(json.loads(prior) == identity_challenge_metadata(captures),
+                'installed identity diagnostic inventory differs')
+    else:
+        require(not any(os.path.lexists(out / name) for name in (*IDENTITY_CHALLENGE_IMAGES,
+                    IDENTITY_CHALLENGE_METADATA, IDENTITY_CHALLENGE_METADATA + '.next')),
+                'installed identity diagnostic output must be unused')
+    raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
+    require(generation[3] == os.geteuid(), 'installed identity diagnostic ownership differs')
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as image:
+        require(image.format == 'PNG' and image.size == (1280, 720),
+                'installed identity diagnostic physical dimensions differ')
+        image.verify()
+    remaining = deadline - time.monotonic()
+    require(remaining > 0, 'installed user identity deadline exceeded')
+    # Numeric-whitelisted authentication OCR cannot guard private input. Guard
+    # the same unchanged original physical frame without any whitelist.
+    guard = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                           capture_output=True, timeout=min(10, remaining), check=True)
+    require(type(guard.stdout) is bytes and len(guard.stdout) <= 65536 and
+            private_password not in guard.stdout.decode().lower(),
+            'private input unexpectedly appeared in console; image withheld')
+    checked, _ = identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+    require(checked == raw and time.monotonic() < deadline,
+            'installed user identity deadline exceeded')
+    name = IDENTITY_CHALLENGE_IMAGES[len(captures)]
+    destination = out / name
+    # These screened nonsecret pixels, like existing QEMU captures, must be
+    # readable by the outer hosted runner after the root container exits.
+    with os.fdopen(os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        stream.write(raw)
+    _, image_generation = identity_diagnostic_read(destination, 8 * 1024 * 1024)
+    record = dict(path=name, bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(), size=[1280, 720],
+                  post_command=True, pre_sudo=True, private_input_guard_passed=True)
+    pending = captures + [(record, image_generation, None)]
+    temporary = out / (IDENTITY_CHALLENGE_METADATA + '.next')
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'w') as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        json.dump(identity_challenge_metadata(pending), stream, sort_keys=True, allow_nan=False); stream.write('\n')
+    if captures:
+        identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    else:
+        require(not os.path.lexists(metadata), 'installed identity diagnostic ownership differs')
+    os.replace(temporary, metadata)
+    _, metadata_generation = identity_diagnostic_read(metadata, 8192)
+    captures.append((record, image_generation, metadata_generation))
+
+
+def discard_identity_challenges(out, captures):
+    """Successful authentication cannot export failure-only diagnostic members."""
+    if not captures:
+        return
+    metadata = Path(out) / IDENTITY_CHALLENGE_METADATA
+    raw, _ = identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    require(json.loads(raw) == identity_challenge_metadata(captures),
+            'installed identity diagnostic cleanup inventory differs')
+    for record, generation, _ in captures:
+        raw, _ = identity_diagnostic_read(Path(out) / record['path'], 8 * 1024 * 1024, generation)
+        require(hashlib.sha256(raw).hexdigest() == record['sha256'],
+                'installed identity diagnostic cleanup image differs')
+    for record, generation, _ in captures:
+        path = Path(out) / record['path']
+        identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+        path.unlink()
+    identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    metadata.unlink()
 
 
 def wait_installed_graphical_login(vm, vmtest):
@@ -537,6 +651,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     sent_after_exact_prompt = False
     greeting_exit_sent = False
     mismatch_observation = None
+    challenge_captures = []
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
@@ -555,11 +670,14 @@ def console_user_identity(vm, startup, out, nonce, private_password):
             with Image.open(path) as image:
                 require(image.size == (1280,720), 'installed prompt physical dimensions differ')
             require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+            discard_identity_challenges(out, challenge_captures)
             Path(path).unlink()
             return dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=nonce,
                         username='arcticqual', uid=1000,
                         observed_line_sha256=hashlib.sha256(('\n'.join(expected)).encode('ascii')).hexdigest(),
                         observed_ns=time.monotonic_ns())
+        if sent and observation[:3] != ('zero', 'zero', 'zero') and len(challenge_captures) < IDENTITY_RECORDS:
+            identity_challenge_capture(path, out, private_password, challenge_captures, deadline)
         if not sent:
             text = result.stdout.decode()
             require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
