@@ -65,9 +65,11 @@ that file. VoxType writes its native state to `$XDG_RUNTIME_DIR/voxtype/state`.
 
 ## Recording and recovery
 
-Mango invokes the official commands directly:
+Mango uses a small, transcript-free readiness helper for activation and the
+official VoxType command for cancellation:
 
-- `Super + Ctrl + X` runs `voxtype record toggle`;
+- `Super + Ctrl + X` runs `arctic-dictation-toggle`, which checks the
+  sanitized status and then runs `voxtype record toggle`;
 - `Super + Ctrl + Backspace` runs `voxtype record cancel`.
 
 Focus a writable text field before starting. The first shortcut begins
@@ -112,6 +114,9 @@ inherited overrides that could change the engine, model, hotkey, output or
 logging policy and starts VoxType with `-q` after removing `RUST_LOG`. Arctic's
 status adapter reads only native state and fixed failure prefixes; it never
 copies raw journal messages into the UI. Transcript notifications are disabled.
+The service sandbox permits only local Unix sockets, which VoxType needs for
+Wayland and PipeWire, and blocks Internet sockets even if a user edits the
+configuration or post-processing command.
 The final exact-image qualification must still inspect logs and notifications;
 source configuration alone is not evidence that every runtime path is clean.
 

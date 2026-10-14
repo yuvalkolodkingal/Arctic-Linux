@@ -34,7 +34,9 @@ exact sizes and SHA-256 hashes before publishing any file as ready.
 3. Speak, then press the same keys to stop, transcribe and insert.
 4. Press **`Super + Ctrl + Backspace`** to cancel without inserting.
 
-Mango invokes `voxtype record toggle` and `voxtype record cancel` directly.
+Mango runs the transcript-free `arctic-dictation-toggle` readiness helper,
+which invokes `voxtype record toggle` only when setup is ready. Cancel invokes
+`voxtype record cancel` directly.
 VoxType inserts through `wtype`; Arctic does not enable VoxType's input-device
 hotkey listener. The recording/transcribing indicator remains visible while the
 taskbar hides. Locking cancels active work and stops the daemon until unlock.
@@ -71,6 +73,10 @@ hotkey listening, transcript notifications, clipboard fallback, auto-submit and
 transcript post-processing. The user service runs with error-only logging and
 clears inherited settings that could change this policy. The status shown by
 Arctic contains fixed state and error text, never speech or a transcript.
+
+The service can use only local Unix sockets for Wayland and PipeWire. Internet
+sockets remain blocked even if the user configuration or post-processing
+command is changed.
 
 The final release qualification still audits the exact image's journal and
 notifications. A source configuration is not proof that every runtime path is
