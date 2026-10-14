@@ -66,7 +66,7 @@ file). That's what `Ctrl + Z` uses.
 | Bluetooth, sound | BlueZ and PipeWire directly | At once |
 | Updates | through `arctic-update` | At once |
 | Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
-| Dictation: Hebrew/English language and CPU/Vulkan preference | `~/.config/arctic/dictation.json` | Next recording; Retry setup asks for administrator authorization |
+| Dictation: Hebrew/English language and CPU/Vulkan preference | `~/.config/voxtype/config.toml`; verified system state under `/var/lib/arctic/dictation` | Next recording; Retry setup asks for administrator authorization |
 
 `settings.conf` is read after Arctic's own Mango files and **before** your
 `~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
@@ -80,24 +80,27 @@ resolution.
 
 ## Dictation
 
-Local Whisper dictation uses **Voxtype 1.1.0** and multilingual models for Hebrew and English.
-Online installation prepares it; offline installation queues first-boot setup. The page shows
-**not ready** until its verified engine, model, audio and insertion dependencies are available.
-**Set up / retry…** resumes setup; **Verify / repair setup…** checks a ready installation.
+Local dictation runs the official **VoxType 1.1.0** daemon with multilingual
+Whisper for Hebrew and English. Online installation prepares it; offline
+installation queues first-boot setup. The page remains **not ready** until its
+signed executable and pinned model pass exact size and SHA-256 checks.
 
-The fixed file totals are **506,181,191 bytes** (506.2 MB) for **Small compatibility**, or
-**678,117,115 bytes** (678.1 MB) for the **Turbo hardware profile**, plus missing system packages.
-The confirmation discloses the selected size before downloading. **Use compatibility model…**
-is available for CPU compatibility problems, and **Use recommended model…** returns to the
-hardware-selected profile. These are explicit choices, not automatic extra model downloads.
+The initial fixed download is **506,181,191 bytes** (506.2 MB) for
+baseline/Small or **593,194,923 bytes** (593.2 MB) for AVX2/Turbo Q5, plus any
+missing system packages. Optional Vulkan is selected separately and adds
+**66,342,968 bytes** (66.3 MB). The confirmation discloses the selected size
+before administrator authorization.
 
-Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop and insert.
-`Super + Ctrl + Backspace` cancels. Recording and transcription have a visible indicator;
-locking discards the result. Language choices are **Detect language**, **Hebrew · עברית** and
-**English**. CPU is available; the Turbo profile also supports Vulkan. A GPU error discards that
-recording, selects CPU for the session and asks you to record again. Audio stays local, and
-status, logs and notifications omit the transcript. See [Local dictation](Local-Dictation) for
-recovery, download integrity and measured limitations.
+Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop
+and insert. `Super + Ctrl + Backspace` cancels. The visible state comes from
+VoxType's native runtime file. Language choices are **Detect language**,
+**Hebrew · עברית** and **English**. Models load on demand to save idle memory.
+
+CPU is the recovery path after a Vulkan error, but it is never assumed or
+selected automatically: choose **CPU** and make a new recording. Audio remains
+local. The service suppresses known INFO-level transcript excerpts and disables
+transcript notifications; exact-image log and notification audits remain a
+release requirement. See [Local dictation](Local-Dictation).
 
 ## Appearance
 

@@ -256,8 +256,9 @@ There's no lock screen in the live session.
 Focus a text field, press `Super + Ctrl + X` to record, then press it again to stop and insert.
 `Super + Ctrl + Backspace` cancels without inserting. The recording/transcribing indicator stays
 visible while the taskbar is hidden. **Settings → Dictation** shows readiness, setup downloads,
-language and acceleration. Audio is processed locally; a GPU error discards the phrase and
-selects CPU for the next explicit recording. See [Local dictation](Local-Dictation).
+language and acceleration. Audio is processed locally. After a Vulkan error, select CPU in
+Settings and make a new recording; the failed phrase is not retried automatically. See
+[Local dictation](Local-Dictation).
 
 ## Capture and the clipboard
 

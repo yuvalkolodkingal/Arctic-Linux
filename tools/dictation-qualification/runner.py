@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Run separate online/offline dictation tests against one exact retained ISO.
+"""Run direct upstream VoxType tests against one exact retained ISO.
 
-This lane never installs a replacement controller, runtime or model from its
+This lane never installs a replacement integration, runtime or model from its
 data CD. Audio fixtures are public FLEURS samples. Only transcript-free checked
 reports are copied to upload evidence; raw harness logs remain private.
 """
@@ -64,16 +64,16 @@ TRUSTED_ERRORS = {
     'Indicator receipt/report binding differs': 'indicator-binding-differs',
     'Indicator screenshot bytes differ': 'indicator-image-differs'}
 TRUSTED_CONTRACT_ERRORS = frozenset({
-    'report-fields', 'report-schema-scope', 'report-context-boot', 'report-controller',
+    'report-fields', 'report-schema-scope', 'report-context-boot', 'report-upstream-pin',
     'report-profile-descriptor', 'report-hardware-fields', 'report-hardware-profile',
     'report-payload-pins', 'report-payload-pin-types', 'report-disk-type',
     'report-missing-duplicate-extra-gates', 'gate-fields', 'gate-status',
-    'gate-safe-code', 'gate-observation-fields', 'report-status-derived',
+    'gate-safe-code', 'gate-code-status', 'gate-observation-fields', 'report-status-derived',
     'image-dictation-gates-incomplete'})
 
 COLLECTOR_SETUP_STAGES = (
     'resource-limits', 'arguments', 'environment', 'context', 'source-integrity',
-    'controller', 'profile', 'hardware', 'report', 'desktop', 'workspace',
+    'integration', 'profile', 'hardware', 'report', 'desktop', 'workspace',
     'journal', 'audit', 'execution')
 COLLECTOR_ERROR_LABELS = (
     'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error')
@@ -326,6 +326,35 @@ def sha(path):
     return result.hexdigest()
 
 
+INTEGRATION_FILES = (
+    'packaging/dictation/arctic-dictation',
+    'packaging/dictation/arctic-dictation-toggle',
+    'packaging/dictation/voxtype',
+    'packaging/dictation/arctic-voxtype-setup',
+    'packaging/dictation/arctic-voxtype-host-profile',
+    'packaging/dictation/arctic-voxtype-configure',
+    'packaging/dictation/voxtype-release-key.asc',
+    'packaging/dictation/org.arcticlinux.dictation.policy',
+    'packaging/systemd/voxtype.service',
+    'packaging/systemd/arctic-dictation-setup.service',
+    'packaging/systemd/arctic-dictation-setup.timer',
+)
+
+
+def integration_sha(source):
+    """Bind the small Arctic setup/selector layer without treating it as a recorder."""
+    result = hashlib.sha256()
+    for name in INTEGRATION_FILES:
+        path = Path(source) / name
+        require(path.is_file() and not path.is_symlink(),
+                'Built source lacks direct VoxType integration file: ' + name)
+        encoded = name.encode()
+        result.update(len(encoded).to_bytes(4, 'big'))
+        result.update(encoded)
+        result.update(path.read_bytes())
+    return result.hexdigest()
+
+
 def write_json(path, value):
     Path(path).write_text(json.dumps(value, indent=2, sort_keys=True) + '\n')
 
@@ -344,7 +373,7 @@ def verify(args):
     expected_env = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
                         GITHUB_REPOSITORY='yuvalkolodkingal/Arctic-Linux',
                         GITHUB_REF='refs/heads/codex/qualification-dispatch-20261010',
-                        GITHUB_WORKFLOW='Candidate dictation image qualification',
+                        GITHUB_WORKFLOW='Candidate direct VoxType image qualification',
                         GITHUB_EVENT_NAME='push', GITHUB_RUN_ATTEMPT='1')
     require(all(os.environ.get(key) == value for key, value in expected_env.items()),
             'Requires reviewed disposable dictation Actions lane')
@@ -372,8 +401,7 @@ def verify(args):
     require(re.fullmatch('[0-9a-f]{64}', manifest['fixture_manifest_sha256']), 'Unpinned dictation fixtures')
     accuracy = load_module('dictation_accuracy_fixture_guard', ROOT / 'tools/dictation-accuracy/accuracy.py')
     accuracy.load_fixtures(args.fixtures, manifest['fixture_manifest_sha256'])
-    controller = args.source / 'packaging/dictation/dictation.py'
-    require(controller.is_file() and not controller.is_symlink(), 'Built source lacks installed dictation controller')
+    integration_sha(args.source)
     return manifest
 
 
@@ -402,14 +430,13 @@ def execute(argv, log, timeout, env, container):
 
 def context(manifest, installation_id, phase, source, hardware_profile):
     image = manifest['image']
-    return dict(schema='arctic-dictation-context-v2', phase=phase, hardware_profile=hardware_profile,
+    return dict(schema='arctic-voxtype-context-v3', phase=phase, hardware_profile=hardware_profile,
                 source_sha=image['source_sha'], iso_sha256=image['sha256'], iso_bytes=image['bytes'],
                 installation_id=installation_id, fixture_manifest_sha256=manifest['fixture_manifest_sha256'],
                 checker_sha256=sha(HERE / 'guest_check.py'), contract_sha256=sha(HERE / 'contract.py'),
                 accuracy_sha256=sha(ROOT / 'tools/dictation-accuracy/accuracy.py'),
                 pins_sha256=sha(ROOT / 'tools/dictation-accuracy/pins.json'),
-                child_exec_sha256=sha(source / 'packaging/dictation/child_exec.py'),
-                controller_sha256=sha(source / 'packaging/dictation/dictation.py'))
+                integration_sha256=integration_sha(source))
 
 
 def reports(vm, stage, ctx, evidence, contract, fixture_manifest=None):
@@ -464,7 +491,7 @@ def run(args):
     private = args.evidence.parent / ('dictation-private-' + args.hardware_profile)
     require(not private.exists(), 'Private dictation output must be unused')
     private.mkdir(mode=0o700)
-    state = dict(schema='arctic-dictation-execution-v2', hardware_profile=args.hardware_profile,
+    state = dict(schema='arctic-voxtype-execution-v3', hardware_profile=args.hardware_profile,
                  status='prepared', release_acceptance=False,
                  image=manifest['image'], execution_checker_head=os.environ['GITHUB_SHA'],
                  fixture_manifest_sha256=manifest['fixture_manifest_sha256'], reports={}, installations={}, indicators={})

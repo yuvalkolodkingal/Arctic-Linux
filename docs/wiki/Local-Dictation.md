@@ -1,118 +1,126 @@
 # Local dictation
 
-Arctic's dictation uses [Voxtype](https://github.com/peteonrails/voxtype) **1.1.0** and a
-multilingual Whisper model on your computer. It supports **Hebrew and English**. Setup downloads
-the software and model; your recordings are not sent to a transcription service.
+Arctic integrates the official [VoxType](https://github.com/peteonrails/voxtype)
+**1.1.0** daemon with a local multilingual Whisper model. It supports Hebrew and
+English. Audio is processed on your computer.
 
 ## Installation and readiness
 
-The replacement live image contains the small Arctic controller and its Settings integration,
-while the Voxtype executable and large model weights stay out of the image.
+The live image contains Arctic's setup, Settings and status integration. The
+VoxType executable and model weights stay out of the ISO.
 
-- **Online installation** downloads and verifies the selected engine/model profile in a bounded
-  setup attempt. A network, dependency or model failure does not fail the OS installation.
-- **Offline installation** saves a first-boot setup queue. The Done screen says dictation is
-  not ready; connect after booting the installed system to finish it.
-- **First boot** retries queued setup in the background, initially about 90–120 seconds after
-  boot and then about every 15 minutes after a failure. Login does not wait for the download.
-- **Settings → Dictation** shows readiness, progress and the next action. **Set up / retry…**
-  resumes setup; **Verify / repair setup…** checks a ready installation. Administrator
-  authorization is required for software/model setup.
+- **Online installation** downloads and verifies one CPU binary and one model
+  in a bounded, nonfatal setup attempt.
+- **Offline installation** saves a first-boot queue. Connect after installation;
+  the background timer retries without delaying login.
+- **Settings → Dictation** shows queued, downloading, ready and error states.
+  **Set up / retry…** or **Verify / repair setup…** requests administrator
+  authorization and safely resumes a partial download.
 
-**Ready** requires the verified model and executables, audio dependencies and text-insertion
-helpers. It does not promise that a particular microphone, GPU or text field will work.
+| Selected CPU path | Fixed app + model download |
+|---|---:|
+| Baseline + Whisper Small | 506,181,191 bytes (506.2 MB) |
+| AVX2 + Whisper Large v3 Turbo Q5 | 593,194,923 bytes (593.2 MB) |
 
-| Hardware profile | Fixed file download | Model and processing |
-|---|---:|---|
-| **Small compatibility** | 506,181,191 bytes (506.2 MB) | Multilingual Whisper Small; baseline CPU executable (x86-64-v2) |
-| **Turbo hardware profile** | 678,117,115 bytes (678.1 MB) | Multilingual Turbo Q5; AVX2 CPU and Vulkan, with a baseline executable retained |
-
-Missing system packages add to those totals. Setup selects one model; it does not download both
-in one attempt. A confirmation discloses the selected profile and download size. HTTPS, exact
-byte counts and complete SHA-256 checks are required before installation. Partial files can
-resume; an incomplete or mismatched file cannot become a ready model. A profile switch may
-briefly need disk space for both the old and replacement model.
-
-**Use compatibility model…** explicitly selects Small after a CPU compatibility problem.
-**Use recommended model…** returns to the hardware-selected profile. These require approval in
-the desktop's administrator dialog; a recording failure never downloads another model by itself.
+The modern path is used only after a conservative CPU capability check. Missing
+system packages add to these totals. Optional Vulkan acceleration is a separate
+**66,342,968-byte (66.3 MB)** download. Setup verifies upstream signatures,
+exact sizes and SHA-256 hashes before publishing any file as ready.
 
 ## Record and insert
 
-1. Focus the text field in the app where you want the words.
-2. Press **`Super + Ctrl + X`** to start recording.
-3. Speak, then press the same keys to stop and insert the transcription.
-4. Press **`Super + Ctrl + Backspace`** to cancel recording or transcription without inserting.
+1. Focus the text field where the words should go.
+2. Press **`Super + Ctrl + X`** to begin recording.
+3. Speak, then press the same keys to stop, transcribe and insert.
+4. Press **`Super + Ctrl + Backspace`** to cancel without inserting.
 
-The Recording/Transcribing indicator stays visible while the taskbar hides. With the bar visible,
-right-click its dictation pill to cancel; Settings also has **Cancel**. Stopping explicitly is
-required for insertion. A recording left running reaches its 60-second cap and is discarded.
-A transcription taking longer than 240 seconds is discarded with an actionable error.
+Mango runs the transcript-free `arctic-dictation-toggle` readiness helper,
+which invokes `voxtype record toggle` only when setup is ready. Cancel invokes
+`voxtype record cancel` directly.
+VoxType inserts through `wtype`; Arctic does not enable VoxType's input-device
+hotkey listener. The recording/transcribing indicator remains visible while the
+taskbar hides. Locking cancels active work and stops the daemon until unlock.
 
-In Settings choose **Detect language**, **Hebrew · עברית**, or **English**. Choosing one language
-can help with short phrases. Language detection and transcription both run locally.
+The 60-second recording limit stops and transcribes what was captured. There is
+no Arctic 240-second transcription timeout in the direct integration.
+
+Choose **Detect language**, **Hebrew · עברית**, or **English** in Settings.
+Constrained detection and transcription both run locally.
 
 ## Acceleration and recovery
 
-The Turbo profile can use **Vulkan** on supported hardware; **CPU** can be selected directly.
-Small uses its baseline CPU executable. Automatic hardware selection checks the CPU's actual
-features rather than assuming a new processor supports the optimized executable.
+CPU is selected after initial setup. Vulkan can be enabled explicitly on
+supported hardware; setup first runs a real local model check. If Vulkan later
+fails during inference, VoxType does not guarantee an automatic CPU retry. The
+failed phrase is not retranscribed: open **Settings → Dictation**, select
+**CPU**, and record again.
 
-| Problem | What happens and what to do |
+| Problem | What to do |
 |---|---|
-| **GPU initialization or inference fails** | That phrase is discarded. Arctic selects CPU for this session and asks you to record again explicitly; it does not retranscribe the failed recording. |
-| **Optimized CPU is incompatible** | The phrase is discarded. Choose **Use compatibility model…**, review its size and finish setup, then record again. |
-| **Model or dependency is missing** | Recording stays unavailable. Connect and use **Set up / retry…**. |
-| **Microphone is unavailable or muted** | Select and unmute the input in **Settings → Sound**, then record again. |
-| **Text cannot be inserted** | Focus a text field and try again. An app may reject Wayland virtual-keyboard insertion. |
-| **The screen locks** | Recording/transcription is cancelled; no result is inserted into the locked session. |
+| Setup is queued or a file is missing | Connect and choose **Set up / retry…**. |
+| Microphone cannot open | Select and unmute the input in **Settings → Sound**, then try again. |
+| Vulkan fails | Select **CPU**, then make a new recording. |
+| Text is not inserted | Focus a writable field and retry; the app may reject Wayland virtual-keyboard input. |
+| VoxType service is stopped | Open Dictation settings and repair or restart setup. |
 
-Mango runs the shortcuts. Text insertion uses Wayland `wtype`; Arctic does not grant broad access
-to input devices or use Voxtype's evdev hotkey listener.
+Models load on demand when recording begins and unload after transcription.
+This saves idle RAM and VRAM, with a short delay when a recording starts.
 
 ## Privacy
 
-Voxtype's info logging can contain transcript excerpts. Arctic sets `RUST_LOG=error`, disables
-transcription notifications, remote/streaming inference and upstream hotkey listening, and
-discards raw engine output. Status and error messages contain neither audio nor the transcript.
-Private runtime text files use mode 0600 and are removed after insertion, cancellation or
-recovery of a stopped controller. Completing a phrase does not press Enter automatically.
+Arctic fixes VoxType to local Whisper mode, disables remote inference, upstream
+hotkey listening, transcript notifications, clipboard fallback, auto-submit and
+transcript post-processing. The user service runs with error-only logging and
+clears inherited settings that could change this policy. The status shown by
+Arctic contains fixed state and error text, never speech or a transcript.
 
-## What has been measured
+The service can use only local Unix sockets for Wayland and PipeWire. Internet
+sockets remain blocked even if the user configuration or post-processing
+command is changed.
 
-[Candidate VM dictation tests](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38134898087)
-used five fixed public FLEURS recordings per language: **103 English reference words** and
-**100 Hebrew reference words**. The online-install and offline-recovery runs measured:
+The final release qualification still audits the exact image's journal and
+notifications. A source configuration is not proof that every runtime path is
+free of transcript excerpts.
 
-| Model | English word error rate | Hebrew word error rate, online / recovery |
-|---|---:|---:|
-| Small | 8/103 (7.8%) | 41/100 (41%) / 43/100 (43%) |
-| Turbo Q5 | 8/103 (7.8%) | 21/100 (21%) / 23/100 (23%) |
-
-On the two-vCPU test guest, the five English recordings (40.86 seconds of audio) took about
-**592–594 seconds with Small** or **367 seconds with Turbo**. The five Hebrew recordings
-(59.82 seconds of audio) took about **641–643 seconds with Small** or **391–392 seconds with
-Turbo**. Those totals include process/model startup and insertion; they are not pure inference
-benchmarks or speed predictions for your computer.
-
-The candidate exercised CPU inference, online setup, offline recovery, missing-model and
-microphone failures, cancellation, insertion, and a controlled GPU failure followed by a new CPU
-recording. Physical GPU acceleration and a real hardware microphone were not verified by that
-VM run. The small read-speech corpus does not establish general accuracy or parity with another
-Whisper implementation, and these candidate results do not qualify the new ISO for release.
-
-## Commands and further details
+## Commands and files
 
 ```sh
 arctic-dictation status
+arctic-dictation retry
 arctic-dictation set-language he        # auto, he or en
-arctic-dictation set-backend cpu        # auto, cpu or vulkan, as supported by the profile
-arctic-dictation toggle
-arctic-dictation cancel
-arctic-dictation retry                 # administrator authorization for setup
+arctic-dictation set-backend cpu        # cpu or vulkan
+voxtype record toggle
+voxtype record cancel
+voxtype status
 ```
 
-Each command emits status JSON, never speech. See [the pinned files and implementation details](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/DICTATION.md)
-and [official Voxtype documentation](https://voxtype.io/docs/). Report hardware problems with the
-selected profile/backend, sanitized status error, microphone/GPU details and the action that
-failed. Share private recordings or transcripts only when you deliberately choose to do so.
+The managed user config is `~/.config/voxtype/config.toml`; native runtime state
+is `$XDG_RUNTIME_DIR/voxtype/state`. Verified binaries and models are under
+`/opt/arctic/voxtype`, with setup state and a public verification receipt under
+`/var/lib/arctic/dictation`.
+
+See [the pinned files and implementation details](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/DICTATION.md)
+and the [official VoxType documentation](https://voxtype.io/docs/).
+
+## What has been measured
+
+Historical Fedora 44 measurements used official VoxType 1.1.0 binaries and five
+fixed FLEURS clips per language (103 English reference words and 100 Hebrew
+reference words):
+
+| Model | English WER | Hebrew WER |
+|---|---:|---:|
+| Small | 8/103 (7.8%) | 42/100 (42.0%) |
+| Turbo Q5 | 8/103 (7.8%) | 23/100 (23.0%) |
+
+This small read-speech sample used explicit language selection. It does not
+establish general accuracy, Whisper parity, microphone performance or speed on
+your hardware. An older candidate VM run also measured online/offline paths,
+but it exercised the retired Arctic runtime controller. Its service, installer,
+cancellation, GPU recovery and privacy results cannot qualify the new direct
+integration.
+
+The new image remains unqualified until exact-image tests pass for online and
+offline setup, Hebrew and English, CPU recovery after a controlled Vulkan
+failure, missing models, microphone failure, cancellation, insertion, locking
+and transcript leakage.

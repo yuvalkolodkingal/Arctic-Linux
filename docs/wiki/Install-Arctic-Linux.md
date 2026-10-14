@@ -230,8 +230,10 @@ Every app, section by section, and where each comes from: [Apps and software](Ap
 
 Local dictation's executable and large Whisper model are excluded from the live image. During
 online installation, a separate bounded setup attempt downloads and verifies them. The selected
-profile needs about **506.2 MB** (Small) or **678.1 MB** (Turbo), plus missing system packages.
-A failed download does not fail the OS installation; the Done screen shows the pending setup.
+CPU path needs exactly **506,181,191 bytes** (506.2 MB) for baseline/Small or
+**593,194,923 bytes** (593.2 MB) for AVX2/Turbo Q5, plus missing system packages. Optional Vulkan
+is a separate 66,342,968-byte download. A failed download does not fail the OS installation; the
+Done screen shows the pending setup.
 See [Local dictation](Local-Dictation) for readiness and recovery.
 
 ### Drivers

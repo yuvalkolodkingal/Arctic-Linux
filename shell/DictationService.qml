@@ -16,8 +16,8 @@ Singleton {
     property int probeRevision: 0
 
     function refresh() { snapshot.reload(); }
-    function toggle() { Quickshell.execDetached(['arctic-dictation', 'toggle']); }
-    function cancel() { Quickshell.execDetached(['arctic-dictation', 'cancel']); }
+    function toggle() { Quickshell.execDetached(['voxtype', 'record', 'toggle']); }
+    function cancel() { Quickshell.execDetached(['voxtype', 'record', 'cancel']); }
     function openSettings() { Quickshell.execDetached(['arctic-settings', 'dictation']); }
     function probeStatus() {
         if (probe.running) return;
@@ -27,11 +27,11 @@ Singleton {
 
     FileView {
         id: snapshot
-        path: Session.runtimeDir + '/arctic/dictation.json'
+        path: Session.runtimeDir + '/voxtype/state'
         watchChanges: true
         printErrors: false
         onFileChanged: reload()
-        onLoaded: { dictation.statusRevision++; dictation.status = Status.parse(text()); }
+        onLoaded: { dictation.statusRevision++; dictation.probeStatus(); }
         onLoadFailed: dictation.probeStatus()
     }
     Process {
@@ -45,7 +45,7 @@ Singleton {
     // Root setup changes readiness before a user recording creates the runtime snapshot.
     // Active polling also reconciles a stale recording file after a broker crash.
     Timer {
-        interval: dictation.active || dictation.status.state === 'downloading' || dictation.status.state === 'queued' ? 5000 : 60000
+        interval: dictation.active ? 1000 : dictation.status.state === 'downloading' || dictation.status.state === 'queued' ? 5000 : 3000
         running: true
         repeat: true
         onTriggered: dictation.probeStatus()

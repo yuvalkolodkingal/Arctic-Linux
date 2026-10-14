@@ -1,4 +1,4 @@
-// Dictation controls only the local controller. No transcript is displayed or notified here.
+// Settings controls upstream VoxType through its public commands. No transcript is displayed here.
 pragma ComponentBehavior: Bound
 import QtQuick
 import ".."
@@ -14,11 +14,7 @@ Page {
     readonly property bool downloading: status.state === 'downloading'
     readonly property bool canConfigure: !DictationService.active && !DictationService.busy
     onShown: DictationService.refresh()
-    function prepare(action) {
-        if (!['retry', 'compatibility-setup', 'recommended-setup'].includes(action)) return;
-        setupDialog.setupAction = action;
-        setupDialog.open();
-    }
+    function prepare() { setupDialog.open(); }
 
     Timer {
         interval: page.settingUp || DictationService.active ? 1500 : 15000
@@ -51,17 +47,17 @@ Page {
                     width: parent.width
                     visible: page.status.state === 'downloading'
                     label: "Downloading and verifying"
-                    value: page.status.progress * 100
-                    valueText: Math.round(page.status.progress * 100) + "%"
+                    indeterminate: true
+                    valueText: ""
                 }
                 Row {
                     spacing: Theme.space2
                     ArButton {
                         text: page.status.ready ? "Verify / repair setup…" : page.status.state === 'downloading' ? "Setup running" : "Set up / retry…"
                         iconName: "download"
-                        enabled: page.canConfigure && Status.profileKnown(Status.setupTarget(page.status, 'retry')) && !page.downloading
+                        enabled: page.canConfigure && Status.profileKnown(page.status) && !page.downloading
                         gapColor: Theme.surfaceRaised
-                        onClicked: page.prepare('retry')
+                        onClicked: page.prepare()
                     }
                     ArButton {
                         text: "Refresh"
@@ -73,32 +69,7 @@ Page {
                 }
             }
         }
-        SettingRow {
-            searchKey: "dictation.profile"
-            title: "Hardware profile"
-            desc: Status.selectionDetail(page.status)
-            resettable: false
-            stacked: true
-            Row {
-                spacing: Theme.space2
-                ArButton {
-                    text: "Use compatibility model…"
-                    iconName: "download"
-                    visible: page.status.profile !== 'small-v2' || page.status.compatibility_required
-                    enabled: page.canConfigure && !page.downloading && Status.profileKnown(page.status.compatibility_profile)
-                    gapColor: Theme.surfaceRaised
-                    onClicked: page.prepare('compatibility-setup')
-                }
-                ArButton {
-                    text: "Use recommended model…"
-                    iconName: "download"
-                    visible: page.status.profile_selection === 'compatibility'
-                    enabled: page.canConfigure && !page.downloading && Status.profileKnown(page.status.recommended_profile)
-                    gapColor: Theme.surfaceRaised
-                    onClicked: page.prepare('recommended-setup')
-                }
-            }
-        }
+
     }
 
     Group {
@@ -137,7 +108,7 @@ Page {
             resettable: false
             ArSelect {
                 width: 220
-                enabled: page.canConfigure
+                enabled: page.status.ready && page.canConfigure
                 Component.onCompleted: combo.Accessible.name = "Dictation language"
                 model: [{ value: "auto", label: "Detect language" }, { value: "he", label: "Hebrew · עברית" }, { value: "en", label: "English" }]
                 value: page.status.language
@@ -151,7 +122,7 @@ Page {
             resettable: false
             ArSelect {
                 width: 220
-                enabled: page.canConfigure
+                enabled: page.status.ready && page.canConfigure
                 Component.onCompleted: combo.Accessible.name = "Dictation acceleration"
                 model: Status.backends(page.status)
                 value: page.status.backend
@@ -172,17 +143,12 @@ Page {
 
     ArDialog {
         id: setupDialog
-        property string setupAction: 'retry'
-        readonly property var descriptor: Status.setupTarget(page.status, setupAction)
-        title: setupAction === 'compatibility-setup' ? "Set up compatibility dictation?"
-            : setupAction === 'recommended-setup' ? "Use recommended dictation?" : "Prepare local dictation?"
-        body: (setupAction === 'compatibility-setup' ? "Use Whisper Small with baseline CPU for compatibility. "
-            : setupAction === 'recommended-setup' ? "Use the model selected for this computer's CPU capabilities. " : "")
-            + Status.setupConsent(descriptor)
+        title: "Prepare local dictation?"
+        body: Status.setupConsent(page.status)
         ArButton {
             text: "Download and verify"
-            enabled: page.canConfigure && !page.downloading && Status.profileKnown(setupDialog.descriptor)
-            onClicked: { setupDialog.close(); DictationService.run([setupDialog.setupAction]); }
+            enabled: page.canConfigure && !page.downloading && Status.profileKnown(page.status)
+            onClicked: { setupDialog.close(); DictationService.run(['retry']); }
         }
     }
 }

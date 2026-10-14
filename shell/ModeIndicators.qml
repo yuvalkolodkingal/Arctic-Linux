@@ -87,7 +87,7 @@ GridLayout {
     }
     Indicator {
         id: dictation
-        visible: DictationService.active || (!row.urgentOnly && (DictationService.status.ready || DictationService.status.state === 'error'))
+        visible: DictationService.active || (!row.urgentOnly && ['unavailable', 'queued', 'downloading', 'ready', 'error'].includes(DictationService.status.state))
         color: DictationService.recording ? Theme.errorSoft : DictationService.active ? Theme.infoSoft : 'transparent'
         iconName: DictationService.recording ? 'mic' : DictationService.active ? 'refresh' : DictationService.status.state === 'error' ? 'alert' : 'mic'
         iconColor: DictationService.recording ? Theme.error : DictationService.status.state === 'error' ? Theme.warning : Theme.inkMuted
@@ -98,7 +98,7 @@ GridLayout {
             : DictationService.active ? ' · click or right-click to cancel'
             : DictationService.status.ready ? ' · click to start (Super + Ctrl + X); right-click for Settings' : ' · click for Settings')
         onClicked: {
-            if (DictationService.status.state === 'error') DictationService.openSettings();
+            if (!DictationService.status.ready || DictationService.status.state === 'error') DictationService.openSettings();
             else if (DictationService.active && !DictationService.recording) DictationService.cancel();
             else DictationService.toggle();
         }

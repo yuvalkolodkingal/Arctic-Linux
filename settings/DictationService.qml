@@ -20,21 +20,21 @@ Singleton {
         command.running = true;
     }
     function refresh() { run(['status']); }
-    function cancel() { run(['cancel']); }
+    function cancel() { Quickshell.execDetached(['voxtype', 'record', 'cancel']); }
     Process {
         id: command
         command: ['arctic-dictation', 'status']
         stdout: StdioCollector {
             onStreamFinished: {
                 const snapshot = Status.parse(text);
-                if (text.trim() === '') snapshot.error = 'The dictation controller is unavailable. Install the current Arctic desktop updates, then try again.';
+                if (text.trim() === '') snapshot.error = 'The dictation setup adapter is unavailable. Install the current Arctic desktop updates, then try again.';
                 dictation.status = snapshot;
             }
         }
         onExited: code => {
             if (code !== 0 && dictation.status.state === 'unavailable') {
                 const snapshot = Status.parse('');
-                snapshot.error = 'The dictation controller is unavailable. Install the current Arctic desktop updates, then try again.';
+                snapshot.error = 'The dictation setup adapter is unavailable. Install the current Arctic desktop updates, then try again.';
                 dictation.status = snapshot;
             }
         }

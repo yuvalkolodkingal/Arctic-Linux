@@ -1,4 +1,4 @@
-name: Candidate dictation image qualification
+name: Candidate direct VoxType image qualification
 
 on:
   push:
@@ -93,7 +93,7 @@ jobs:
           python3 -B execution/tools/native-functional/fetch-image.py \
             --manifest execution/tools/dictation-qualification/execution-manifest.json \
             --out "$RUNNER_TEMP/arctic-dictation/inputs"
-      - name: Online installation, offline first boot, local sessions and offline recovery
+      - name: Direct upstream commands, online install, offline retry, local sessions and privacy
         run: |
           python3 -B execution/tools/dictation-qualification/runner.py \
             --source "$GITHUB_WORKSPACE/source" --inputs "$RUNNER_TEMP/arctic-dictation/inputs" \

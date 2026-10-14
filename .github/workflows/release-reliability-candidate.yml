@@ -1,0 +1,74 @@
+name: Exact-artifact release reliability
+
+# Pre-publication validation only: no build, tag, release, repository write or host disk access.
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/qualification-20261010.reliability]
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: exact-artifact-release-reliability
+  cancel-in-progress: false
+
+jobs:
+  blank-disk-install:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        firmware: [uefi, bios]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 100
+    env:
+      GH_TOKEN: ${{ github.token }}
+      FIRMWARE: ${{ matrix.firmware }}
+      EVIDENCE: ${{ runner.temp }}/arctic-reliability
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify marker-only activation and reviewed execution inventory
+        run: python3 -B tools/reliability/exact-artifact.py verify --manifest tools/reliability/exact-artifact-manifest.json
+      - name: Require KVM and bounded host resources
+        run: |
+          mkdir -p "$EVIDENCE/candidate" "$EVIDENCE/candidate-iso"
+          { df -h .; free -m; nproc; ls -l /dev/kvm; } > "$EVIDENCE/resources.txt" 2>&1
+          test -c /dev/kvm
+          sudo chmod a+rw /dev/kvm
+          test "$(df --output=avail -BG . | tail -1 | tr -dc '0-9')" -ge 25
+      - name: Fetch the verified exact candidate artifact
+        timeout-minutes: 15
+        run: python3 -B tools/native-functional/fetch-image.py --manifest tools/reliability/exact-artifact-manifest.json --out "$EVIDENCE/candidate-iso"
+      - name: Live boot, blank disk install, installed boot and smoke checks
+        timeout-minutes: 75
+        run: |
+          iso=("$EVIDENCE"/candidate-iso/iso/*.iso)
+          test "${#iso[@]}" -eq 1
+          timeout --signal=TERM --kill-after=60s 70m tools/test-install.sh \
+            --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
+            --boot-append '' --boot-network online --install-timeout 2400 \
+            --reliability-version 1.2 --reliability-app-profile lightweight \
+            --out "$EVIDENCE/candidate"
+      - name: Validate and bind candidate evidence
+        run: |
+          python3 -B tools/reliability/report.py "$EVIDENCE/candidate" --app-profile lightweight >> "$GITHUB_STEP_SUMMARY"
+          python3 -B tools/reliability/exact-artifact.py collect \
+            --manifest tools/reliability/exact-artifact-manifest.json \
+            --results "$EVIDENCE/candidate/results.json" \
+            --public-results "$EVIDENCE/results.json" \
+            --out "$EVIDENCE/execution.json" --firmware "$FIRMWARE"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: candidate-release-reliability-${{ matrix.firmware }}
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            ${{ runner.temp }}/arctic-reliability/execution.json
+            ${{ runner.temp }}/arctic-reliability/results.json

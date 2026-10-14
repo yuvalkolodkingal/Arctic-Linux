@@ -1,0 +1,80 @@
+#!/bin/sh
+# Write Arctic's canonical local-only VoxType config as the target user. This
+# helper must never run as root inside a user-controlled home directory.
+set -eu
+umask 077
+[ "$#" = 1 ] || exit 2
+case "$1" in
+    /opt/arctic/voxtype/models/ggml-small.bin|/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin) model=$1 ;;
+    *) exit 2 ;;
+esac
+[ "$(id -u)" -ne 0 ] || exit 77
+[ -n "${HOME:-}" ] && [ "${HOME#/}" != "$HOME" ] && [ -d "$HOME" ] && [ ! -L "$HOME" ] || exit 1
+base=$HOME/.config
+dir=$base/voxtype
+for path in "$base" "$dir"; do
+    if [ -e "$path" ] || [ -L "$path" ]; then
+        [ -d "$path" ] && [ ! -L "$path" ] || exit 1
+    else
+        mkdir -m 0700 "$path"
+    fi
+    chmod 0700 "$path"
+done
+config=$dir/config.toml
+backup=$dir/config.toml.pre-arctic-voxtype-v1
+if [ -e "$config" ] || [ -L "$config" ]; then
+    [ -f "$config" ] && [ ! -L "$config" ] || exit 1
+    if [ -e "$backup" ] || [ -L "$backup" ]; then
+        [ -f "$backup" ] && [ ! -L "$backup" ] || exit 1
+    else
+        cp -- "$config" "$backup"
+        chmod 0600 "$backup"
+    fi
+fi
+temporary=$(mktemp "$dir/config.toml.XXXXXX")
+trap 'rm -f -- "$temporary"' EXIT HUP INT TERM
+cat >"$temporary" <<CONFIG
+# Managed safe defaults for Arctic's local-only VoxType integration.
+engine = "whisper"
+state_file = "auto"
+
+[hotkey]
+enabled = false
+
+[audio]
+device = "default"
+sample_rate = 16000
+max_duration_secs = 60
+pause_media = false
+duck_media = false
+
+[whisper]
+mode = "local"
+model = "$model"
+language = ["he", "en"]
+translate = false
+on_demand_loading = true
+
+[text]
+filter_filler_words = false
+
+[output]
+mode = "type"
+driver_order = ["wtype"]
+fallback_to_clipboard = false
+auto_submit = false
+shift_enter_newlines = false
+wait_for_modifier_release = false
+
+[output.notification]
+on_recording_start = false
+on_recording_stop = false
+on_transcription = false
+
+[osd]
+enabled = false
+CONFIG
+chmod 0600 "$temporary"
+/usr/bin/voxtype --config "$temporary" config get whisper.language --json >/dev/null
+mv -f -T -- "$temporary" "$config"
+trap - EXIT HUP INT TERM

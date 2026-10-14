@@ -1,0 +1,307 @@
+#!/bin/bash
+# Fetch signed official VoxType 1.1.0 binaries plus one pinned local Whisper
+# model. This setup bootstrap never records audio or handles transcripts.
+set -euo pipefail
+umask 077
+readonly VERSION=1.1.0 SOURCE_COMMIT=e2638ca63f566f1682bcedc0abea8e4b25211c21
+readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.0
+readonly FINGERPRINT=9CCF7915B750CAE8B095ED1AA3FC9F33FD209279
+readonly SUMS_BYTES=2931 SUMS_SHA=3a2fa8661ac2dceeb0b52d4de85b71361de122a09298f3a85ca596ff0428fe4b
+readonly SUMS_SIG_BYTES=228 SUMS_SIG_SHA=63155a999853a5816912a586610ab831273d2d493ca8e08679f817a7e383d455
+readonly BASELINE_BYTES=18579224 BASELINE_SHA=1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
+readonly BASELINE_SIG_BYTES=228 BASELINE_SIG_SHA=41b8b14315f55c9ffb03ccb28e99dfd115c7e5a7e7953ef158213d38b4162ed8
+readonly AVX2_BYTES=19153728 AVX2_SHA=e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
+readonly AVX2_SIG_BYTES=228 AVX2_SIG_SHA=fdf2c35826ea7590a703993c5bdf69804672a5a0c76312e66bc4f14399d8f2ce
+readonly VULKAN_BYTES=66342968 VULKAN_SHA=db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2
+readonly VULKAN_SIG_BYTES=228 VULKAN_SIG_SHA=2b6b6afbaecd0c8adff536db4c5e0ea50b8781ad6f2643344e96c8cba2ea672a
+readonly SMALL_NAME=ggml-small.bin SMALL_BYTES=487601967 SMALL_SHA=1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
+readonly SMALL_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8bfee42b0e836fc3a9890373e5defc00a6/ggml-small.bin
+readonly TURBO_NAME=ggml-large-v3-turbo-q5_0.bin TURBO_BYTES=574041195 TURBO_SHA=394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin
+readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.0 MODELS=/opt/arctic/voxtype/models
+readonly CACHE=/var/cache/arctic/voxtype
+readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
+cleanup_tmp=
+cleanup() { [ -z "$cleanup_tmp" ] || rm -rf -- "$cleanup_tmp"; }
+fail() {
+    trap - ERR
+    mkdir -p "$STATE"
+    printf '%s\n' failed | install -m 0644 /dev/stdin "$STATE/setup.state"
+    printf '%s\n' setup | install -m 0644 /dev/stdin "$STATE/setup.error"
+    printf '%s\n' 'VoxType setup did not finish. Check the connection and retry in Settings.' >&2
+    exit 1
+}
+backend_fail() {
+    trap - ERR
+    mkdir -p "$STATE"
+    printf '%s\n' backend-vulkan | install -m 0644 /dev/stdin "$STATE/setup.error"
+    printf '%s\n' 'Vulkan could not initialize the verified local model. CPU remains selected.' >&2
+    exit 1
+}
+trap cleanup EXIT
+trap fail ERR
+usage() {
+    echo 'usage: arctic-voxtype-setup --install USER [--offline] | --resume | --retry | --backend cpu|vulkan | --disclosure' >&2
+    exit 2
+}
+acquire_setup_lock() {
+    local lockdir=/run/lock/arctic-voxtype-setup
+    # Lock the dedicated root-only directory itself, avoiding a writable lock
+    # file or symlink target. A short bounded wait keeps concurrent UI retries
+    # responsive while the first installer/timer operation continues intact.
+    if [[ -L $lockdir ]]; then
+        printf '%s\n' 'VoxType setup is already running or its lock is unsafe. Try again shortly.' >&2
+        exit 75
+    fi
+    install -d -m 0700 -o root -g root "$lockdir"
+    [[ ! -L $lockdir && -d $lockdir && $(stat -c %u:%a "$lockdir") == 0:700 ]] || {
+        printf '%s\n' 'VoxType setup is already running or its lock is unsafe. Try again shortly.' >&2
+        exit 75
+    }
+    exec 9<"$lockdir"
+    flock --exclusive --timeout 10 9 || {
+        printf '%s\n' 'VoxType setup is already running. Try again shortly.' >&2
+        exit 75
+    }
+}
+valid_user() { [[ "$1" =~ ^[a-z_][a-z0-9_-]*$ ]] && getent passwd "$1" >/dev/null; }
+user_from_uid() {
+    local uid=${PKEXEC_UID:-}
+    [[ "$uid" =~ ^[0-9]+$ ]] || return 1
+    getent passwd "$uid" | cut -d: -f1
+}
+queue_user() {
+    mkdir -p "$STATE"
+    printf '%s\n' "$1" | install -m 0600 /dev/stdin "$STATE/user"
+    printf '%s\n' queued | install -m 0644 /dev/stdin "$STATE/setup.state"
+    printf '%s\n' "$VERSION" | install -m 0644 /dev/stdin "$STATE/pending"
+}
+read_queued_user() {
+    local user=
+    [[ -r "$STATE/user" ]] || return 1
+    IFS= read -r user <"$STATE/user"
+    valid_user "$user" || return 1
+    printf '%s\n' "$user"
+}
+verify_file() {
+    [[ $(stat -c %s "$1") = "$2" ]]
+    printf '%s  %s\n' "$3" "$1" | sha256sum --check --status
+}
+download_pinned() {
+    local url=$1 dest=$2 bytes=$3 sha=$4 part="$2.part" rc=0
+    mkdir -p "$(dirname "$dest")"
+    if [ -f "$dest" ] && verify_file "$dest" "$bytes" "$sha"; then return; fi
+    # A complete but invalid partial cannot be resumed: curl would start at EOF
+    # and repeatedly receive 416. Discard it before the retryable transfer.
+    if [ -f "$part" ] && [ "$(stat -c %s "$part")" -ge "$bytes" ]; then rm -f -- "$part"; fi
+    curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 \
+        --speed-limit 1024 --speed-time 60 --continue-at - --output "$part" "$url" || rc=$?
+    if [ "$rc" != 0 ]; then
+        # A mirror may not support ranges. Preserve valid partials on ordinary
+        # network failures; restart only when curl reports range rejection.
+        [ "$rc" = 33 ] || return "$rc"
+        rm -f -- "$part"
+        curl --fail --location --retry 3 --retry-delay 2 --connect-timeout 20 \
+            --speed-limit 1024 --speed-time 60 --output "$part" "$url"
+    fi
+    verify_file "$part" "$bytes" "$sha"
+    mv -f -- "$part" "$dest"
+}
+verify_signature() {
+    local status
+    status=$(gpgv --status-fd 1 --keyring "$3" "$1" "$2" 2>/dev/null)
+    grep -Fq "[GNUPG:] VALIDSIG $FINGERPRINT " <<<"$status"
+}
+prepare_keyring() {
+    local shown
+    shown=$(gpg --batch --show-keys --with-colons "$KEY" | awk -F: '$1=="fpr" {print $10; exit}')
+    [[ "$shown" = "$FINGERPRINT" ]]
+    gpg --batch --yes --dearmor --output "$1" "$KEY"
+}
+asset_values() {
+    case "$1" in
+        baseline) printf '%s\n%s\n%s\n%s\n' "$BASELINE_BYTES" "$BASELINE_SHA" "$BASELINE_SIG_BYTES" "$BASELINE_SIG_SHA" ;;
+        avx2) printf '%s\n%s\n%s\n%s\n' "$AVX2_BYTES" "$AVX2_SHA" "$AVX2_SIG_BYTES" "$AVX2_SIG_SHA" ;;
+        vulkan) printf '%s\n%s\n%s\n%s\n' "$VULKAN_BYTES" "$VULKAN_SHA" "$VULKAN_SIG_BYTES" "$VULKAN_SIG_SHA" ;;
+        *) return 1 ;;
+    esac
+}
+install_asset() {
+    local variant=$1 tmp=$2 keyring=$3 name bytes sha sig_bytes sig_sha target legacy=
+    local -a values
+    name="voxtype-$VERSION-linux-x86_64-$variant"
+    mapfile -t values < <(asset_values "$variant")
+    bytes=${values[0]}; sha=${values[1]}; sig_bytes=${values[2]}; sig_sha=${values[3]}
+    grep -Fq "$sha  $name" "$tmp/SHA256SUMS.txt"
+    target="$DEST/voxtype-$variant"
+    case "$variant" in baseline) legacy="$DEST/voxtype-cpu" ;; avx2) legacy="$DEST/voxtype-cpu-avx2" ;; esac
+    if [[ -x $target ]] && verify_file "$target" "$bytes" "$sha"; then return; fi
+    if [[ -n $legacy && -f $legacy && ! -L $legacy && $(stat -c %u:%a "$legacy") == 0:755 ]] && verify_file "$legacy" "$bytes" "$sha"; then
+        cp --reflink=auto -- "$legacy" "$target.new"
+        chmod 0755 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
+        mv -f "$target.new" "$target"
+        return
+    fi
+    download_pinned "$RELEASE/$name" "$CACHE/$name" "$bytes" "$sha"
+    download_pinned "$RELEASE/$name.asc" "$CACHE/$name.asc" "$sig_bytes" "$sig_sha"
+    verify_signature "$CACHE/$name.asc" "$CACHE/$name" "$keyring"
+    install -D -m 0755 "$CACHE/$name" "$target.new"
+    mv -f "$target.new" "$target"
+}
+prepare_release_metadata() {
+    prepare_keyring "$2"
+    download_pinned "$RELEASE/SHA256SUMS.txt" "$CACHE/SHA256SUMS.txt" "$SUMS_BYTES" "$SUMS_SHA"
+    download_pinned "$RELEASE/SHA256SUMS.txt.asc" "$CACHE/SHA256SUMS.txt.asc" "$SUMS_SIG_BYTES" "$SUMS_SIG_SHA"
+    cp "$CACHE/SHA256SUMS.txt" "$1/SHA256SUMS.txt"
+    cp "$CACHE/SHA256SUMS.txt.asc" "$1/SHA256SUMS.txt.asc"
+    verify_file "$1/SHA256SUMS.txt" "$SUMS_BYTES" "$SUMS_SHA"
+    verify_file "$1/SHA256SUMS.txt.asc" "$SUMS_SIG_BYTES" "$SUMS_SIG_SHA"
+    verify_signature "$1/SHA256SUMS.txt.asc" "$1/SHA256SUMS.txt" "$2"
+}
+as_user() {
+    local user=$1 home=$2
+    shift 2
+    runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" "$@"
+}
+configure_user() {
+    local user=$1 home=$2 model=$3
+    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model"
+}
+
+reuse_legacy_model() {
+    local name=$1 bytes=$2 sha=$3 source="$DEST/$1" target="$MODELS/$1"
+    [[ -f $target ]] && verify_file "$target" "$bytes" "$sha" && return 0
+    [[ -f $source && ! -L $source && $(stat -c %u:%a "$source") == 0:644 ]] || return 1
+    verify_file "$source" "$bytes" "$sha" || return 1
+    mkdir -p "$MODELS"
+    cp --reflink=auto -- "$source" "$target.new"
+    chmod 0644 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
+    mv -f "$target.new" "$target"
+}
+
+cleanup_legacy_payload() {
+    # Keep the old controller payload usable until the direct receipt and marker
+    # are both durable. Exact compatible bytes were copied/reflinked above.
+    [[ -r $STATE/verified.json && -r $STATE/upstream-direct-v1 ]] || return
+    rm -f -- "$DEST/voxtype-cpu" "$DEST/voxtype-cpu-avx2" "$DEST/voxtype-vulkan" \
+        "$DEST/$SMALL_NAME" "$DEST/$TURBO_NAME"
+}
+
+setup_user() {
+    local user=$1 home tmp keyring cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha
+    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
+    printf '%s\n' downloading | install -m 0644 /dev/stdin "$STATE/setup.state"
+    tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
+    prepare_release_metadata "$tmp" "$keyring"
+    if [[ $(/usr/libexec/arctic/arctic-voxtype-host-profile) == turbo-q5-v3 ]]; then
+        cpu=avx2; profile=turbo-q5-v3; model_name=$TURBO_NAME; model_bytes=$TURBO_BYTES; model_sha=$TURBO_SHA; model_url=$TURBO_URL
+        binary_bytes=$AVX2_BYTES; binary_sha=$AVX2_SHA
+    else
+        cpu=baseline; profile=small-v2; model_name=$SMALL_NAME; model_bytes=$SMALL_BYTES; model_sha=$SMALL_SHA; model_url=$SMALL_URL
+        binary_bytes=$BASELINE_BYTES; binary_sha=$BASELINE_SHA
+    fi
+    install_asset "$cpu" "$tmp" "$keyring"
+    model_path="$MODELS/$model_name"
+    if ! reuse_legacy_model "$model_name" "$model_bytes" "$model_sha"; then
+        download_pinned "$model_url" "$CACHE/$model_name" "$model_bytes" "$model_sha"
+        install -D -m 0644 "$CACHE/$model_name" "$model_path.new"
+        mv -f "$model_path.new" "$model_path"
+    fi
+    configure_user "$user" "$home" "$model_path"
+    systemctl --global enable voxtype.service >/dev/null
+    printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+    receipt="$STATE/verified.json.new"
+    printf '{"integration":"upstream-direct-v1","version":"%s","source_commit":"%s","release_signing_fingerprint":"%s","user":"%s","profile":"%s","binary":"voxtype-%s","binary_bytes":%s,"binary_sha256":"%s","model_path":"%s","model":"%s","model_bytes":%s,"model_sha256":"%s","backend":"cpu"}\n' \
+        "$VERSION" "$SOURCE_COMMIT" "$FINGERPRINT" "$user" "$profile" "$cpu" "$binary_bytes" "$binary_sha" "$model_path" "${model_name#ggml-}" "$model_bytes" "$model_sha" >"$receipt"
+    chmod 0644 "$receipt"; mv -f "$receipt" "$STATE/verified.json"
+    printf '%s\n' upstream-direct-v1 | install -m 0644 /dev/stdin "$STATE/upstream-direct-v1"
+    cleanup_legacy_payload
+    rm -f "$STATE/pending" "$STATE/setup.error"; printf '%s\n' ready | install -m 0644 /dev/stdin "$STATE/setup.state"
+    uid=$(id -u "$user")
+    if [ -S "/run/user/$uid/bus" ]; then
+        runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+            systemctl --user daemon-reload
+        runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+            systemctl --user enable --now voxtype.service
+    fi
+}
+update_receipt_backend() {
+    python3 - "$STATE/verified.json" "$1" <<'PY'
+import json, os, sys, tempfile
+path, backend = sys.argv[1:]
+with open(path, encoding='utf-8') as src:
+    data = json.load(src)
+data['backend'] = backend
+fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
+with os.fdopen(fd, 'w', encoding='utf-8') as out:
+    json.dump(data, out, separators=(',', ':')); out.write('\n')
+os.chmod(tmp, 0o644); os.replace(tmp, path)
+PY
+}
+set_backend() {
+    local backend=$1 user tmp keyring uid home config fixture receipt
+    trap backend_fail ERR
+    user=$(user_from_uid) || usage; valid_user "$user" || usage; [[ -r "$STATE/verified.json" ]] || fail
+    case "$backend" in
+        cpu)
+            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            update_receipt_backend cpu
+            rm -f "$STATE/setup.error"
+            ;;
+        vulkan)
+            # Selection remains CPU until both the driver probe and real local
+            # model initialization through the official Vulkan binary pass.
+            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            update_receipt_backend cpu
+            tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
+            prepare_release_metadata "$tmp" "$keyring"; install_asset vulkan "$tmp" "$keyring"
+            command -v vulkaninfo >/dev/null
+            uid=$(id -u "$user"); home=$(getent passwd "$user" | cut -d: -f6)
+            runuser -u "$user" -- env HOME="$home" vulkaninfo --summary >/dev/null
+            config="$home/.config/voxtype/config.toml"; fixture="$tmp/silence.wav"
+            python3 - "$fixture" <<'PY'
+import struct, sys, wave
+with wave.open(sys.argv[1], 'wb') as out:
+    out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000)
+    out.writeframes(struct.pack('<16000h', *([0] * 16000)))
+PY
+            runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" RUST_LOG=error \
+                timeout 120 "$DEST/voxtype-vulkan" -q --config "$config" transcribe "$fixture" >/dev/null 2>&1
+            printf '%s\n' vulkan | install -m 0644 /dev/stdin "$STATE/backend"
+            receipt="$STATE/verified.json"
+            python3 - "$receipt" "$VULKAN_BYTES" "$VULKAN_SHA" <<'PY'
+import json, os, sys, tempfile
+path, size, sha = sys.argv[1:]
+with open(path, encoding='utf-8') as src:
+    data = json.load(src)
+data.update(backend='vulkan', vulkan_binary='voxtype-vulkan', vulkan_binary_bytes=int(size), vulkan_binary_sha256=sha)
+fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
+with os.fdopen(fd, 'w', encoding='utf-8') as out:
+    json.dump(data, out, separators=(',', ':')); out.write('\n')
+os.chmod(tmp, 0o644); os.replace(tmp, path)
+PY
+            rm -f "$STATE/setup.error"
+            ;;
+        *) usage ;;
+    esac
+}
+if [[ ${1:-} == --disclosure ]]; then
+    [[ $# = 1 ]] || usage
+    printf 'VoxType %s: compatibility CPU %s bytes; modern CPU %s bytes; optional Vulkan %s additional bytes.\n' \
+        "$VERSION" "$((BASELINE_BYTES + SMALL_BYTES))" "$((AVX2_BYTES + TURBO_BYTES))" "$VULKAN_BYTES"
+    exit 0
+fi
+[[ $EUID -eq 0 ]] || usage
+acquire_setup_lock
+case ${1:-} in
+    --install)
+        [[ $# = 2 || $# = 3 ]] || usage; valid_user "$2" || usage; queue_user "$2"
+        if [[ ${3:-} = --offline ]]; then exit 0; fi
+        [[ $# = 2 ]] || usage; setup_user "$2" ;;
+    --resume) [[ $# = 1 ]] || usage; setup_user "$(read_queued_user)" ;;
+    --retry)
+        [[ $# = 1 ]] || usage; retry_user=$(user_from_uid) || retry_user=$(read_queued_user)
+        valid_user "$retry_user" || usage; queue_user "$retry_user"; setup_user "$retry_user" ;;
+    --backend) [[ $# = 2 ]] || usage; set_backend "$2" ;;
+    *) usage ;;
+esac
