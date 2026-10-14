@@ -200,7 +200,7 @@ jobs:
           done
 
   units:
-    name: systemd units (updates and dictation setup)
+    name: systemd units (updates and dictation)
     runs-on: ubuntu-latest
     container: registry.fedoraproject.org/fedora:44
     steps:
@@ -212,6 +212,9 @@ jobs:
           # ExecStart= must exist for verify: install the command where the package puts it.
           install -m 0755 dotfiles/.local/bin/arctic-update /usr/bin/arctic-update
           install -m 0755 dotfiles/.local/bin/arctic-login-wallpaper /usr/bin/arctic-login-wallpaper
+          install -m 0755 packaging/dictation/voxtype /usr/bin/voxtype
+          install -Dpm 0755 packaging/dictation/arctic-voxtype-setup /usr/libexec/arctic/arctic-voxtype-setup
+          install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile /usr/libexec/arctic/arctic-voxtype-host-profile
           systemd-sysusers packaging/system/arctic-wallpaper.sysusers
           systemd-analyze verify --man=no packaging/systemd/arctic-login-wallpaper.service
           install -Dpm 0755 packaging/firstboot/arctic-firstboot /usr/libexec/arctic/arctic-firstboot
@@ -223,6 +226,7 @@ jobs:
             packaging/systemd/arctic-update-stage.timer packaging/systemd/arctic-update-restage.timer \
             packaging/systemd/arctic-flatpak-update.service packaging/systemd/arctic-flatpak-update.timer
           XDG_RUNTIME_DIR="$(mktemp -d)" systemd-analyze verify --user --man=no \
+            packaging/systemd/voxtype.service \
             packaging/systemd/user/arctic-flatpak-update.service \
             packaging/systemd/user/arctic-flatpak-update.timer
 

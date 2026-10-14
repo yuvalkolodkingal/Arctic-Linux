@@ -1,0 +1,21 @@
+#!/bin/sh
+# Select a verified official VoxType 1.1.0 binary. All runtime operations are
+# handled by that upstream binary; this launcher only chooses a host variant.
+set -eu
+lib=/opt/arctic/voxtype/1.1.0
+backend=cpu
+if [ -r /var/lib/arctic/dictation/backend ]; then
+    IFS= read -r selected < /var/lib/arctic/dictation/backend || :
+    [ "$selected" = vulkan ] && backend=vulkan
+fi
+if [ "$backend" = vulkan ] && [ -x "$lib/voxtype-vulkan" ]; then
+    exec "$lib/voxtype-vulkan" "$@"
+fi
+if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ] && [ -x "$lib/voxtype-avx2" ]; then
+    exec "$lib/voxtype-avx2" "$@"
+fi
+if [ -x "$lib/voxtype-baseline" ]; then
+    exec "$lib/voxtype-baseline" "$@"
+fi
+echo "VoxType is not ready. Open Settings -> Dictation to finish setup." >&2
+exit 69

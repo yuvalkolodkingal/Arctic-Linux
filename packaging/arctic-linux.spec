@@ -218,6 +218,13 @@ Requires:       arctic-fonts = %{version}-%{release}
 Requires:       arctic-logos = %{version}-%{release}
 Requires:       bash
 Requires:       python3
+Requires:       curl
+Requires:       gnupg2
+Requires:       libstdc++
+Requires:       pipewire-alsa
+Requires:       wtype
+Recommends:     vulkan-loader
+Recommends:     vulkan-tools
 # arctic-themegen: colours from wallpapers
 Requires:       python3-pillow
 # The unprivileged, D-Bus-activated shared login wallpaper publisher.
@@ -876,16 +883,17 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
 install -Dpm 0644 packaging/systemd/arctic-firstboot.timer %{buildroot}%{_unitdir}/arctic-firstboot.timer
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
-# Dictation ships only the controller. The installer/first-boot service fetches
-# the pinned Voxtype binaries and multilingual model after the live-root copy.
+# Dictation keeps large upstream binaries and models out of the live image. The
+# installer/first-boot bootstrap fetches and verifies them for the installed host.
 install -Dpm 0755 packaging/dictation/arctic-dictation %{buildroot}%{_bindir}/arctic-dictation
-install -Dpm 0755 packaging/dictation/arctic-dictation-setup %{buildroot}%{_libexecdir}/arctic/arctic-dictation-setup
-install -Dpm 0755 packaging/dictation/arctic-dictation-install %{buildroot}%{_libexecdir}/arctic/arctic-dictation-install
-install -Dpm 0644 packaging/dictation/dictation.py %{buildroot}%{_datadir}/arctic/dictation/dictation.py
-install -Dpm 0644 packaging/dictation/child_exec.py %{buildroot}%{_datadir}/arctic/dictation/child_exec.py
+install -Dpm 0755 packaging/dictation/voxtype %{buildroot}%{_bindir}/voxtype
+install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-setup
+install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
+install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
+install -Dpm 0644 packaging/systemd/voxtype.service %{buildroot}%{_userunitdir}/voxtype.service
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
 # accounts that already exist (a copy in the home directory would never change again):
@@ -1347,6 +1355,19 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# Direct-upstream dictation replaced the old Arctic runtime controller. Queue
+# an idempotent migration without removing the last working payload; the new
+# receipt marker is published only after every pinned file verifies.
+if [ ! -e %{_sharedstatedir}/arctic/dictation/upstream-direct-v1 ]; then
+  user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $6 ~ /^\/home\// { print $1; exit }')
+  if [ -n "$user" ]; then
+    install -d -m 0755 %{_sharedstatedir}/arctic/dictation
+    printf '%s\n' "$user" | install -m 0600 /dev/stdin %{_sharedstatedir}/arctic/dictation/user
+    printf '%s\n' 1.1.0 | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/pending
+    printf '%s\n' queued | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/setup.state
+    systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
+  fi
+fi
 # Migrate old boot-wanted download services to post-boot retries once. Do not stop a
 # currently running setup, and do not override later administrator timer choices.
 if [ ! -e %{_sharedstatedir}/arctic/.postboot-setup-timers ]; then
@@ -1561,12 +1582,14 @@ fi
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
 %{_bindir}/arctic-dictation
-%{_libexecdir}/arctic/arctic-dictation-setup
-%{_libexecdir}/arctic/arctic-dictation-install
+%{_bindir}/voxtype
+%{_libexecdir}/arctic/arctic-voxtype-setup
+%{_libexecdir}/arctic/arctic-voxtype-host-profile
 %{_datadir}/arctic/dictation/
 %{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 %{_unitdir}/arctic-dictation-setup.service
 %{_unitdir}/arctic-dictation-setup.timer
+%{_userunitdir}/voxtype.service
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer

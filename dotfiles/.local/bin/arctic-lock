@@ -15,15 +15,14 @@ if arctic-is-live 2>/dev/null; then
   exit 0
 fi
 
-# Mark locking and stop private audio before either lock implementation takes focus.
-# The controller produces status JSON only; never include it in a notification or log.
-if command -v arctic-dictation >/dev/null 2>&1; then
-  timeout 1s arctic-dictation lock >/dev/null 2>&1 || true
+# Cancel upstream recording, then stop the daemon so a queued start cannot win
+# while the compositor is acquiring the secure lock.
+if command -v voxtype >/dev/null 2>&1; then
+  timeout 1s voxtype record cancel >/dev/null 2>&1 || true
+  timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || true
 fi
-watch_dictation_unlock() {
-  if command -v arctic-dictation >/dev/null 2>&1; then
-    arctic-dictation watch-unlock >/dev/null 2>&1 &
-  fi
+start_dictation_after_unlock() {
+  systemctl --user start voxtype.service >/dev/null 2>&1 || true
 }
 
 if arctic-shell-ipc lock lock >/dev/null 2>&1; then
@@ -36,7 +35,7 @@ if arctic-shell-ipc lock lock >/dev/null 2>&1; then
 fi
 
 if pgrep -u "$UID" -x swaylock >/dev/null; then
-  watch_dictation_unlock
+  (while pgrep -u "$UID" -x swaylock >/dev/null; do sleep 1; done; start_dictation_after_unlock) &
   exit 0
 fi
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -58,14 +57,7 @@ if [[ -z "$img" || ! -f "$img" ]]; then
 fi
 args=()
 [[ -f "$img" ]] && args+=(-i "$img")
-# The controller supervises a foreground swaylock and returns after its --ready-fd confirms
-# the secure lock. It clears dictation's marker only after an actual successful unlock;
-# a crashed lock client cannot be mistaken for an unlocked compositor.
-if command -v arctic-dictation >/dev/null 2>&1; then
-  if timeout --kill-after=1s 15s arctic-dictation lock-fallback "${args[@]}" "$@" >/dev/null 2>&1; then
-    exit 0
-  fi
-fi
-# An unavailable optional controller must not prevent locking. This legacy fallback leaves
-# an existing dictation guard in place because its unlock outcome cannot be supervised.
-exec swaylock -f "${args[@]}" "$@"
+swaylock -f "${args[@]}" "$@"
+result=$?
+start_dictation_after_unlock
+exit "$result"

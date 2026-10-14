@@ -39,12 +39,12 @@ Scope {
             return;
         }
         if (root.showing || dictationGuard.running) return;
-        // The controller marks locking and cancels before a newly dispatched start can win.
+        // Cancel upstream VoxType before asking the compositor to lock.
         dictationGuard.running = true;
     }
     Process {
         id: dictationGuard
-        command: ['sh', '-c', 'if command -v arctic-dictation >/dev/null 2>&1; then timeout 1s arctic-dictation lock >/dev/null 2>&1; fi']
+        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 1s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; fi']
         // Optional dictation must never prevent the screen from locking.
         onExited: root.acquireLock()
     }
@@ -190,7 +190,7 @@ Scope {
             NotificationService.locked = false;
             root.password = '';
             root.state = 'idle';
-            Quickshell.execDetached(['arctic-dictation', 'unlock']);
+            Quickshell.execDetached(['systemctl', '--user', 'start', 'voxtype.service']);
             Quickshell.execDetached(['arctic-hook', 'unlock']);
         }
     }

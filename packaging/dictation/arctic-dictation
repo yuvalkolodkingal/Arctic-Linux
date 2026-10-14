@@ -1,2 +1,143 @@
 #!/bin/sh
-exec /usr/bin/python3 -I /usr/share/arctic/dictation/dictation.py "$@"
+# Arctic setup/readiness adapter. Recording and transcription commands are
+# intentionally absent: Mango and the shell invoke official VoxType directly.
+set -eu
+status() {
+    state=unavailable error= language=auto backend=cpu integrity_ready=false
+    if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ]; then
+        profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593194923
+    else
+        profile=small-v2; model=small; model_bytes=487601967; download_bytes=506181191
+    fi
+    [ -r /var/lib/arctic/dictation/backend ] && IFS= read -r backend </var/lib/arctic/dictation/backend || :
+    case "$backend" in cpu|vulkan) ;; *) backend=cpu ;; esac
+    if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r /var/lib/arctic/dictation/verified.json ]; then
+        receipt=/var/lib/arctic/dictation/verified.json
+        binary_path= model_path= binary_bytes=
+        if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt"; then
+            state=error
+            error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
+        elif grep -Fq '"profile":"small-v2"' "$receipt"; then
+            profile=small-v2; model=small; model_bytes=487601967; download_bytes=506181191
+            binary_path=/opt/arctic/voxtype/1.1.0/voxtype-baseline; binary_bytes=18579224
+            model_path=/opt/arctic/voxtype/models/ggml-small.bin
+        elif grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
+            profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593194923
+            binary_path=/opt/arctic/voxtype/1.1.0/voxtype-avx2; binary_bytes=19153728
+            model_path=/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin
+        else
+            state=error
+            error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
+        fi
+        if [ -n "$binary_path" ]; then
+            user_config=${XDG_CONFIG_HOME:-$HOME/.config}/voxtype/config.toml
+            if [ ! -x "$binary_path" ] || [ "$(stat -c %s "$binary_path" 2>/dev/null || true)" != "$binary_bytes" ]; then
+                state=error
+                error='The verified VoxType app is missing or damaged. Retry setup to repair it.'
+            elif [ ! -f "$model_path" ] || [ "$(stat -c %s "$model_path" 2>/dev/null || true)" != "$model_bytes" ]; then
+                state=error
+                error='The verified local Whisper model is missing or damaged. Retry setup to repair it.'
+            elif [ ! -r "$user_config" ]; then
+                state=error
+                error='Dictation is not prepared for this account. Retry setup to create its private VoxType configuration.'
+            elif [ "$backend" = vulkan ] && { [ ! -x /opt/arctic/voxtype/1.1.0/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.0/voxtype-vulkan 2>/dev/null || true)" != 66342968 ]; }; then
+                state=error
+                error='The verified Vulkan VoxType app is missing or damaged. Select CPU or retry Vulkan setup.'
+            else
+                integrity_ready=true
+            fi
+        fi
+        if [ "$integrity_ready" = true ]; then
+            upstream=$(voxtype status 2>/dev/null || true)
+            case "$upstream" in
+                idle) state=ready ;;
+                recording|transcribing) state=$upstream ;;
+                *) state=error; error='VoxType is installed but its user service is stopped. Start it in Dictation settings.' ;;
+            esac
+            configured=$(voxtype config get whisper.language 2>/dev/null || true)
+            case "$configured" in
+                he,en|en,he) language=auto ;;
+                he) language=he ;;
+                en) language=en ;;
+            esac
+            runtime=${XDG_RUNTIME_DIR:-/tmp}/arctic
+            mkdir -p -m 0700 "$runtime"
+            if [ "$state" = recording ] || [ "$state" = transcribing ]; then
+                rm -f "$runtime/voxtype-error"
+            else
+                recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
+                    --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
+                case "$recent" in
+                    *'Failed to start audio:'*|*'Failed to create audio capture:'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
+                    *'Transcription failed: Model not found:'*|*'Transcription failed: Failed to load model:'*) printf '%s\n' model >"$runtime/voxtype-error" ;;
+                    *'Transcription failed:'*) printf '%s\n' transcription >"$runtime/voxtype-error" ;;
+                    *'Output failed:'*) printf '%s\n' output >"$runtime/voxtype-error" ;;
+                esac
+                projected=; [ -r "$runtime/voxtype-error" ] && IFS= read -r projected <"$runtime/voxtype-error"
+                case "$projected:$backend" in
+                    microphone:*) state=error; error='VoxType could not open the microphone. Check the selected input and microphone permission, then try again.' ;;
+                    model:*) state=error; error='The local Whisper model could not be loaded. Retry setup to verify and repair it.' ;;
+                    transcription:vulkan) state=error; error='Vulkan transcription failed. Select CPU acceleration in Dictation settings, then try again.' ;;
+                    transcription:*) state=error; error='Local transcription failed. Try a shorter recording; if it repeats, retry setup.' ;;
+                    output:*) state=error; error='VoxType could not insert text. Focus a writable text field; the app may reject Wayland text insertion.' ;;
+                esac
+            fi
+        fi
+        if [ -r /var/lib/arctic/dictation/setup.error ]; then
+            setup_error=; IFS= read -r setup_error </var/lib/arctic/dictation/setup.error || :
+            case "$setup_error" in
+                backend-vulkan) state=error; error='Vulkan setup failed its local model check. CPU remains selected; check the Vulkan driver before retrying.' ;;
+                setup) state=error; error='VoxType setup or repair did not finish. Check the connection and retry in Settings.' ;;
+            esac
+        fi
+    elif [ -r /var/lib/arctic/dictation/setup.state ]; then
+        IFS= read -r state </var/lib/arctic/dictation/setup.state || state=unavailable
+        case "$state" in
+            queued|downloading) ;;
+            failed) state=error; error='VoxType setup did not finish. Check the connection and retry in Settings.' ;;
+            *) state=unavailable ;;
+        esac
+    fi
+    ready=$integrity_ready
+    printf '{"state":"%s","ready":%s,"error":"%s","version":"1.1.0","language":"%s","backend":"%s","profile":"%s","model":"%s","model_download_bytes":%s,"download_bytes":%s,"vulkan_download_bytes":66342968}\n' \
+        "$state" "$ready" "$error" "$language" "$backend" "$profile" "$model" "$model_bytes" "$download_bytes"
+}
+case ${1:-} in
+    status) [ $# = 1 ] || exit 2; status ;;
+    retry)
+        [ $# = 1 ] || exit 2
+        if pkexec /usr/libexec/arctic/arctic-voxtype-setup --retry; then
+            rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+            systemctl --user daemon-reload || :
+            systemctl --user enable --now voxtype.service || :
+        fi
+        status
+        ;;
+    set-language)
+        [ $# = 2 ] || exit 2
+        case "$2" in auto|he|en) ;; *) exit 2 ;; esac
+        voxtype config set whisper.language "$2" >/dev/null
+        if [ "$2" = auto ]; then
+            config=${XDG_CONFIG_HOME:-$HOME/.config}/voxtype/config.toml
+            temporary=$(mktemp "$config.XXXXXX")
+            awk 'BEGIN{s=""} /^\[/ {s=$0} s=="[whisper]" && /^[[:space:]]*language[[:space:]]*=/ {print "language = [\"he\", \"en\"]"; next} {print}' "$config" >"$temporary"
+            chmod 0600 "$temporary"; mv -f "$temporary" "$config"
+            voxtype --config "$config" config get whisper.language --json >/dev/null
+        fi
+        systemctl --user restart voxtype.service || :
+        rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+        status
+        ;;
+    set-backend)
+        [ $# = 2 ] || exit 2
+        case "$2" in cpu|vulkan) ;; *) exit 2 ;; esac
+        if pkexec /usr/libexec/arctic/arctic-voxtype-setup --backend "$2"; then
+            rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+            systemctl --user daemon-reload || :
+            systemctl --user enable voxtype.service || :
+            systemctl --user restart voxtype.service || :
+        fi
+        status
+        ;;
+    *) echo 'usage: arctic-dictation status|retry|set-language auto|he|en|set-backend cpu|vulkan' >&2; exit 2 ;;
+esac

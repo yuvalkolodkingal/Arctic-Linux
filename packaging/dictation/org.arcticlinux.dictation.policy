@@ -4,12 +4,12 @@
   <vendor>Arctic Linux</vendor>
   <action id="org.arcticlinux.dictation.setup">
     <description>Finish local dictation setup</description>
-    <message>Administrator authentication is required to install local dictation (about 506 MB for legacy CPUs or 678 MB for modern CPUs, plus missing system dependencies).</message>
+    <message>Administrator authentication is required to install local dictation (506.2 MB on compatibility CPUs or 593.2 MB on modern CPUs; optional Vulkan adds 66.3 MB).</message>
     <defaults>
       <allow_any>no</allow_any>
       <allow_inactive>no</allow_inactive>
       <allow_active>auth_admin</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/arctic/arctic-dictation-setup</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/arctic/arctic-voxtype-setup</annotate>
   </action>
 </policyconfig>

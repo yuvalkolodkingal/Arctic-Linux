@@ -1,0 +1,23 @@
+[Unit]
+Description=VoxType local voice-to-text daemon
+Documentation=https://voxtype.io/docs/
+PartOf=graphical-session.target
+After=graphical-session.target pipewire.service pipewire-pulse.service
+ConditionPathExists=/var/lib/arctic/dictation/upstream-direct-v1
+ConditionPathExists=%h/.config/voxtype/config.toml
+
+[Service]
+Type=simple
+UMask=0077
+# -q suppresses upstream info-level transcript excerpts. Remove inherited
+# overrides that could bypass Arctic's local-only, no-hotkey and safe-output
+# config; explicitly select that canonical file.
+UnsetEnvironment=RUST_LOG VOXTYPE_CONFIG VOXTYPE_ENGINE VOXTYPE_MODEL VOXTYPE_LANGUAGE VOXTYPE_TRANSLATE VOXTYPE_ON_DEMAND_LOADING VOXTYPE_REMOTE_ENDPOINT VOXTYPE_WHISPER_API_KEY SONIOX_API_KEY
+UnsetEnvironment=VOXTYPE_HOTKEY VOXTYPE_HOTKEY_ENABLED VOXTYPE_CANCEL_KEY VOXTYPE_OUTPUT_MODE VOXTYPE_APPEND_TEXT VOXTYPE_AUTO_SUBMIT VOXTYPE_SHIFT_ENTER_NEWLINES
+UnsetEnvironment=VOXTYPE_AUDIO_DEVICE VOXTYPE_MAX_DURATION_SECS VOXTYPE_FALLBACK_TO_CLIPBOARD VOXTYPE_PASTE_KEYS VOXTYPE_SMART_AUTO_SUBMIT VOXTYPE_FILTER_FILLERS VOXTYPE_SPOKEN_PUNCTUATION VOXTYPE_RESTORE_CLIPBOARD
+ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target

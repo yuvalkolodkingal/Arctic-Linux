@@ -115,7 +115,7 @@ func TestDictationInstallQueueAndNonfatalSetup(t *testing.T) {
 					return (tc.completed && p == "/mnt/var/lib/arctic/dictation/verified.json") || DefaultExists(p)
 				},
 				Respond: func(c Cmd) (string, error) {
-					if c.Name == "chroot" && strings.Contains(strings.Join(c.Args, " "), "/usr/share/arctic/dictation/dictation.py") {
+					if c.Name == "chroot" && strings.Contains(strings.Join(c.Args, " "), "/usr/libexec/arctic/arctic-voxtype-setup") {
 						copy := c
 						setup = &copy
 						if tc.fail {
@@ -131,13 +131,17 @@ func TestDictationInstallQueueAndNonfatalSetup(t *testing.T) {
 			if setup == nil || !setup.AllowFail {
 				t.Fatal("installer must make a nonfatal target setup attempt")
 			}
-			if strings.Contains(strings.Join(setup.Args, " "), "--offline") != tc.offline {
+			setupArgs := strings.Join(setup.Args, " ")
+			if !strings.Contains(setupArgs, "/usr/libexec/arctic/arctic-voxtype-setup --install "+job.Data.Account.Username) {
+				t.Fatalf("setup must receive the installed username: %v", setup.Args)
+			}
+			if strings.Contains(setupArgs, "--offline") != tc.offline {
 				t.Fatalf("wrong offline setup contract: %v", setup.Args)
 			}
 			plan := rec.Plan()
 			if !strings.Contains(plan, "enable arctic-dictation-setup.timer") ||
-				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/pending.json") ||
-				!strings.Contains(plan, "\"state\":\"queued\"") {
+				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/pending") ||
+				!strings.Contains(plan, "write /mnt/var/lib/arctic/dictation/setup.state (0644)\n    | queued") {
 				t.Fatal("installation must persist and enable retryable first-boot setup")
 			}
 			notes := strings.Join(job.Outcome.Notes, "\n")
