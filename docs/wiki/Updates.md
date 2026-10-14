@@ -26,6 +26,24 @@ while you work, and it never restarts the computer by itself.
 Updates are never installed into the running desktop, so an update can't break the apps you
 have open. On the live USB nothing is downloaded: nothing there survives a restart.
 
+## What’s New after an Arctic update
+
+After an existing account receives a new Arctic package build, the desktop shows a **What’s New**
+card once at the next login. Closing it records that exact packaged update for this account, so
+the same card does not interrupt later logins. A later Arctic update carries a different ID and
+can show its own summary. Fresh accounts already see First Login, and the live USB never opens
+the card automatically.
+
+Open **Settings → Updates → Release notes** for the full notes. To reopen the installed summary
+card itself, run:
+
+```sh
+arctic-shell-ipc whatsnew open
+```
+
+The card describes the package build installed on this computer. The release page remains the
+source for an ISO's checksum, size and exact qualification results.
+
 ## The bar
 
 | You see | It means |
@@ -82,9 +100,9 @@ now` is the gentler way.
 ## Channels
 
 For normal updates, keep **stable** selected. The enabled repository is **arctic**; **arctic-testing**
-is disabled. **The testing channel is not required.** The final stable package set described in
-the current release notes is pending qualification and publication; leave stable selected and it
-will become available there after it is published. Both RPM signatures and signed repository
+is disabled. **The testing channel is not required.** The v1.2.1 package set described in the
+current release notes is prepared for qualification and publication; leave stable selected and
+it will become available there after it is published. Both RPM signatures and signed repository
 metadata are verified against the Arctic key shipped by `arctic-release`.
 
 ```sh
