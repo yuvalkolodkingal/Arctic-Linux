@@ -150,6 +150,74 @@ jobs:
                   encoded = json.dumps(taskbar, sort_keys=True)
                   assert len(encoded.encode()) <= 64 * 1024
                   print('ARCTIC-TASKBAR-SUMMARY ' + encoded)
+                  cases = report.get('results', [])
+                  assert type(cases) is list and len(cases) <= 24
+                  print('ARCTIC-TASKBAR-PASSED-CASES ' + json.dumps([
+                      {'output': case.get('output'), 'scale': case.get('scale'), 'edge': case.get('edge')}
+                      for case in cases
+                  ], sort_keys=True))
+                  trace_raw = verified.get('taskbar/gui-trace.log')
+                  assert trace_raw is not None and len(trace_raw) <= 4 * 1024 * 1024
+                  trace = [json.loads(line) for line in trace_raw.decode('utf-8', errors='strict').splitlines()]
+                  assert len(trace) <= 20000 and all(type(row) is dict for row in trace)
+                  trace_summary = []
+                  for row in trace[-30:]:
+                      selected = {key: row.get(key) for key in (
+                          'event', 'gate', 'error', 'output', 'scale', 'edge', 'mode', 'label', 'shown',
+                      ) if key in row}
+                      if 'case' in row and type(row['case']) is dict:
+                          selected['case'] = {key: row['case'].get(key) for key in ('output', 'scale', 'edge')}
+                      trace_summary.append(selected)
+                  print('ARCTIC-TASKBAR-TRACE-TAIL ' + json.dumps(trace_summary, sort_keys=True))
+
+                  failing_image = 'taskbar/Virtual-2-2-top-auto-covered-rest.png'
+                  raw = verified.get(failing_image)
+                  assert raw is not None and raw[:8] == b'\x89PNG\r\n\x1a\n'
+                  # Decode this fixed synthetic failure capture with stdlib zlib;
+                  # only the same bounded RGB probe arithmetic is emitted.
+                  import zlib
+                  width, height = struct.unpack('>II', raw[16:24])
+                  assert width == 1280 and height == 720 and raw[24] == 8 and raw[25] == 2
+                  position, compressed = 8, bytearray()
+                  while position < len(raw):
+                      length = struct.unpack('>I', raw[position:position+4])[0]
+                      kind = raw[position+4:position+8]
+                      data = raw[position+8:position+8+length]
+                      assert position + 12 + length <= len(raw)
+                      if kind == b'IDAT': compressed.extend(data)
+                      position += 12 + length
+                      if kind == b'IEND': break
+                  decoded = zlib.decompress(bytes(compressed))
+                  stride = width * 3
+                  assert len(decoded) == (stride + 1) * height
+                  rows, previous = [], bytes(stride)
+                  for y in range(height):
+                      offset = y * (stride + 1)
+                      filter_type, scan = decoded[offset], bytearray(decoded[offset+1:offset+1+stride])
+                      assert filter_type in range(5)
+                      for x in range(stride):
+                          left = scan[x-3] if x >= 3 else 0
+                          up = previous[x]
+                          upper_left = previous[x-3] if x >= 3 else 0
+                          if filter_type == 1: scan[x] = (scan[x] + left) & 255
+                          elif filter_type == 2: scan[x] = (scan[x] + up) & 255
+                          elif filter_type == 3: scan[x] = (scan[x] + ((left + up) // 2)) & 255
+                          elif filter_type == 4:
+                              estimate = left + up - upper_left
+                              distance = (abs(estimate-left), abs(estimate-up), abs(estimate-upper_left))
+                              scan[x] = (scan[x] + (left if distance[0] <= distance[1] and distance[0] <= distance[2]
+                                                    else up if distance[1] <= distance[2] else upper_left)) & 255
+                      previous = bytes(scan); rows.append(previous)
+                  center_x, center_y, radius, foot = width // 2, 44, 6, (33, 131, 79)
+                  pixels = [tuple(rows[y][x*3:x*3+3])
+                            for y in range(center_y-radius, center_y+radius+1)
+                            for x in range(center_x-radius, center_x+radius+1)]
+                  fraction = sum(max(abs(a-b) for a,b in zip(pixel, foot)) > 10 for pixel in pixels) / len(pixels)
+                  print('ARCTIC-TASKBAR-FAILING-PROBE ' + json.dumps({
+                      'path': failing_image, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
+                      'width': width, 'height': height, 'non_foot_fraction': fraction,
+                      'hidden_limit': 0.1, 'sampled_pixels': len(pixels),
+                  }, sort_keys=True))
 
                   prefixes = ('ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
                               'ARCTIC-NATIVE-RUNNER-END ', 'ARCTIC-NATIVE-ERROR ',
