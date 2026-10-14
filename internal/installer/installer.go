@@ -1604,12 +1604,13 @@ func (in *Installer) finalizePhase(ctx context.Context) error {
 // copied system gets a bounded online setup attempt, or an explicit first-boot
 // queue when offline. A model/dependency download must never undo an OS install.
 func (in *Installer) finishDictation(ctx context.Context) {
-	queue := "{\"version\":\"1.1.0\"}\n"
-	// The fixed setup helper selects the hardware profile and exact disclosure
-	// before network access; don't duplicate model/byte constants in Go.
-	status := "{\"state\":\"queued\",\"progress\":0,\"error\":\"\",\"version\":\"1.1.0\"}\n"
-	for _, file := range []struct{ name, data string }{{"pending.json", queue}, {"setup.json", status}} {
-		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, 0o644); err != nil {
+	// The fixed setup helper selects the signed upstream binary and pinned model;
+	// this queue contains no secret and is safe to retry after an offline install.
+	for _, file := range []struct {
+		name, data string
+		perm       uint32
+	}{{"pending", "1.1.0\n", 0o644}, {"setup.state", "queued\n", 0o644}, {"user", in.Job.Data.Account.Username + "\n", 0o600}} {
+		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, file.perm); err != nil {
 			in.Rep.Logf("dictation queue could not be saved (continuing): %v", err)
 			in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)
 			return
@@ -1618,14 +1619,14 @@ func (in *Installer) finishDictation(ctx context.Context) {
 	if err := in.run(ctx, "systemctl", "--root="+in.Opt.Target, "enable", "arctic-dictation-setup.timer"); err != nil {
 		in.Rep.Logf("dictation first-boot setup could not be enabled (continuing): %v", err)
 	}
-	args := []string{"--install"}
+	args := []string{"--install", in.Job.Data.Account.Username}
 	if in.Job.Offline {
 		args = append(args, "--offline")
 	}
 	in.t.Update(0.4, "Preparing local dictation (model download depends on hardware; audio stays on this computer)…")
 	setupCtx, cancel := context.WithTimeout(ctx, 11*time.Minute)
 	defer cancel()
-	if _, err := in.R.Run(setupCtx, Chroot(in.Opt.Target, Cmd{Name: "/usr/bin/python3", Args: append([]string{"-I", "/usr/share/arctic/dictation/dictation.py"}, args...), AllowFail: true})); err != nil {
+	if _, err := in.R.Run(setupCtx, Chroot(in.Opt.Target, Cmd{Name: "/usr/libexec/arctic/arctic-voxtype-setup", Args: args, AllowFail: true})); err != nil {
 		in.Rep.Logf("dictation setup did not finish (continuing with a retryable queue): %v", err)
 	}
 	if !in.R.Exists(in.tgt("/var/lib/arctic/dictation/verified.json")) {

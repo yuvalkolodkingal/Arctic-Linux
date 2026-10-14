@@ -43,7 +43,9 @@ sudo unshare --net -- python3 tools/dictation-accuracy/accuracy.py measure \
   --output /tmp/accuracy-private --threads 2
 ```
 
-The installed payload can instead be read from `/opt/arctic/voxtype/1.1.0/`.
+On an installed system, use `/opt/arctic/voxtype/1.1.0/voxtype-baseline` and
+`/opt/arctic/voxtype/models/ggml-small.bin`; Arctic keeps models outside the
+versioned binary directory.
 The CPU baseline is intentional: a successful accelerated run does not prove
 CPU fallback. GPU failure recovery, the microphone, cancel, recording status
 and Hebrew/English insertion need separate installed-image tests.

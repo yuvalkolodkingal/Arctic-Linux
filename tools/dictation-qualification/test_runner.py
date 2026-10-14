@@ -13,6 +13,21 @@ spec.loader.exec_module(runner)
 
 
 class RunnerGuards(unittest.TestCase):
+    def test_integration_hash_requires_every_direct_upstream_source_file(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name in runner.INTEGRATION_FILES:
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(name)
+            first = runner.integration_sha(root)
+            self.assertRegex(first, r'^[0-9a-f]{64}$')
+            (root / runner.INTEGRATION_FILES[1]).write_text('changed selector')
+            self.assertNotEqual(first, runner.integration_sha(root))
+            (root / runner.INTEGRATION_FILES[1]).unlink()
+            with self.assertRaisesRegex(RuntimeError, 'lacks direct VoxType integration file'):
+                runner.integration_sha(root)
+
     def test_unresponsive_docker_still_terminates_owned_host_process_group(self):
         child = Mock(pid=123, poll=Mock(return_value=None),
                      wait=Mock(side_effect=[runner.subprocess.TimeoutExpired('fixture', 1), 0]))
@@ -45,7 +60,7 @@ class RunnerGuards(unittest.TestCase):
         identity = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
                         GITHUB_REPOSITORY='yuvalkolodkingal/Arctic-Linux',
                         GITHUB_REF='refs/heads/codex/qualification-dispatch-20261010',
-                        GITHUB_WORKFLOW='Candidate dictation image qualification',
+                        GITHUB_WORKFLOW='Candidate direct VoxType image qualification',
                         GITHUB_EVENT_NAME='push', GITHUB_RUN_ATTEMPT='1')
         with tempfile.TemporaryDirectory() as temp:
             manifest = Path(temp) / 'manifest.json'

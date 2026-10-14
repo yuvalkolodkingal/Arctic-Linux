@@ -231,11 +231,12 @@ commands.
 - **arctic-firstboot** (in `arctic-desktop-config`, because the installer is removed from the new
   system) retries selected app downloads deferred by offline or unattended installation, after
   login through its timer when `/var/lib/arctic/pending.json` exists.
-- **Dictation** ships a small controller with compositor shortcuts, Settings and a recording
-  indicator. Online installation downloads the pinned Voxtype payload and one multilingual
-  Whisper model; offline or failed setup is queued for `arctic-dictation-setup.timer`.
-  Recording stays unready until dependencies and model are present; audio inference is local.
-  See [Local dictation](Local-Dictation).
+- **Dictation** runs the official VoxType 1.1.0 user service. The ISO ships only setup/status,
+  Settings, a verified-binary selector and Mango shortcuts; online installation downloads one
+  signed upstream binary and one pinned multilingual model. Offline or failed setup is queued for
+  `arctic-dictation-setup.timer`. Recording stays unready until verification succeeds. Audio
+  inference is local; CPU recovery after Vulkan failure is explicit. See
+  [Local dictation](Local-Dictation).
 
 ## Packaging and the ISO
 

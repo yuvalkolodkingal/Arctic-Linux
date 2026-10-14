@@ -359,23 +359,29 @@ XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 
 ### 3.4 Local dictation
 
-`arctic-desktop-config` ships `packaging/dictation/` as the small standard-library
-controller in `/usr/share/arctic/dictation/`, `/usr/bin/arctic-dictation`, the fixed
-polkit setup helper, and `arctic-dictation-setup.service`/`.timer`. No engine binary
-or model belongs in the RPM/live ISO. Installer finalization writes a target setup
-queue, enables the background timer and makes a bounded, nonfatal online setup
-attempt; offline installations retain an explicit unready first-boot queue. The
-fixed hardware profiles use Voxtype 1.1.0 baseline/Small (506,181,191 bytes) on
-legacy or unknown CPUs and AVX2/Vulkan/Turbo Q5 (678,117,115 bytes) on validated
-x86-64-v3 CPUs, plus missing system dependencies. Each attempt downloads one
-multilingual model and verifies exact bytes and SHA-256 before readiness. GPU
-failure offers a fresh CPU recording; optimized CPU incompatibility offers an
-explicit administrator-authorized Small setup, without automatic audio retry or
-model download. See [DICTATION.md](DICTATION.md) for hashes, sizes,
-dependency/readiness checks, privacy, lock and cancellation behavior, commands and
-the native release acceptance contract. CI/RPM checks run the dictation control
-tests; systemd CI verifies its service and timer, and installer goldens include the queue/setup
-hook. Source checks do not qualify audio inference or the final image.
+`arctic-desktop-config` ships a setup/readiness adapter, the `/usr/bin/voxtype`
+binary selector, the upstream release key, `voxtype.service`, Settings/status
+integration and `arctic-dictation-setup.service`/`.timer`. The live RPM/ISO
+contains no VoxType executable or Whisper model.
+
+Installer finalization writes a target queue, enables the background timer and
+makes a bounded, nonfatal online setup attempt. Offline installations retain an
+explicit unready first-boot queue. The timer first runs about 90–120 seconds
+after boot and retries about every 15 minutes. Setup verifies the signed official
+VoxType 1.1.0 release, exact bytes and SHA-256, then installs one CPU binary and
+one multilingual model atomically: baseline/Small is 506,181,191 bytes; the
+conservatively selected AVX2/Turbo Q5 path is 593,194,923 bytes. Optional Vulkan
+is an explicit later 66,342,968-byte download and must pass real local model
+initialization before selection.
+
+The systemd user service runs official VoxType directly with local-only,
+error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and
+`voxtype record cancel`; the Arctic adapter handles only status, retry, language
+and CPU/Vulkan selection. GPU failure never implies automatic CPU fallback: the
+user selects CPU and makes a new recording. See [DICTATION.md](DICTATION.md) for
+hashes, paths, privacy controls, commands, historical accuracy measurements and
+the exact-image release gate. Source and RPM checks do not qualify inference,
+privacy or the final image.
 
 ## 4. Engine ↔ installer UI protocol
 

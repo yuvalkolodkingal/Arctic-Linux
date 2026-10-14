@@ -21,10 +21,10 @@ BACKEND_OBSERVER_ADDITIONS = (
     b"            if code == 'installer-inner-driver-collect-guard-collection-034':\n                try:\n                    observed = write_observation_codes(error, controller_source)\n                except Exception:\n                    observed = ()\n                for observation in observed:\n                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)\n",
 )
 
-INSTALLED_IDENTITY_START = b"IDENTITY_MARKER = '731904'\n"
+INSTALLED_IDENTITY_START = b"IDENTITY_MARKERS = ('2', '4', '6')\n"
 INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
-INSTALLED_IDENTITY_BYTES = 8303
-INSTALLED_IDENTITY_SHA256 = '5424c85308e628a3c4661e463b4fd199317e490d645fd95de6d10c40a93f1750'
+INSTALLED_IDENTITY_BYTES = 8687
+INSTALLED_IDENTITY_SHA256 = '460b28a62c6ab32d62e06397805978136154e4fd374a998b44d288abc3e3f1ec'
 IDENTITY_OBSERVER_ADDITIONS = (
     b'''_IDENTITY_OBSERVATION_TOKEN = object()
 IDENTITY_OBSERVATION_LABELS = (

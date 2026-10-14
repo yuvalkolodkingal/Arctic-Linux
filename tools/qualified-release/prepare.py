@@ -21,7 +21,9 @@ FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-re
          'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
          'tools/dictation-qualification/contract.py', 'tools/installer-qualification/contract.py',
          'tools/installer-qualification/active-contract.py',
-         'tools/native-functional/apps.py'}
+         'tools/native-functional/apps.py',
+         '.github/workflows/release-reliability-candidate.yml',
+         'tools/reliability/exact-artifact.py'}
 BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
@@ -29,6 +31,16 @@ DOCUMENTATION = {'README.md', 'iso/kiwi/README.md'}
 # arctic-linux.spec excludes shell/dev from the installed shell payload. This
 # private compositor fixture has no runtime or image-build invocation.
 TEST_ONLY = {'shell/dev/test-lock-clock.py'}
+# The showcase is publication media, not an ISO/RPM input. Keep this exemption
+# fail-closed: it is valid only while the ISO checkout and Source0 archive both
+# exclude the tree and none of the product build definitions refers to it.
+SHOWCASE_BUILD_DEFINITIONS = {
+    'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
+    'tools/lib/container.sh',
+    'packaging/arctic-linux.spec', 'packaging/mangowm.spec', 'packaging/scenefx.spec',
+    'iso/kiwi/config.kiwi', 'iso/kiwi/config.sh',
+    'iso/kiwi/grub-arctic.cfg.iso-template', 'iso/kiwi/iso-esp-excludes.yaml',
+}
 NATIVE_GATES = set('fresh-defaults-and-isolation archive-content-roundtrips actual-role-file-manager-terminal-editor '
                    'open-codec-content-and-player-state portal-and-accessibility-reachability '
                    'owned-process-cleanup-config-preservation selinux-and-new-avcs open-codec-lossless-command-decode'.split())
@@ -55,12 +67,56 @@ def git(*args):
     return subprocess.check_output(['git', '-C', str(ROOT), *args], text=True, timeout=120).strip()
 
 
+def _literal_block_values(text, key):
+    """Return values from YAML literal blocks named *key* without accepting comments."""
+    lines = text.splitlines()
+    result = []
+    for index, line in enumerate(lines):
+        if line.strip() != key + ': |':
+            continue
+        indent = len(line) - len(line.lstrip())
+        values = []
+        for item in lines[index + 1:]:
+            if not item.strip():
+                continue
+            item_indent = len(item) - len(item.lstrip())
+            if item_indent <= indent:
+                break
+            values.append(item.strip())
+        result.append(values)
+    return result
+
+
+def showcase_is_non_product():
+    """Prove that showcase/ cannot enter the built ISO or binary/source RPM payload."""
+    try:
+        iso_workflow = (ROOT / '.github/workflows/iso.yml').read_text()
+        attributes = (ROOT / '.gitattributes').read_text().splitlines()
+        definitions = [(name, (ROOT / name).read_text()) for name in SHOWCASE_BUILD_DEFINITIONS]
+    except (OSError, UnicodeError):
+        return False
+    sparse_blocks = _literal_block_values(iso_workflow, 'sparse-checkout')
+    matching_blocks = [values for values in sparse_blocks
+                       if '/*' in values and values.count('!/showcase/') == 1]
+    if len(matching_blocks) != 1 or iso_workflow.lower().count('showcase') != 1:
+        return False
+    attribute_rows = [line.split() for line in attributes
+                      if line.strip() and not line.lstrip().startswith('#')]
+    showcase_rows = [row for row in attribute_rows
+                     if row and 'showcase' in row[0].lower()]
+    if showcase_rows != [['/showcase', 'export-ignore']]:
+        return False
+    return all('showcase' not in text.lower() for name, text in definitions)
+
+
 def product_changes(names):
     # Unknown roots are product changes too: a new vendor/go.sum/runtime asset
     # cannot silently evade the rebuild gate. Only helper/docs paths are exempt.
+    showcase_exempt = showcase_is_non_product()
     return [name for name in names if name in BUILD_INPUTS or
             not (name in DOCUMENTATION or name in TEST_ONLY
-                 or name.startswith(('docs/', '.github/', 'tools/')))]
+                 or name.startswith(('docs/', '.github/', 'tools/'))
+                 or (showcase_exempt and name.startswith('showcase/')))]
 
 
 def changed_product_files(source, target):
@@ -192,6 +248,79 @@ def publication_files(manifest):
     return FILES | set(performance_contract(manifest['execution_files'].get('tools/performance/contract.py')).EXECUTION_FILES)
 
 
+def reliability_contract(expected_sha):
+    path = ROOT / 'tools/reliability/exact-artifact.py'
+    require(path.is_file() and not path.is_symlink()
+            and type(expected_sha) is str and re.fullmatch('[0-9a-f]{64}', expected_sha)
+            and sha(path) == expected_sha,
+            'Exact-artifact reliability validator is absent, unsafe or differs from the reviewed source')
+    data = path.read_bytes()
+    require(hashlib.sha256(data).hexdigest() == expected_sha,
+            'Reliability validator changed before loading')
+    spec = importlib.util.spec_from_file_location('qualified_exact_artifact_reliability', path)
+    result = importlib.util.module_from_spec(spec)
+    exec(compile(data, str(path), 'exec'), result.__dict__)
+    return result
+
+
+def validate_reliability_lane(manifest):
+    pins = manifest.get('reliability')
+    required = {'run_id', 'source_sha', 'artifact_id', 'archive_bytes', 'archive_sha256'}
+    require(type(pins) is dict and set(pins) == {'uefi', 'bios'}
+            and all(type(pin) is dict and required <= set(pin) for pin in pins.values()),
+            'Both exact-artifact UEFI and BIOS reliability pins are required')
+    require(len({pin['run_id'] for pin in pins.values()}) == 1
+            and len({pin['source_sha'] for pin in pins.values()}) == 1
+            and len({pin['artifact_id'] for pin in pins.values()}) == 2
+            and len({pin['archive_sha256'] for pin in pins.values()}) == 2,
+            'Reliability firmware lanes must share one run/source and distinct artifacts')
+    artifacts = {firmware: validate_lane(pin, '.github/workflows/release-reliability-candidate.yml',
+                                         'candidate-release-reliability-' + firmware)
+                 for firmware, pin in pins.items()}
+    pin = pins['uefi']
+    run = api('/actions/runs/' + str(pin['run_id']))
+    require(run['head_branch'] == 'codex/qualification-dispatch-20261010',
+            'Reliability execution branch differs')
+    source = pin['source_sha']
+    parents = git('rev-list', '--parents', '-n', '1', source).split()
+    require(len(parents) == 2, 'Reliability activation must have exactly one parent')
+    parent = parents[1]
+    require(source_bytes(source, '.github/qualification-20261010.reliability') == (parent + '\n').encode()
+            and git('diff', '--no-renames', '--name-only', parent, source).splitlines()
+            == ['.github/qualification-20261010.reliability'],
+            'Reliability activation is not the reviewed marker-only child')
+    expected_contract = source_hash(source, 'tools/reliability/exact-artifact.py')
+    contract = reliability_contract(expected_contract)
+    source_hashes = {name: source_hash(source, name) for name in contract.EXECUTION_FILES}
+    raw = source_bytes(source, 'tools/reliability/exact-artifact-manifest.json')
+    require(len(raw) <= 256 * 1024, 'Oversized reliability execution manifest')
+    execution_manifest = contract.validate_manifest(contract.strict_json(raw.decode()), source_hashes)
+    require(execution_manifest['image'] == manifest['image'],
+            'Reliability lane used a different exact image')
+    return artifacts, contract, parent
+
+
+def reliability_proof(archives, manifest, contract, parent):
+    proofs = {}
+    for firmware in ('uefi', 'bios'):
+        evidence = archives[firmware]
+        names = {item.filename for item in evidence.infolist() if not item.is_dir()}
+        require(names == {'execution.json', 'results.json'},
+                'Reliability evidence inventory differs')
+        require(evidence.getinfo('execution.json').file_size <= 128 * 1024
+                and evidence.getinfo('results.json').file_size <= 4_000_000,
+                'Oversized reliability evidence')
+        execution = read_json(evidence, 'execution.json')
+        require(execution.get('reviewed_parent_sha') == parent,
+                'Reliability execution parent differs from marker provenance')
+        pin = manifest['reliability'][firmware]
+        replay = contract.validate_evidence(execution, evidence.read('results.json'),
+            image=manifest['image'], firmware=firmware, source_sha=pin['source_sha'], run_id=pin['run_id'])
+        proofs[firmware] = dict(pin=pin, replay=replay)
+    return dict(firmware=proofs, status='uefi_and_bios_blank_disk_install_reboot_passed',
+                release_acceptance=False)
+
+
 def validate_performance_lane(manifest, jobs, fetch):
     """Require exactly one successful producer mode; failures are never rescued."""
     image, pin = manifest['image'], manifest['performance']
@@ -282,7 +411,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
     image, pin = manifest['image'], manifest['dictation'][hardware_profile]
-    require(state['schema'] == 'arctic-dictation-execution-v2' and state['hardware_profile'] == hardware_profile
+    require(state['schema'] == 'arctic-voxtype-execution-v3' and state['hardware_profile'] == hardware_profile
             and state['status'] == 'exact_image_dictation_online_offline_local_sessions_passed'
             and state['image'] == image and state['execution_checker_head'] == pin['source_sha']
             and state['release_acceptance'] is False
@@ -312,8 +441,26 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
         ('contract_sha256', 'tools/dictation-qualification/contract.py'),
         ('accuracy_sha256', 'tools/dictation-accuracy/accuracy.py'),
         ('pins_sha256', 'tools/dictation-accuracy/pins.json'))}
-    hashes['controller_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/dictation.py')
-    hashes['child_exec_sha256'] = source_hash(image['source_sha'], 'packaging/dictation/child_exec.py')
+    integration_files = (
+        'packaging/dictation/arctic-dictation',
+        'packaging/dictation/arctic-dictation-toggle',
+        'packaging/dictation/voxtype',
+        'packaging/dictation/arctic-voxtype-setup',
+        'packaging/dictation/arctic-voxtype-host-profile',
+        'packaging/dictation/arctic-voxtype-configure',
+        'packaging/dictation/voxtype-release-key.asc',
+        'packaging/dictation/org.arcticlinux.dictation.policy',
+        'packaging/systemd/voxtype.service',
+        'packaging/systemd/arctic-dictation-setup.service',
+        'packaging/systemd/arctic-dictation-setup.timer',
+    )
+    integration = hashlib.sha256()
+    for name in integration_files:
+        encoded = name.encode()
+        integration.update(len(encoded).to_bytes(4, 'big'))
+        integration.update(encoded)
+        integration.update(source_bytes(image['source_sha'], name))
+    hashes['integration_sha256'] = integration.hexdigest()
     reports = {}
     for name in sorted(required):
         info = state['reports'][name]
@@ -324,7 +471,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                 'Dictation checked report path, bytes or status differs')
         phase = 'live' if name.endswith('-live') else name
         kind = 'online' if name.startswith('online-') else 'offline'
-        expected = dict(schema='arctic-dictation-context-v2', phase=phase, hardware_profile=hardware_profile,
+        expected = dict(schema='arctic-voxtype-context-v3', phase=phase, hardware_profile=hardware_profile,
                         source_sha=image['source_sha'], iso_sha256=image['sha256'], iso_bytes=image['bytes'],
                         installation_id=state['installations'][kind],
                         fixture_manifest_sha256=pin['fixture_manifest_sha256'], **hashes)
@@ -1084,11 +1231,14 @@ def prepare(manifest, out):
             'Actual installer restoration qualification and visual review pins are required')
     require(type(manifest.get('installer_active')) is dict and type(manifest.get('installer_active_media_review')) is dict,
             'Actual in-flight installer restoration, completion, installed boot and visual review pins are required')
+    require(type(manifest.get('reliability')) is dict,
+            'Exact-artifact UEFI and BIOS install/reboot qualification pins are required')
     for ref in {manifest['image']['source_sha'], manifest['main_sha'], release_main,
                 manifest['native']['source_sha'], manifest['installer']['source_sha'],
                 manifest['installer_active']['source_sha'],
                 manifest['performance']['source_sha'],
-                *(pin['source_sha'] for pin in manifest['dictation'].values())}:
+                *(pin['source_sha'] for pin in manifest['dictation'].values()),
+                *(pin['source_sha'] for pin in manifest['reliability'].values())}:
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
     current_checks = main_checks(release_main, manifest['main_sha'])
@@ -1105,6 +1255,7 @@ def prepare(manifest, out):
     fetch.validate_boot_steps(image, jobs['jobs'])
     perf = manifest['performance']
     validate_performance_lane(manifest, jobs['jobs'], fetch)
+    _, reliability_validator, reliability_parent = validate_reliability_lane(manifest)
     validate_lane(manifest['native'], '.github/workflows/native-candidate-20261008.yml', 'native-candidate-qualification')
     for profile, pin in manifest['dictation'].items():
         validate_lane(pin, '.github/workflows/dictation-candidate-20261009.yml',
@@ -1121,6 +1272,11 @@ def prepare(manifest, out):
             performance = performance_proof(evidence, manifest, fetch)
             comparison = (read_json(evidence, 'comparison.json') if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE
                           else performance['replay']['comparison'])
+        with ExitStack() as stack:
+            reliability_archives = {firmware: stack.enter_context(archive(manifest['reliability'][firmware],
+                                    temp / ('reliability-' + firmware + '.zip')))
+                                    for firmware in ('uefi', 'bios')}
+            reliability = reliability_proof(reliability_archives, manifest, reliability_validator, reliability_parent)
         with archive(manifest['native'], temp / 'native.zip') as evidence:
             native = native_proof(evidence, manifest)
         with ExitStack() as stack:
@@ -1154,7 +1310,7 @@ def prepare(manifest, out):
         (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
-                     performance=performance, native=native, dictation=dictation, installer=installer, installer_active=installer_active,
+                     performance=performance, reliability=reliability, native=native, dictation=dictation, installer=installer, installer_active=installer_active,
                      update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')

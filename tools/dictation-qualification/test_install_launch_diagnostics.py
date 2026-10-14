@@ -154,64 +154,6 @@ class LaunchDiagnostics(unittest.TestCase):
             self.assertEqual(out.getvalue(),expected)
             self.assertEqual(path.read_text(),hostile+good)
 
-    def test_driver_runner_bytes_roll_back_only_added_observers(self):
-        helper_path = ROOT / 'tools/native-functional/test_native_bulk_transport.py'
-        helper = next(n for n in ast.parse(helper_path.read_text()).body
-                      if isinstance(n, ast.FunctionDef) and n.name == 'restore_native_bulk_driver')
-        namespace = {}
-        exec(compile(ast.Module(body=[helper], type_ignores=[]), str(helper_path), 'exec'), namespace)
-        driver = namespace['restore_native_bulk_driver'](DRIVER)
-        old_shell=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/test-install.sh']).decode()
-        old_driver=old_shell.split("DRIVER <<'PY' || true\n",1)[1].split('\nPY\n',1)[0]
-        old_tree,new_tree=ast.parse(old_driver),ast.parse(driver)
-        old_enum=next(n for n in old_tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DICTATION_HOST_STAGES' for t in n.targets))
-        edits=[]
-        helpers=[n for n in new_tree.body if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'dictation_qemu_startup')]
-        for n in ast.walk(new_tree):
-            if any(helper.lineno < getattr(n,'lineno',0) <= helper.end_lineno for helper in helpers):
-                continue
-            if isinstance(n,ast.FunctionDef) and n.name in ('dictation_install_wait_vm_stage', 'dictation_launch_desktop', 'dictation_acquire_vm', 'dictation_qemu_startup'):
-                edits.append((n.lineno-1,n.end_lineno+1,[]))
-            if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='DICTATION_HOST_STAGES' for t in n.targets):
-                edits.append((n.lineno-1,n.end_lineno,old_driver.splitlines(keepends=True)[old_enum.lineno-1:old_enum.end_lineno]))
-            if isinstance(n,ast.Expr) and isinstance(n.value,ast.Call) and isinstance(n.value.func,ast.Name):
-                call=n.value
-                strings={v.value for v in ast.walk(call) if isinstance(v,ast.Constant) and type(v.value) is str}
-                if call.func.id=='dictation_install_wait_vm_stage' or (call.func.id=='dictation_host_stage' and strings and strings<=ADDED):
-                    edits.append((n.lineno-1,n.end_lineno,[]))
-                if call.func.id=='dictation_launch_desktop':
-                    self.assertEqual(ast.unparse(call.args[0]), "vm.shot('install-20-live-desktop')")
-                    edits.append((n.lineno-1,n.end_lineno,['        vm.shot("install-20-live-desktop")\n']))
-        lines=driver.splitlines(keepends=True)
-        for begin,end,replacement in sorted(edits,reverse=True): lines[begin:end]=replacement
-        rolled=''.join(lines)
-        self.assertEqual(rolled.count('vm = dictation_acquire_vm('),2)
-        rolled=rolled.replace('vm = dictation_acquire_vm(', 'vm = vmtest.VM(')
-        coherent = ('        # A versioned coherent v2 floor, without partially masked host XSAVE.\n'
-                    "        # QEMU Westmere-v2 adds spec-ctrl to Westmere's pre-AVX CPU model;\n"
-                    '        # enforce rejects unsupported requested features before guest execution.\n'
-                    '        # The hosted fixture lacks only optional spec-ctrl; retain its v2 floor.\n'
-                    '        argv[at] = "Westmere-v2,-spec-ctrl,enforce"\n')
-        self.assertEqual(rolled.count(coherent),1)
-        rolled=rolled.replace(coherent, '        argv[at] += ",-avx,-avx2,-fma,-f16c,-bmi1,-bmi2"\n',1)
-        self.assertEqual(rolled,old_driver)
-        # The shell now also contains independently tested taskbar media
-        # protection outside DRIVER; this inverse remains exact for DRIVER.
-        self.assertEqual(ast.dump(ast.parse(rolled),include_attributes=False),ast.dump(old_tree,include_attributes=False))
-        old_runner=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode()
-        new_runner=restore_collector_host_relay(Path(r.__file__).read_text())
-        def assignment(text):
-            return next(n for n in ast.parse(text).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='HOST_STAGES' for t in n.targets))
-        a,b=assignment(old_runner),assignment(new_runner); lines=new_runner.splitlines(keepends=True)
-        edits=[(b.lineno-1,b.end_lineno,old_runner.splitlines(keepends=True)[a.lineno-1:a.end_lineno])]
-        for node in ast.walk(ast.parse(new_runner)):
-            if isinstance(node,ast.FunctionDef) and node.name in ('launch_diagnostic_read', 'launch_diagnostic_png', 'preserve_launch_diagnostic'):
-                edits.append((node.lineno-1,node.end_lineno+2,[]))
-            if isinstance(node,ast.Expr) and isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Name) and node.value.func.id=='preserve_launch_diagnostic':
-                edits.append((node.lineno-1,node.end_lineno,[]))
-        for begin,end,replacement in sorted(edits,reverse=True): lines[begin:end]=replacement
-        self.assertEqual(''.join(lines),old_runner)
-
 class LaunchCaptureDiagnostics(unittest.TestCase):
     def driver(self, root, path, token='a'*32):
         env=driver_functions({'dictation_launch_desktop','dictation_host_stage'},

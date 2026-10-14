@@ -38,25 +38,6 @@ def restore_collector_host_relay(text):
 
 
 class CollectorHostRelayControls(unittest.TestCase):
-    def test_complete_layer_rolls_back_exactly_and_rejects_mutations(self):
-        current = Path(runner.__file__).read_text()
-        parent = subprocess.check_output(
-            ['git', '-C', str(ROOT), 'show',
-             PARENT + ':tools/dictation-qualification/runner.py'],
-            text=True)
-        self.assertEqual(restore_collector_host_relay(current), parent)
-        self.assertEqual(restore_collector_host_relay(parent), parent)
-        for before, after in (
-                ('COLLECTOR_SETUP_STAGES = (', 'COLLECTOR_SETUP_STAGES_MUTATED = ('),
-                ('def relay_collector_diagnostic(vm, phase):',
-                 'def relay_collector_diagnostic_mutated(vm, phase):'),
-                ('                relay_collector_diagnostic(vm, phase)\n',
-                 '                relay_collector_diagnostic_mutated(vm, phase)\n')):
-            with self.subTest(before=before):
-                self.assertEqual(current.count(before), 1)
-                with self.assertRaises(AssertionError):
-                    restore_collector_host_relay(current.replace(before, after, 1))
-
     def test_fixed_inventory_matches_guest_source(self):
         tree = ast.parse(Path(__file__).with_name('guest_check.py').read_text())
         assignments = {
@@ -107,14 +88,14 @@ class CollectorHostRelayControls(unittest.TestCase):
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
             b'{"code":"private transcript","release_acceptance":false}\n',
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-            b'{"code":"collector-controller-invalid","release_acceptance":true}\n',
+            b'{"code":"collector-integration-invalid","release_acceptance":true}\n',
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-            b'{"code":"collector-controller-invalid","extra":"private",'
+            b'{"code":"collector-integration-invalid","extra":"private",'
             b'"release_acceptance":false}\n',
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-            b'{"code":"collector-controller-invalid","release_acceptance":false}\n'
+            b'{"code":"collector-integration-invalid","release_acceptance":false}\n'
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-            b'{"code":"collector-controller-invalid","release_acceptance":false}\n',
+            b'{"code":"collector-integration-invalid","release_acceptance":false}\n',
         )
         for serial in records:
             with self.subTest(serial=serial):
@@ -129,7 +110,7 @@ class CollectorHostRelayControls(unittest.TestCase):
         for serial in (
                 b'ARCTIC-DICTATION-COLLECTOR-ERROR {\xff}\n',
                 b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-                b'{"code":"collector-controller-invalid",'
+                b'{"code":"collector-integration-invalid",'
                 b'"code":"private","release_acceptance":false}\n',
                 b'ARCTIC-DICTATION-COLLECTOR-ERROR {}',
                 b'private transcript only\n'):
@@ -148,7 +129,7 @@ class CollectorHostRelayControls(unittest.TestCase):
 
     def test_non_phase_context_cannot_relay(self):
         record = (b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-                  b'{"code":"collector-controller-invalid",'
+                  b'{"code":"collector-integration-invalid",'
                   b'"release_acceptance":false}\n')
         self.assertEqual(self.relay(record, phase='private-phase'), '')
 
