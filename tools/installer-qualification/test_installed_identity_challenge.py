@@ -5,6 +5,7 @@ import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import types
@@ -26,11 +27,11 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
     def response(self, nonce=None, *, user='arcticqual', uid=1000, id_un='arcticqual',
                  corrupt=()):
         nonce = nonce or self.nonce
-        record = D.IDENTITY_MARKER + D.installed_user_token(nonce, user, uid, id_un)
-        records = [record, record, record]
+        token = D.installed_user_token(nonce, user, uid, id_un)
+        records = [marker + token for marker in D.IDENTITY_MARKERS]
         for index in corrupt:
             records[index] = records[index][:-1] + ('0' if records[index][-1] != '0' else '1')
-        return ('\n'.join(records) + '\n').encode()
+        return ('\n\n         '.join(records) + '\n').encode()
 
     def exercise(self, outputs, *, size=(1280, 720), console=True):
         clock = [0.0]
@@ -71,18 +72,20 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
 
     def test_command_cannot_contain_its_exact_response(self):
         command = D.installed_user_command(self.nonce)
-        expected = D.installed_user_record(self.nonce)
-        self.assertNotIn(expected, command)
-        self.assertNotIn(D.IDENTITY_MARKER, command)
+        expected = D.installed_user_records(self.nonce)
+        self.assertTrue(all(record not in command for record in expected))
+        self.assertTrue(all(('\\0' + format(ord(marker), '02o')) in command
+                            for marker in D.IDENTITY_MARKERS))
         result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, check=True, timeout=5)
         self.assertEqual(result.stderr, b'')
         rendered = result.stdout.decode()
-        self.assertTrue(rendered.startswith('\x1b[2J\x1b[H'))
-        records = [line.replace(' ', '') for line in rendered[len('\x1b[2J\x1b[H'):].splitlines()]
-        actual = D.IDENTITY_MARKER + D.installed_user_token(
+        self.assertTrue(rendered.startswith('\x1b[2J\x1b[8;10H\x1b[1m'))
+        visible = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', rendered)
+        records = [line.replace(' ', '') for line in visible.splitlines() if line.strip()]
+        token = D.installed_user_token(
             self.nonce, os.environ['USER'], os.getuid(),
             subprocess.check_output(['id', '-un'], text=True).strip())
-        self.assertEqual(records, [actual] * D.IDENTITY_RECORDS)
+        self.assertEqual(records, [marker + token for marker in D.IDENTITY_MARKERS])
         self.assertNotIn(self.nonce, rendered)
 
     def test_both_fixed_fish_prompt_renders_require_a_fresh_exact_response(self):
@@ -96,7 +99,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
                 self.assertEqual(proof['username'], 'arcticqual')
                 self.assertEqual(proof['uid'], 1000)
                 self.assertEqual(proof['observed_line_sha256'],
-                                 hashlib.sha256(D.installed_user_record(self.nonce).encode()).hexdigest())
+                                 hashlib.sha256(('\n'.join(D.installed_user_records(self.nonce))).encode()).hexdigest())
                 self.assertEqual(len([call for call in calls if call[0] == 'text']), 1)
                 self.assertNotIn('tessedit_char_whitelist=0123456789', self.ocr_arguments[0][0][0])
                 self.assertIn('tessedit_char_whitelist=0123456789', self.ocr_arguments[1][0][0])
@@ -129,7 +132,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             b'arcticqual@arctic-qual ~>\n', response])
         self.assertIs(type(proof), dict)
         self.assertEqual(proof['observed_line_sha256'],
-                         hashlib.sha256(D.installed_user_record(self.nonce).encode()).hexdigest())
+                         hashlib.sha256(('\n'.join(D.installed_user_records(self.nonce))).encode()).hexdigest())
         self.assertEqual([call[0] for call in calls], ['text', 'keys'])
         self.assertNotIn(self.secret, repr(proof))
 
@@ -138,6 +141,19 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertIs(type(error), RuntimeError)
         self.assertEqual(error.args, ('installed user identity response differs',))
         self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+
+    def test_duplicate_single_record_cannot_satisfy_two_of_three(self):
+        record = D.installed_user_records(self.nonce)[0]
+        response = ((record + '\n') * D.IDENTITY_RECORDS).encode()
+        error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', response])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+        self.assertEqual(D.identity_observation_codes(error), (
+            'installer-inner-driver-installed-proof-identity-record-count-three',
+            'installer-inner-driver-installed-proof-identity-marker-count-three',
+            'installer-inner-driver-installed-proof-identity-exact-count-one',
+            'installer-inner-driver-installed-proof-identity-challenge-issued-true'))
 
     def test_repeated_mismatch_waits_to_deadline_and_exports_only_closed_facts(self):
         replay = self.response('0' * 32, user='root', uid=0, id_un='root')

@@ -398,7 +398,7 @@ def ocr_provenance():
                 version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
 
 
-IDENTITY_MARKER = '731904'
+IDENTITY_MARKERS = ('2', '4', '6')
 IDENTITY_TOKEN_DIGITS = 19
 IDENTITY_RECORDS = 3
 
@@ -415,8 +415,9 @@ def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual')
     return format(int(prefix, 16), '0' + str(IDENTITY_TOKEN_DIGITS) + 'd')
 
 
-def installed_user_record(nonce):
-    return IDENTITY_MARKER + installed_user_token(nonce)
+def installed_user_records(nonce):
+    token = installed_user_token(nonce)
+    return tuple(marker + token for marker in IDENTITY_MARKERS)
 
 
 def installed_user_command(nonce):
@@ -425,16 +426,18 @@ def installed_user_command(nonce):
             'installed user identity nonce differs')
     # coreutils is in the installed `core` pattern and is independently needed
     # by the shipped image.  Fifteen SHA-256 hex digits retain 60 response bits;
-    # decimal rendering avoids letter confusions and three records tolerate one
-    # damaged OCR line.  The marker is octal-encoded, so no expected record is
-    # present in the command text.  Clearing occurs only after all identities and
-    # the digest have been computed successfully.
+    # decimal rendering avoids letter confusions and three distinct records
+    # tolerate one damaged OCR line.  Short octal-encoded row markers keep each
+    # record at 20 digits, while blank rows and an inset bold layout keep the
+    # physical records distinct for OCR.  No expected record is present in the
+    # command text. Clearing occurs only after all identities and the digest have
+    # been computed successfully.
     return ("sh -c 'u=$(id -u)||exit;n=$(id -un)||exit;"
             "h=$(printf \"%s\\0%s\\0%s\\0%s\\0\" \"$1\" \"$USER\" \"$u\" \"$n\"|sha256sum|cut -c1-15);"
             "d=$(printf %019u 0x$h)||exit;"
-            "printf \"\\033[2J\\033[H\\067\\063\\061\\071\\060\\064 %s\\n"
-            "\\067\\063\\061\\071\\060\\064 %s\\n"
-            "\\067\\063\\061\\071\\060\\064 %s\\n\" \"$d\" \"$d\" \"$d\"' sh " + nonce)
+            "printf \"\\033[2J\\033[8;10H\\033[1m\\062%s\\n\\n"
+            "         \\064%s\\n\\n"
+            "         \\066%s\\033[0m\\n\" \"$d\" \"$d\" \"$d\"' sh " + nonce)
 
 
 def installed_shell_ready(observed_line):
@@ -452,11 +455,14 @@ def _identity_count(value):
 def _identity_ocr_observation(stdout, expected, sent):
     """Parse only fixed-width decimal records and return counts, never OCR text."""
     require(type(stdout) is bytes and len(stdout) <= 65536, 'prompt OCR exceeds bound')
+    require(type(expected) is tuple and len(expected) == IDENTITY_RECORDS and
+            len(set(expected)) == IDENTITY_RECORDS,
+            'installed user identity records differ')
     text = stdout.decode()
     lines = [re.sub(r'\s', '', line) for line in text.splitlines()]
-    numeric = [line for line in lines if re.fullmatch('[0-9]{' + str(len(expected)) + '}', line)]
-    marked = [line for line in numeric if line.startswith(IDENTITY_MARKER)]
-    exact = [line for line in marked if line == expected]
+    numeric = [line for line in lines if re.fullmatch('[0-9]{' + str(len(expected[0])) + '}', line)]
+    marked = [line for line in numeric if line[:1] in IDENTITY_MARKERS]
+    exact = set(marked).intersection(expected)
     observation = (_identity_count(len(numeric)), _identity_count(len(marked)),
                    _identity_count(len(exact)), 'true' if sent else 'false')
     accepted = sent and 2 <= len(exact) <= IDENTITY_RECORDS and \
@@ -473,9 +479,10 @@ def _identity_mismatch_error(observation):
 def console_user_identity(vm, startup, out, nonce, private_password):
     """Require a fresh redundant SHA-256 identity response before permitting sudo."""
     deadline = time.monotonic() + 45
-    expected = installed_user_record(nonce)
+    expected = installed_user_records(nonce)
     command = installed_user_command(nonce)
-    require(expected not in command, 'installed user command can mimic its response')
+    require(not any(record in command for record in expected),
+            'installed user command can mimic its response')
     sent = False
     sent_after_exact_prompt = False
     greeting_exit_sent = False
@@ -501,7 +508,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
             Path(path).unlink()
             return dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=nonce,
                         username='arcticqual', uid=1000,
-                        observed_line_sha256=hashlib.sha256(expected.encode('ascii')).hexdigest(),
+                        observed_line_sha256=hashlib.sha256(('\n'.join(expected)).encode('ascii')).hexdigest(),
                         observed_ns=time.monotonic_ns())
         if not sent:
             text = result.stdout.decode()

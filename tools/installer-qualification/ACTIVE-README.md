@@ -51,10 +51,12 @@ future candidate's runtime prompt. After one nonsecret Return, an unrecognized
 cosmetic prompt may receive only the nonsecret challenge. That command computes
 SHA-256 over the fresh nonce, `$USER`, `id -u` and `id -un` using installed
 coreutils, clears its echoed command, and renders three short decimal records.
-The expected record is absent from the typed command. A digits-only OCR pass must
-observe at least two exact records on the physical 1280×720 console within the
-original 45-second bound; one corrupted record is tolerated, while a replay,
-wrong identity or two damaged records fails closed. Sudo input remains forbidden
+Each record has a distinct one-digit row marker and the three 20-digit records are
+inset, bold and separated by blank rows. Every expected record is absent from the
+typed command. A digits-only OCR pass must observe at least two distinct exact
+records on the physical 1280×720 console within the original 45-second bound;
+one corrupted record is tolerated, while a duplicate, replay, wrong identity or
+two damaged records fails closed. Sudo input remains forbidden
 until that response is observed. Getty and sudo password OCR remain unchanged.
 
 The four live guest captures, actual VT-away host capture and two pre-input console
