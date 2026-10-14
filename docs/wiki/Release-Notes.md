@@ -1,14 +1,14 @@
 # Release notes
 
-## Current main packages and replacement ISO
+## Current stable packages and replacement ISO
 
-The completed desktop, installer and setup changes described here are on `main`. Their final
-signed **stable arctic** publication is pending release qualification. Keep the stable channel
-selected; after publication, existing systems can use `arctic-update now`, then
+The completed desktop, installer and setup changes described here are on `main` and published in
+the signed **stable arctic** repository. Keep the stable channel selected; existing systems can
+use `arctic-update now`, then
 `arctic-update apply` (save your work; this asks before restarting). **The testing channel is
 not required.** Existing app and wallpaper choices are preserved.
 
-The pending stable package set includes:
+The current stable package set includes:
 
 - New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
   Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
@@ -20,7 +20,7 @@ The pending stable package set includes:
   explicitly selected Tor/Tailscale/VPN support.
 - Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
   status, the lock-screen clock, and installer restoration after a console/output change.
-- Local Voxtype 1.1.0 dictation for Hebrew and English: verified online-install downloads,
+- Local VoxType 1.1.0 dictation for Hebrew and English: verified online-install downloads,
   nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
   selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
 - A **What's New** card keyed by a unique packaged update ID, shown once per account after every
