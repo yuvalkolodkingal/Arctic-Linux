@@ -120,51 +120,20 @@ class CaptureControls(unittest.TestCase):
                 seen.append((list(smoke.prefix),list(argv)))
                 if fail:raise RuntimeError('synthetic launch failure')
             if fail:
-                with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
-            else:smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
+                with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
+            else:smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
             self.assertIs(smoke.prefix,initial)
             self.assertEqual(seen[0][0],initial+['GSETTINGS_BACKEND=keyfile'])
-            self.assertEqual(seen[0][1],['/usr/bin/celluloid'])
+            self.assertEqual(seen[0][1],['/usr/libexec/arctic/arctic-celluloid'])
             smoke.prefix=['GSETTINGS_BACKEND=dconf']; launch=Mock()
-            with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
+            with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
             launch.assert_not_called()
 
     def test_non_gui_v6_launch_keeps_original_environment(self):
         smoke=N.Smoke.__new__(N.Smoke);smoke.prefix=['original-prefix'];smoke.reference_settings_config=Mock()
-        launch=Mock();smoke.launch_reference_player(['/usr/bin/celluloid','fixed-fixture'],launch)
+        launch=Mock();smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','fixed-fixture'],launch)
         self.assertEqual(smoke.prefix,['original-prefix']);smoke.reference_settings_config.assert_not_called()
-        launch.assert_called_once_with(['/usr/bin/celluloid','fixed-fixture'])
-
-    def primary_seed(self, root, replies):
-        config=root/'config';config.mkdir(mode=0o700)
-        smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid()
-        smoke.prefix=['synthetic-prefix','XDG_CONFIG_HOME='+str(config)]
-        smoke.cmd=Mock(side_effect=replies)
-        return smoke
-
-    def test_primary_controls_seed_exact_private_set_get_and_receipt(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            smoke=self.primary_seed(Path(temporary),[(0,'',''),(0,'true','')])
-            value=smoke.seed_primary_reference_controls()
-            prefix=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings']
-            schema=['io.github.celluloid-player.Celluloid.window-state','show-controls']
-            self.assertEqual([call.args[0] for call in smoke.cmd.call_args_list],
-                             [prefix+['set']+schema+['true'],prefix+['get']+schema])
-            self.assertTrue(value['initial_visible']);self.assertTrue(value['seed_readback_matched'])
-            self.assertTrue(value['private_config_verified']);self.assertFalse(value['release_acceptance'])
-            for call in smoke.cmd.call_args_list:
-                self.assertEqual(call.kwargs,dict(timeout=5,allow_failure=True))
-
-    def test_primary_controls_seed_nonzero_poison_or_foreign_backend_fails_closed(self):
-        for replies in ([(1,'','')],[(0,'',''),(1,'true','')],
-                        [(0,'',''),(0,'false','')],[(0,'',''),(0,'maybe','')]):
-            with self.subTest(replies=replies),tempfile.TemporaryDirectory() as temporary:
-                smoke=self.primary_seed(Path(temporary),replies)
-                with self.assertRaises(RuntimeError):smoke.seed_primary_reference_controls()
-        with tempfile.TemporaryDirectory() as temporary:
-            smoke=self.primary_seed(Path(temporary),[]);smoke.prefix.append('GSETTINGS_BACKEND=dconf')
-            with self.assertRaises(RuntimeError):smoke.seed_primary_reference_controls()
-            smoke.cmd.assert_not_called()
+        launch.assert_called_once_with(['/usr/libexec/arctic/arctic-celluloid','fixed-fixture'])
 
     def socket_control(self,reply,expected_pid=None,expected_uid=None):
         with tempfile.TemporaryDirectory() as t:
@@ -289,8 +258,6 @@ class CaptureControls(unittest.TestCase):
             self.assertLess(method.index('time.sleep(.5)'),method.index("['grim'"))
             self.assertEqual(method.count('time.sleep(.5)'),1)
             if klass=='Smoke':
-                self.assertLess(method.index('self.seed_primary_reference_controls()'),
-                                method.index('self.fresh_window('))
                 self.assertEqual(method.count('time.sleep(retry_settle_seconds)'),1)
             self.assertEqual(method.count('self.hide_reference_controls(player,ipc)'),1)
             self.assertIn('evaluate_reference_rgb(',method)

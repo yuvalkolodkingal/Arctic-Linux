@@ -1,205 +1,408 @@
 {
-  "status": "validated_unpublished_candidate",
-  "source_commit": "a000e91e85c3b584d052c9af589c37047d116af0",
-  "flow": {
-    "id": "AZ4TDAX0jyQtW3LwUlZZ",
-    "voice": {
-      "provider": "ElevenLabs",
-      "name": "River - Relaxed, Neutral, Informative",
-      "voice_id": "SAz9YHcvj6GT2YYXdXww",
-      "model": "eleven_multilingual_v2",
-      "language": "en"
-    },
-    "nodes": {
-      "intro_through_files": "sStDaZE5nlZtiMpU41xw",
-      "terminal_through_outro": "BhJOXKjBcez5004wfLtv",
-      "winter_replacement": "ZoVKeQ1VmiCT7ssOZeXH"
+  "status": "direct_voxtype_master_aligned_capture_listening_pending",
+  "source_commit": null,
+  "source_branch": "codex/showcase-direct-voxtype-source-20261014",
+  "voice": {
+    "provider": "ElevenLabs",
+    "name": "River - Relaxed, Neutral, Informative",
+    "voice_id": "SAz9YHcvj6GT2YYXdXww",
+    "model": "eleven_multilingual_v2",
+    "language": "en",
+    "category": "premade"
+  },
+  "license": {
+    "basis": "Generated through the project maintainer’s connected ElevenLabs workspace; use is governed by that workspace plan and the ElevenLabs Terms of Service.",
+    "terms_url": "https://elevenlabs.io/terms-of-use",
+    "standalone_license_file_supplied": false,
+    "publisher_action_required": "Confirm the connected plan permits the intended public video before publication.",
+    "publication_confirmation": {
+      "status": "pending",
+      "confirmed_by": null,
+      "confirmed_at": null,
+      "scope": null
     }
   },
-  "bounded_generation_authorization": {
-    "variations_per_node": 1,
-    "run_count_per_node": 1,
-    "estimated_credits": 8562,
-    "estimated_usd": 1.7124,
+  "base_master": {
+    "draft_release_tag": "showcase-river-source-2026-10-12",
+    "asset": "narration-river-final.mp3",
+    "public": false,
+    "bytes": 12182090,
+    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
+    "pyav_duration_seconds": 507.512041,
+    "provenance": {
+      "flow_id": "AZ4TDAX0jyQtW3LwUlZZ",
+      "nodes": {
+        "intro_through_files": "sStDaZE5nlZtiMpU41xw",
+        "terminal_through_outro": "BhJOXKjBcez5004wfLtv",
+        "winter_replacement": "ZoVKeQ1VmiCT7ssOZeXH"
+      },
+      "generated_sources": [
+        {
+          "id": "intro-through-files",
+          "session_id": "KaVBliJ0KTP09mN8GIIj",
+          "generation_id": "ODaaj6ojrG9Pyd7MDwYU",
+          "reported_duration_seconds": 222.77224489795918,
+          "container_duration_seconds": 222.798367,
+          "bytes": 3582361,
+          "sha256": "a66d2b7d95b8722d620fc94883f873dcc0eaf8516771b8d9df18110b95472a9c"
+        },
+        {
+          "id": "terminal-through-outro",
+          "session_id": "BfVGLRcUcRZrwaQ9r3O4",
+          "generation_id": "huGR0ehRkMfrtez37D0M",
+          "reported_duration_seconds": 285.6054421768707,
+          "container_duration_seconds": 285.64898,
+          "bytes": 4587971,
+          "sha256": "61dc43b0a60b52ad3d7b84f363c8ae338053960256106b748b6e138452a08bb1"
+        },
+        {
+          "id": "winter-replacement",
+          "session_id": "oZQQyFVCKUo3q7HSrz2j",
+          "generation_id": "ceAvL8SQsj60c6g1CRvL",
+          "reported_duration_seconds": 12.26013605442177,
+          "container_duration_seconds": 12.303673,
+          "bytes": 214446,
+          "sha256": "95616c286e8539772780a3267966a8d8f7bb4cb942cdd72c221c419682255a39"
+        }
+      ],
+      "prior_alignment_workflow": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
+      "prior_render_workflow": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733"
+    }
+  },
+  "bounded_patch_authorization": {
+    "variations_per_patch": 1,
+    "run_count_per_patch": 1,
+    "estimated_credits": 199,
+    "estimated_usd": 0.0398,
+    "charged_credits": 199,
+    "charged_usd": 0.0398,
     "no_additional_variations_generated": true
   },
-  "generated_sources": [
+  "patches": [
     {
-      "id": "intro-through-files",
-      "session_id": "KaVBliJ0KTP09mN8GIIj",
-      "generation_id": "ODaaj6ojrG9Pyd7MDwYU",
-      "first_scene": "intro",
-      "last_scene": "files",
-      "reported_duration_seconds": 222.77224489795918,
-      "container_duration_seconds": 222.798367,
-      "bytes": 3582361,
-      "sha256": "a66d2b7d95b8722d620fc94883f873dcc0eaf8516771b8d9df18110b95472a9c"
+      "id": "wallpaper-delete-restore",
+      "purpose": "Add packaged-wallpaper Delete=hide and Restore behavior to the Winter scene.",
+      "text": "Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
+      "flow_id": "oF8RXAnv8KcREQ5P32UF",
+      "node_id": "nTX6LRjOoLsTV6QgTQsz",
+      "session_id": "GfyL2XBNi44ig7fJzoqZ",
+      "generation_id": "aBPN0JFwzHoHIzxAUoM6",
+      "created_at_unix_ms": 1791879524734,
+      "reported_duration_seconds": 5.2477097505668935,
+      "ffprobe_duration_seconds": 5.276735,
+      "bytes": 102015,
+      "sha256": "8d6aba63182933ecfd1b5c8c7fa6b178a29c2f7e25666f6e6250fc968a87a1d5",
+      "credits": 104,
+      "price_usd": 0.0208,
+      "published": false,
+      "committed": false
     },
     {
-      "id": "terminal-through-outro",
-      "session_id": "BfVGLRcUcRZrwaQ9r3O4",
-      "generation_id": "huGR0ehRkMfrtez37D0M",
-      "first_scene": "terminal",
-      "last_scene": "outro",
-      "reported_duration_seconds": 285.6054421768707,
-      "container_duration_seconds": 285.64898,
-      "bytes": 4587971,
-      "sha256": "61dc43b0a60b52ad3d7b84f363c8ae338053960256106b748b6e138452a08bb1"
-    },
-    {
-      "id": "winter-replacement",
-      "session_id": "oZQQyFVCKUo3q7HSrz2j",
-      "generation_id": "ceAvL8SQsj60c6g1CRvL",
-      "scene": "winter",
-      "text": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
-      "reported_duration_seconds": 12.26013605442177,
-      "container_duration_seconds": 12.303673,
-      "bytes": 214446,
-      "sha256": "95616c286e8539772780a3267966a8d8f7bb4cb942cdd72c221c419682255a39"
+      "id": "whats-new",
+      "purpose": "Add the one-time per-update What's New summary to the Updates scene.",
+      "text": "After each update, What's New shows the changes once, with release notes ready to reopen later.",
+      "flow_id": "PtpRX7Ow7UbO6D3WekNM",
+      "node_id": "tJy4jy8DoYU97cH4rUOO",
+      "session_id": "D3X3sFlv2cw5Dt9n1uJG",
+      "generation_id": "XCKS1S11ORYIs6CA6cGA",
+      "created_at_unix_ms": 1791879527288,
+      "reported_duration_seconds": 5.61922902494331,
+      "ffprobe_duration_seconds": 5.668571,
+      "bytes": 108285,
+      "sha256": "07608b53381c306d7dc81409e1f8aaaa16533a6ff1264503de0dfa7012817664",
+      "credits": 95,
+      "price_usd": 0.019,
+      "published": false,
+      "committed": false
     }
   ],
   "assembly": {
-    "input_segments": [
-      {
-        "source": "intro-through-files",
-        "start_seconds": 0,
-        "end_seconds": 222.772245
-      },
-      {
-        "source": "terminal-through-outro",
-        "start_seconds": 0,
-        "end_seconds": 156.56585
-      },
-      {
-        "source": "winter-replacement",
-        "start_seconds": 0,
-        "end_seconds": 11.921587
-      },
-      {
-        "source": "terminal-through-outro",
-        "start_seconds": 169.353084,
-        "end_seconds": 285.605442
-      }
-    ],
-    "replaced_terminal_clip_interval_seconds": {
-      "start": 156.56585,
-      "end": 169.353084
+    "script": "assemble-river-patches.py",
+    "cuts_on_base_seconds": {
+      "wallpaper_delete_restore": 391.63,
+      "whats_new": 468.06
     },
-    "final_file": "narration-river-final.mp3",
-    "format": {
-      "codec": "mp3",
-      "sample_rate_hz": 44100,
-      "channels": 1,
-      "bit_rate_bps": 192000
+    "local_reference": {
+      "file": "narration-river-patched.mp3",
+      "bytes": 12442896,
+      "sha256": "ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765",
+      "ffprobe_duration_seconds": 518.426122,
+      "pyav_duration_seconds": 518.37898,
+      "ffmpeg": "7.1.5-0+deb13u1",
+      "status": "superseded_custom_controller_wording"
     },
-    "duration_seconds": 507.559184,
-    "bytes": 12182090,
-    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb"
+    "published": false,
+    "preserved_in_draft_release": false
+  },
+  "source_archive": {
+    "status": "pending",
+    "release_id": null,
+    "draft": null,
+    "public": null,
+    "target_commit": null,
+    "tag": "showcase-river-source-2026-10-14",
+    "asset_id": null,
+    "asset": "narration-river-direct-voxtype-final-2026-10-14.mp3",
+    "bytes": 13201492,
+    "rest_digest": null,
+    "download_sha256": null,
+    "full_decode_errors": null
   },
   "validation": {
-    "exact_model_and_voice_verified_for_all_sources": true,
-    "source_media_checksums_verified": true,
-    "old_19_photo_winter_wording_removed_by_measured_cut": true,
-    "corrected_winter_text_present_in_replacement_source": true,
-    "sentence_alignment_available": true,
-    "scene_timing_available": true,
-    "local_speech_to_text_verification": "passed",
-    "transcript_leakage_review": "passed_for_verifier_logs",
-    "authentic_capture_review": "passed_with_disclosed_evidence",
-    "render_verified": true,
+    "local_speech_to_text_alignment": "passed_faster_whisper_base_en_word_alignment",
+    "transcript_leakage_review": "passed_automated_log_safety_ephemeral_transcript_not_uploaded",
+    "human_listening_review": {
+      "status": "pending",
+      "reviewer": null,
+      "reviewed_at": null,
+      "master_sha256": null,
+      "scope": null
+    },
+    "final_render_verified": false,
     "public_video_published": false,
-    "whisper_metrics": {
-      "audio_duration_seconds": 507.512041,
+    "superseded_master_whisper_metrics": {
+      "audio_duration_seconds": 518.37898,
       "model": "base.en",
       "detected_language": "en",
       "detected_language_probability": 1,
-      "expected_words": 1355,
-      "asr_words": 1363,
-      "edit_distance": 56,
-      "word_error_rate": 0.041328,
-      "sequence_ratio": 0.967623,
-      "exact_token_coverage": 0.97048,
-      "corrected_winter_phrase_token_coverage": 1,
+      "expected_words": 1387,
+      "asr_words": 1401,
+      "edit_distance": 51,
+      "word_error_rate": 0.03677,
+      "sequence_ratio": 0.971306,
+      "exact_token_coverage": 0.976208,
+      "corrected_winter_phrase_token_coverage": 1.0,
+      "wallpaper_hide_restore_phrase_token_coverage": 1.0,
+      "whats_new_phrase_token_coverage": 1.0,
       "banned_old_phrase_detected": false,
-      "caption_cues": 128,
+      "caption_cues": 130,
       "scenes": 38,
       "transcript_in_ci_log": false
     },
-    "verifier_versions": {
-      "python": "3.12.15",
-      "faster-whisper": "1.2.1",
-      "av": "16.0.1",
-      "ctranslate2": "4.8.2",
-      "huggingface-hub": "2.2.0",
-      "tokenizers": "0.23.3",
-      "preflight_seconds": 1,
-      "preflight_segments": 1,
-      "preflight_words": 3,
+    "direct_voxtype_master_whisper_metrics": {
+      "audio_duration_seconds": 549.987846,
+      "model": "base.en",
+      "detected_language": "en",
+      "detected_language_probability": 1,
+      "expected_words": 1473,
+      "asr_words": 1486,
+      "edit_distance": 58,
+      "word_error_rate": 0.039375,
+      "sequence_ratio": 0.969246,
+      "exact_token_coverage": 0.973523,
+      "minimum_cue_exact_token_coverage": 0.666667,
+      "cues_below_half_exact_token_coverage": 0,
+      "cues_without_exact_tokens": 0,
+      "corrected_winter_phrase_token_coverage": 1.0,
+      "wallpaper_hide_restore_phrase_token_coverage": 1.0,
+      "whats_new_phrase_token_coverage": 1.0,
+      "explicit_cpu_recovery_phrase_token_coverage": 1.0,
+      "local_privacy_phrase_token_coverage": 1.0,
+      "banned_old_phrase_detected": false,
+      "caption_cues": 130,
+      "scenes": 38,
       "transcript_in_ci_log": false
     },
-    "workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
-    "alignment_artifact": {
-      "id": 11769902895,
-      "name": "showcase-river-whisper-alignment",
-      "bytes": 44296,
-      "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
+    "objective_audio_checks": {
+      "full_ffmpeg_decode_errors": 0,
+      "codec": "mp3float",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "decoded_samples": 24254464,
+      "decoded_duration_seconds": 549.987846,
+      "integrated_loudness_lufs": -24.5,
+      "loudness_range_lu": 2.3,
+      "true_peak_dbfs": -1.9,
+      "sample_peak_dbfs": -1.919,
+      "rms_dbfs": -25.267,
+      "dc_offset": 1.599279e-06,
+      "hard_clipped_samples_ge_0_999": 0,
+      "join": {
+        "join_sample_index": 12328960,
+        "join_seconds": 279.568254,
+        "join_boundary_sample_delta": 0.000141357,
+        "join_window_max_adjacent_delta": 0.103272557,
+        "join_boundary_delta_fraction_of_window_max": 0.001369,
+        "join_pre_250ms_rms_dbfs": -73.617,
+        "join_post_250ms_rms_dbfs": -19.419,
+        "join_contiguous_below_minus_60_dbfs_seconds": 0.38229,
+        "join_contiguous_below_minus_60_dbfs_start_seconds": 279.211633,
+        "join_contiguous_below_minus_60_dbfs_end_seconds": 279.593923
+      },
+      "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval and its sample step is below the largest adjacent step in the surrounding 500 ms. Human listening remains pending."
     },
-    "render_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38300570733",
-    "render_artifact": {
-      "id": 11771111869,
-      "name": "Arctic-Linux-Showcase-River-1080p-candidate",
-      "bytes": 63981992,
-      "sha256": "c569ea70092736eec2d1abca29678211897b6aa665233d396aa38d0f4f5dfe5f"
-    },
-    "final_video": {
-      "path": "Arctic-Linux-Showcase-River-1080p.mp4",
-      "bytes": 60327673,
-      "sha256": "731fb8c58c1e4097c472f44c6ee2cd1280884af7b41b1c23e2a2cf296739a836",
-      "duration_seconds": 507.533333,
-      "width": 1920,
-      "height": 1080,
-      "frame_rate": "30/1",
-      "video_codec": "h264",
-      "audio_codec": "aac",
-      "subtitle_codec": "mov_text"
-    },
-    "full_decode_errors": 0,
-    "representative_frame_review": {
-      "status": "passed",
-      "count": 15,
-      "timestamps_seconds": [
-        0.5,
-        24,
-        56,
-        112,
-        198,
-        210,
-        238,
-        266,
-        283,
-        304,
-        322,
-        352,
-        383,
-        394,
-        493
-      ]
+    "final_render_review": {
+      "status": "pending",
+      "source_commit": null,
+      "render": {
+        "workflow_run": null,
+        "source_commit": null,
+        "artifact_id": null,
+        "artifact_name": "Arctic-Linux-Showcase-River-1080p-candidate",
+        "archive_bytes": null,
+        "archive_sha256": null
+      },
+      "video": {
+        "name": "Arctic-Linux-Showcase-River-1080p.mp4",
+        "bytes": null,
+        "sha256": null,
+        "duration_seconds": null
+      },
+      "checks": {
+        "full_decode_status": "pending",
+        "subtitle_mux_status": "pending",
+        "subtitle_codec": null,
+        "subtitle_cues": null,
+        "duration_matches_master": false
+      },
+      "human_frame_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null,
+        "video_sha256": null,
+        "frames": null
+      }
     }
   },
   "generated_audio_binaries_committed": false,
   "notes": [
     "Signed provider download URLs are intentionally excluded from source control.",
-    "Do not rerun the three nodes unless a named segment is proven unusable.",
-    "The validated candidate remains unpublished until the matching Arctic release finishes qualification.",
-    "The 30-day workflow artifact contains the ASR transcript and word timestamps; those text-bearing files are intentionally not committed."
+    "Do not rerun either patch: both authorized one-time generations succeeded and their immutable receipts are recorded.",
+    "The two patch files and assembled master currently exist only in the task workspace; preserve them in a non-public source archive before relying on remote rendering.",
+    "No raw audio or final MP4 was published by this source-preparation change.",
+    "The 12,442,896-byte River master with SHA-256 ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765 is preserved as superseded evidence only.",
+    "The failed 9,093-character connector attempt produced no renderable audio; its flow, node, session and generation identifiers are retained as non-renderable evidence.",
+    "The locked narration is split byte for byte at the paragraph boundary between Get apps and Remove apps into 4,451- and 4,642-character inputs. Exactly two one-take River generation calls were required and both completed.",
+    "Both segment generation receipts and the gapless assembled-master receipt now contain measured sizes, SHA-256 hashes, durations and decoded sample counts. Rendering remains blocked by alignment, human listening, qualified captures and release binding.",
+    "Both pinned River segments were generated exactly once. Their immutable provider identifiers, byte sizes, SHA-256 hashes, PyAV durations and 44.1 kHz decoded sample counts are recorded under direct_voxtype_revision.segmented_generation.segments.",
+    "The verified 13,201,492-byte assembled River master has SHA-256 90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5, PyAV duration 549.987846 seconds and 24,254,464 decoded mono samples at 44.1 kHz.",
+    "The two source MP3s and assembled master are preserved outside Git. They are not published and the render remains blocked pending listening review, qualified captures and release binding.",
+    "The verified master was aligned twice with the pinned local faster-whisper 1.2.1/base.en stack; all committed alignment outputs were byte-identical between runs.",
+    "Automated alignment measured 3.9375% WER, 96.9246% sequence ratio and 97.3523% exact-token coverage; no cue had less than half exact-token coverage.",
+    "Objective full-decode, loudness, clipping and join measurements passed their factual checks. They do not replace the pending human listening review."
   ],
-  "source_archive": {
-    "kind": "draft_github_release",
-    "tag": "showcase-river-source-2026-10-12",
-    "asset": "narration-river-final.mp3",
-    "bytes": 12182090,
-    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
-    "preservation_workflow_run": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38304097685",
-    "public": false
+  "release_binding": {
+    "status": "pending",
+    "qualified_iso": null,
+    "qualification_manifest": {
+      "path": "tools/qualified-release/manifest.json",
+      "sha256": null,
+      "status": "pending"
+    }
+  },
+  "ready_for_render": false,
+  "direct_voxtype_revision": {
+    "affected_cues": [
+      42,
+      "76-90",
+      96,
+      127
+    ],
+    "wording_status": "locked",
+    "new_master": {
+      "draft_release_tag": "showcase-river-source-2026-10-14",
+      "asset": "narration-river-direct-voxtype-final-2026-10-14.mp3",
+      "bytes": 13201492,
+      "sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
+      "pyav_duration_seconds": 549.987846,
+      "decoded_sample_rate_hz": 44100,
+      "decoded_channels": 1,
+      "decoded_samples": 24254464,
+      "segment_audio_sha256s": [
+        "312930f1b1d759bb42271be4437b968c5053371c7c75cbe96483011a52e49fa6",
+        "d9da67e9db12cc9866a689accc7a7257137de90f9c6ccf3c026c6feee4e8231a"
+      ]
+    },
+    "alignment": "verified_faster_whisper_base_en_word_alignment",
+    "capture_evidence": "pending_qualified_direct_voxtype_iso",
+    "note": "The verified assembled master is aligned to all 130 approved cues. Rendering remains blocked pending human listening, qualified captures and publication binding.",
+    "failed_full_narration_attempt": {
+      "flow_id": "Cy4mMtnohtJes0X2nAN9",
+      "node_id": "89XLWvL8r6Kw473qr1C0",
+      "session_id": "1i3Rl0dfqyey9flZ6U8A",
+      "generation_id": "ifJ58S7jcPIhtJ62UNfy",
+      "requested_characters": 9093,
+      "connector_limit_characters": 5000,
+      "outcome": "failed_input_too_long",
+      "renderable_audio": false
+    },
+    "segmented_generation": {
+      "connector_limit_characters": 5000,
+      "minimum_generation_calls": 2,
+      "locked_narration": {
+        "path": "showcase/narration.txt",
+        "characters": 9093,
+        "bytes": 9093,
+        "sha256": "23d1eab240865ea3230a1448a098abaed2b3e5fa9a1ee58e0a4eaab12e96215e"
+      },
+      "segments": [
+        {
+          "index": 1,
+          "text_path": "showcase/revision-2026-10-12/narration-river-segment-01.txt",
+          "first_scene": "intro",
+          "last_scene": "getapps",
+          "characters": 4451,
+          "bytes": 4451,
+          "sha256": "27e84fb55bef8b81bccff227974c8a6f2c4bd71c42f4adfd540b762225707389",
+          "generation": {
+            "flow_id": "X8Vsj5cvGYGSBDVVBSiE",
+            "node_id": "6gXjmZonbxRClujjHE2E",
+            "session_id": "YluBSbSIcWfT6pDrB5VD",
+            "generation_id": "eDiUE3lhJv80hbjcdXda",
+            "asset": "river-segment-01.mp3",
+            "bytes": 4491422,
+            "sha256": "312930f1b1d759bb42271be4437b968c5053371c7c75cbe96483011a52e49fa6",
+            "reported_duration_seconds": 279.56825396825394,
+            "pyav_duration_seconds": 279.568254,
+            "decoded_samples": 12328960
+          }
+        },
+        {
+          "index": 2,
+          "text_path": "showcase/revision-2026-10-12/narration-river-segment-02.txt",
+          "first_scene": "removeapps",
+          "last_scene": "outro",
+          "characters": 4642,
+          "bytes": 4642,
+          "sha256": "c2c53a05ee9d33f63c109fcbf1d3d0e460c778983055207e69e562f8fef4a79d",
+          "generation": {
+            "flow_id": "X8Vsj5cvGYGSBDVVBSiE",
+            "node_id": "hRxw7aDzoOB7yfpHk9po",
+            "session_id": "Jy632vKyeuHclqg4pb05",
+            "generation_id": "KvzqGhkc7FXMx1BRbsWP",
+            "asset": "river-segment-02.mp3",
+            "bytes": 4344718,
+            "sha256": "d9da67e9db12cc9866a689accc7a7257137de90f9c6ccf3c026c6feee4e8231a",
+            "reported_duration_seconds": 270.4195918367347,
+            "pyav_duration_seconds": 270.419592,
+            "decoded_samples": 11925504
+          }
+        }
+      ],
+      "assembly": {
+        "script": "assemble-river-segments.py",
+        "method": "Decode each verified segment to 44.1 kHz mono PCM, concatenate decoded samples in index order with no inserted silence or crossfade, then encode one MP3 master.",
+        "sample_rate_hz": 44100,
+        "channels": 1,
+        "segment_audio_receipts_required": true,
+        "assembled_master_receipt_required": true,
+        "status": "verified_unpublished_master_preserved_outside_git",
+        "inserted_join_samples": 0,
+        "master_sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
+        "master_bytes": 13201492,
+        "master_pyav_duration_seconds": 549.987846
+      },
+      "generation_contract": {
+        "voice_name": "River - Relaxed, Neutral, Informative",
+        "voice_id": "SAz9YHcvj6GT2YYXdXww",
+        "model": "eleven_multilingual_v2",
+        "language": "en",
+        "variations_per_segment": 1,
+        "generation_calls": 2,
+        "text_handling": "Pass each UTF-8 segment file exactly, including its trailing newline bytes; do not trim, rewrite, join, or overlap the text.",
+        "status": "completed_exactly_once_per_segment",
+        "completed_generation_calls": 2
+      }
+    }
   }
 }

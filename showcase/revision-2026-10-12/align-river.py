@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Align the verified River master to the approved showcase caption text.
 
-The ASR transcript is written only to the private workflow artifact. Standard output contains a
+The ASR transcript is written only to the ephemeral job workspace and is never uploaded. Standard output contains a
 numeric summary so CI logs do not reproduce the narration.
 """
 from __future__ import annotations
@@ -60,6 +60,7 @@ def main() -> None:
     parser.add_argument("--storyboard", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--model", default="base.en")
+    parser.add_argument("--expected-duration", type=float, required=True)
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
 
@@ -67,7 +68,9 @@ def main() -> None:
     cues = approved["cues"]
     storyboard = json.loads(args.storyboard.read_text())
     duration = media_duration(args.audio)
-    if abs(duration - 507.559184) > 0.08:
+    if not 300 < args.expected_duration < 900:
+        raise SystemExit("expected master duration is outside the showcase bounds")
+    if abs(duration - args.expected_duration) > 0.08:
         raise SystemExit(f"unexpected master duration: {duration:.6f}")
 
     logging.getLogger("faster_whisper").setLevel(logging.ERROR)
@@ -168,6 +171,13 @@ def main() -> None:
         "duration": round(duration, 6),
         "scenes": timed_scenes,
         "captions": caption_output,
+        "timing_status": "verified_direct_voxtype_river_alignment",
+        "render_ready": False,
+        "timing_basis": (
+            "All scene and caption windows are aligned to the verified assembled direct-VoxType "
+            "River master. Rendering remains blocked by human listening, qualified final-image "
+            "captures and release binding."
+        ),
     }
     (args.output / "timing.json").write_text(json.dumps(timing, indent=2) + "\n")
     (args.output / "caption-text-aligned.json").write_text(json.dumps({
@@ -212,12 +222,25 @@ def main() -> None:
     sequence_ratio = matcher.ratio()
     coverage = matched / max(1, len(expected_words))
     normalized_transcript = " ".join(hypothesis_words)
-    target = "wallpaper picker includes the project's growing photo collection"
-    target_ratio = difflib.SequenceMatcher(
-        None, tokens(target), hypothesis_words,
-        autojunk=False,
-    ).find_longest_match().size / len(tokens(target))
+    targets = {
+        "corrected_winter_phrase_token_coverage": "wallpaper picker includes the project's growing photo collection",
+        "wallpaper_hide_restore_phrase_token_coverage": "built-in wallpapers can be deleted from your view and restored later",
+        "whats_new_phrase_token_coverage": "what's new shows the changes once with release notes ready to reopen later",
+    }
+    targets.update({
+        "explicit_cpu_recovery_phrase_token_coverage": "explicitly switch voxtype to cpu",
+        "local_privacy_phrase_token_coverage": "without sending audio to a service",
+    })
+    target_ratios = {
+        key: difflib.SequenceMatcher(None, tokens(value), hypothesis_words, autojunk=False)
+        .find_longest_match().size / len(tokens(value))
+        for key, value in targets.items()
+    }
     banned = "nineteen project photos" in normalized_transcript
+    cue_coverages = [
+        cue["matched_tokens"] / max(1, cue["expected_tokens"])
+        for cue in aligned
+    ]
     report = {
         "audio_duration_seconds": round(duration, 6),
         "model": args.model,
@@ -229,7 +252,10 @@ def main() -> None:
         "word_error_rate": round(wer, 6),
         "sequence_ratio": round(sequence_ratio, 6),
         "exact_token_coverage": round(coverage, 6),
-        "corrected_winter_phrase_token_coverage": round(target_ratio, 6),
+        "minimum_cue_exact_token_coverage": round(min(cue_coverages), 6),
+        "cues_below_half_exact_token_coverage": sum(value < 0.5 for value in cue_coverages),
+        "cues_without_exact_tokens": sum(value == 0 for value in cue_coverages),
+        **{key: round(value, 6) for key, value in target_ratios.items()},
         "banned_old_phrase_detected": banned,
         "caption_cues": len(caption_output),
         "scenes": len(timed_scenes),
@@ -240,8 +266,8 @@ def main() -> None:
 
     if wer > 0.12 or sequence_ratio < 0.90 or coverage < 0.85:
         raise SystemExit("Whisper verification thresholds failed")
-    if target_ratio < 0.75 or banned:
-        raise SystemExit("Corrected winter wording verification failed")
+    if min(target_ratios.values()) < 0.75 or banned:
+        raise SystemExit("Required patched wording verification failed")
 
 
 if __name__ == "__main__":

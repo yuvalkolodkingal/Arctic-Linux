@@ -402,7 +402,7 @@ def discover_desktop():
     sessions = []
     fields = ('PATH', 'XDG_DATA_DIRS', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_CACHE_HOME',
               'DISPLAY', 'XAUTHORITY', 'LANG', 'XDG_CURRENT_DESKTOP', 'XDG_SESSION_ID',
-              'QT_QPA_PLATFORM', 'GDK_BACKEND', 'MANGO_SOCKET')
+              'QT_QPA_PLATFORM', 'GDK_BACKEND', 'GSK_RENDERER', 'MANGO_SOCKET')
     for proc in Path('/proc').glob('[0-9]*'):
         try:
             if (proc / 'comm').read_text().strip() != 'mango' or proc.stat().st_uid == 0:
@@ -977,12 +977,10 @@ class Smoke:
         self.steps.append(dict(argv=argv, status='started-asynchronously', log=str(log)))
 
     def launch_protocol_player(self, argv):
-        # Observe successful realization without selecting a renderer.  The
-        # installed guest can map the toplevel before its default renderer is
-        # ready to present the video surface.
-        require(argv[0]=='/usr/bin/celluloid' and getattr(self,'gui_v6',False),
-                'native protocol diagnostic player selection differs')
-        self.primary_renderer_drain=None
+        # Exercise the installed product launcher. The private GTK diagnostic is
+        # mandatory because the environment request alone cannot prove realization.
+        require(argv[0]=='/usr/libexec/arctic/arctic-celluloid' and getattr(self,'gui_v6',False),
+                'native product Celluloid launcher selection differs')
         drain=None; reader=None; writer=None
         try:
             drain=NativeProtocolDrain(renderer=True)
@@ -990,48 +988,92 @@ class Smoke:
             try: reader=os.fdopen(read,'rb',buffering=0)
             except BaseException:
                 os.close(read); raise
-            # Optional setup finishes before any diagnostic app is launched.
+            # Capture setup finishes before the product app is launched.
             drain.start(reader)
         except (OSError,RuntimeError):
             if drain is not None: drain.finish()
             if reader is not None: reader.close()
             if writer is not None: os.close(writer)
-            # A failed private capture setup uses the original, uninstrumented launch.
-            self.launch(argv); return
+            raise RuntimeError('product renderer attestation setup unavailable') from None
         log=self.root/('gui-launch-'+str(len(self.launches))+'.log')
         try:
             with log.open('ab') as stream:
-                child=subprocess.Popen(self.prefix+['env','-u','GSK_RENDERER','GSK_DEBUG=renderer',
-                    'WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
+                child=subprocess.Popen(self.prefix+['GSK_DEBUG=renderer','WAYLAND_DEBUG=client']+argv,
+                                       stdout=stream,stderr=writer)
         except BaseException:
             drain.finish(); raise
         finally: os.close(writer)
         self.launches.append(child)
         self.steps.append(dict(argv=argv,status='started-asynchronously',log=str(log)))
         self.native_protocol_drain=drain
-        self.primary_renderer_drain=drain
 
-    # BEGIN PRIMARY_RENDERER_REALIZATION
-    def primary_renderer_realization(self, player):
-        drain=getattr(self,'primary_renderer_drain',None)
-        require(drain is not None and getattr(drain,'renderer',None) is not None,
-                'primary renderer realization capture unavailable')
-        require(drain.bind(player,self.uid),'primary renderer stderr ownership differs')
+    def product_launch_contract(self, player, route):
+        require(route in ('file-manager-mime','gio-new-window','gio-enqueue','enqueue-target'),
+                'Celluloid product launch route differs')
+        launcher=Path('/usr/libexec/arctic/arctic-celluloid')
+        desktop=Path('/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop')
+        require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
+                'product launcher did not retain native Wayland upstream Celluloid')
+        environ=Path('/proc')/str(player['pid'])/'environ'
+        require(environ.stat().st_uid==self.uid,'product renderer process owner differs')
+        with environ.open('rb') as stream: raw=stream.read(65537)
+        require(len(raw)<=65536,'product renderer environment exceeded bound')
+        self.alive(player)
+        values=raw.split(b'\0')
+        require([x for x in values if x.startswith(b'GSK_RENDERER=')]==[b'GSK_RENDERER=gl'],
+                'product renderer request is not exactly gl')
+        return dict(schema='arctic-celluloid-product-launch-v1',route=route,
+                    launcher=str(launcher),desktop_file=str(desktop),requested_renderer='gl',
+                    upstream_executable=player['executable'],native_wayland=True,
+                    process={key:player[key] for key in ('pid','start_ticks','executable','executable_sha256','client_id','is_xwayland')},
+                    release_acceptance=True)
+
+    def gio_desktop_action(self, action):
+        require(action in ('new-window','enqueue'),'unsupported Celluloid desktop action')
+        code=('from gi.repository import Gio; import sys; '
+              'a=Gio.DesktopAppInfo.new("io.github.celluloid_player.Celluloid.desktop"); '
+              'assert a is not None and set(a.list_actions())=={"new-window","enqueue"}; '
+              'assert a.get_string("Exec")=="/usr/libexec/arctic/arctic-celluloid %U"; '
+              'assert a.get_string("TryExec")=="/usr/bin/celluloid"; '
+              'a.launch_action(sys.argv[1],Gio.AppLaunchContext())')
+        result=self.cmd(['/usr/bin/python3','-c',code,action],timeout=15)
+        require(result[0]==0,'Gio DesktopAppInfo action launch failed')
+
+    def product_renderer_contract(self, player):
+        launcher=Path('/usr/libexec/arctic/arctic-celluloid')
+        desktop=Path('/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop')
+        for path,mode in ((launcher,0o111),(desktop,0)):
+            info=path.stat()
+            require(info.st_uid==0 and stat.S_ISREG(info.st_mode) and not info.st_mode&0o022
+                    and (not mode or info.st_mode&mode), 'Celluloid product launch file identity differs')
+        text=desktop.read_text()
+        require('Exec=/usr/libexec/arctic/arctic-celluloid %U\n' in text
+                and 'TryExec=/usr/bin/celluloid\n' in text
+                and 'DBusActivatable=false\n' in text
+                and text.count('Exec=/usr/libexec/arctic/arctic-celluloid')==3,
+                'Celluloid desktop/MIME/action launch contract differs')
+        require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
+                'product launcher did not retain native Wayland upstream Celluloid')
+        environ=Path('/proc')/str(player['pid'])/'environ'
+        require(environ.stat().st_uid==self.uid,'product renderer process owner differs')
+        with environ.open('rb') as stream: raw=stream.read(65537)
+        require(len(raw)<=65536,'product renderer environment exceeded bound')
+        values=raw.split(b'\0')
+        require([x for x in values if x.startswith(b'GSK_RENDERER=')]==[b'GSK_RENDERER=gl'],
+                'product renderer request is not exactly gl')
         def realized():
-            with drain.lock: value=drain.renderer.snapshot()
-            return value if value.get('status')=='reported-realized' else None
-        value=self.wait(realized,5,'owned primary renderer realization')
-        require(type(value) is dict and set(value)=={'status','renderer','message_count','capped','gtk_source_version',
-                'surface_kind','video_widget_or_framebuffer_attested','release_acceptance'}
-                and value['renderer'] in ('gl','vulkan','cairo') and value['message_count']>=1
-                and value['capped'] is False and value['gtk_source_version']=='4.22.5'
-                and value['surface_kind']=='wayland-toplevel'
-                and value['video_widget_or_framebuffer_attested'] is False
-                and value['release_acceptance'] is False,
-                'primary renderer realization receipt differs')
-        return dict(value,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
-                    debug_observation='GSK_DEBUG=renderer')
-    # END PRIMARY_RENDERER_REALIZATION
+            proof=self.native_protocol_drain.snapshot(player,self.uid)
+            renderer=proof.get('realized_renderer',{})
+            if renderer.get('status')=='reported-realized':
+                require(renderer.get('renderer')=='gl','GTK realized a renderer other than requested GL')
+                return proof
+            return None
+        proof=self.wait(realized,10,'owned GTK GL renderer realization')
+        return dict(schema='arctic-celluloid-product-renderer-v1',launcher=str(launcher),
+                    desktop_file=str(desktop),requested_renderer='gl',realized_renderer='gl',
+                    upstream_executable=player['executable'],native_wayland=True,
+                    user_override_policy='an explicitly set GSK_RENDERER is preserved by the launcher',
+                    protocol=proof,release_acceptance=True)
 
     def native_protocol_diagnostic(self, player, state, screenshot, client):
         value=dict(schema='arctic-native-owned-protocol-viewport-v1',stage=self.stage if self.stage in ('live','installed') else 'unknown',
@@ -1153,16 +1195,8 @@ class Smoke:
                     'controls trial fixture identity changed')
             self.finish_native_protocol()
             players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
-            require(1<=len(players)<=3,'controls trial primary player inventory differs')
-            retired=[row['player'] for row in primary.get('player_attempts',[])
-                     if row.get('owned_player_cleanup_completed') is True]
-            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
-                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
-                    'controls trial prior retired player identity differs')
-            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
-            for player in players:
-                if (player['pid'],player['start_ticks']) not in retired_keys:
-                    retire_renderer_player(player,self.uid)
+            require(1<=len(players)<=2,'controls trial primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
             seen=set()
             for index,state in enumerate(states):
                 trial=None
@@ -1346,9 +1380,9 @@ class Smoke:
         require(json.loads(response).get('success') is True,'compositor did not acknowledge owned physical focus')
         self.wait(lambda:self.alive(proof).get('is_focused') is True,10)
         self.native_physical_count=getattr(self,'native_physical_count',0)+1
-        require(self.native_physical_count<=5 and action in ('navigate','f4','open-first'),'physical route count/action differs')
+        require(self.native_physical_count<=7 and action in ('navigate','f4','open-first'),'physical route count/action differs')
         if action=='navigate':
-            require(path in (str(self.root/'files with spaces'),str(self.root/'archive file opener'))
+            require(path in (str(self.root/'files with spaces'),str(self.root/'archive file opener'),str(self.root/'media file opener'))
                     and len(path)<=128 and path.isascii(),'physical path is not an exact bounded ASCII fixture')
         else:require(path is None,'physical shortcut cannot carry text')
         observed=time.monotonic_ns();client=self.alive(proof)
@@ -1556,19 +1590,60 @@ class Smoke:
         archiver = self.fresh_window(lambda:self.keys(files,'-k','Home','-k','Return'),
                                      'xarchiver',r'xarchiver',native=False)
         self.wait(lambda:archive.name in self.alive(archiver).get('title',''))
+        media_dir=self.root/'media file opener';media_dir.mkdir()
+        source=self.write('file-manager-media-input.raw',visual_reference_frame()*10)
+        media_file=media_dir/'file-manager-reference.mkv'
+        self.cmd(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-f','rawvideo',
+                  '-pixel_format','rgb24','-video_size','160x120','-framerate','10','-i',str(source),
+                  '-an','-c:v','ffv1','-level','3','-pix_fmt','yuv420p','-t','1',str(media_file)])
+        require(list(media_dir.iterdir())==[media_file],'ambiguous file-manager media fixture')
+        self.navigate(files,media_dir,'media-fixture')
+        media_player=self.fresh_window(lambda:self.keys(files,'-k','Home','-k','Return'),
+                                       'celluloid',r'celluloid')
+        media_route=self.product_launch_contract(media_player,'file-manager-mime')
+        retire_renderer_player(media_player,self.uid)
         return dict(role_terminal=role_terminal,role_editor=editor,role_files=files,
                     file_manager_foot=terminal,file_manager_zip_opener=archiver,
+                    file_manager_media_opener=dict(player=media_player,product_launch=media_route,
+                        fixture=str(media_file),mime='video/x-matroska',retired_after_proof=True),
                     terminal_execution=proof,gui_saved=dict(path=str(fixture),sha256=digest(fixture),bytes=len(wanted)),
                     screenshots=[editor_shot,self.screenshot('files-opened-zip')],
-                    scope='actual role launch + PCManFM file opener/F4 + GUI Unicode edit/save; mount/network/a11y remain separate')
+                    scope='actual role launch + PCManFM text/ZIP/media openers/F4 + GUI Unicode edit/save; mount/network/a11y remain separate')
 
     def media(self):
         fixture,decoder = self.media_fixture()
         self.gates.append(dict(check='open-codec-lossless-command-decode',status='passed',value=decoder))
+        action_routes=[]
+        for action in ('new-window','enqueue'):
+            player=self.fresh_window(lambda action=action:self.gio_desktop_action(action),
+                                     'celluloid',r'celluloid')
+            action_routes.append(self.product_launch_contract(player,'gio-'+action))
+            retire_renderer_player(player,self.uid)
+        enqueue_ipc=self.root/'celluloid-enqueue-ipc.sock'
+        enqueue_target=self.fresh_window(lambda:self.launch(['/usr/libexec/arctic/arctic-celluloid',
+            '--mpv-input-ipc-server='+str(enqueue_ipc),'--mpv-loop-file=inf',str(fixture)]),
+            'celluloid',r'celluloid')
+        enqueue_route=self.product_launch_contract(enqueue_target,'enqueue-target')
+        self.wait(lambda:enqueue_ipc.is_socket())
+        require(mpv_property(enqueue_ipc,'playlist-count',enqueue_target['pid'],self.uid)==1,
+                'Celluloid enqueue target initial playlist differs')
+        enqueue_fixture=self.root/'enqueue-reference.mkv';enqueue_fixture.write_bytes(fixture.read_bytes())
+        before_enqueue=self.alive(enqueue_target)
+        self.cmd(['/usr/libexec/arctic/arctic-celluloid','--enqueue',str(enqueue_fixture)],timeout=15)
+        self.wait(lambda:mpv_property(enqueue_ipc,'playlist-count',enqueue_target['pid'],self.uid)==2,
+                  10,'Celluloid enqueue playlist count')
+        require(mpv_property(enqueue_ipc,'playlist/1/filename',enqueue_target['pid'],self.uid)==str(enqueue_fixture)
+                and self.alive(enqueue_target).get('id')==before_enqueue.get('id'),
+                'Celluloid enqueue did not preserve target window and append exact file')
+        enqueue_semantics=dict(product_launch=enqueue_route,initial_playlist_count=1,
+            final_playlist_count=2,appended_path=str(enqueue_fixture),target_window_preserved=True,
+            release_acceptance=True)
+        retire_renderer_player(enqueue_target,self.uid)
         ipc = self.root/'celluloid-ipc.sock'
-        player = self.fresh_window(lambda:self.launch(['/usr/bin/celluloid','--no-existing-session',
+        player = self.fresh_window(lambda:self.launch_protocol_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),
             'celluloid',r'celluloid')
+        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None
         self.wait(lambda:ipc.is_socket())
         def ready():
             try:
@@ -1596,13 +1671,16 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,moving_before,self.alive(player),moving_shot)
         moving_proof=dict(decoder=decoder,player=player,player_samples=samples,screenshot=moving_shot,
+                          product_renderer=renderer,
                           client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review')
         (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
+            self.finish_native_protocol()
         visual=self.visual_media()
-        return dict(moving_proof, visual_reference=visual,
-                    scope='original moving fixture lossless decode/advancing AV state plus separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+        return dict(moving_proof, visual_reference=visual,desktop_action_launches=action_routes,
+                    enqueue_semantics=enqueue_semantics,
+                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
         source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
@@ -1618,7 +1696,9 @@ class Smoke:
     def launch_reference_player(self, argv, launch):
         # Only this owned reference window uses private keyfile settings. Its
         # supported UI action must not write the desktop user's dconf database.
-        require(argv[0]=='/usr/bin/celluloid', 'reference controls require Celluloid')
+        diagnostic=isinstance(self,(RendererTrialSmoke,ControlsTrialSmoke))
+        expected='/usr/bin/celluloid' if diagnostic else '/usr/libexec/arctic/arctic-celluloid'
+        require(argv[0]==expected, 'reference controls Celluloid launcher selection differs')
         if not getattr(self,'gui_v6',False):
             launch(argv)
             return
@@ -1644,23 +1724,6 @@ class Smoke:
                 and info.st_uid==self.uid and not info.st_mode&0o022 and config.resolve()==config,
                 'reference settings config is not exact private owned directory')
         return config
-
-    # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED
-    def seed_primary_reference_controls(self):
-        """Make each private primary capture exercise a real visible-to-hidden redraw."""
-        self.reference_settings_config()
-        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in self.prefix),
-                'primary reference settings backend already selected')
-        command=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings']
-        schema=['io.github.celluloid-player.Celluloid.window-state','show-controls']
-        written=self.cmd(command+['set']+schema+['true'],timeout=5,allow_failure=True)
-        require(written[0]==0, 'primary reference controls visible seed write failed')
-        observed=self.cmd(command+['get']+schema,timeout=5,allow_failure=True)
-        require(observed[0]==0 and observed[1]=='true',
-                'primary reference controls visible seed readback differs')
-        return dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
-                    seed_readback_matched=True,release_acceptance=False)
-    # END PRIMARY_REFERENCE_CONTROLS_SEED
 
     def hide_reference_controls(self, player, ipc):
         require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
@@ -1699,38 +1762,19 @@ class Smoke:
         self.trace('reference-controls-hidden',receipt=value)
         return value
 
-    def visual_media(self, restart=None):
-        player_attempt_limit=2
-        if restart is None:
-            fixture,expected,source_sha=self.visual_fixture()
-            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])
-        else:
-            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}
-                    and type(restart['player_attempts']) is list
-                    and len(restart['player_attempts'])==1,
-                    'visual player restart state differs')
-            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']
-            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']
-                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']
-                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],
-                    'visual player restart fixture identity differs')
-        player_attempt=len(restart['player_attempts'])+1
-        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')
+    def visual_media(self):
+        fixture,expected,source_sha=self.visual_fixture()
+        # This release gate admits exactly one fresh product-wrapper player.
+        # A failed or unmatched capture cannot create another acceptance path.
+        player_attempt=1
+        player_attempt_limit=1
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
-        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')
-        # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION
-        controls_seed=(self.seed_primary_reference_controls()
-                       if getattr(self,'gui_v6',False) else None)
-        # END PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION
-        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
+        ipc=self.root/'visual-reference-ipc.sock'
+        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
             self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
-        primary_renderer=(self.primary_renderer_realization(player)
-                          if getattr(self,'gui_v6',False) else None)
-        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
-                        or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
-                'visual restart did not create a fresh owned player')
+        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None
         self.wait(lambda:ipc.is_socket())
         def ready_reference():
             try:
@@ -1751,10 +1795,6 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
-            require(controls_seed.get('initial_visible') is True
-                    and controls_seed.get('seed_readback_matched') is True
-                    and controls.get('before_visible') is True and controls.get('after_visible') is False,
-                    'primary reference controls visible-to-hidden transition differs')
         initial_time=state['time-pos']
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
@@ -1776,9 +1816,9 @@ class Smoke:
                 'visual capture client identity differs from owned proof')
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
-        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')
+        image=self.root/'celluloid-reference.png'
         rgb=self.root/'visual-owned-window.rgb'
-        attempt_limit=6
+        attempt_limit=1
         capture_command_timeout_seconds=3
         retry_settle_seconds=.5
         capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
@@ -1848,40 +1888,25 @@ class Smoke:
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
-                  primary_controls_seed=controls_seed,
-                  primary_renderer_realization=primary_renderer,
+                  product_renderer=renderer,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
-        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit
-                          and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed',
-            'primary_renderer_realization')}
-        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
-        restart['player_attempts'].append(player_receipt)
-        info['player_attempts']=restart['player_attempts']
-        info['accepted_player_attempt']=player_attempt if oracle.get('status')=='matched' else None
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}
+        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
+        info['player_attempts']=[player_receipt]
+        info['accepted_player_attempt']=1 if oracle.get('status')=='matched' else None
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
-        if getattr(self,'gui_v6',False) and not restart_eligible:
-            self.native_protocol_diagnostic(player,state,screenshot,client)
         if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
             self.player_fullscreen(player,False)
-        if restart_eligible:
-            if getattr(self,'gui_v6',False): self.finish_native_protocol()
-            try:
-                player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
-                player_receipt['owned_player_cleanup_completed']=True
-            finally:
-                (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
-            return self.visual_media(restart)
-        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
-            self.controlled_controls_trials(fixture,expected,source_sha,info)
-        require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
+        require(info['oracle']['status']=='matched',
+                'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
 
     def media_fixture(self):
@@ -2013,26 +2038,6 @@ def retire_renderer_player(proof,uid):
         except (FileNotFoundError,ProcessLookupError,RuntimeError): return
         time.sleep(.1)
     raise RuntimeError('controlled cleanup player survived bounded retirement')
-
-
-def retire_reference_player(proof,uid,ipc,root,attempt):
-    """Retire exactly one failed primary player before its sole fresh restart."""
-    require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()
-            and isinstance(ipc,Path) and ipc.parent==root and ipc.name=='visual-reference-ipc-1.sock',
-            'visual restart cleanup target differs')
-    retire_renderer_player(proof,uid)
-    removed=False
-    try:
-        info=ipc.lstat()
-        require(stat.S_ISSOCK(info.st_mode) and info.st_uid==uid,
-                'visual restart IPC owner/type differs')
-        ipc.unlink()
-        removed=True
-    except FileNotFoundError:
-        pass
-    require(not ipc.exists() and not ipc.is_symlink(),'visual restart IPC cleanup incomplete')
-    return dict(process_identity_retired=True,owned_ipc_absent=True,
-                owned_ipc_removed=removed,release_acceptance=False)
 
 
 class RendererTrialSmoke(Smoke):
@@ -2504,7 +2509,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
-    'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
+    'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
     'files with spaces/editor fixture.txt',
 )) | frozenset(
@@ -2514,7 +2519,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     for filename in ('nested directory/hello world.txt', 'Unicode-\u05e9.txt')
 ) | frozenset('gui-launch-' + str(index) + '.log' for index in range(130)) | frozenset(
     'gui-%02d-' % index + label + '.png'
-    for index in range(13)  # Seven one-use gate failures plus six GUI diagnostics.
+    for index in range(15)  # Seven one-use gate failures plus eight GUI diagnostics.
     for label in (
         'failure-fresh-defaults-and-isolation', 'failure-archive-content-roundtrips',
         'failure-actual-role-file-manager-terminal-editor',
@@ -2523,6 +2528,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
         'failure-owned-process-cleanup-config-preservation', 'failure-selinux-and-new-avcs',
         'text-fixture-before-location', 'text-fixture-navigation-confirmed',
         'archive-fixture-before-location', 'archive-fixture-navigation-confirmed',
+        'media-fixture-before-location', 'media-fixture-navigation-confirmed',
         'file-manager-F4-mapped', 'editor-save-confirmed',
     )
 )
@@ -2547,7 +2553,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02'
+    native_source_sha = '2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

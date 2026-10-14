@@ -1,385 +1,391 @@
 WEBVTT
 
-00:00:00.000 --> 00:00:00.900
+00:00:00.000 --> 00:00:01.080
 Meet Arctic Linux.
 
-00:00:01.640 --> 00:00:06.440
+00:00:01.900 --> 00:00:06.920
 A calm, keyboard-first desktop built on Fedora, with the Mango tiling window manager.
 
-00:00:07.060 --> 00:00:12.840
+00:00:07.640 --> 00:00:14.140
 Let's take a look at installation, the lighter everyday apps, and a few details that make the desktop your own.
 
-00:00:13.500 --> 00:00:14.520
+00:00:14.740 --> 00:00:16.260
 Start with a live USB.
 
-00:00:15.340 --> 00:00:18.460
+00:00:17.200 --> 00:00:20.660
 The boot menu lets you try Arctic Linux or open the installer.
 
-00:00:19.240 --> 00:00:22.240
+00:00:21.340 --> 00:00:24.540
 You can explore the desktop before deciding to put it on your computer.
 
-00:00:23.280 --> 00:00:25.860
+00:00:25.340 --> 00:00:27.960
 The live welcome card gives you a few useful shortcuts.
 
-00:00:26.700 --> 00:00:29.540
+00:00:28.740 --> 00:00:31.740
 Keep trying the desktop, or choose Install Arctic Linux.
 
-00:00:30.160 --> 00:00:32.360
+00:00:32.540 --> 00:00:35.160
 The install button is also right there on the top bar.
 
-00:00:32.880 --> 00:00:34.220
+00:00:35.640 --> 00:00:36.860
 The installer starts with your language.
 
-00:00:34.920 --> 00:00:38.800
+00:00:37.600 --> 00:00:41.540
 Each screen asks one clear question, and the sidebar shows where you are.
 
-00:00:39.280 --> 00:00:43.060
+00:00:42.160 --> 00:00:46.040
 These installer screens use sample disks, networks, and account details.
 
-00:00:43.660 --> 00:00:46.100
+00:00:46.780 --> 00:00:49.660
 Choose your keyboard layout, then try it in the test box.
 
-00:00:46.900 --> 00:00:48.680
+00:00:50.340 --> 00:00:52.440
 The live session uses your choice too.
 
-00:00:49.080 --> 00:00:54.340
+00:00:52.880 --> 00:00:58.420
 If you switch to a text console or disconnect a screen, the installer keeps your page and your answers.
 
-00:00:55.180 --> 00:00:57.000
+00:00:59.140 --> 00:01:01.280
 Connect to Wi-Fi, or plug in a cable.
 
-00:00:57.680 --> 00:00:59.220
+00:01:02.000 --> 00:01:03.800
 You can also choose Install offline.
 
-00:01:00.020 --> 00:01:04.340
+00:01:04.700 --> 00:01:09.080
 The apps already on the image remain available, while extra downloads wait until you're connected.
 
-00:01:05.340 --> 00:01:07.440
+00:01:09.820 --> 00:01:12.040
 Your new system remembers the Wi-Fi connection.
 
-00:01:08.400 --> 00:01:09.680
+00:01:12.840 --> 00:01:14.220
 Next, check your time zone.
 
-00:01:10.340 --> 00:01:13.900
+00:01:14.760 --> 00:01:18.420
 The installer suggests a location, and you can change the region or city.
 
-00:01:14.640 --> 00:01:16.760
+00:01:18.980 --> 00:01:21.060
 Automatic time keeps the clock in sync.
 
-00:01:17.440 --> 00:01:19.200
+00:01:21.600 --> 00:01:23.240
 Choose your disk and how to install.
 
-00:01:19.840 --> 00:01:21.300
+00:01:23.920 --> 00:01:25.420
 Erasing replaces its contents.
 
-00:01:22.260 --> 00:01:26.100
+00:01:26.440 --> 00:01:30.440
 Installing alongside another system is offered when suitable free space is available.
 
-00:01:26.900 --> 00:01:28.640
+00:01:31.140 --> 00:01:32.900
 Back up your files before you continue.
 
-00:01:29.240 --> 00:01:30.740
+00:01:33.600 --> 00:01:35.360
 Disk encryption is on by default.
 
-00:01:31.540 --> 00:01:33.920
+00:01:35.980 --> 00:01:38.400
 Create a passphrase, or use the suggested one.
 
-00:01:34.420 --> 00:01:35.920
+00:01:39.020 --> 00:01:40.600
 You'll enter it when the computer starts.
 
-00:01:36.460 --> 00:01:39.340
+00:01:41.280 --> 00:01:44.440
 Keep it safe: forgotten passphrases cannot be recovered.
 
-00:01:40.000 --> 00:01:42.960
+00:01:45.140 --> 00:01:48.480
 Create your account, set your sign-in password, and name the computer.
 
-00:01:43.780 --> 00:01:45.100
+00:01:49.340 --> 00:01:50.590
 Automatic login is optional.
 
-00:01:45.840 --> 00:01:48.900
+00:01:50.620 --> 00:01:54.480
 You can also choose to use your account password for the encrypted disk.
 
-00:01:49.480 --> 00:01:59.120
+00:01:55.440 --> 00:02:05.560
 The suggested apps now keep the everyday setup lighter: GNOME Web for browsing, Foot for the terminal, PCManFM for files, FeatherPad for text, and Celluloid for media.
 
-00:02:00.640 --> 00:02:01.740
+00:02:06.520 --> 00:02:07.760
 Choose alternatives if you prefer.
 
-00:02:02.320 --> 00:02:04.260
+00:02:08.400 --> 00:02:10.400
 Office suites and code editors are optional.
 
-00:02:05.120 --> 00:02:06.680
+00:02:11.160 --> 00:02:12.940
 The summary brings your choices together.
 
-00:02:07.340 --> 00:02:11.280
+00:02:13.660 --> 00:02:17.930
 Check the disk, encryption, account, and apps, and change anything you need.
 
-00:02:12.000 --> 00:02:15.440
+00:02:17.960 --> 00:02:21.780
 Nothing is written to the disk until you confirm the install here.
 
-00:02:15.960 --> 00:02:19.200
+00:02:22.400 --> 00:02:25.860
 The progress screen shows the system and your selected apps being installed.
 
-00:02:20.040 --> 00:02:22.160
+00:02:26.680 --> 00:02:29.340
 An optional app download can be retried or skipped.
 
-00:02:22.780 --> 00:02:28.220
-Dictation has its own setup queue, so a missing model never stops the whole operating system from installing.
+00:02:30.160 --> 00:02:35.360
+VoxType setup runs separately, so a missing model never stops the operating system from installing.
 
-00:02:29.060 --> 00:02:31.400
+00:02:36.180 --> 00:02:38.780
 When installation finishes, read the final notes.
 
-00:02:32.140 --> 00:02:35.340
+00:02:39.540 --> 00:02:43.160
 They tell you about queued downloads and any Secure Boot steps for a driver.
 
-00:02:36.400 --> 00:02:38.680
+00:02:44.200 --> 00:02:46.350
 Remove the USB and restart when you're ready.
 
-00:02:39.660 --> 00:02:43.520
+00:02:46.380 --> 00:02:50.880
 These screens are a demonstration, rather than a recording of a fresh install.
 
-00:02:44.320 --> 00:02:47.600
+00:02:51.980 --> 00:02:55.480
 On the desktop, five workspaces give each task some room.
 
-00:02:48.260 --> 00:02:51.940
+00:02:56.160 --> 00:02:59.740
 The bar stays small, and the backgrounds now come from the project's photo collection.
 
-00:02:52.820 --> 00:02:56.020
+00:03:00.740 --> 00:03:04.080
 Existing users keep their own wallpaper choices when they update.
 
-00:02:56.680 --> 00:02:58.540
+00:03:04.840 --> 00:03:06.740
 Press Super and Space to open the launcher.
 
-00:02:59.340 --> 00:03:00.860
+00:03:07.600 --> 00:03:09.360
 Type an app name and press Enter.
 
-00:03:01.520 --> 00:03:05.960
+00:03:10.080 --> 00:03:14.980
 It also finds files, open windows, and settings, so you can get to the next task quickly.
 
-00:03:06.780 --> 00:03:08.370
+00:03:15.780 --> 00:03:17.600
 The launcher handles small jobs too.
 
-00:03:08.400 --> 00:03:12.700
+00:03:18.320 --> 00:03:22.300
 Start with an equals sign to calculate, and press Enter to copy the answer.
 
-00:03:13.440 --> 00:03:16.380
+00:03:22.980 --> 00:03:26.540
 You can convert units, run commands, or set a reminder for later.
 
-00:03:17.560 --> 00:03:20.320
+00:03:27.260 --> 00:03:29.860
 Open a few windows and Mango arranges them automatically.
 
-00:03:21.220 --> 00:03:22.860
+00:03:30.920 --> 00:03:32.900
 The amber border marks the one you're using.
 
-00:03:23.480 --> 00:03:27.980
+00:03:33.560 --> 00:03:38.680
 Move between windows with Super and the arrow keys, or switch workspaces to separate your tasks.
 
-00:03:29.210 --> 00:03:33.740
+00:03:40.310 --> 00:03:45.060
 PCManFM is the new graphical file manager, using Fedora's GTK three build.
 
-00:03:34.400 --> 00:03:38.820
+00:03:45.640 --> 00:03:50.680
 Browse folders and downloads in tabs, and use XArchiver to open or create archives.
 
-00:03:39.590 --> 00:03:42.260
+00:03:51.540 --> 00:03:54.420
 Super and F opens whichever file manager you've chosen.
 
-00:03:42.770 --> 00:03:46.080
+00:03:55.080 --> 00:03:58.720
 Super and Enter opens Foot with Fish and the Arctic fox greeting.
 
-00:03:46.780 --> 00:03:47.960
+00:03:59.520 --> 00:04:00.840
 Bash and Nano are there too.
 
-00:03:49.200 --> 00:03:55.720
+00:04:02.040 --> 00:04:08.920
 Fedora packages, Flatpak and Nix give you several ways to add tools, without making a large app collection compulsory.
 
-00:03:56.680 --> 00:04:00.520
+00:04:10.300 --> 00:04:14.100
 GNOME Web shares the WebKit engine already used by Arctic's web apps.
 
-00:04:01.140 --> 00:04:05.140
+00:04:14.800 --> 00:04:18.820
 FeatherPad handles everyday text, and Celluloid plays music and video.
 
-00:04:05.740 --> 00:04:08.760
+00:04:19.600 --> 00:04:22.600
 Chromium remains available for web apps that need calling support.
 
-00:04:09.380 --> 00:04:10.800
+00:04:23.160 --> 00:04:24.660
 You can change the defaults in Settings.
 
-00:04:11.440 --> 00:04:12.200
+00:04:25.420 --> 00:04:26.000
 Need something else?
 
-00:04:12.680 --> 00:04:17.620
+00:04:26.540 --> 00:04:31.520
 Open Get apps and choose Flathub, Fedora packages, a web app, or a terminal tool.
 
-00:04:18.320 --> 00:04:20.380
+00:04:32.340 --> 00:04:34.420
 Installations continue when you close the launcher.
 
-00:04:21.160 --> 00:04:24.800
+00:04:35.240 --> 00:04:39.000
 Removing software has its own menu, so it's easier to find the action you want.
 
-00:04:25.540 --> 00:04:31.780
+00:04:39.520 --> 00:04:45.540
 Open Remove apps from the launcher to manage Fedora packages, Flatpaks, web apps, and terminal entries.
 
-00:04:33.080 --> 00:04:35.620
+00:04:46.560 --> 00:04:49.040
 Arctic shows the proposed removal before you confirm.
 
-00:04:36.460 --> 00:04:40.880
+00:04:49.780 --> 00:04:54.360
 It protects the desktop, your login shell, and your only terminal from an accidental removal.
 
-00:04:41.940 --> 00:04:45.920
-Dictation uses Voxtype and a multilingual Whisper model on this computer.
+00:04:55.700 --> 00:05:03.760
+Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model.
 
-00:04:47.080 --> 00:04:50.260
-Online installation downloads and verifies the engine and model.
+00:05:04.480 --> 00:05:10.720
+During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model.
 
-00:04:51.250 --> 00:04:53.590
-Offline installation queues setup for first boot.
+00:05:11.320 --> 00:05:16.740
+An offline installation leaves a clear retry for first boot and reports that dictation is not ready.
 
-00:04:53.620 --> 00:04:57.830
-Settings shows the download size, progress, and any retry needed.
+00:05:17.320 --> 00:05:22.160
+The local multilingual model supports Hebrew and English without sending audio to a service.
 
-00:04:57.860 --> 00:05:00.930
-Recording stays unavailable until setup is ready.
+00:05:22.820 --> 00:05:28.000
+Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.
 
-00:05:00.960 --> 00:05:05.690
-Focus a text field, press Super, Control and X, and speak.
+00:05:28.680 --> 00:05:34.380
+Focus a text field and press Arctic's Mango shortcut, whose readiness guard runs VoxType's official record toggle.
 
-00:05:05.720 --> 00:05:08.510
-Press the same keys again to stop and insert.
+00:05:34.980 --> 00:05:38.570
+Press the same shortcut again to stop, transcribe, and insert with VoxType.
 
-00:05:08.540 --> 00:05:13.230
-A visible indicator follows recording and transcription, even with the bar hidden.
+00:05:39.660 --> 00:05:45.100
+Arctic's dictation pill follows VoxType's recording and transcription state, even when the taskbar is hidden.
 
-00:05:13.260 --> 00:05:16.770
-Super, Control and Backspace cancels.
+00:05:45.680 --> 00:05:47.420
+Audio and transcription stay on this computer.
 
-00:05:16.800 --> 00:05:20.780
-Audio stays local, and status messages never display the transcript.
+00:05:48.370 --> 00:05:53.800
+VoxType runs in quiet mode, and Arctic's notifications and status output do not include transcript text.
 
-00:05:21.620 --> 00:05:24.360
-Choose Hebrew, English, or local language detection.
+00:05:54.460 --> 00:05:59.520
+VoxType uses one local multilingual Whisper model for Hebrew, English, and automatic language detection.
 
-00:05:25.180 --> 00:05:27.140
-Supported hardware can use Vulkan acceleration.
+00:06:00.500 --> 00:06:03.060
+Supported hardware can enable VoxType's Vulkan backend.
 
-00:05:28.220 --> 00:05:33.460
-If the GPU fails, Arctic discards that recording and selects the CPU for your next attempt.
+00:06:03.760 --> 00:06:09.080
+If GPU setup fails, the error stays visible and the user can explicitly switch VoxType to CPU.
 
-00:05:34.160 --> 00:05:35.140
-Record again explicitly.
+00:06:09.980 --> 00:06:18.480
+In a hosted Westmere CPU test, the small model measured 7.77 percent English word error and 42.0 percent Hebrew word error.
 
-00:05:36.040 --> 00:05:39.600
-Accuracy and speed depend on the model, your voice, and the computer.
+00:06:19.120 --> 00:06:27.980
+It took 15.79 times the English audio duration and 11.63 times the Hebrew duration, so that CPU result was not real time.
 
-00:05:40.420 --> 00:05:42.560
+00:06:28.480 --> 00:06:30.520
 Super and S opens Arctic Settings.
 
-00:05:43.180 --> 00:05:45.280
+00:06:31.240 --> 00:06:33.480
 Search for a setting instead of hunting through pages.
 
-00:05:45.700 --> 00:05:50.080
+00:06:34.280 --> 00:06:38.180
 Changes apply straight away, and Control and Z undoes the last one.
 
-00:05:50.680 --> 00:05:55.600
+00:06:38.680 --> 00:06:43.000
 Put the bar on any edge, and choose always visible, auto-hide, or dodge windows.
 
-00:05:56.420 --> 00:05:59.940
+00:06:43.720 --> 00:06:46.840
 Move the pointer to its edge, or use the keyboard, to reveal it.
 
-00:06:00.420 --> 00:06:02.040
-Recording indicators remain visible.
+00:06:47.320 --> 00:06:49.480
+Arctic's dictation indicator remains visible.
 
-00:06:02.800 --> 00:06:05.620
+00:06:50.160 --> 00:06:52.900
 The installer keeps its bar available while you're in the live session.
 
-00:06:06.440 --> 00:06:10.270
+00:06:53.540 --> 00:06:56.790
 Choose Winter or Polar night, or let a wallpaper provide the desktop's colours.
 
-00:06:10.580 --> 00:06:15.300
+00:06:57.900 --> 00:07:01.680
 The palette follows through the shell, window borders, terminal, and supported apps.
 
-00:06:16.120 --> 00:06:18.560
+00:07:02.440 --> 00:07:04.540
 Your own pictures stay selected when you change themes.
 
-00:06:19.260 --> 00:06:22.100
+00:07:05.400 --> 00:07:07.820
 Winter keeps the same layout with soft, snow-coloured surfaces.
 
-00:06:22.920 --> 00:06:27.500
+00:07:08.540 --> 00:07:13.440
 The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself.
 
-00:06:28.300 --> 00:06:31.040
+00:07:14.300 --> 00:07:16.980
 You can set a favourite, or let the wallpaper change on a schedule.
 
-00:06:32.220 --> 00:06:38.310
+00:07:17.620 --> 00:07:22.220
+Built-in wallpapers can be deleted from your view and restored later, without affecting another account.
+
+00:07:23.400 --> 00:07:29.160
 One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city.
 
-00:06:38.340 --> 00:06:42.920
+00:07:29.680 --> 00:07:33.020
 It's the artist's finished photograph, preserved at its original resolution.
 
-00:06:43.480 --> 00:06:47.700
+00:07:33.740 --> 00:07:37.640
 Set it from the wallpaper picker, or browse the full collection on the project's gallery.
 
-00:06:48.460 --> 00:06:55.240
+00:07:38.320 --> 00:07:43.640
 Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode.
 
-00:06:55.840 --> 00:07:01.770
+00:07:44.020 --> 00:07:48.960
 Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.
 
-00:07:01.800 --> 00:07:06.920
+00:07:49.660 --> 00:07:53.420
 The network menu lets you join Wi-Fi and manage saved connections or a VPN.
 
-00:07:07.760 --> 00:07:13.940
+00:07:54.240 --> 00:07:59.580
 Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.
 
-00:07:14.720 --> 00:07:18.860
+00:08:00.320 --> 00:08:04.200
 At your desk, arrange monitors and adjust their resolution, scale, and rotation.
 
-00:07:19.680 --> 00:07:21.560
+00:08:05.020 --> 00:08:06.680
 Super and P switches screen modes.
 
-00:07:22.800 --> 00:07:28.200
+00:08:07.140 --> 00:08:11.500
 Arctic also handles USB drives, printing, and scanning, with settings when you need them.
 
-00:07:28.720 --> 00:07:30.200
+00:08:12.120 --> 00:08:13.740
 You don't have to memorise every shortcut.
 
-00:07:30.920 --> 00:07:33.100
+00:08:14.520 --> 00:08:16.380
 Super and slash opens a searchable guide.
 
-00:07:33.700 --> 00:07:39.280
+00:08:16.900 --> 00:08:21.400
 Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.
 
-00:07:40.410 --> 00:07:44.320
+00:08:22.610 --> 00:08:26.140
 Arctic's signed stable repository keeps existing systems up to date.
 
-00:07:44.940 --> 00:07:47.560
+00:08:26.880 --> 00:08:29.260
 Updates download in the background and install when you restart.
 
-00:07:48.560 --> 00:07:50.560
+00:08:30.240 --> 00:08:35.340
+After each update, What's New shows the changes once, with release notes ready to reopen later.
+
+00:08:35.800 --> 00:08:37.900
 Settings shows the latest check and anything waiting.
 
-00:07:51.420 --> 00:07:53.900
+00:08:38.680 --> 00:08:40.760
 Save your work before choosing Restart and install.
 
-00:07:54.620 --> 00:07:57.200
+00:08:41.520 --> 00:08:43.880
 There is no need to reinstall for desktop package updates.
 
-00:07:57.700 --> 00:07:59.520
+00:08:44.380 --> 00:08:45.660
 Super and L locks the desktop.
 
-00:08:00.220 --> 00:08:03.640
+00:08:46.420 --> 00:08:49.620
 The clock stays visible, and notifications show a count without their contents.
 
-00:08:04.380 --> 00:08:06.080
+00:08:50.500 --> 00:08:52.060
 Arctic also locks before sleeping.
 
-00:08:06.720 --> 00:08:11.140
-Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away.
+00:08:52.960 --> 00:08:54.820
+Your session stays protected when you step away.
 
-00:08:12.100 --> 00:08:19.300
+00:08:55.540 --> 00:09:02.200
 That's Arctic Linux: a guided installer, a calm desktop, useful native apps, and local dictation when setup is complete.
 
-00:08:19.900 --> 00:08:22.390
+00:09:03.000 --> 00:09:05.300
 Find published downloads and the full wiki on GitHub.
 
-00:08:22.420 --> 00:08:26.980
+00:09:05.980 --> 00:09:09.360
 The release page tells you which image has been published, and which checks were performed.

@@ -1,9 +1,27 @@
 # Arctic Linux showcase
 
 The video below is the published **3 October 2026** edition. A replacement English walkthrough
-with ElevenLabs narration and current default apps, photo wallpapers and local dictation is being
-prepared. Its audio, captures, captions and final render must be checked before new download
-links are published.
+with ElevenLabs River narration and the current default apps and photo wallpapers is being
+prepared. Its locked script now covers Arctic's direct integration of official VoxType 1.1.0:
+verified automatic online setup, a clear offline first-boot retry, local Hebrew and English
+Whisper, Mango shortcuts and Arctic's VoxType-backed indicator. The source reports the hosted Westmere
+CPU measurements honestly: 7.77% English word error, 42.0% Hebrew word error, and slower-than-real-
+time processing. Those figures do not claim parity or real-time CPU performance.
+
+The old custom-controller screenshots and their River audio are superseded. Five explicit
+capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
+packaged-wallpaper hide and restore, and one for the per-update What's New summary. A new River
+master has deterministic local alignment and still needs human listening. The locked narration is 9,093 characters, above
+the connected generator's 5,000-character request limit. The failed full-script attempt has no
+renderable audio. Two exact source segments of 4,451 and 4,642 characters are pinned at a paragraph
+boundary. Both one-take River generations completed and their receipts were verified. The
+sample-exact assembled master is 549.987846 seconds with SHA-256
+`90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5`; it remains unpublished.
+Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130 cues, with 3.9375%
+WER and 97.3523% exact-token coverage. A full decode found no errors or hard-clipped samples; the
+segment boundary lies inside 0.382290 seconds below -60 dBFS. These automated results do not replace
+listening. Rendering is blocked pending human listening, qualified captures and release binding, so
+no replacement video link is published yet.
 
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 

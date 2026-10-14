@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = 'ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02'
+NATIVE_SOURCE_SHA = '2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '8c57d4e9342f1962fbc8e8311a2d8a5397f89ba9cb80b4588430174fc867d003')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'adafa295b7c9bda6a161baba13427fd7f93089ca3734472b9d26be047e8e562d')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -142,7 +142,30 @@ def check_native(serial,stage,target):
     R.require(root.parent==Path('/tmp') and root.name.startswith('arctic-native-smoke-')
               and transport['evidence_root']==str(root),'Native report/transport evidence root differs')
     byname={gate['check']:gate for gate in report['gates']}
-    screenshots=byname['actual-role-file-manager-terminal-editor']['value']['screenshots']+[byname['open-codec-content-and-player-state']['value']['screenshot']]
+    files_value=byname['actual-role-file-manager-terminal-editor']['value']
+    media_value=byname['open-codec-content-and-player-state']['value']
+    file_media=files_value.get('file_manager_media_opener',{})
+    R.require(file_media.get('fixture')==str(root/'media file opener/file-manager-reference.mkv')
+              and file_media.get('mime')=='video/x-matroska'
+              and file_media.get('retired_after_proof') is True,
+              'Actual PCManFM MIME Celluloid route differs')
+    actions=media_value.get('desktop_action_launches')
+    R.require(type(actions) is list and len(actions)==2,
+              'Gio DesktopAppInfo action launch inventory differs')
+    enqueue=media_value.get('enqueue_semantics',{})
+    R.require(set(enqueue)=={'product_launch','initial_playlist_count','final_playlist_count','appended_path',
+                            'target_window_preserved','release_acceptance'}
+              and enqueue['initial_playlist_count']==1 and enqueue['final_playlist_count']==2
+              and enqueue['appended_path']==str(root/'enqueue-reference.mkv')
+              and enqueue['target_window_preserved'] is True and enqueue['release_acceptance'] is True,
+              'Celluloid enqueue action semantics differ')
+    check_product_launches((
+        (file_media.get('product_launch'),file_media.get('player',{}),'file-manager-mime'),
+        (actions[0],None,'gio-new-window'),
+        (actions[1],None,'gio-enqueue'),
+        (enqueue.get('product_launch'),None,'enqueue-target'),
+    ),report.get('proven_new_processes'))
+    screenshots=files_value['screenshots']+[media_value['screenshot']]
     visual=byname['open-codec-content-and-player-state']['value']['visual_reference']
     screenshots.append(visual['screenshot'])
     R.require(len(screenshots)==4,'Required native moving/editor/archive/static screenshots missing')
@@ -174,7 +197,7 @@ def check_physical(serial,stage,vm,target):
     spec=importlib.util.spec_from_file_location('native_physical_checked',HERE/'native-physical-controller.py')
     controller=importlib.util.module_from_spec(spec);spec.loader.exec_module(controller)
     requests=records(serial.splitlines(),controller.PREFIX)
-    R.require(len(requests)==5,'Exactly five physical PCManFM requests required')
+    R.require(len(requests)==7,'Exactly seven physical PCManFM requests required')
     host=vm/('native-physical-'+stage+'.log')
     R.require(host.is_file() and not host.is_symlink() and host.stat().st_size<=2*1024*1024,'Physical host receipt missing/unsafe/oversized')
     rows=[controller.strict_json(line) for line in host.read_text().splitlines()]
@@ -183,19 +206,19 @@ def check_physical(serial,stage,vm,target):
     R.require(all(type(t) in (int,float) and math.isfinite(t) and t>=0 for t in times) and times==sorted(times),'Physical host clock malformed/reversed')
     consumed=[row for row in rows if row['event']=='physical-consumed']
     delivered=[row for row in rows if row['event']=='physical-delivered']
-    R.require(len(consumed)==len(delivered)==5,'Physical request attempt/delivery count differs')
+    R.require(len(consumed)==len(delivered)==7,'Physical request attempt/delivery count differs')
     trace=(target/'gui-trace.log').read_text().splitlines()
     guest=[controller.strict_json(line)['request'] for line in trace if controller.strict_json(line).get('event')=='physical-request']
     summary=json.loads((target/'gui-trace-summary.json').read_text())
     R.require(guest==requests and summary['omitted_records']==0,'Physical guest trace missing/omitted/differs')
     spec=importlib.util.spec_from_file_location('native_supported_qcode',HERE.parents[1]/'tools/lib/vmtest.py')
     helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
-    roots=set();owners=set();nonces=set();expected_actions=['navigate','f4','open-first','navigate','open-first']
+    roots=set();owners=set();nonces=set();expected_actions=['navigate','f4','open-first','navigate','open-first','navigate','open-first']
     for index,request in enumerate(requests):
         controller.validate(request,stage)
         R.require(request['action']==expected_actions[index] and request['nonce'] not in nonces,'Physical action/order/nonce differs')
         nonces.add(request['nonce']);roots.add(request['evidence_root']);owners.add((request['boot_id'],request['desktop_uid'],request['process']['pid'],request['process']['start_ticks']))
-        if request['action']=='navigate':R.require(request['path']==request['evidence_root']+('/files with spaces' if index==0 else '/archive file opener'),'Physical fixture/order differs')
+        if request['action']=='navigate':R.require(request['path']==request['evidence_root']+{0:'/files with spaces',3:'/archive file opener',5:'/media file opener'}[index],'Physical fixture/order differs')
         digest=controller.canonical(request)
         R.require(consumed[index]['request']==delivered[index]['request']==request
                   and consumed[index]['request_sha256']==delivered[index]['request_sha256']==digest
@@ -209,7 +232,7 @@ def check_physical(serial,stage,vm,target):
         R.require(rows.index(consumed[index])<min(rows.index(row) for row in keyrows)<max(rows.index(row) for row in keyrows)+1<=rows.index(delivered[index]),'Physical actual delivery order differs')
     R.require(len(roots)==len(owners)==1 and len([row for row in rows if row['event']=='qmp-key'])==sum(len([r for r in rows if r['event']=='qmp-key' and r['nonce']==n]) for n in nonces),'Physical identity or unknown key differs')
     captures=[row for row in rows if row['event']=='capture']
-    R.require(len(captures)==12,'Required physical before/path/after screenshots missing')
+    R.require(len(captures)==17,'Required physical before/path/after screenshots missing')
     expected_names=[]
     for index,request in enumerate(requests,1):
         prefix='native-physical-'+stage+'-'+str(index)
@@ -220,8 +243,8 @@ def check_physical(serial,stage,vm,target):
     for row in captures:
         path=vm/row['name'];R.require(path.is_file() and not path.is_symlink() and path.stat().st_size<=MAX_FILE
             and path.read_bytes().startswith(b'\x89PNG\r\n\x1a\n') and R.digest(path)==row['sha256'],'Physical actual screenshot differs')
-    R.write_json(target/'physical-host-receipt.json',dict(stage=stage,requests=5,captures=captures,accessibility_proof=False,release_acceptance=False))
-    return dict(stage=stage,requests=5,input_route='direct supported QMP physical keyboard',accessibility_proof=False,release_acceptance=False)
+    R.write_json(target/'physical-host-receipt.json',dict(stage=stage,requests=7,captures=captures,accessibility_proof=False,release_acceptance=False))
+    return dict(stage=stage,requests=7,input_route='direct supported QMP physical keyboard',accessibility_proof=False,release_acceptance=False)
 
 def desktop_controller():
     spec=importlib.util.spec_from_file_location('native_desktop_checked',HERE/'native-physical-controller.py')
@@ -261,7 +284,7 @@ def check_editor_save(serial,stage,vm,target):
         R.require(item['name']==name and p.is_file() and not p.is_symlink() and p.stat().st_size<=MAX_FILE
                   and p.read_bytes().startswith(b'\x89PNG\r\n\x1a\n') and R.digest(p)==item['sha256'],'Editor save capture differs')
     pc=records(serial.splitlines(),C.PREFIX)
-    R.require(len(pc)==5 and serial.index(C.PREFIX+json.dumps(pc[2],sort_keys=True))
+    R.require(len(pc)==7 and serial.index(C.PREFIX+json.dumps(pc[2],sort_keys=True))
               <serial.index(C.EDITOR_PREFIX+json.dumps(r,sort_keys=True))
               <serial.index(C.PREFIX+json.dumps(pc[3],sort_keys=True)),'Editor save must stay between text open and archive navigation')
     fixture=target/'files with spaces/editor fixture.txt'
@@ -270,6 +293,80 @@ def check_editor_save(serial,stage,vm,target):
     R.write_json(target/'editor-save-host-receipt.json',dict(stage=stage,requests=1,action='physical Ctrl+S',
                  saved_fixture_sha256=hashlib.sha256(wanted).hexdigest(),accessibility_proof=False,release_acceptance=False))
     return dict(stage=stage,requests=1,accessibility_proof=False,release_acceptance=False)
+
+def check_product_launch(value, player, route, proven):
+    keys={'schema','route','launcher','desktop_file','requested_renderer','upstream_executable',
+          'native_wayland','process','release_acceptance'}
+    R.require(type(value) is dict and set(value)==keys
+              and value['schema']=='arctic-celluloid-product-launch-v1'
+              and value['route']==route
+              and value['launcher']=='/usr/libexec/arctic/arctic-celluloid'
+              and value['desktop_file']=='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop'
+              and value['requested_renderer']=='gl'
+              and value['upstream_executable']=='/usr/bin/celluloid'
+              and value['native_wayland'] is True
+              and value['release_acceptance'] is True,
+              'Celluloid product launch route differs')
+    process=value['process']
+    R.require(type(process) is dict
+              and set(process)=={'pid','start_ticks','executable','executable_sha256','client_id','is_xwayland'}
+              and process['executable']=='/usr/bin/celluloid' and process['is_xwayland'] is False
+              and all(type(process[key]) is int and process[key]>1 for key in ('pid','start_ticks'))
+              and type(process['client_id']) is str and process['client_id']
+              and type(process['executable_sha256']) is str
+              and re.fullmatch(r'[0-9a-f]{64}',process['executable_sha256']) is not None,
+              'Celluloid product launch process binding differs')
+    if player is not None:
+        R.require(type(player) is dict and all(process[key]==player.get(key) for key in process),
+                  'Celluloid route/player receipt binding differs')
+    R.require(type(proven) is list,'Fresh process inventory differs')
+    owned=[item for item in proven if type(item) is dict and item.get('pid')==process['pid']]
+    R.require(len(owned)==1 and all(owned[0].get(key)==process[key] for key in process),
+              'Celluloid route was not one exact proved fresh process')
+    return process
+
+
+def check_product_launches(routes, proven):
+    R.require(type(routes) in (list,tuple) and len(routes)==4,
+              'Celluloid product route inventory differs')
+    processes=[check_product_launch(value,player,route,proven)
+               for value,player,route in routes]
+    R.require(len({(p['pid'],p['start_ticks']) for p in processes})==4
+              and len({p['client_id'] for p in processes})==4,
+              'Celluloid product routes did not use four distinct fresh identities')
+    return processes
+
+
+def check_product_renderer(value, player):
+    keys={'schema','launcher','desktop_file','requested_renderer','realized_renderer',
+          'upstream_executable','native_wayland','user_override_policy','protocol','release_acceptance'}
+    R.require(type(value) is dict and set(value)==keys
+              and value['schema']=='arctic-celluloid-product-renderer-v1'
+              and value['launcher']=='/usr/libexec/arctic/arctic-celluloid'
+              and value['desktop_file']=='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop'
+              and value['requested_renderer']==value['realized_renderer']=='gl'
+              and value['upstream_executable']==player.get('executable')=='/usr/bin/celluloid'
+              and value['native_wayland'] is True and player.get('is_xwayland') is False
+              and value['user_override_policy']=='an explicitly set GSK_RENDERER is preserved by the launcher'
+              and value['release_acceptance'] is True,
+              'Celluloid product renderer contract differs')
+    protocol=value['protocol'];renderer=protocol.get('realized_renderer',{}) if type(protocol) is dict else {}
+    owner=protocol.get('owner',{}) if type(protocol) is dict else {}
+    R.require(protocol.get('ownership_verified') is True
+              and protocol.get('drain_failed') is False
+              and protocol.get('partial_line') is False
+              and protocol.get('time_cap_reached') is False
+              and renderer.get('status')=='reported-realized'
+              and renderer.get('renderer')=='gl'
+              and renderer.get('owned_stderr_binding_verified') is True
+              and renderer.get('environment_request_is_not_attestation') is True
+              and renderer.get('release_acceptance') is False
+              and owner.get('pid')==player.get('pid')
+              and owner.get('start_ticks')==player.get('start_ticks')
+              and owner.get('executable_sha256')==player.get('executable_sha256'),
+              'Owned GTK realized GL renderer proof differs')
+    return value
+
 
 def check_fullscreen(target,report,uid):
     C=desktop_controller()
@@ -283,40 +380,24 @@ def check_fullscreen(target,report,uid):
     attempts=visual.get('player_attempts');accepted=visual.get('accepted_player_attempt')
     base_keys={'player_attempt','player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit','capture_deadline_seconds',
-               'accepted_capture_attempt','oracle','screenshot','primary_controls_seed','primary_renderer_realization',
-               'owned_player_cleanup_completed','restart_eligible','release_acceptance'}
-    R.require(type(accepted) is int and accepted in (1,2) and visual.get('player_attempt')==accepted
-              and visual.get('player_attempt_limit')==2
-              and type(attempts) is list and len(attempts)==accepted,
+               'accepted_capture_attempt','oracle','screenshot','product_renderer','owned_player_cleanup_completed','restart_eligible','release_acceptance'}
+    R.require(accepted==1 and visual.get('player_attempt')==1
+              and visual.get('player_attempt_limit')==1
+              and type(attempts) is list and len(attempts)==1,
               'Fullscreen visual player-attempt inventory differs')
     for index,row in enumerate(attempts,1):
-        expected_keys=base_keys|({'cleanup'} if index==1 and accepted==2 else set())
+        expected_keys=base_keys
         R.require(type(row) is dict and set(row)==expected_keys and row['player_attempt']==index
-                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==6
+                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==1
                   and row['capture_deadline_seconds']==visual['capture_deadline_seconds']
                   and row['release_acceptance'] is False
                   and all(row[key]==visual[key] for key in ('fixture_sha256','input_rgb_sha256','expected_rgb_sha256')),
                   'Fullscreen visual player-attempt schema/binding differs')
-        seed=row['primary_controls_seed'];renderer=row['primary_renderer_realization']
-        R.require(seed==dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
-                  seed_readback_matched=True,release_acceptance=False)
-                  and type(renderer) is dict and set(renderer)=={'status','renderer','message_count','capped',
-                  'gtk_source_version','surface_kind','video_widget_or_framebuffer_attested','release_acceptance',
-                  'owned_stderr_binding_verified','requested_gsk_renderer','debug_observation'}
-                  and renderer['status']=='reported-realized' and renderer['renderer'] in ('gl','vulkan','cairo')
-                  and type(renderer['message_count']) is int and 1<=renderer['message_count']<=16
-                  and renderer['capped'] is False and renderer['gtk_source_version']=='4.22.5'
-                  and renderer['surface_kind']=='wayland-toplevel'
-                  and renderer['video_widget_or_framebuffer_attested'] is False
-                  and renderer['release_acceptance'] is False
-                  and renderer['owned_stderr_binding_verified'] is True
-                  and renderer['requested_gsk_renderer']=='unset'
-                  and renderer['debug_observation']=='GSK_DEBUG=renderer',
-                  'Fullscreen visual private seed/renderer realization differs')
+        check_product_renderer(row['product_renderer'],row['player'])
         rows=row['capture_attempts']
         capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
                       'playback_time_seconds','owned_identity_geometry_unchanged'}
-        R.require(type(rows) is list and 1<=len(rows)<=6
+        R.require(type(rows) is list and len(rows)==1
                   and all(type(item) is dict and set(item)==capture_keys
                           and item['attempt']==number
                           and type(item['screenshot_sha256']) is str
@@ -334,31 +415,17 @@ def check_fullscreen(target,report,uid):
                   and row['oracle']==rows[-1].get('oracle')
                   and row['screenshot'].get('sha256')==rows[-1].get('screenshot_sha256'),
                   'Fullscreen visual capture-attempt binding differs')
-        if index<accepted:
-            cleanup=row['cleanup']
-            R.require(len(rows)==6 and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows)
-                      and row['oracle'].get('status')=='unmatched' and row['restart_eligible'] is True
-                      and row['owned_player_cleanup_completed'] is True and type(cleanup) is dict
-                      and set(cleanup)=={'process_identity_retired','owned_ipc_absent','owned_ipc_removed','release_acceptance'}
-                      and cleanup['process_identity_retired'] is True and cleanup['owned_ipc_absent'] is True
-                      and type(cleanup['owned_ipc_removed']) is bool and cleanup['release_acceptance'] is False,
-                      'Fullscreen failed visual player restart proof differs')
-        else:
-            accepted_fields=('player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
-                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-                'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')
-            R.require(all(row[key]==visual[key] for key in accepted_fields)
-                      and row['oracle'].get('status')=='matched' and row['restart_eligible'] is False
-                      and row['owned_player_cleanup_completed'] is False
-                      and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows[:-1]),
-                      'Fullscreen accepted visual player proof differs')
-    if accepted==2:
-        failed_shot,accepted_shot=[row['screenshot'] for row in attempts]
-        R.require(Path(failed_shot['path']).name=='celluloid-reference.png'
-                  and Path(accepted_shot['path']).name=='celluloid-reference-player-2.png'
-                  and failed_shot['path']!=accepted_shot['path']
-                  and failed_shot['sha256']!=accepted_shot['sha256'],
-                  'Fullscreen retry screenshots are not distinct exact attempts')
+        accepted_fields=('player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
+            'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')
+        R.require(all(row[key]==visual[key] for key in accepted_fields)
+                  and row['oracle'].get('status')=='matched' and row['restart_eligible'] is False
+                  and row['owned_player_cleanup_completed'] is False
+                  and Path(row['screenshot']['path']).name=='celluloid-reference.png',
+                  'Fullscreen accepted visual player proof differs')
+    check_product_renderer(moving.get('product_renderer'),moving['player'])
+    R.require(visual.get('product_renderer')==attempts[-1].get('product_renderer'),
+              'Accepted visual oracle/product renderer proof differs')
     expected=[moving['player'],*[row['player'] for row in attempts]]
     shots=[moving['screenshot'],*[row['screenshot'] for row in attempts]]
     R.require(len({(p.get('pid'),p.get('start_ticks')) for p in expected})==len(expected)

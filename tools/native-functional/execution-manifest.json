@@ -1,37 +1,26 @@
 {
   "execution_files": {
     ".github/workflows/native-candidate-20261008.yml": "a3bf68e561cd44a2d583ad7715085b4d0116e2269901db479afcf1933617d8ac",
+    "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
-    "tools/native-functional/evidence.py": "ea5d06af9bcafe1a6f5a54a968fb0c6245ed0be68b09cc3ee98eda27ce7ae71a",
+    "tools/native-functional/evidence.py": "4bac7ac60fb8c64e757e1436de28ec8302824cff901cedc17ffb5b2f2540a76c",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/runner.py": "2435bb72d59d944940d8ff135f35b1c61de7a459593c085b89bea60c833747f1",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/native-functional/source-provenance.json": "1615944326ca0e1bccf0d847d6739397b7158bb79d06038593f1121efac0c0df",
+    "tools/native-functional/source-provenance.json": "89adc8348a0b1e3dd51e85ae980adf702fee169ca0017277fefe35af47a39a3a",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "285c67aa190535ea68e9c7451ac8cccd245f511e36d33960ead2956fc6a5eafb",
     "tools/native-functional/taskbar-runtime.py": "297ee48eac1cea021713830f625f47453e84da0abf2bdcd1856c7b4e8082bbb4",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/native-functional/taskbar.py": "80cfba045134fc5ba3fcda0e78b2bea338f8b46df603b9f9b03f05885e37b489",
-    "tools/native-functional/virtual-pointer.c": "f00fc6e10250f62e2b0f531cc3becf433cc6e65b002b95432ca30b3800947bd4",
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
   },
-  "image": {
-    "run_id": 38536710765,
-    "artifact_id": 11883891542,
-    "archive_bytes": 1936466960,
-    "archive_sha256": "83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c",
-    "source_sha": "a13d91118fb90b99dbbf1899fadc3e184ea213ca",
-    "name": "Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso",
-    "bytes": 1936279552,
-    "sha256": "b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23"
-  },
-  "ready": true,
+  "image": null,
+  "ready": false,
   "release_acceptance": false
 }

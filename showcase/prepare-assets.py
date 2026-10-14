@@ -3,12 +3,21 @@ import json
 import shutil
 from pathlib import Path
 from PIL import Image
+from asset_integrity import ensure_exact_asset
+from capture_contracts import CAPTURES, pending_contract, preserve_reviewed_contracts
 
 ROOT = Path(__file__).resolve().parent
 REPO = ROOT.parent
 story = json.loads((ROOT/'storyboard.json').read_text())
 assets = ROOT/'assets'
 assets.mkdir(exist_ok=True)
+existing_contracts = {}
+provenance_path = ROOT/'asset-provenance.json'
+if provenance_path.exists():
+    existing = json.loads(provenance_path.read_text())
+    # Legacy pending records are migrated to the current closed schema. A
+    # reviewed record is never reset: its receipt and exact PNG must pass.
+    existing_contracts = preserve_reviewed_contracts(existing, REPO)
 provenance=[]
 for scene in story:
     if 'image' not in scene or scene.get('type') in {'apps','evidence','qualification-pair'}:
@@ -27,10 +36,14 @@ for source in (REPO/'design/fonts').glob('*.woff2'):
     shutil.copy2(source,assets/source.name)
 for name in ['arctic-mark-winter.svg','arctic-mark-polar-night.svg']:
     shutil.copy2(REPO/'design/logos'/name,assets/name)
-# Bundle GSAP locally so the source can be rendered without a CDN request.
-import urllib.request
-with urllib.request.urlopen('https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js') as src:
-    (assets/'gsap.min.js').write_bytes(src.read())
+# Bundle only the reviewed GSAP bytes. The committed copy enables offline
+# preparation; a missing or changed copy is accepted only after exact checking.
+ensure_exact_asset(
+    assets/'gsap.min.js',
+    url='https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js',
+    expected_bytes=72_777,
+    expected_sha256='19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee',
+)
 provenance.append({
     'scene':'tiling',
     'composition':'Two separate exact-candidate qualification captures placed side by side in HTML',
@@ -50,13 +63,11 @@ provenance.append({
         {'path':'vm/boot-51-desktop.png','sha256':'40d7a378b8f727dfff4ae4b7234958329f37f59ed9462417260a3031b8035272','transformation':'JPEG quality 92, 4:4:4, no crop','output':'showcase/assets/installed-desktop-exact.jpg','output_sha256':'9ec51efc605a5a8d144319702dedc9b34d263195ce1b9ce10f3db48c768e65a7'},
     ],
 })
-provenance.append({
-    'artifact':{'id':11762348140,'sha256':'26c5d39f914d6d7ae9dcfab558fc37dd593a9d901896e4f8f854b48e535e0126'},
-    'sources':[
-        {'path':'dictation-indicator-online-installed.png','sha256':'341b144e1f1ee92c0e365de39463946dcddf279db1105c0615680bc3a6a3b853','output':'showcase/assets/dictation-recording-current.png'},
-        {'path':'dictation-indicator-recovered-offline.png','sha256':'252c27ecc4c417311ab49913aa060b54034b7fe548eae83f4f3f2ad12274a230','output':'showcase/assets/dictation-recovery-qualification.png'},
-    ],
-})
+for scene in CAPTURES:
+    provenance.append({
+        'scene': scene,
+        'capture_contract': existing_contracts.get(scene, pending_contract(scene)),
+    })
 provenance.append({'continuous_os_recording':False,'qualification_capture_disclosures_retained':True})
 (ROOT/'asset-provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
 print(f'Prepared {len(provenance)} authentic screen assets')

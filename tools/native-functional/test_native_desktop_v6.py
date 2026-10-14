@@ -25,6 +25,15 @@ def editor_request():
 def serial(r):
  l=dict(stage='live',boot_id=r['boot_id'],launcher_sha256='e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c',owned_launcher_gone=True,foot={'uid':1000},shell={'uid':1000},probe={'uid':0})
  return '\n'.join(['ARCTIC-NATIVE-LAUNCHER-GONE '+json.dumps(l),'ARCTIC-NATIVE-RUNNER-BEGIN '+json.dumps(dict(stage='live',checker_sha256='2'*64,release_acceptance=False)),C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)])+'\n'
+def product_renderer(player):
+ return dict(schema='arctic-celluloid-product-renderer-v1',launcher='/usr/libexec/arctic/arctic-celluloid',
+  desktop_file='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop',requested_renderer='gl',
+  realized_renderer='gl',upstream_executable='/usr/bin/celluloid',native_wayland=True,
+  user_override_policy='an explicitly set GSK_RENDERER is preserved by the launcher',release_acceptance=True,
+  protocol=dict(ownership_verified=True,drain_failed=False,partial_line=False,time_cap_reached=False,
+   owner=dict(pid=player['pid'],start_ticks=player['start_ticks'],executable_sha256=player['executable_sha256']),
+   realized_renderer=dict(status='reported-realized',renderer='gl',owned_stderr_binding_verified=True,
+    environment_request_is_not_attestation=True,release_acceptance=False)))
 def fullscreen_fixture(value,visual,moving_shot):
  """Data-only synthetic positive proof; never claims real GUI or activation."""
  turns=[];caps=[];owned=[];root=value['evidence_root'];monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
@@ -35,29 +44,22 @@ def fullscreen_fixture(value,visual,moving_shot):
   for j,enabled in enumerate((True,False)):
    turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(argv=['mmsg','dispatch','togglefullscreen','client,'+p['client_id']],returncode=0,stdout='{"success":true}',stderr=''),monotonic_ns=100+i*100+j*20,completed_monotonic_ns=110+i*100+j*20,release_acceptance=False))
   shot=moving_shot if i==0 else visual['screenshot'];caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
- visual.update(player=owned[1],player_attempt=1,player_attempt_limit=2,accepted_player_attempt=1,capture_attempt_limit=6,
+ visual.update(player=owned[1],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
   capture_deadline_seconds=42,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
  matched=dict(status='matched');capture=dict(attempt=1,screenshot_sha256=visual['screenshot']['sha256'],
   actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
  accepted=dict(player_attempt=1,player=owned[1],player_state={},fixture_sha256=visual['fixture_sha256'],
   input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
-  playback_clock={},capture_attempts=[capture],capture_attempt_limit=6,capture_deadline_seconds=42,
-  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],owned_player_cleanup_completed=False,
+  playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=42,
+  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],product_renderer=product_renderer(owned[1]),owned_player_cleanup_completed=False,
   restart_eligible=False,release_acceptance=False)
- seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
-  seed_readback_matched=True,release_acceptance=False)
- renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
-  gtk_source_version='4.22.5',surface_kind='wayland-toplevel',video_widget_or_framebuffer_attested=False,
-  release_acceptance=False,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
-  debug_observation='GSK_DEBUG=renderer')
- accepted.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
  visual['player_attempts']=[accepted]
  visual.update({key:accepted[key] for key in ('player','player_state','actual_rgb_sha256','playback_clock','capture_attempts',
-  'accepted_capture_attempt','oracle','screenshot')})
+  'accepted_capture_attempt','oracle','screenshot','product_renderer')})
  value['proven_new_processes']=owned
  value['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
  trace=[dict(event='owned-player-fullscreen',receipt=x) for x in turns]+[dict(event='owned-fullscreen-capture',receipt=x) for x in caps]
- return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot)).encode()}
+ return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot,product_renderer=product_renderer(owned[0]))).encode()}
 class EditorControls(unittest.TestCase):
  def fixture(self,d):
   clock=Clock();vm=VM(Path(d));c=C.EditorSaveController(vm,d,'live','2'*64,clock=clock,sleep=clock.sleep);return c,vm,clock
@@ -114,7 +116,7 @@ class EditorControls(unittest.TestCase):
   N=load('desktop_editor_raw','evidence.py');F=load('desktop_pc_fixture','test_native_physical_v6.py')
   with tempfile.TemporaryDirectory() as d:
    d=Path(d);out=d/'host';out.mkdir();target=d/'guest';target.mkdir();c,vm,_=self.fixture(out);r=editor_request();c.poll(serial(r))
-   pc=[F.request(i) for i in range(5)];raw=F.serial(pc[:3])+C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)+'\n'+''.join(C.PREFIX+json.dumps(x,sort_keys=True)+'\n' for x in pc[3:])
+   pc=[F.request(i) for i in range(7)];raw=F.serial(pc[:3])+C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)+'\n'+''.join(C.PREFIX+json.dumps(x,sort_keys=True)+'\n' for x in pc[3:])
    report=dict(evidence_root=r['evidence_root'],proven_new_processes=[dict(r['process'])]);proof=dict(boot_id=r['boot_id'],desktop_uid=1000)
    (target/'serial-native-report.json').write_text(json.dumps(report));(target/'serial-native-provenance.json').write_text(json.dumps(proof))
    (target/'gui-trace.log').write_text(json.dumps(dict(event='editor-physical-request',request=r))+'\n');(target/'gui-trace-summary.json').write_text('{"omitted_records":0}')
@@ -184,9 +186,9 @@ class FullscreenControls(unittest.TestCase):
  def test_actual_host_fullscreen_raw_pairing_and_adverses(self):
   N=load('desktop_host_fullscreen','evidence.py')
   with tempfile.TemporaryDirectory() as d:
-   d=Path(d);root='/tmp/arctic-native-smoke-test';png=b'\x89PNG\r\n\x1a\nsynthetic';(d/'moving.png').write_bytes(png);(d/'static.png').write_bytes(png)
+   d=Path(d);root='/tmp/arctic-native-smoke-test';png=b'\x89PNG\r\n\x1a\nsynthetic';(d/'moving.png').write_bytes(png);(d/'celluloid-reference.png').write_bytes(png)
    shot=lambda n:dict(path=root+'/'+n,sha256=hashlib.sha256(png).hexdigest())
-   value=dict(evidence_root=root);visual=dict(screenshot=shot('static.png'));files=fullscreen_fixture(value,visual,shot('moving.png'));files['visual-oracle.json']=json.dumps(visual).encode()
+   value=dict(evidence_root=root);visual=dict(screenshot=shot('celluloid-reference.png'));files=fullscreen_fixture(value,visual,shot('moving.png'));files['visual-oracle.json']=json.dumps(visual).encode()
    for n,b in files.items():(d/n).write_bytes(b)
    self.assertEqual(N.check_fullscreen(d,value,1000)['captures'],2)
    turns=json.loads(files['fullscreen-player-receipts.json'])
@@ -197,15 +199,15 @@ class FullscreenControls(unittest.TestCase):
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,v,1000)
    for mutate in [lambda v,t,c:t[0]['action'].update(argv=['mmsg','dispatch','focusid','client,7']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action'].update(returncode=1)]:rerun(mutate)
 
- def test_actual_fullscreen_methods_and_validator_bind_failed_then_accepted_player(self):
-  N=load('desktop_host_fullscreen_restart','evidence.py')
+ def test_actual_fullscreen_validator_requires_one_fresh_first_launch(self):
+  N=load('desktop_host_fullscreen_single','evidence.py')
   with tempfile.TemporaryDirectory() as d:
-   d=Path(d);root='/tmp/arctic-native-smoke-restart';trace=[]
+   d=Path(d);root='/tmp/arctic-native-smoke-single';trace=[]
    smoke=S.Smoke.__new__(S.Smoke);smoke.root=d;smoke.uid=1000
    smoke.trace=lambda event,**value:trace.append(dict(event=event,**value))
    monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
    players=[dict(client_id=str(7+i),pid=70+i,start_ticks=700+i,executable='/usr/bin/celluloid',
-                 executable_sha256=str(i+1)*64,is_xwayland=False) for i in range(3)]
+                 executable_sha256=str(i+1)*64,is_xwayland=False) for i in range(2)]
    states={p['pid']:dict(id=int(p['client_id']),pid=p['pid'],appid='celluloid',foreign_toplevel_id='owned-'+str(i),
           monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=False,
           x=0,y=0,width=160,height=120) for i,p in enumerate(players)}
@@ -215,96 +217,75 @@ class FullscreenControls(unittest.TestCase):
     client=int(argv[-1].split(',')[-1]);state=next(x for x in states.values() if x['id']==client)
     state['is_fullscreen']=not state['is_fullscreen'];return 0,'{"success":true}',''
    smoke.cmd=command
-   names=('moving.png','celluloid-reference.png','celluloid-reference-player-2.png');shots=[]
+   names=('moving.png','celluloid-reference.png');shots=[]
    for index,name in enumerate(names):
-    png=b'\x89PNG\r\n\x1a\nrestart-validator-'+bytes([index]);(d/name).write_bytes(png)
+    png=b'\x89PNG\r\n\x1a\nsingle-player-validator-'+bytes([index]);(d/name).write_bytes(png)
     shots.append(dict(path=root+'/'+name,sha256=hashlib.sha256(png).hexdigest()))
    for player,shot in zip(players,shots):
     smoke.player_fullscreen(player,True);full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False)
-   unmatched=dict(status='unmatched',reason='No bounded 16-color ROI matched')
    matched=dict(status='matched',mismatched_pixels=0)
    hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
-   failed_captures=[dict(attempt=i,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='7'*64,
-      oracle=copy.deepcopy(unmatched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True) for i in range(1,7)]
-   accepted_captures=[dict(attempt=1,screenshot_sha256=shots[2]['sha256'],actual_rgb_sha256='8'*64,
-      oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)]
-   failed=dict(player_attempt=1,player=players[1],player_state={},**hashes,actual_rgb_sha256='7'*64,
-      playback_clock={},capture_attempts=failed_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
-      accepted_capture_attempt=None,oracle=unmatched,screenshot=shots[1],owned_player_cleanup_completed=True,
-      restart_eligible=True,release_acceptance=False,cleanup=dict(process_identity_retired=True,owned_ipc_absent=True,
-      owned_ipc_removed=True,release_acceptance=False))
-   accepted=dict(player_attempt=2,player=players[2],player_state={},**hashes,actual_rgb_sha256='8'*64,
-      playback_clock={},capture_attempts=accepted_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
-      accepted_capture_attempt=1,oracle=matched,screenshot=shots[2],owned_player_cleanup_completed=False,
-      restart_eligible=False,release_acceptance=False)
-   seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
-      seed_readback_matched=True,release_acceptance=False)
-   renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
-      gtk_source_version='4.22.5',surface_kind='wayland-toplevel',video_widget_or_framebuffer_attested=False,
-      release_acceptance=False,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
-      debug_observation='GSK_DEBUG=renderer')
-   failed.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
-   accepted.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
-   visual=dict(player=players[2],player_attempt=2,player_attempt_limit=2,accepted_player_attempt=2,capture_attempt_limit=6,
-      capture_deadline_seconds=42,screenshot=shots[2],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
-      playback_clock=accepted['playback_clock'],capture_attempts=accepted_captures,accepted_capture_attempt=1,
-      oracle=matched,player_attempts=[failed,accepted],**hashes)
+   capture=dict(attempt=1,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
+      oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
+   accepted=dict(player_attempt=1,player=players[1],player_state={},**hashes,actual_rgb_sha256='8'*64,
+      playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=9.5,
+      accepted_capture_attempt=1,oracle=matched,screenshot=shots[1],product_renderer=product_renderer(players[1]),
+      owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
+   visual=dict(player=players[1],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
+      capture_deadline_seconds=9.5,screenshot=shots[1],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
+      playback_clock=accepted['playback_clock'],capture_attempts=[capture],accepted_capture_attempt=1,
+      oracle=matched,product_renderer=accepted['product_renderer'],player_attempts=[accepted],**hashes)
    report=dict(evidence_root=root,proven_new_processes=players,
       diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
-   (d/'moving-player-proof.json').write_text(json.dumps(dict(player=players[0],screenshot=shots[0])))
-   (d/'visual-oracle.json').write_text(json.dumps(visual));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
-   (d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
+   moving=dict(player=players[0],screenshot=shots[0],product_renderer=product_renderer(players[0]))
+   (d/'moving-player-proof.json').write_text(json.dumps(moving));(d/'visual-oracle.json').write_text(json.dumps(visual))
+   (d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace));(d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
    result=N.check_fullscreen(d,report,1000)
-   self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(3,6,3,2))
-   self.assertEqual(len({x['path'] for x in shots}),3)
-   self.assertIn('celluloid-reference-player-2.png',load('restart_public_inventory','guest-check-native-v6.py').NATIVE_PUBLIC_EVIDENCE_FILES)
-   original_turns=(d/'fullscreen-player-receipts.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text();original_visual=(d/'visual-oracle.json').read_text()
-   def rejected(change):
-    (d/'fullscreen-player-receipts.json').write_text(original_turns);(d/'fullscreen-player-captures.json').write_text(original_captures);(d/'visual-oracle.json').write_text(original_visual)
-    change()
+   self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(2,4,2,1))
+   original_visual=(d/'visual-oracle.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text()
+   def rejected(mutate):
+    value=json.loads(original_visual);mutate(value);(d/'visual-oracle.json').write_text(json.dumps(value))
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,report,1000)
-   rejected(lambda:(lambda x:(x[0]['cleanup'].update(owned_ipc_absent=False),(d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(d/'fullscreen-player-captures.json').write_text(json.dumps(json.loads(original_captures)[:-1])))
-   rejected(lambda:(lambda x:(x[0].update(restart_eligible=False),(d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[0].update(screenshot=copy.deepcopy(x[1]['screenshot'])),
-      x[0]['capture_attempts'][-1].update(screenshot_sha256=x[1]['screenshot']['sha256']),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(attempt=2),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
-       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(private_value='forbidden'),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
-       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(screenshot_sha256='A'*64),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
-       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(playback_time_seconds=float('nan')),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
-       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['capture_attempts'][0].update(owned_identity_geometry_unchanged=False),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x,
-       capture_attempts=x[1]['capture_attempts'])))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1].update(actual_rgb_sha256='9'*64),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['player'].update(client_id=x[0]['player']['client_id']),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player=copy.deepcopy(x[1]['player']),player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['primary_controls_seed'].update(seed_readback_matched=False),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['primary_renderer_realization'].update(status='unknown'),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1]['primary_renderer_realization'].update(requested_gsk_renderer='gl'),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
-   rejected(lambda:(lambda x:(x[1].pop('primary_renderer_realization'),
-      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+    (d/'visual-oracle.json').write_text(original_visual)
+   rejected(lambda v:v.update(player_attempt_limit=2))
+   rejected(lambda v:v.update(accepted_player_attempt=2))
+   rejected(lambda v:v['player_attempts'].append(copy.deepcopy(v['player_attempts'][0])))
+   rejected(lambda v:v['player_attempts'][0].update(capture_attempt_limit=6))
+   rejected(lambda v:v['player_attempts'][0].update(restart_eligible=True))
+   rejected(lambda v:v['player_attempts'][0]['oracle'].update(status='unmatched'))
+   rejected(lambda v:v['player_attempts'][0].update(actual_rgb_sha256='9'*64))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0].update(private_value='forbidden'))
+   rejected(lambda v:v['product_renderer'].update(realized_renderer='vulkan'))
+   (d/'fullscreen-player-captures.json').write_text(json.dumps(json.loads(original_captures)[:-1]))
+   with self.assertRaises(RuntimeError):N.check_fullscreen(d,report,1000)
 
 class HarnessControls(unittest.TestCase):
- def test_original_five_controller_and_default_false_guest_remain_exact(self):
+ def test_product_routes_bind_four_exact_distinct_fresh_processes(self):
+  N=load('desktop_product_routes','evidence.py');proven=[];routes=[]
+  for index,route in enumerate(('file-manager-mime','gio-new-window','gio-enqueue','enqueue-target'),1):
+   process=dict(pid=100+index,start_ticks=1000+index,executable='/usr/bin/celluloid',
+    executable_sha256=str(index)*64,client_id=str(index),is_xwayland=False)
+   proven.append(copy.deepcopy(process))
+   value=dict(schema='arctic-celluloid-product-launch-v1',route=route,
+    launcher='/usr/libexec/arctic/arctic-celluloid',
+    desktop_file='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop',
+    requested_renderer='gl',upstream_executable='/usr/bin/celluloid',native_wayland=True,
+    process=copy.deepcopy(process),release_acceptance=True)
+   routes.append((value,copy.deepcopy(process) if index==1 else None,route))
+  self.assertEqual(len(N.check_product_launches(routes,proven)),4)
+  bad=copy.deepcopy(routes);bad[1][0]['process']['start_ticks']+=1
+  with self.assertRaises(RuntimeError):N.check_product_launches(bad,proven)
+  bad=copy.deepcopy(routes);bad[3][0]['process']=copy.deepcopy(bad[2][0]['process'])
+  with self.assertRaises(RuntimeError):N.check_product_launches(bad,proven)
+  with self.assertRaises(RuntimeError):N.check_product_launches(routes,proven+[copy.deepcopy(proven[0])])
+
+ def test_seven_controller_and_default_false_guest_remain_exact(self):
   prior=HERE/'predecessor-native-v5.txt';new=(HERE/'native_smoke.py').read_text();tree=ast.parse(new)
   call=next(n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='run_checks')
   self.assertFalse(any(k.arg=='gui_v6' for k in call.keywords))
   fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run_checks')
   self.assertIs(fn.args.kw_defaults[-1].value,False)
-  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'5a8cc6436335a8ea49feca8bcd8dd40746f9f2811f6976d3f3ebbd200f1eec6c')
+  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
  def test_actual_generated_poll_default_off_and_selected_editor_path(self):
   import os
   F=load('desktop_poll_fixture','test_native_physical_v6.py')

@@ -14,5 +14,20 @@
     "subtitle_codec": "mov_text"
   },
   "full_decode_errors": 0,
-  "published": false
+  "published": false,
+  "status": "superseded_previous_river_candidate",
+  "superseded_by": {
+    "source_branch": "codex/showcase-direct-voxtype-source-20261014",
+    "wording": "direct official VoxType 1.1.0",
+    "render_ready": false,
+    "rendered": false,
+    "published": false,
+    "pending": [
+      "new River master and alignment",
+      "qualified direct-VoxType ISO captures",
+      "human listening",
+      "strict render validation",
+      "release binding"
+    ]
+  }
 }

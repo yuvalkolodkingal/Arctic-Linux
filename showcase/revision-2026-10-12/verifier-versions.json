@@ -1,12 +1,13 @@
 {
-  "python": "3.12.15",
+  "python": "3.12.14",
   "faster-whisper": "1.2.1",
   "av": "16.0.1",
-  "ctranslate2": "4.8.2",
+  "ctranslate2": "4.8.3",
   "huggingface-hub": "2.2.0",
   "tokenizers": "0.23.3",
-  "preflight_seconds": 1,
-  "preflight_segments": 1,
-  "preflight_words": 3,
-  "transcript_in_ci_log": false
+  "transcript_in_ci_log": false,
+  "alignment_runs": 2,
+  "alignment_outputs_byte_identical": true,
+  "model": "base.en",
+  "model_execution": "local_cpu_int8_offline_cached_after_initial_download"
 }

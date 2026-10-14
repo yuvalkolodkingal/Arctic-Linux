@@ -245,15 +245,15 @@ class DrainAndExportControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True
             smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
-            child=Mock();drain=Mock();argv=['/usr/bin/celluloid','--no-existing-session','--new-window','fixture.mkv']
+            child=Mock();drain=Mock();argv=['/usr/libexec/arctic/arctic-celluloid','--no-existing-session','--new-window','fixture.mkv']
             order=[]
             drain.start.side_effect=lambda reader:order.append('drain-start')
             with patch.object(N,'NativeProtocolDrain',return_value=drain) as factory,patch.object(N.subprocess,'Popen',return_value=child) as popen:
                 popen.side_effect=lambda *a,**kw:(order.append('app-launch') or child)
                 smoke.launch_protocol_player(argv)
-            self.assertEqual(popen.call_args.args[0],smoke.prefix+['env','-u','GSK_RENDERER',
-                'GSK_DEBUG=renderer','WAYLAND_DEBUG=client']+argv)
-            self.assertEqual(factory.call_args.kwargs,dict(renderer=True))
+            self.assertEqual(popen.call_args.args[0],smoke.prefix+['GSK_DEBUG=renderer','WAYLAND_DEBUG=client']+argv)
+            self.assertTrue(popen.call_args.kwargs['stderr'] >= 0)
+            factory.assert_called_once_with(renderer=True)
             writer=popen.call_args.kwargs['stderr'];self.assertIs(type(writer),int)
             with self.assertRaises(OSError):os.fstat(writer)
             self.assertEqual(order,['drain-start','app-launch'])
@@ -261,67 +261,28 @@ class DrainAndExportControls(unittest.TestCase):
             self.assertEqual(smoke.steps[0]['argv'],argv)
             with self.assertRaises(RuntimeError):smoke.launch_protocol_player(['/usr/bin/other'])
 
-    def test_optional_thread_start_failure_reaches_original_visual_oracle_and_cleans_owned_fds(self):
-        # Actual gate/visual/launch/drain methods; only app/process and GUI fixtures mocked.
+    def test_renderer_capture_start_failure_fails_closed_before_product_launch(self):
         with tempfile.TemporaryDirectory() as t:
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True;smoke.uid=os.getuid();smoke.stage='live'
             smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[];smoke.gates=[];smoke.owned=[]
             fixture=smoke.root/'visual-reference.mkv';fixture.write_bytes(b'host-only')
             expected=smoke.root/'visual-reference-frame.rgb';expected.write_bytes(N.visual_reference_frame())
-            proofs=[dict(pid=100+i,start_ticks=10+i,client_id=str(7+i),executable='/usr/bin/celluloid',
-                         executable_sha256=chr(97+i)*64) for i in range(2)]
-            def client(proof):return dict(id=int(proof['client_id']),pid=proof['pid'],x=0,y=0,width=160,height=120,
-                is_focused=True,is_visible=True,is_fullscreen=True,monitor='fixture')
-            monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64))
-            smoke.fresh_window=Mock(side_effect=lambda start,*args:(start() or smoke.owned.append(proofs.pop(0)) or smoke.owned[-1]))
-            smoke.alive=Mock(side_effect=lambda proof:client(proof));smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
-            smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock()
-            smoke.seed_primary_reference_controls=Mock(return_value=dict(initial_visible=True,
-                seed_readback_matched=True,release_acceptance=False))
-            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
-                release_acceptance=False))
+            smoke.fresh_window=Mock(side_effect=lambda start,*args:start())
+            smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
             smoke.reference_settings_config=Mock()
-            commands=[];captures=[];closed=[];original_close=os.close;original_pipe=os.pipe;original_drain=N.NativeProtocolDrain
-            def command(argv,**kwargs):
-                commands.append(argv)
-                if argv[:3]==['mmsg','get','all-monitors']:return (0,json.dumps(dict(monitors=[monitor])),'')
-                if argv[0]=='grim':Path(argv[-1]).write_bytes(b'\x89PNG\r\n\x1a\n'+b'\0\0\0\rIHDR'+struct.pack('>II',160,120))
-                if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
-                return (0,'{"success":true}','')
-            def pipe():
-                pair=original_pipe();captures.extend(pair);return pair
-            def drain_factory(**kwargs):
-                self.assertEqual(kwargs,dict(renderer=True))
-                drain=original_drain();captures.append(drain.raw_fd);return drain
-            def close(fd):closed.append(fd);original_close(fd)
-            smoke.cmd=Mock(side_effect=command)
-            time_calls={100:0,101:0}
-            def prop(path,key,pid,uid):
-                if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
-                    'pause':False,'current-vo':'libmpv'}[key]
-                time_calls[pid]+=1
-                return 0 if time_calls[pid]==1 else .2
+            captures=[];original_drain=N.NativeProtocolDrain
+            def drain_factory(*args,**kwargs):
+                drain=original_drain(*args,**kwargs);captures.append(drain.raw_fd);return drain
             with patch.object(N,'NativeProtocolDrain',side_effect=drain_factory) as factory,\
-                 patch.object(N.os,'pipe',side_effect=pipe),patch.object(N.os,'close',side_effect=close),\
                  patch.object(N.threading.Thread,'start',side_effect=RuntimeError('private optional setup text')),\
-                 patch.object(N.subprocess,'Popen',return_value=Mock()) as popen,\
-                 patch.object(N,'retire_reference_player',return_value=dict(process_identity_retired=True,
-                    owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
-                 patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                 patch.object(N.subprocess,'Popen',return_value=Mock()) as popen:
                 self.assertIsNone(smoke.gate('open-codec-content-and-player-state',smoke.visual_media))
-            self.assertEqual(factory.call_count,1);self.assertEqual(popen.call_count,1)
-            self.assertEqual(smoke.seed_primary_reference_controls.call_count,1)
-            for call in popen.call_args_list:self.assertNotIn('WAYLAND_DEBUG=client',call.args[0])
-            self.assertEqual(sleep.call_args_list,[])
-            self.assertIn('primary renderer realization capture unavailable',smoke.gates[-1]['detail'])
+            self.assertEqual(factory.call_count,1);popen.assert_not_called()
+            self.assertIn('product renderer attestation setup unavailable',smoke.gates[-1]['detail'])
             self.assertNotIn('private optional',json.dumps(smoke.gates))
-            self.assertFalse((smoke.root/'visual-oracle.json').exists())
-            self.assertFalse((smoke.root/'celluloid-reference.png').exists())
-            self.assertFalse((smoke.root/'0-native-protocol-viewport.json').exists())
             for fd in captures:
                 with self.assertRaises(OSError):os.fstat(fd)
-            self.assertGreaterEqual(len(closed),3)
 
     def test_start_failure_cleanup_is_idempotent_even_after_fd_reuse(self):
         read,write=os.pipe();reader=os.fdopen(read,'rb',buffering=0);drain=N.NativeProtocolDrain();raw=drain.raw_fd
@@ -348,7 +309,7 @@ class DrainAndExportControls(unittest.TestCase):
                 writer.append(kw['stderr']);self.assertFalse(os.get_inheritable(kw['stderr']))
                 return actual_popen([sys.executable,'-c','import sys,time;print("host fixture",file=sys.stderr,flush=True);time.sleep(2)'],**kw)
             with patch.object(N.NativeProtocolDrain,'start',start),patch.object(N.subprocess,'Popen',side_effect=popen):
-                smoke.launch_protocol_player(['/usr/bin/celluloid','--no-existing-session','fixture.mkv'])
+                smoke.launch_protocol_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session','fixture.mkv'])
             child=smoke.launches[0];drain=smoke.native_protocol_drain
             try:
                 with self.assertRaises(OSError):os.fstat(writer[0])
@@ -358,20 +319,20 @@ class DrainAndExportControls(unittest.TestCase):
                 child.terminate();child.wait(3);drain.finish()
             self.assertFalse(drain.thread.is_alive());self.assertIsNone(drain.raw_fd)
 
-    def test_pipe_setup_falls_back_and_original_popen_failure_closes_prestarted_capture(self):
+    def test_pipe_setup_and_product_popen_fail_closed_and_close_capture(self):
         with tempfile.TemporaryDirectory() as t:
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True
             smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
             original=N.NativeProtocolDrain;captures=[]
-            def factory(**kwargs):
-                self.assertEqual(kwargs,dict(renderer=True))
-                drain=original();captures.append(drain);return drain
-            argv=['/usr/bin/celluloid','--no-existing-session','fixture.mkv']
+            def factory(*args,**kwargs):
+                drain=original(*args,**kwargs);captures.append(drain);return drain
+            argv=['/usr/libexec/arctic/arctic-celluloid','--no-existing-session','fixture.mkv']
             with patch.object(N,'NativeProtocolDrain',side_effect=factory),\
                  patch.object(N.os,'pipe',side_effect=OSError('host-only setup fault')),\
                  patch.object(N.subprocess,'Popen',return_value=Mock()) as popen:
-                smoke.launch_protocol_player(argv)
-            self.assertEqual(popen.call_args.args[0],smoke.prefix+argv)
+                with self.assertRaisesRegex(RuntimeError,'product renderer attestation setup unavailable'):
+                    smoke.launch_protocol_player(argv)
+            popen.assert_not_called()
             self.assertIsNone(captures[0].raw_fd)
             with patch.object(N,'NativeProtocolDrain',side_effect=factory),\
                  patch.object(N.subprocess,'Popen',side_effect=OSError('original process launch fault')):
@@ -386,8 +347,8 @@ class DrainAndExportControls(unittest.TestCase):
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True;smoke.uid=os.getuid();smoke.stage='live';smoke.owned=[]
             fixture=smoke.root/'visual-reference.mkv';fixture.write_bytes(b'host-only')
             expected=smoke.root/'visual-reference-frame.rgb';expected.write_bytes(N.visual_reference_frame())
-            proofs=[dict(pid=100+i,start_ticks=10+i,client_id=str(7+i),executable='/usr/bin/celluloid',
-                         executable_sha256=chr(97+i)*64) for i in range(2)]
+            proofs=[dict(pid=100,start_ticks=10,client_id='7',executable='/usr/bin/celluloid',
+                         executable_sha256='a'*64)]
             def client(proof):return dict(id=int(proof['client_id']),pid=proof['pid'],x=0,y=0,width=160,height=120,
                 is_focused=True,is_visible=True,is_fullscreen=True,monitor='fixture')
             monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
@@ -397,15 +358,8 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock(side_effect=fresh)
             smoke.alive=Mock(side_effect=lambda proof:client(proof));smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock()
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
-            smoke.seed_primary_reference_controls=Mock(return_value=dict(initial_visible=True,
-                seed_readback_matched=True,release_acceptance=False))
-            smoke.primary_renderer_realization=Mock(return_value=dict(status='reported-realized',renderer='vulkan',
-                message_count=1,capped=False,gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
-                video_widget_or_framebuffer_attested=False,release_acceptance=False,
-                owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
-                debug_observation='GSK_DEBUG=renderer'))
-            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
-                release_acceptance=False))
+            smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
+            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
             commands=[]
             def command(argv,**kwargs):
@@ -415,24 +369,23 @@ class DrainAndExportControls(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
-            time_calls={100:0,101:0}
+            time_calls={100:0}
             def prop(path,key,pid,uid):
                 if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
                     'pause':False,'current-vo':'libmpv'}[key]
                 time_calls[pid]+=1
                 return 0 if time_calls[pid]==1 else .2
-            with patch.object(N,'retire_reference_player',return_value=dict(process_identity_retired=True,
-                    owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
-                 patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
-                with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
-                    smoke.visual_media()
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
-            self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
-            self.assertEqual(smoke.primary_renderer_realization.call_count,2)
+            with socket.socket(socket.AF_UNIX) as endpoint:
+                endpoint.bind(str(smoke.root/'visual-reference-ipc.sock'))
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
+                        smoke.visual_media()
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True))
-            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[1],False))
+            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False))
             oracle=json.loads((smoke.root/'visual-oracle.json').read_bytes());self.assertEqual(oracle['oracle']['status'],'unmatched')
+            self.assertEqual((oracle['player_attempt_limit'],oracle['capture_attempt_limit']),(1,1))
             diagnostic=json.loads((smoke.root/'0-native-protocol-viewport.json').read_bytes())
             self.assertEqual(diagnostic['primary_screenshot_sha256'],oracle['screenshot']['sha256'])
             self.assertFalse(diagnostic['release_acceptance']);self.assertEqual(diagnostic['protocol']['status'],'unknown')

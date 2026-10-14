@@ -35,6 +35,10 @@ SETUP = Path('/usr/libexec/arctic/arctic-voxtype-setup')
 HOST_PROFILE = Path('/usr/libexec/arctic/arctic-voxtype-host-profile')
 CONFIGURE = Path('/usr/libexec/arctic/arctic-voxtype-configure')
 KEY = Path('/usr/share/arctic/dictation/voxtype-release-key.asc')
+PROVENANCE_SUMS = Path('/usr/share/arctic/dictation/provenance/1.1.0/SHA256SUMS.txt')
+PROVENANCE_SUMS_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/SHA256SUMS.txt.asc')
+PROVENANCE_BASELINE_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc')
+PROVENANCE_AVX2_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc')
 POLICY = Path('/usr/share/polkit-1/actions/org.arcticlinux.dictation.policy')
 UNIT = Path('/usr/lib/systemd/user/voxtype.service')
 SETUP_SERVICE = Path('/usr/lib/systemd/system/arctic-dictation-setup.service')
@@ -400,6 +404,10 @@ def installed_integration_sha():
         ('packaging/dictation/arctic-voxtype-host-profile', HOST_PROFILE),
         ('packaging/dictation/arctic-voxtype-configure', CONFIGURE),
         ('packaging/dictation/voxtype-release-key.asc', KEY),
+        ('packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt', PROVENANCE_SUMS),
+        ('packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc', PROVENANCE_SUMS_SIG),
+        ('packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc', PROVENANCE_BASELINE_SIG),
+        ('packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc', PROVENANCE_AVX2_SIG),
         ('packaging/dictation/org.arcticlinux.dictation.policy', POLICY),
         ('packaging/systemd/voxtype.service', UNIT),
         ('packaging/systemd/arctic-dictation-setup.service', SETUP_SERVICE),

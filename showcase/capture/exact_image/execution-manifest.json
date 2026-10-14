@@ -1,0 +1,43 @@
+{
+  "branch": "codex/showcase-exact-capture-20261014",
+  "controller": {
+    "accelerator": "kvm",
+    "account": {
+      "autologin": true,
+      "disposable": true,
+      "hostname": "arctic-showcase",
+      "uid": 1000,
+      "username": "arcticshowcase"
+    },
+    "display": "none",
+    "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
+    "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
+    "mode": "fixed-qmp-and-owned-virtio-serial",
+    "network_control": "none; QEMU user networking has no host forwarding",
+    "output": {
+      "count": 1,
+      "height": 800,
+      "scale": 1,
+      "width": 1280
+    },
+    "release_acceptance": false,
+    "schema": "arctic-showcase-unattended-controller-v1"
+  },
+  "execution_files": {
+    ".github/workflows/showcase-exact-capture-20261014.yml": "b5b9c0cd0b37fa7aacc16802c12a4f2e057b0c12ac25fc947d2123284520a2ef",
+    "showcase/capture/exact_image/automation.py": "799bddf5f7e10603b98bfe3bf6f906b96d1eb6447d548fb8d2050315587e98f1",
+    "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
+    "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
+    "showcase/capture/exact_image/capture_vm.py": "cf1033309877e2631c5259ac664918e430835c08b7d2c37045d2dce6e90e6181",
+    "showcase/capture/exact_image/contract.py": "7162f2330e6d55a8d67531c7a95bd938092c95966f735b0d43287350d8cc9237",
+    "showcase/capture/exact_image/guest.py": "07f8f3000de782724db05b575b2e47a934a36114915523ad637486e53adb024f",
+    "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
+    "showcase/capture/exact_image/unattended.py": "20faaaa06419af1fde730461d1f8a43c9e987d13196e92a2e8e7725b1211c758",
+    "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
+  },
+  "image": null,
+  "ready": false,
+  "release_acceptance": false,
+  "schema": "arctic-showcase-unattended-execution-v1"
+}

@@ -7,7 +7,7 @@
     "tools/installer-qualification/active-guest.py": "7a8d96c29526acd89cc635428b5f9e02175d89b32e285a551549795ed4ef48a8",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
-    "tools/installer-qualification/driver.py": "4c49a9340bebd24fe1238568befcdad0f70b9eef5be0b75b5356a364416b1da9",
+    "tools/installer-qualification/driver.py": "6063ead674082237b5cb60bd1c662d6f9f151f5fb562f47f18879f1133b3858e",
     "tools/installer-qualification/evidence.py": "de5e491879b457414965cc9ad81051d622a50d3c9306cebd77ae11107642564d",
     "tools/installer-qualification/guest.py": "18e1ddd54a39195a2a78dfb45d5308207932e3d3b3f071809fd42e85d34fd93c",
     "tools/installer-qualification/installed-guest.py": "1e2e592d97878f7348ad6d81e1ef617ee04634f6188d8992824100f657c6be1e",
@@ -17,7 +17,7 @@
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/native_smoke.py": "ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02",
+    "tools/native-functional/native_smoke.py": "2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0",
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
@@ -25,18 +25,7 @@
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750"
   },
-  "image": {
-    "run_id": 38536710765,
-    "artifact_id": 11883891542,
-    "archive_bytes": 1936466960,
-    "archive_sha256": "83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c",
-    "source_sha": "a13d91118fb90b99dbbf1899fadc3e184ea213ca",
-    "name": "Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso",
-    "bytes": 1936279552,
-    "sha256": "b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23"
-  },
-  "ready": true,
+  "image": null,
+  "ready": false,
   "release_acceptance": false
 }

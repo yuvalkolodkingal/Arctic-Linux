@@ -1,11 +1,11 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02",
+  "native_source_sha256": "2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0",
   "files": {
-    "native_smoke.py": "ea01c486e0f058465ca2a934bd06e43f88c7b3be7acb3462e7497c7be04d9c02",
-    "guest-check-native-v6.py": "8c57d4e9342f1962fbc8e8311a2d8a5397f89ba9cb80b4588430174fc867d003",
+    "native_smoke.py": "2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0",
+    "guest-check-native-v6.py": "adafa295b7c9bda6a161baba13427fd7f93089ca3734472b9d26be047e8e562d",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
-    "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
+    "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e"
   },
   "validator_functions": [
     "check_editor_save",
@@ -21,20 +21,20 @@
     "records",
     "validate_harness_serial"
   ],
-  "validators_source_sha256": "1cf453d97fbae6dbcef1b0c8c6706645833ffeccdc91310e25d39ea982ee4199",
+  "validators_source_sha256": "6f31daa8c4c9e141328a1b1d5c179c2576db4a872f50f748b536775f10e4a6ef",
   "each_selected_function_source_equal": false,
   "release_acceptance": false,
   "adapted_host_controls": {
-    "test_native_desktop_v6.py": "22506c6f0e66ac22e5b2d8f927971247a83d9fb5e55143d072bc4e8325790bc1",
-    "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
-    "test_native_v6.py": "563d5c4c0e6f5418b7b30401f8488143ba1f98e8e06a68aad549c56fe8d5128b",
+    "test_native_desktop_v6.py": "1d51154ec21445cd3e7127ca6313d980016db8173e4fe6692befced65ab2f514",
+    "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
+    "test_native_v6.py": "5ae5d5c413e0b1d579a01b2c4ce4ae055036ef702c660332680bc8f6a01a1929",
     "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
-    "test_native_protocol_diagnostics.py": "3613e8fd265b42c4b45e642c04ab3dfac8d227840534a7d62bbe0fb46275d798",
-    "test_renderer_trials.py": "ccaccb647578f7d304fe1e37881a141531346fc145cb2f17eda5422a45c156b7",
-    "test_native_capture_controls.py": "f4b152b8d557cdb3a65bbfe6056088c4bd65e05f8bf16bbd6e941e3134e21937",
+    "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
+    "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
+    "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
-    "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "cf9df56edb0276cd420dbb25b667dc6098bae6cf7d97642fa7932faa17ed45a8",
+    "test_native_public_evidence.py": "616ccb191ce37aefc989bd85c3b26bb18a46887f57081853443cd85fa1161954",
+    "test_controls_state_trials.py": "8ea8b3dd32242e980a9d9c322dcb6a27c163e3994ae2357743545b602eed6a34",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -46,7 +46,7 @@
     "release_acceptance": false
   },
   "controlled_renderer_trials": {
-    "trigger": "bounded primary static oracle attempts unmatched only",
+    "trigger": "not invoked from the primary acceptance path; retained diagnostic definition only",
     "interventions": [
       "GSK_RENDERER unset",
       "GSK_RENDERER=gl"
@@ -88,10 +88,9 @@
       "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
     },
     "playback_clock_advancement_required": true,
-    "capture_retry_bound": "six fresh captures within eight seconds",
-    "primary_private_initial_state": "show-controls true, exact keyfile set plus readback before each owned player launch",
-    "primary_transition": "verified true-to-false through the existing authenticated Celluloid action",
-    "maximum_owned_player_attempts_seeded": 2
+    "capture_retry_bound": "one fresh capture; any failed or unmatched oracle hard-fails the gate",
+    "primary_player_attempt_limit": 1,
+    "controlled_diagnostics_invoked_from_primary": false
   },
   "bulk_evidence_transport": {
     "UART_records_unchanged": [
@@ -155,7 +154,7 @@
     "acceptance_validators_unchanged": true
   },
   "controls_state_trials": {
-    "trigger": "bounded primary static oracle attempts unmatched only; replaces the optional default/gl invocation",
+    "trigger": "not invoked from the primary acceptance path; retained optional diagnostic definition only",
     "ordered_interventions": [
       "private show-controls true to false",
       "private show-controls false to false"
@@ -175,29 +174,8 @@
     "video_widget_or_framebuffer_attested": false,
     "three_optional_public_slots_replaced_not_added": true,
     "release_acceptance": false,
-    "rendering_cause_proven": false
-  },
-  "capture_retry": {
-    "observed_failure_run": "38275826520",
-    "diagnosis": "first fullscreen screencopy contained transiently incomplete scaled palette content; two subsequent fresh owned-player trials matched the unchanged exact oracle",
-    "playback_clock_minimum_advance_seconds": 0.05,
-    "playback_clock_timeout_seconds": 5,
-    "capture_attempt_limit": 6,
-    "capture_deadline_seconds": 42,
-    "recapture_settle_seconds": 0.5,
-    "fresh_grim_capture_each_attempt": true,
-    "owned_identity_geometry_focus_monitor_unchanged_each_attempt": true,
-    "oracle_thresholds_unchanged": true,
-    "final_fixed_capture_paths": [
-      "celluloid-reference.png",
-      "visual-owned-window.rgb"
-    ],
-    "bounded_attempt_receipt": "visual-oracle.json rewritten after each completed attempt before any later deadline check",
-    "product_or_codec_failure_inferred": false,
-    "release_acceptance": false,
-    "deadline_basis": "six attempts times two existing three-second command maxima, five half-second settles, and a 3.5-second bounded margin",
-    "deadline_failure_run": "38343014126",
-    "deadline_failure_diagnosis": "five strict-oracle captures remained unmatched; the 8-second wall budget expired before the unchanged sixth attempt could run"
+    "rendering_cause_proven": false,
+    "primary_acceptance_path_can_use_trials": false
   },
   "installed_login_head_observation": {
     "failure_run": "38350659932",
@@ -275,23 +253,6 @@
     "taskbar_port_product_geometry_and_acceptance_unchanged": true,
     "release_acceptance": false
   },
-  "fresh_primary_player_restart": {
-    "trigger": "six strict primary captures all unmatched",
-    "maximum_owned_player_attempts": 2,
-    "same_command_fixture_playback_clock_focus_fullscreen_geometry_and_oracle": true,
-    "prior_owned_process_and_ipc_retired_before_restart": true,
-    "controlled_diagnostic_trials_cannot_admit": true,
-    "oracle_thresholds_unchanged": true,
-    "causal_run_id": 38447656906,
-    "causal_artifact_id": 11839152694,
-    "causal_artifact_sha256": "b50a91f57e087726cf28f914ff12cb4608cf01b65711d0d4579e75aef91d434f",
-    "release_acceptance": false,
-    "attempt_screenshot_paths": [
-      "celluloid-reference.png",
-      "celluloid-reference-player-2.png"
-    ],
-    "host_attempt_receipt_schema_exact": true
-  },
   "taskbar_context_media_protection": {
     "failure_run": 38476315147,
     "failure_artifact": 11855882054,
@@ -302,74 +263,6 @@
     "guest_staging": "exact read-only ARCTICTEST device and ISO9660 mount are verified; regular files and directories only are copied to a root-owned non-writable staging tree and exposed at /run/t through a read-only nodev nosuid bind mount",
     "taskbar_hash_schema_port_geometry_and_acceptance_unchanged": true,
     "release_acceptance": false
-  },
-  "taskbar_mixed_scale_pointer_feedback": {
-    "failure_run": 38496263633,
-    "failure_artifact": 11864772858,
-    "failure_artifact_sha256": "9dc5172d04af296770c70c97c2a95be052ff2898fc0778d616be317d2b31682f",
-    "screened_inspection_run": 38500236947,
-    "diagnosis": "the scale-2 top-bar failure followed an absolute virtual-pointer request whose resulting logical position was never checked; that artifact did not isolate whether the changed center pixels came from the bar or the covered client",
-    "observed_case": "Virtual-2 scale 2 top auto covered-rest after all eight scale-1 and scale-1.5 cases passed",
-    "feedback": "each move is checked against Mango's authoritative logical cursor position; at most four bounded relative protocol corrections must reach the requested point within one logical pixel",
-    "failure_policy": "invalid cursor feedback, an oversized correction, helper rejection, or non-convergence fails before any visibility observation",
-    "visibility_geometry_layer_cleanup_security_and_deadline_gates_unchanged": true,
-    "product_or_iso_bytes_changed": false,
-    "release_acceptance": false
-  },
-  "taskbar_prompt_free_proof_window": {
-    "failure_run": 38502122664,
-    "failure_artifact": 11867557214,
-    "failure_artifact_sha256": "a9305ca034be139af249d5d17cb9007cae1795980ff5456227dd539bf2d72e5f",
-    "screened_inspection_run": 38506159737,
-    "corrected_diagnosis": "the scale-2 bar was concealed at the correct 3-logical-pixel trigger; the 59 changed pixels in the fixed 13x13 center probe were the owned Foot default-shell prompt rendered over its green client background",
-    "screen_geometry_evidence": "hidden full rows ended at physical y=31, matching the scale-2 client inset; the revealed capture added continuous bar frost and accent through the sampled band",
-    "cursor_in_screencopy": false,
-    "fixture_fix": "pass Foot -e before /usr/bin/sleep so the owned solid-colour acceptance client cannot start a default shell or render a prompt",
-    "visibility_thresholds": [
-      0.1,
-      0.6
-    ],
-    "visibility_wait_seconds": 8,
-    "matrix_edges_scales_outputs_modes_cases_unchanged": true,
-    "pixel_oracle_pointer_product_iso_and_cleanup_gates_unchanged": true,
-    "product_or_iso_bytes_changed": false,
-    "release_acceptance": false
-  },
-  "primary_private_controls_seed": {
-    "trigger": "causal primary false-to-false captures had zero reference-color candidates while same-fixture true-to-false control matched",
-    "scope": "disposable primary reference players only; exact private XDG_CONFIG_HOME and GSETTINGS_BACKEND=keyfile",
-    "maximum_owned_player_attempts": 2,
-    "set_and_readback_before_each_launch": true,
-    "supported_authenticated_hide_action_retained": true,
-    "capture_attempt_limit_per_player": 6,
-    "oracle_thresholds_unchanged": true,
-    "timeouts_unchanged": true,
-    "taskbar_matrix_pointer_and_product_unchanged": true,
-    "causal_run_id": 38506968441,
-    "causal_artifact_id": 11869217337,
-    "causal_artifact_sha256": "207c74795b8c914697801fe39426e41e69aca22ca8d487f4250ddd8d2f4df65a",
-    "inspector_run_id": 38510136841,
-    "release_acceptance": false
-  },
-  "primary_renderer_realization": {
-    "causal_run_id": 38511087588,
-    "causal_artifact_id": 11870947979,
-    "causal_artifact_sha256": "b09a777c2548eeb86ae0495e78ca96834dde3209d6a6284f71c0cc8a90d7ee92",
-    "inspector_run_id": 38514189070,
-    "exact_artifact_head": "4c325e07e6dcbec8c180aa071f8270ba25cde95c",
-    "live_primary_oracle": "matched; rejected only because host schema omitted primary_controls_seed",
-    "installed_primary_observation": "two fresh owned players, six captures each, zero reference-color candidates in every capture",
-    "installed_control_observation": "subsequent true-to-false and false-to-false trials each matched 316224 checked interior pixels with zero mismatches using default realized Vulkan and GSK_RENDERER unset",
-    "causal_limit": "controlled trials followed the failed primary path and shared isolated cache history, so the exact rendering cause remains unproven",
-    "remedy": "require the owned primary default GTK renderer successful-realization message before primary IPC, playback, fullscreen, and screencopy",
-    "renderer_selected_or_forced": false,
-    "requested_GSK_RENDERER": "unset",
-    "realization_wait_seconds": 5,
-    "private_raw_stderr_exported": false,
-    "two_player_retry_six_capture_limit_oracle_tolerances_and_deadline_unchanged": true,
-    "taskbar_matrix_pointer_product_and_iso_unchanged": true,
-    "release_acceptance": false,
-    "rendering_cause_proven": false
   },
   "audit_file_interval_streaming": {
     "failure_run": 38582141613,
@@ -389,6 +282,20 @@
     "rotation_truncation_inode_and_exact_length_fail_closed": true,
     "selinux_enforcing_audit_mode_audit_lost_and_zero_avc_requirements_unchanged": true,
     "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
+  },
+  "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
+  "single_primary_capture": {
+    "policy": "exactly one fresh product-wrapper Celluloid process and one screencopy",
+    "maximum_owned_player_attempts": 1,
+    "capture_attempt_limit": 1,
+    "first_failed_or_unmatched_oracle": "hard gate failure; no recapture, restart, or diagnostic acceptance path",
+    "playback_clock_minimum_advance_seconds": 0.05,
+    "playback_clock_timeout_seconds": 5,
+    "capture_command_timeout_seconds": 3,
+    "oracle_thresholds_unchanged": true,
+    "screenshot_path": "celluloid-reference.png",
+    "host_attempt_receipt_schema_exact": true,
     "release_acceptance": false
   }
 }

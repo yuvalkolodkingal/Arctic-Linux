@@ -87,6 +87,16 @@ INSTALLED_PROOF_REPLACEMENTS = (
 )
 
 
+VT_DISCOVERY_BLOCK = b'def wait_installed_graphical_login(vm, vmtest):\n    """Find the unchanged physical greeter even when boot leaves another VT active."""\n    started = time.monotonic()\n    deadline = started + 900\n    next_vt_probe = started + 60\n    vts = (\'f1\', \'f2\', \'f3\', \'f4\', \'f5\')\n    vt_index = 0\n    while vm.alive() and time.monotonic() < deadline:\n        shot = vm.shot(\'installed-login-probe\')\n        if shot and vmtest.looks_like_boot_menu(shot):\n            vm.keys(\'ret\')\n            # Let the selected installed entry start before probing its VTs.\n            next_vt_probe = max(next_vt_probe, time.monotonic() + 15)\n        if shot and vmtest.classify(shot) == \'login\':\n            return\n        now = time.monotonic()\n        if now >= next_vt_probe:\n            vm.cmd(\'send-key\', keys=[{\'type\': \'qcode\', \'data\': key}\n                   for key in (\'ctrl\', \'alt\', vts[vt_index])], **{\'hold-time\': 100})\n            vt_index = (vt_index + 1) % len(vts)\n            next_vt_probe = now + 5\n        time.sleep(2)\n    raise RuntimeError(\'fresh installed login display did not appear\')\n\n\n'
+VT_DISCOVERY_CALL = b'    wait_installed_graphical_login(vm, vmtest)\n'
+VT_DISCOVERY_PRIOR = b"    deadline = time.monotonic() + 900\n    while vm.alive() and time.monotonic() < deadline:\n        shot = vm.shot('installed-login-probe')\n        if shot and vmtest.looks_like_boot_menu(shot):\n            vm.keys('ret')\n        if shot and vmtest.classify(shot) == 'login':\n            break\n        time.sleep(2)\n    else:\n        raise RuntimeError('fresh installed login display did not appear')\n"
+
+def restore_vt_discovery(driver):
+    if driver.count(VT_DISCOVERY_BLOCK) != 1 or driver.count(VT_DISCOVERY_CALL) != 1:
+        raise AssertionError('Installed graphical VT discovery addition differs')
+    return driver.replace(VT_DISCOVERY_BLOCK,b'',1).replace(VT_DISCOVERY_CALL,VT_DISCOVERY_PRIOR,1)
+
+
 def restore_identity_observer(driver):
     """Remove each complete closed observer addition and reject near matches."""
     for addition in IDENTITY_OBSERVER_ADDITIONS:
@@ -98,6 +108,7 @@ def restore_identity_observer(driver):
 
 def restore_installed_proof(driver):
     """Remove only the exact installed-proof additions before older inverses."""
+    driver = restore_vt_discovery(driver)
     driver = restore_identity_observer(driver)
     if driver.count(INSTALLED_IDENTITY_START) != 1 or driver.count(INSTALLED_IDENTITY_END) != 1:
         raise AssertionError('Expected one exact installed identity block')

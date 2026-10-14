@@ -12,7 +12,6 @@ import socket
 import struct
 import subprocess
 import tempfile
-import threading
 import time
 import unittest
 from unittest.mock import Mock, patch
@@ -75,35 +74,12 @@ class RendererControls(unittest.TestCase):
             if write is not None:os.close(write)
             drain.finish();drain.raw_path.unlink();drain.raw_path.parent.rmdir()
 
-    def test_plain_drain_schema_stays_identical_without_renderer_option(self):
+    def test_primary_drain_schema_stays_identical_without_renderer_option(self):
         drain=N.NativeProtocolDrain()
         try:
             with patch.object(drain,'bind',return_value=False):value=drain.snapshot({},1000)
             self.assertNotIn('realized_renderer',value)
         finally:drain.finish();drain.raw_path.unlink();drain.raw_path.parent.rmdir()
-
-    def test_primary_realization_is_owned_default_renderer_and_fails_closed(self):
-        smoke=N.Smoke.__new__(N.Smoke);smoke.uid=os.getuid()
-        player=dict(pid=71,start_ticks=72,executable='/usr/bin/celluloid',executable_sha256='a'*64,
-                    client_id='7')
-        expected=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
-            gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
-            video_widget_or_framebuffer_attested=False,release_acceptance=False)
-        drain=Mock(spec=N.NativeProtocolDrain);drain.renderer=Mock();drain.renderer.snapshot.return_value=expected
-        drain.lock=threading.Lock();drain.bind.return_value=True;smoke.primary_renderer_drain=drain
-        smoke.wait=Mock(side_effect=lambda fn,*args:fn())
-        value=smoke.primary_renderer_realization(player)
-        self.assertEqual(value,dict(expected,owned_stderr_binding_verified=True,
-            requested_gsk_renderer='unset',debug_observation='GSK_DEBUG=renderer'))
-        drain.bind.assert_called_once_with(player,os.getuid())
-        for mutation in ('unbound','unknown','capped','foreign'):
-            bad=Mock(spec=N.NativeProtocolDrain);bad.renderer=Mock();bad.lock=threading.Lock();bad.bind.return_value=mutation!='unbound'
-            row=dict(expected)
-            if mutation=='unknown':row.update(status='unknown',renderer=None)
-            if mutation=='capped':row['capped']=True
-            if mutation=='foreign':row['renderer']='private'
-            bad.renderer.snapshot.return_value=row;smoke.primary_renderer_drain=bad
-            with self.assertRaises(RuntimeError):smoke.primary_renderer_realization(player)
 
     def test_launch_uses_supported_lowercase_gl_and_same_owned_pipe(self):
         for mode in ('default','gl'):

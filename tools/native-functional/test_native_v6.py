@@ -152,45 +152,27 @@ class NewControls(unittest.TestCase):
             N.visual_capture_geometry(client,dict(monitors=[monitor,monitor]))
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'host FFmpeg absent; actual guest gate remains mandatory')
-    def test_actual_visual_method_uses_one_strict_fresh_player_restart(self):
+    def test_actual_visual_method_uses_one_player_and_one_capture(self):
         # Actual visual_media method + real FFmpeg fixture/PNG/crop. GUI/window
         # authority and mpv responses are explicit host-only fixtures.
-        cases=('positive','transient','restart-match','all-black','oracle-failed','second-unfocused',
-               'second-identity-changed','second-geometry-changed','cleanup-failed')
-        for case in cases:
+        for case in ('positive','corrupt-first-capture','oracle-failed'):
           with self.subTest(case=case),tempfile.TemporaryDirectory() as t:
             root=Path(t);smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.user=pwd.getpwuid(os.getuid())
             smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[];smoke.owned=[];smoke.gui_v6=True;smoke.stage='live'
             smoke.trace=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
             smoke.controlled_controls_trials=Mock();smoke.finish_native_protocol=Mock();smoke.player_fullscreen=Mock()
-            seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
-                      seed_readback_matched=True,release_acceptance=False)
-            smoke.seed_primary_reference_controls=Mock(return_value=seed)
-            renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
-                gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
-                video_widget_or_framebuffer_attested=False,release_acceptance=False,
-                owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
-                debug_observation='GSK_DEBUG=renderer')
-            smoke.primary_renderer_realization=Mock(return_value=renderer)
-            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
-                                                                  release_acceptance=False))
-            proofs=[dict(client_id=str(i),pid=122+i,start_ticks=i,executable='/usr/bin/celluloid',
-                         executable_sha256=str(i)*64,is_xwayland=False) for i in (1,2)]
-            launched=[];active=[0]
+            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
+            proof=dict(client_id='1',pid=123,start_ticks=1,executable='/usr/bin/celluloid',
+                       executable_sha256='1'*64,is_xwayland=False)
+            launched=[]
             smoke.launch_reference_player=Mock(side_effect=lambda argv,launch:launched.append(list(argv)))
             def fresh(trigger,*args):
-                trigger(); active[0]+=1;proof=proofs[active[0]-1];smoke.owned.append(proof);return proof
+                trigger();smoke.owned.append(proof);return proof
             smoke.fresh_window=Mock(side_effect=fresh)
-            alive_calls={123:0,124:0}
-            def alive(proof):
-                alive_calls[proof['pid']]+=1
-                value=dict(id=int(proof['client_id']),pid=proof['pid'],is_visible=True,is_focused=True,
-                           is_fullscreen=True,monitor='FIXTURE',x=0,y=0,width=160,height=120)
-                if proof['pid']==124 and case=='second-unfocused':value['is_focused']=False
-                if proof['pid']==124 and case=='second-identity-changed':value['id']=99
-                if proof['pid']==124 and case=='second-geometry-changed' and alive_calls[124]>=3:value['width']=159
-                return value
-            smoke.alive=Mock(side_effect=alive)
+            client=dict(id=1,pid=123,is_visible=True,is_focused=True,is_fullscreen=True,
+                        monitor='FIXTURE',x=0,y=0,width=160,height=120)
+            smoke.alive=Mock(return_value=client)
             def wait(fn,*args,**kwargs):
                 value=fn()
                 if not value:raise RuntimeError('synthetic bounded wait failure')
@@ -213,74 +195,40 @@ class NewControls(unittest.TestCase):
                 if argv[:2]==['mmsg','dispatch']:return (0,'{"success":true}','')
                 if argv==['mmsg','get','all-monitors']:return (0,json.dumps(dict(monitors=[monitor])),'')
                 if argv[0]=='grim':
-                    grim_calls.append(active[0])
-                    bad=(case in ('all-black','cleanup-failed') or active[0]==1 and case.startswith(('restart','second-'))
-                         or case=='transient' and len(grim_calls)==1)
-                    shutil.copyfile(bad_capture if bad else good_capture,argv[-1]);return (0,'','')
+                    grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_calls={1:0,2:0}
+            time_calls=0
             def prop(path,key,*args):
+                nonlocal time_calls
                 if key!='time-pos':return props[key]
-                index=1 if str(path).endswith('-1.sock') else 2;time_calls[index]+=1
-                return 0 if time_calls[index]==1 else .2
-            retired=Mock(return_value=dict(process_identity_retired=True,owned_ipc_absent=True,
-                                            owned_ipc_removed=True,release_acceptance=False))
-            if case=='cleanup-failed':retired.side_effect=RuntimeError('synthetic cleanup failure')
+                time_calls+=1;return 0 if time_calls==1 else .2
             oracle_control=(patch.object(N,'evaluate_reference_rgb',side_effect=ValueError('synthetic oracle failure'))
                             if case=='oracle-failed' else contextlib.nullcontext())
-            with socket.socket(socket.AF_UNIX) as peer1,socket.socket(socket.AF_UNIX) as peer2:
-                peer1.bind(str(root/'visual-reference-ipc-1.sock'));peer2.bind(str(root/'visual-reference-ipc-2.sock'))
-                with oracle_control,patch.object(N,'retire_reference_player',retired),patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep'):
-                    if case in ('positive','transient','restart-match'):
+            with socket.socket(socket.AF_UNIX) as peer:
+                peer.bind(str(root/'visual-reference-ipc.sock'))
+                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    if case=='positive':
                         value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
                     else:
-                        with self.assertRaises(RuntimeError):smoke.visual_media()
-            if case in ('positive','transient','oracle-failed'):
-                self.assertEqual(smoke.fresh_window.call_count,1);retired.assert_not_called()
-            elif case=='cleanup-failed':
-                self.assertEqual(smoke.fresh_window.call_count,1);retired.assert_called_once()
-            else:
-                self.assertEqual(smoke.fresh_window.call_count,2);retired.assert_called_once()
-            self.assertEqual(smoke.seed_primary_reference_controls.call_count,smoke.fresh_window.call_count)
-            self.assertEqual(smoke.primary_renderer_realization.call_count,smoke.fresh_window.call_count)
-            if case in ('restart-match','all-black'):
-                receipt=json.loads((root/'visual-oracle.json').read_text())
-                self.assertEqual(len(receipt['player_attempts']),2)
-                self.assertEqual([len(x['capture_attempts']) for x in receipt['player_attempts']],[6,1 if case=='restart-match' else 6])
-                self.assertEqual([x['oracle']['status'] for x in receipt['player_attempts']],
-                                 ['unmatched','matched' if case=='restart-match' else 'unmatched'])
-                self.assertEqual([x['primary_controls_seed'] for x in receipt['player_attempts']],[seed,seed])
-                self.assertEqual([x['primary_renderer_realization'] for x in receipt['player_attempts']],[renderer,renderer])
-                self.assertTrue(receipt['player_attempts'][0]['owned_player_cleanup_completed'])
-                self.assertEqual(receipt['accepted_player_attempt'],2 if case=='restart-match' else None)
-                paths=[Path(x['screenshot']['path']) for x in receipt['player_attempts']]
-                self.assertEqual([x.name for x in paths],['celluloid-reference.png','celluloid-reference-player-2.png'])
-                self.assertNotEqual(paths[0],paths[1]);self.assertTrue(all(x.is_file() for x in paths))
-                if case=='restart-match':
-                    self.assertNotEqual(receipt['player_attempts'][0]['screenshot']['sha256'],receipt['player_attempts'][1]['screenshot']['sha256'])
-                self.assertEqual(launched[0][:3],launched[1][:3])
-                self.assertEqual(launched[0][4:],launched[1][4:])
-                self.assertEqual(launched[0][3].rsplit('-',1)[0],launched[1][3].rsplit('-',1)[0])
-            if case=='all-black':smoke.controlled_controls_trials.assert_called_once()
-            elif case!='cleanup-failed':
-                if case!='all-black':smoke.controlled_controls_trials.assert_not_called()
-            if case=='all-black':self.assertEqual(smoke.owned,proofs)
-
-    def test_reference_restart_cleanup_is_exact_and_fail_closed(self):
-        with tempfile.TemporaryDirectory() as t:
-            root=Path(t).resolve();ipc=root/'visual-reference-ipc-1.sock'
-            proof=dict(pid=123,start_ticks=1,executable='/usr/bin/celluloid',executable_sha256='a'*64)
-            with socket.socket(socket.AF_UNIX) as peer,patch.object(N,'retire_renderer_player') as retire:
-                peer.bind(str(ipc));value=N.retire_reference_player(proof,os.getuid(),ipc,root,1)
-            retire.assert_called_once_with(proof,os.getuid());self.assertFalse(ipc.exists())
-            self.assertTrue(value['process_identity_retired']);self.assertTrue(value['owned_ipc_absent'])
-            for poison in ('wrong-attempt','regular'):
-                if poison=='regular':ipc.write_text('untouched')
-                with patch.object(N,'retire_renderer_player'):
-                    with self.assertRaises(RuntimeError):
-                        N.retire_reference_player(proof,os.getuid(),ipc,root,2 if poison=='wrong-attempt' else 1)
-                if poison=='regular':self.assertEqual(ipc.read_text(),'untouched');ipc.unlink()
+                        with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
+                            smoke.visual_media()
+            self.assertEqual(smoke.fresh_window.call_count,1)
+            self.assertEqual(len(launched),1);self.assertEqual(len(grim_calls),1)
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+            receipt=json.loads((root/'visual-oracle.json').read_text())
+            self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
+            self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
+            self.assertEqual(len(receipt['player_attempts']),1)
+            row=receipt['player_attempts'][0]
+            self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
+            self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
+            self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
+            self.assertFalse((root/'celluloid-reference-player-2.png').exists())
+            smoke.controlled_controls_trials.assert_not_called()
+            smoke.native_protocol_diagnostic.assert_called_once()
+            self.assertEqual(smoke.player_fullscreen.call_args_list,
+                             [unittest.mock.call(proof,True),unittest.mock.call(proof,False)])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

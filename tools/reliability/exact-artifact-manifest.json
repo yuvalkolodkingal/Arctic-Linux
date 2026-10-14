@@ -1,30 +1,8 @@
 {
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "version": "1.2",
   "app_profile": "lightweight",
-  "image": {
-    "run_id": 38536710765,
-    "artifact_id": 11883891542,
-    "archive_bytes": 1936466960,
-    "archive_sha256": "83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c",
-    "source_sha": "a13d91118fb90b99dbbf1899fadc3e184ea213ca",
-    "name": "Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso",
-    "bytes": 1936279552,
-    "sha256": "b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23"
-  },
-  "execution_files": {
-    ".github/workflows/release-reliability-candidate.yml": "38669ad1157b363672bd42ee749686b5e5c18cb9b867ce1fafd4afc84fd8d1a2",
-    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
-    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/reliability/exact-artifact.py": "f207a04ad88b863e103b2d21e7bbda5a43d0a44974d8644c0dc701cea9ee44d6",
-    "tools/reliability/guest.py": "5fb703f179ba6f74a148c12eea5b667da032329bdeff5880549b4d1f89b77ce7",
-    "tools/reliability/profiles/lightweight.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
-    "tools/reliability/report.py": "c1732ebc40779682ca839bd86ce22722fda6183554db08e8077e2bd5a1403900",
-    "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
-  }
+  "image": null,
+  "execution_files": {}
 }

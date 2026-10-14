@@ -1,0 +1,310 @@
+import copy
+import tempfile
+import unittest
+import json
+import os
+import types
+from pathlib import Path
+from unittest import mock
+
+from PIL import Image
+
+import sys
+HERE = Path(__file__).parent
+sys.path.insert(0, str(HERE))
+import automation
+import contract as c
+import unattended
+from test_capture import controller_trace
+
+
+class QMP:
+    def __init__(self):
+        self.commands = []
+
+    def command(self, name, arguments=None):
+        self.commands.append((name, arguments))
+        return {}
+
+    def screendump(self, path):
+        Image.new("RGB", (1280, 800), "#233041").save(path)
+
+
+class UnattendedController(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+        self.qmp = QMP()
+        self.controller = automation.Controller(self.qmp, self.root, lambda path: "clean",
+                                                (), "f" * 64)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_text_and_secret_use_only_qmp_and_secret_receipt_has_no_value_or_hash(self):
+        self.controller.type_text("live-console", "live-username", "Ab-1", gap=0)
+        self.controller.type_secret("installed-console")
+        self.assertTrue(all(name == "input-send-event" for name, _ in self.qmp.commands))
+        self.assertEqual(self.controller.events[0]["detail"]["sha256"],
+                         __import__("hashlib").sha256(b"Ab-1").hexdigest())
+        secret = self.controller.events[1]["detail"]
+        self.assertEqual(secret, {"source": "reviewed-disposable-controller-constant",
+                                  "characters": 38})
+        self.assertNotIn(automation.Controller.PASSWORD, repr(self.controller.events))
+
+    def test_screen_gate_records_host_qmp_pixels_and_deletes_probe(self):
+        self.controller.ocr = lambda path: "Arctic Linux is ready Remove the USB stick"
+        path, _ = self.controller.wait_screen("install-complete", "installer-done",
+                                              ("Arctic Linux is ready", "Remove the USB stick"),
+                                              seconds=1)
+        self.assertIsNone(path)
+        self.assertEqual(list(self.root.glob("controller-*.png")), [])
+        event = self.controller.events[0]
+        self.assertEqual(event["kind"], "screen")
+        self.assertEqual(event["detail"]["expectation"], "installer-done")
+
+    def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
+        self.controller.ocr = lambda path: "wrong screen"
+        with mock.patch.object(automation.time, "sleep"):
+            with self.assertRaises(c.Invalid):
+                self.controller.wait_screen("updates", "whats-new-layer", ("Local dictation",),
+                                            seconds=0)
+        self.controller.ocr = lambda path: "/home/private-user/secret"
+        with self.assertRaises(c.Invalid):
+            self.controller._shot("private")
+
+    def test_wallpaper_click_is_host_ocr_derived_and_dialog_is_rechecked(self):
+        image = self.root / "wallpaper.png"
+        Image.new("RGB", (1280, 800), "#233041").save(image)
+        screens = [(image, "Wallpaper Butterfly in Gold"), (None, "Hide dialog")]
+        self.controller.wait_screen = mock.Mock(side_effect=screens)
+        self.controller._tsv = mock.Mock(return_value=[
+            {"text": "Butterfly", "block_num": "1", "par_num": "1", "line_num": "1",
+             "left": "400", "top": "300"},
+            {"text": "in", "block_num": "1", "par_num": "1", "line_num": "1",
+             "left": "450", "top": "300"},
+            {"text": "Gold", "block_num": "1", "par_num": "1", "line_num": "1",
+             "left": "470", "top": "300"},
+        ])
+        self.controller.wallpaper_hide()
+        pointer = [event for event in self.controller.events if event["kind"] == "pointer"]
+        self.assertEqual(pointer[0]["detail"], {"x": 533, "y": 229, "button": "left",
+                                                "target": "wallpaper-hide-button"})
+        self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
+                         "wallpaper-hide-dialog")
+
+    def test_scene_authorization_is_fixed_and_receives_no_guest_diagnostics(self):
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        for scene in ("dictationsetup", "updates"):
+            self.controller.authorize_scene(scene)
+            self.controller.verify_scene(scene)
+        commands = [event["detail"]["id"] for event in self.controller.events
+                    if event["kind"] == "command"]
+        self.assertEqual(commands, ["dictationsetup", "updates"])
+        with self.assertRaises(c.Invalid):
+            self.controller.authorize_scene("guest-selected")
+        with self.assertRaises(c.Invalid):
+            self.controller.verify_scene("guest-selected")
+
+    def test_first_login_is_host_observed_dismissed_and_rechecked(self):
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.dismiss_first_login()
+        self.assertEqual(self.controller.wait_screen.call_args_list[0].args[1],
+                         "first-login-welcome")
+        self.assertEqual(self.controller.events[0], {
+            "index": 0, "stage": "installed-boot", "kind": "keys",
+            "detail": {"names": ["esc"]},
+        })
+        self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
+                         "first-login-dismissed")
+
+    def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
+        self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
+        self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
+
+
+class TraceContract(unittest.TestCase):
+    def test_guest_fields_cannot_enter_or_promote_trace(self):
+        value = controller_trace()
+        for mutate in (
+            lambda row: row.update(guest_diagnostics_used=True),
+            lambda row: row.update(release_acceptance=True),
+            lambda row: row["events"][0]["detail"].update(guest={"ready": True}),
+            lambda row: row["events"].pop(),
+            lambda row: row["events"][9]["detail"].update(target="guest-target"),
+        ):
+            changed = copy.deepcopy(value)
+            mutate(changed)
+            with self.assertRaises(c.Invalid):
+                c.controller_trace(changed)
+
+    def test_required_event_order_is_fail_closed(self):
+        value = controller_trace()
+        value["events"][8], value["events"][11] = value["events"][11], value["events"][8]
+        for index, event in enumerate(value["events"]):
+            event["index"] = index
+        with self.assertRaises(c.Invalid):
+            c.controller_trace(value)
+
+
+class GuestAutomation(unittest.TestCase):
+    def _run_installer(self, pages):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
+        index = {"value": 0}
+        fills = []
+
+        def ipc(_account, _environment, _pid, method, payload=None):
+            if method == "state":
+                page = pages[index["value"]]
+                return json.dumps({"page": page, "current": page, "ready": True,
+                                   "connected": True, "busy": False, "failure": "",
+                                   "valid": True, "percent": 100 if page == "done" else 0})
+            if method == "fill":
+                fills.append((pages[index["value"]], payload))
+                return "ok"
+            index["value"] += 1
+            return "ok"
+
+        class Channel:
+            def __init__(self, *args, **kwargs): self.rows = []
+            def write(self, value): self.rows.append(value)
+            def read(self): return c.INSTALL_ACK
+            def close(self): pass
+
+        with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+             mock.patch.object(unattended, "_graphical_environment",
+                               return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
+             mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
+             mock.patch.object(unattended, "_run"), \
+             mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
+             mock.patch.object(unattended.guest, "seal_installation", return_value={}), \
+             mock.patch.object(unattended.c, "install_seal"), \
+             mock.patch.object(unattended, "Channel", Channel):
+            unattended.live_install(600)
+        return fills
+
+    def test_live_installer_uses_fixed_online_real_gui_choices(self):
+        pages = list(("welcome", "keyboard", "network", "timezone", "disk", "encryption",
+                      "account", "apps", "summary", "done"))
+        choices = dict(self._run_installer(pages))
+        self.assertEqual(choices["network"], {"offline": False})
+        self.assertEqual(choices["disk"], {"disk": "/dev/vda", "mode": "erase"})
+        self.assertEqual(choices["encryption"], {"enabled": False})
+        self.assertTrue(choices["account"]["autologin"])
+        self.assertEqual(choices["account"]["username"], c.CONTROLLER["account"]["username"])
+        self.assertEqual(choices["account"]["password"], unattended.PASSWORD)
+
+    def test_live_installer_accepts_the_real_wired_online_network_auto_skip(self):
+        pages = list(("welcome", "keyboard", "timezone", "disk", "encryption",
+                      "account", "apps", "summary", "done"))
+        fills = dict(self._run_installer(pages))
+        self.assertNotIn("network", fills)
+        self.assertEqual(fills["disk"], {"disk": "/dev/vda", "mode": "erase"})
+
+    def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
+        account = types.SimpleNamespace(pw_uid=os.geteuid(), pw_name="liveuser",
+                                        pw_dir="/home/liveuser")
+        with tempfile.TemporaryDirectory() as temp:
+            process = Path(temp) / "123"
+            process.mkdir()
+            runtime = f"/run/user/{account.pw_uid}"
+            (process / "environ").write_bytes(
+                (f"DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus\0"
+                 f"WAYLAND_DISPLAY=wayland-1\0XDG_RUNTIME_DIR={runtime}\0").encode())
+            calls = []
+
+            def run(argv, **_kwargs):
+                calls.append(argv)
+                if argv[1] == "list-sessions":
+                    output = b"7 1000 liveuser seat0\n"
+                elif "Type" in argv:
+                    output = b"wayland\n"
+                elif "VTNr" in argv:
+                    output = b"2\n"
+                else:
+                    raise AssertionError(argv)
+                return types.SimpleNamespace(returncode=0, stdout=output)
+
+            with mock.patch.object(unattended.pwd, "getpwnam", return_value=account), \
+                 mock.patch.object(unattended, "_run", side_effect=run), \
+                 mock.patch.object(unattended.Path, "glob", return_value=[process]), \
+                 mock.patch.object(unattended.Path, "is_dir", return_value=True), \
+                 mock.patch.object(unattended.Path, "is_symlink", return_value=False):
+                _, vt, environment = unattended._graphical_environment("liveuser")
+        self.assertEqual(vt, 2)
+        self.assertEqual(environment["WAYLAND_DISPLAY"], "wayland-1")
+        self.assertFalse(any("Active" in argv for argv in calls))
+
+    def test_installed_root_launcher_activates_vt_before_irrevocable_uid_drop(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name=c.CONTROLLER["account"]["username"],
+                                        pw_dir="/home/" + c.CONTROLLER["account"]["username"])
+        environment = {"PATH": "/usr/bin:/bin", "XDG_RUNTIME_DIR": "/run/user/1000",
+                       "WAYLAND_DISPLAY": "wayland-1"}
+        calls = []
+
+        def run(argv, **kwargs):
+            calls.append((argv, kwargs))
+            return types.SimpleNamespace(returncode=0, stdout=b"")
+
+        with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+             mock.patch.object(unattended, "_graphical_environment",
+                               return_value=(account, 2, environment)), \
+             mock.patch.object(unattended, "_run", side_effect=run):
+            unattended.installed_root_launch(600)
+        self.assertEqual(calls[0][0], ["/usr/bin/chvt", "2"])
+        self.assertEqual(calls[1][0][:5],
+                         ["/usr/sbin/runuser", "-u", c.CONTROLLER["account"]["username"],
+                          "--", "/usr/bin/env"])
+        self.assertIn("installed-scenes", calls[1][0])
+        self.assertNotIn("/usr/bin/chvt", calls[1][0])
+
+    def test_completed_install_remounts_only_unique_fixed_disk_root_subvolume(self):
+        with tempfile.TemporaryDirectory() as temp:
+            target = Path(temp) / "target"
+            calls = []
+            report = {"blockdevices": [{"path": "/dev/vda", "name": "vda",
+                "type": "disk", "serial": c.VM_DISK_SERIAL, "children": [
+                    {"path": "/dev/vda3", "name": "vda3", "pkname": "vda",
+                     "type": "part", "fstype": "btrfs", "label": "arctic",
+                     "partlabel": "Arctic root"}]}]}
+            findmnt = {"count": 0}
+
+            def run(argv, **_kwargs):
+                calls.append(argv)
+                if argv[0] == "/usr/bin/lsblk":
+                    return types.SimpleNamespace(returncode=0, stdout=json.dumps(report).encode())
+                if argv[0] == "/usr/bin/findmnt":
+                    findmnt["count"] += 1
+                    if findmnt["count"] == 1:
+                        return types.SimpleNamespace(returncode=1, stdout=b"")
+                    return types.SimpleNamespace(returncode=0, stdout=b"/dev/vda3[/@]\n")
+                if argv[0] == "/usr/bin/mount":
+                    return types.SimpleNamespace(returncode=0, stdout=b"")
+                raise AssertionError(argv)
+
+            with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+                 mock.patch.object(unattended.Path, "resolve", return_value=Path("/dev/vda")), \
+                 mock.patch.object(unattended, "_run", side_effect=run):
+                self.assertEqual(unattended._mount_installed_target(target), target)
+        self.assertIn(["/usr/bin/mount", "-o", "subvol=@,compress=zstd:1",
+                       "/dev/vda3", str(target)], calls)
+
+    def test_dictation_readiness_is_exact_and_never_substituted(self):
+        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.0",
+                "profile": "small-v2", "model": "small", "cpu_variant": "baseline",
+                "model_download_bytes": 487601967, "download_bytes": 506181191,
+                "compatibility_required": False}
+        result = types.SimpleNamespace(returncode=0, stdout=json.dumps(good).encode())
+        with mock.patch.object(unattended, "_run", return_value=result):
+            self.assertTrue(unattended._dictation_ready({}))
+        for field, value in (("ready", False), ("state", "error"),
+                             ("download_bytes", 9), ("compatibility_required", True)):
+            bad = dict(good, **{field: value})
+            result = types.SimpleNamespace(returncode=0, stdout=json.dumps(bad).encode())
+            with mock.patch.object(unattended, "_run", return_value=result):
+                self.assertIsNone(unattended._dictation_ready({}))
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -95,6 +95,29 @@ class PublicationGuardTest(unittest.TestCase):
                 self.assertFalse(prepare.showcase_is_non_product())
                 self.assertEqual(prepare.product_changes(names), names)
 
+    def test_publication_sparse_checkout_retains_showcase_exclusion_proof(self):
+        workflow = (ROOT / '.github/workflows/publish-qualified-20261008.yml').read_text()
+        blocks = prepare._literal_block_values(workflow, 'sparse-checkout')
+        publication = [block for block in blocks if '.github' in block and 'tools' in block]
+        self.assertEqual(publication, [['.github', 'tools', 'packaging', 'iso']])
+        with tempfile.TemporaryDirectory() as temp:
+            checkout = Path(temp) / 'publication'
+            subprocess.run(['git', 'clone', '-q', '--shared', '--no-checkout',
+                            str(ROOT), str(checkout)], check=True)
+            subprocess.run(['git', '-C', str(checkout), 'sparse-checkout',
+                            'init', '--cone'], check=True)
+            subprocess.run(['git', '-C', str(checkout), 'sparse-checkout',
+                            'set', *publication[0]], check=True)
+            subprocess.run(['git', '-C', str(checkout), 'checkout', '-q', 'HEAD'], check=True)
+            self.assertFalse((checkout / 'showcase').exists())
+            self.assertTrue((checkout / '.gitattributes').is_file())
+            self.assertTrue(all((checkout / name).is_file()
+                                for name in prepare.SHOWCASE_BUILD_DEFINITIONS))
+            with patch.object(prepare, 'ROOT', checkout):
+                self.assertTrue(prepare.showcase_is_non_product())
+                self.assertEqual(prepare.product_changes(
+                    ['showcase/storyboard.json', 'showcase/assets/frame.png']), [])
+
     def test_runtime_rename_into_showcase_still_requires_rebuild(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

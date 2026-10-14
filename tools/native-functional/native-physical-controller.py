@@ -4,7 +4,7 @@ import hashlib,json,re,time
 from pathlib import Path
 
 PREFIX='ARCTIC-NATIVE-PCMANFM-PHYSICAL '
-MAX_REQUESTS=5
+MAX_REQUESTS=7
 def require(value,message):
  if not value:raise RuntimeError(message)
 def strict_json(data):
@@ -43,7 +43,7 @@ def validate(value,stage):
  root=value['evidence_root'];require(isinstance(root,str) and re.fullmatch('/tmp/arctic-native-smoke-[a-zA-Z0-9_-]+',root),'physical fixture root differs')
  require(value['action'] in ('navigate','f4','open-first'),'physical action is not allowlisted')
  if value['action']=='navigate':
-  path=value['path'];require(isinstance(path,str) and len(path)<=128 and re.fullmatch(re.escape(root)+r'/(?:files with spaces|archive file opener)',path),'physical navigation path differs')
+  path=value['path'];require(isinstance(path,str) and len(path)<=128 and re.fullmatch(re.escape(root)+r'/(?:files with spaces|archive file opener|media file opener)',path),'physical navigation path differs')
  else:require(value['path'] is None,'unexpected physical path')
  return value
 class Controller:
@@ -81,7 +81,7 @@ class Controller:
            and launcher.get('owned_launcher_gone') is True and launcher.get('foot',{}).get('uid')==launcher.get('shell',{}).get('uid')==request['desktop_uid']
            and launcher.get('probe',{}).get('uid')==0,'physical same-boot/UID launcher absent')
    require(serial.index('ARCTIC-NATIVE-RUNNER-BEGIN ')<serial.index(PREFIX+json.dumps(raw,sort_keys=True)),'physical request precedes source begin')
-   expected=[('navigate','files with spaces'),('f4',None),('open-first',None),('navigate','archive file opener'),('open-first',None)][len(self.used)]
+   expected=[('navigate','files with spaces'),('f4',None),('open-first',None),('navigate','archive file opener'),('open-first',None),('navigate','media file opener'),('open-first',None)][len(self.used)]
    require(request['action']==expected[0] and request['path']==(request['evidence_root']+'/'+expected[1] if expected[1] else None),
            'physical request action/order differs')
    self.used[nonce]=digest # consume BEFORE any attempt; failure never resends

@@ -203,7 +203,7 @@ def desktop():
                     f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
                     'XDG_SESSION_TYPE=wayland',
                     *[f'{key}={env[key]}' for key in ('PATH', 'XDG_DATA_DIRS', 'XDG_DATA_HOME',
-                        'XDG_CONFIG_HOME', 'XDG_CACHE_HOME') if key in env],
+                        'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'GSK_RENDERER') if key in env],
                     *([f'MANGO_SOCKET={env["MANGO_SOCKET"]}'] if 'MANGO_SOCKET' in env else [])]
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -333,7 +333,8 @@ def nix_window_identity(client, before_processes, expected_executable, uid, proc
     return value
 
 
-def app(prefix, command, pattern, timeout=300, expected_executable=None, proc_root=Path('/proc')):
+def app(prefix, command, pattern, timeout=300, expected_executable=None, expected_env=None,
+        proc_root=Path('/proc')):
     before = set(clients(prefix))
     uid = pwd.getpwnam(prefix[2]).pw_uid if expected_executable else None
     before_processes = process_snapshot(proc_root, uid) if expected_executable else set()
@@ -352,6 +353,24 @@ def app(prefix, command, pattern, timeout=300, expected_executable=None, proc_ro
                     key = sorted(new)[0]
                     if expected_executable:
                         proof = nix_window_identity(current[key], before_processes, expected_executable, uid, proc_root)
+                    if expected_env:
+                        if proof is None:
+                            raise RuntimeError('environment proof requires an exact executable identity')
+                        before_env = nix_window_identity(current[key], before_processes,
+                                                         expected_executable, uid, proc_root)
+                        with (proc_root/str(proof['pid'])/'environ').open('rb') as stream:
+                            raw=stream.read(65537)
+                        if len(raw)>65536:
+                            raise RuntimeError('application environment exceeded bound')
+                        after_env = nix_window_identity(current[key], before_processes,
+                                                        expected_executable, uid, proc_root)
+                        if before_env != proof or after_env != proof:
+                            raise RuntimeError('application identity changed while reading environment')
+                        values=raw.split(b'\0')
+                        for name,value in expected_env.items():
+                            prefix_bytes=(name+'=').encode()
+                            if [v for v in values if v.startswith(prefix_bytes)] != [(name+'='+value).encode()]:
+                                raise RuntimeError(f'application environment differs for {name}')
                     time.sleep(5)
                     later = clients(prefix)
                     if key in later:
@@ -695,7 +714,9 @@ def main(update_method='dnf', expected_stable_source=None):
           'foot|kitty|alacritty|ghostty'))
     if configured == 'epiphany':
         check('configured-editor', lambda: app(prefix, ['/usr/bin/arctic-open', 'editor'], 'featherpad'))
-        check('native-media-player', lambda: app(prefix, ['/usr/bin/celluloid'], 'celluloid|io.github.celluloid_player.Celluloid'))
+        check('native-media-player', lambda: app(prefix, ['gtk-launch','io.github.celluloid_player.Celluloid'],
+              'celluloid|io.github.celluloid_player.Celluloid', expected_executable='/usr/bin/celluloid',
+              expected_env={'GSK_RENDERER':'gl'}))
         check('native-archive-manager', lambda: app(prefix, ['/usr/bin/xarchiver'], 'xarchiver'))
         check('native-archive-helpers', lambda: archive_tools(prefix))
 

@@ -41,6 +41,9 @@ extra lane are not performance measurements and do not alter benchmark limits.
 
 The same engine must finish successfully and the same GUI reach Done. A new owned
 QEMU process then boots the same disk and UEFI variables with the live ISO removed.
+The unchanged physical greeter classifier must succeed within the original
+900-second bound. After a 60-second boot grace, the host checks VT1 through VT5 in
+turn so a valid greeter cannot be missed merely because another VT remained active.
 Its actual root must be the original target partition, SELinux must be Enforcing,
 and the installed console and Mango keyboard must retain `us,il` with Alt+Shift.
 Console login and sudo use a random disposable credential stored only in private

@@ -476,6 +476,31 @@ def _identity_mismatch_error(observation):
     return error
 
 
+def wait_installed_graphical_login(vm, vmtest):
+    """Find the unchanged physical greeter even when boot leaves another VT active."""
+    started = time.monotonic()
+    deadline = started + 900
+    next_vt_probe = started + 60
+    vts = ('f1', 'f2', 'f3', 'f4', 'f5')
+    vt_index = 0
+    while vm.alive() and time.monotonic() < deadline:
+        shot = vm.shot('installed-login-probe')
+        if shot and vmtest.looks_like_boot_menu(shot):
+            vm.keys('ret')
+            # Let the selected installed entry start before probing its VTs.
+            next_vt_probe = max(next_vt_probe, time.monotonic() + 15)
+        if shot and vmtest.classify(shot) == 'login':
+            return
+        now = time.monotonic()
+        if now >= next_vt_probe:
+            vm.cmd('send-key', keys=[{'type': 'qcode', 'data': key}
+                   for key in ('ctrl', 'alt', vts[vt_index])], **{'hold-time': 100})
+            vt_index = (vt_index + 1) % len(vts)
+            next_vt_probe = now + 5
+        time.sleep(2)
+    raise RuntimeError('fresh installed login display did not appear')
+
+
 def console_user_identity(vm, startup, out, nonce, private_password):
     """Require a fresh redundant SHA-256 identity response before permitting sudo."""
     deadline = time.monotonic() + 45
@@ -557,16 +582,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
 
 def boot_installed(vm, startup, vmtest, out, context):
     """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
-    deadline = time.monotonic() + 900
-    while vm.alive() and time.monotonic() < deadline:
-        shot = vm.shot('installed-login-probe')
-        if shot and vmtest.looks_like_boot_menu(shot):
-            vm.keys('ret')
-        if shot and vmtest.classify(shot) == 'login':
-            break
-        time.sleep(2)
-    else:
-        raise RuntimeError('fresh installed login display did not appear')
+    wait_installed_graphical_login(vm, vmtest)
     vm.cmd('send-key', keys=[{'type': 'qcode', 'data': k} for k in ('ctrl', 'alt', 'f6')], **{'hold-time': 100})
     time.sleep(4)
     require(startup.console_screen(vm.shot('installed-console-login')), 'fresh installed console was not visible')

@@ -1,0 +1,168 @@
+# Exact-image showcase capture
+
+This lane creates three of the five pending showcase images from one installed
+copy of the reviewed ISO: Dictation setup, wallpaper hide/restore and What's New.
+It is capture evidence only. Every receipt remains
+`release_acceptance:false`, `status:captured_unreviewed`, and
+`privacy.human:pending` until a person reviews the exported pixels.
+
+The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
+outside this unattended lane. They remain pending exact-image captures with
+their own complete receipts and human pixel review before the source can render.
+
+The reviewed candidate is fixed in `contract.IMAGE` and
+`execution-manifest.json`:
+
+* producer run `38536710765`, attempt 1, source
+  `a13d91118fb90b99dbbf1899fadc3e184ea213ca`;
+* artifact `11883891542`, archive size `1936466960`, archive SHA-256
+  `83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c`;
+* ISO `Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso`, size
+  `1936279552`, SHA-256
+  `b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea`;
+* producer receipt SHA-256
+  `11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23`.
+
+The producer source is a marker-only child of the qualification preparation
+whose ancestry contains final `main`
+`455327f4c7eee31d4058ba2b02e2cfe489439ac0`. GitHub records producer run
+`38536710765` as a successful attempt 1. The ISO artifact is retained through
+28 October 2026; that retention window is not capture or release acceptance.
+
+The workflow downloads that retained artifact with the existing strict
+`fetch-image.py` verifier. It checks the producer workflow, first attempt, source,
+startup lanes, artifact archive, ISO, BUILD-INFO, checksum, and producer receipt
+before QEMU starts.
+
+## Unattended trust boundary
+
+`capture_vm.py` creates one protected 64 GiB blank raw disk, opens the exact ISO
+through a held file descriptor, and starts one `/usr/bin/qemu-system-x86_64`
+process. The disk has serial `ARCTICSHOWCASE121`, boot index 0, and no backing
+file. The fixed virtio VGA exposes one EDID-backed 1280×800 output. The ISO has
+boot index 1. The same QEMU process is kept from the blank-disk
+ISO boot through installation, ISO ejection, reset, installed boot, all three
+captures, and shutdown. There is no test CD, writable host share, SSH, VNC,
+tmate, host-forwarded port, or external control service.
+
+The host owns all input through QMP. `automation.py` permits only fixed bounded
+key sequences, reviewed command text, one disposable credential input, and the
+wallpaper pointer click derived from host OCR of the exact QMP framebuffer. Each
+transition has a finite timeout. Screens used for a decision are strict 1280×800
+RGB QMP PNGs, pass the same automated privacy rules as final captures, and are
+deleted. Their byte, pixel-source, and OCR hashes are recorded in the controller
+trace. The full QEMU argv hash, exact ISO/disk/channel topology, fixed scene
+commands, QMP events, input events, and final pixels are bound into each receipt.
+
+The only guest transport is the owned
+`org.arctic.showcase.capture` virtio-serial channel. The live guest receives a
+deterministic reviewed tooling archive over it, drives the real installer only
+through its existing IPC, and chooses the fixed online, unencrypted, whole-disk
+installation. The disposable `arcticshowcase` account uses autologin only inside
+the isolated VM. After the installer's normal cleanup unmounts its target, the
+reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
+the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
+the installed boot, the root wrapper activates the unique Wayland VT before it
+drops permanently to UID 1000 for scene work. The host proves the Fish session
+with its fixed `ARCTIC-SHOWCASE-SHELL-READY` command before starting that wrapper.
+The installed helper must prove local dictation is fully ready
+with one supported multilingual profile before the host will observe the
+Dictation scene. A missing model, failed online setup, GPU/CPU mismatch, or timeout
+fails the job; no fixture or alternate screen is substituted.
+
+Guest diagnostics remain untrusted. They cannot choose an input, scene, OCR
+expectation, pointer target, screenshot, receipt field, or acceptance state. The
+host follows the fixed scene order `dictationsetup`, `winter`, `updates`, checks
+each visible surface independently from QMP pixels, and only then authorizes the
+one-use request. Changing or forging guest diagnostic JSON produces the same
+host receipt for the same pixels. The guest-local installed marker is contextual
+evidence and never release acceptance.
+
+The fresh disposable account's top-layer welcome is expected. After the
+Dictation page is open behind it, the host requires `Welcome to Arctic Linux`
+pixels, sends one QMP Escape, and requires both `Dictation is ready` and the
+reviewed Dictation page copy. The same ready screen is checked again after guest
+diagnostics and immediately before capture.
+
+The winter pointer target is found by the approved Tesseract binary and fixed TSV
+invocation from the unique visible `Butterfly in Gold` title. A fixed geometric
+offset selects its Hide control. The controller then independently requires the
+real `Hide “Butterfly in Gold”?` dialog text before capture. The dialog remains
+visible while the guest performs the packaged hide/restore diagnostic.
+
+## Pixel and privacy contract
+
+Every trigger nonce is one-use. The host takes one new QMP PNG, rejects any
+metadata, unexpected PNG chunk, wrong mode, wrong size, CRC error, trailing byte,
+or privacy match, and losslessly re-encodes the unchanged RGB pixels without
+metadata. Email addresses, IP and MAC addresses, `/home`, `/var/home`, `/root`,
+private sentinels, and optional private transcript fragments are blocked. Raw QMP
+PNGs and controller decision screenshots are deleted. Final normalized images
+are rechecked during export and independent validation.
+
+After the three captures, the host quits QEMU, stops the complete process group,
+closes the QMP/channel and image descriptors, retains exactly the three screened
+normalized PNGs, and removes the private disk/log/socket/runtime tree before it
+finalizes receipts. That cleanup event and the literal QEMU argv plus its hash
+are present in every receipt. The screened source directory is removed after
+the deterministic bundle is exported.
+
+The deterministic USTAR bundle contains exactly three normalized PNGs, three
+receipts, and `bundle.json`. An external digest contract binds every member, the
+archive, OCR identity, controller trace, image identity, and VM provenance. The
+validator requires the published digest-contract SHA-256 and reruns all pixel and
+privacy checks. Human review remains mandatory after download.
+
+## Workflow
+
+`.github/workflows/showcase-exact-capture-20261014.yml` runs only on the trusted
+`codex/showcase-exact-capture-20261014` branch when the sole activation marker
+changes, and only on attempt 1. The activation commit must be a direct child of
+the reviewed preparation commit and may change only
+`.github/qualification-20261014.showcase-capture`. The workflow has read-only
+repository and Actions permissions, verifies every execution-file hash, uses a
+GitHub-hosted Ubuntu 24.04 KVM runner, and uploads only a successfully validated,
+bounded `exact-image-showcase-captures-unreviewed` artifact for 14 days.
+The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
+version, language data and both OCR invocations are pinned in the receipt contract.
+
+The host invocation is:
+
+```sh
+showcase/capture/exact_image/capture_vm.py host \
+  --candidate-iso /private/Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso \
+  --output /private/arctic-showcase-captures \
+  --display none --accel kvm --unattended --timeout 7200
+```
+
+Validate a transported result using the digest SHA printed by the host:
+
+```sh
+showcase/capture/exact_image/validate_bundle.py \
+  /private/arctic-showcase-captures \
+  /private/arctic-showcase-captures.digest.json \
+  /private/arctic-showcase-captures.tar \
+  --expected-contract-sha256 '<64 lowercase hex>'
+```
+
+Run local contract and controller tests with:
+
+```sh
+python3 -m unittest discover -s showcase/capture/exact_image -p 'test_*.py' -v
+```
+
+Earlier run `38501272459` reached the real live installer with the superseded
+candidate but produced no installed-image seal within the original 90-minute
+private-channel wait. Run `38509763052` used the extended timeout and was
+cancelled during capture; neither run produced an artifact. The prepared final
+candidate keeps the same 85-minute online-install completion budget used by the
+dictation qualification lane and gives the private host channel 120 minutes.
+Acceptance rules and capture predicates are unchanged.
+
+These tests cover the transport, fixed VM topology, QMP input records, OCR-derived
+pointer, exact online installer choices, dictation readiness gate, guest-forgery
+isolation, pixel/privacy checks, cleanup, deterministic export, and external
+digest validation. A fresh attempt-1 Actions run is still required for the pinned
+final candidate to test boot timing, online dictation download, installer UI,
+installed session and OCR geometry. Passing mocks alone does not qualify the
+images.

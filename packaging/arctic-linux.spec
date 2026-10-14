@@ -54,11 +54,13 @@ Version:        1.2.1
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
 Summary:        Arctic Linux: a Fedora-based desktop with the Mango window manager
+# GPL-3.0-or-later covers Celluloid's Fedora-localized desktop metadata; the exact
+# v0.30 COPYING is pinned by the product-launch regression and shipped by arctic-desktop-config.
 # ISC covers the vendored 3D greeting (fetch/, a fork of areofyl/fetch). Its text is fetch/LICENSE
 # in the source package and fetch/README.md names it; TODO: ship it as a %license in
 # arctic-desktop-config too (it needs renaming, as %license flattens and would collide with
 # the project's own LICENSE above).
-License:        MIT AND LGPL-2.1-or-later AND OFL-1.1 AND ISC
+License:        MIT AND LGPL-2.1-or-later AND OFL-1.1 AND ISC AND GPL-3.0-or-later
 URL:            https://github.com/yuvalkolodkingal/Arctic-Linux
 Source0:        arctic-linux-%{version}.tar.gz
 # --- stream 6
@@ -892,6 +894,9 @@ install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexe
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
 install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
 install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
+install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0
+install -pm 0644 packaging/dictation/provenance/v1.1.0/* \
+  %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0/
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
@@ -966,6 +971,9 @@ install -Dpm 0644 packaging/desktop/default-apps %{buildroot}%{_sysconfdir}/arct
 # Updating this RPM does not replace an existing computer's chosen role/MIME defaults.
 install -Dpm 0644 packaging/desktop/live-default-apps %{buildroot}%{_datadir}/arctic/live-default-apps
 install -Dpm 0644 packaging/desktop/live-mimeapps.list %{buildroot}%{_datadir}/arctic/live-mimeapps.list
+install -Dpm 0755 packaging/desktop/arctic-celluloid %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
+install -Dpm 0644 packaging/desktop/io.github.celluloid_player.Celluloid.desktop \
+  %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
@@ -1156,6 +1164,8 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
+desktop-file-validate %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+sh -n %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
 # arctic-release: the key and enabled repositories go together; never secret key material;
 # the testing channel is always off by default.
 key=%{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
@@ -1214,6 +1224,10 @@ done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
 python3 -m unittest discover -s packaging/dictation -p 'test_*.py'
+# Execute the old stable state/payload migration, conflicting profile choices,
+# online recovery from fail-closed state, the receipt-to-marker crash/retry
+# transition, and failure of current-session activation after commit.
+python3 tools/dictation-qualification/test_upgrade_migration.py
 # ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
 # start without a display; the launcher entries the manager writes are valid.
 readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
@@ -1357,17 +1371,18 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
-# Direct-upstream dictation replaced the old Arctic runtime controller. Queue
-# an idempotent migration without removing the last working payload; the new
-# receipt marker is published only after every pinned file verifies.
+# Direct-upstream dictation replaced the old Arctic runtime controller. Exact
+# legacy payloads migrate synchronously and without a network, using signed
+# provenance shipped in this RPM. The direct marker is published only after
+# the binary, model and user config verify; failures keep every legacy byte and
+# fall back to the ordinary retryable online queue.
 if [ ! -e %{_sharedstatedir}/arctic/dictation/upstream-direct-v1 ]; then
   user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $6 ~ /^\/home\// { print $1; exit }')
   if [ -n "$user" ]; then
-    install -d -m 0755 %{_sharedstatedir}/arctic/dictation
-    printf '%s\n' "$user" | install -m 0600 /dev/stdin %{_sharedstatedir}/arctic/dictation/user
-    printf '%s\n' 1.1.0 | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/pending
-    printf '%s\n' queued | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/setup.state
-    systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
+    if ! %{_libexecdir}/arctic/arctic-voxtype-setup --migrate-legacy "$user" >/dev/null 2>&1; then
+      %{_libexecdir}/arctic/arctic-voxtype-setup --install "$user" --offline >/dev/null 2>&1 || :
+      systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
+    fi
   fi
 fi
 # Migrate old boot-wanted download services to post-boot retries once. Do not stop a
@@ -1532,7 +1547,7 @@ fi
 %ghost %verify(not md5 size mode mtime) %{_sharedstatedir}/selinux/%{selinuxtype}/active/modules/200/arctic-nix
 
 %files -n arctic-desktop-config -f desktop-config.files
-%license LICENSE
+%license LICENSE packaging/desktop/COPYING.celluloid
 %doc dotfiles/README.md
 %{_sysconfdir}/skel/.[!.]*
 %dir %{_datadir}/arctic/skel
@@ -1542,6 +1557,9 @@ fi
 %config(noreplace) %{_sysconfdir}/arctic/default-apps
 %{_datadir}/arctic/live-default-apps
 %{_datadir}/arctic/live-mimeapps.list
+%{_libexecdir}/arctic/arctic-celluloid
+%dir %{_datadir}/arctic/applications
+%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_libexecdir}/arctic-nix-system
 %{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
