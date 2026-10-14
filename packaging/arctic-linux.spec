@@ -892,6 +892,9 @@ install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexe
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
 install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
 install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
+install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0
+install -pm 0644 packaging/dictation/provenance/v1.1.0/* \
+  %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0/
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
@@ -1214,6 +1217,10 @@ done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
 python3 -m unittest discover -s packaging/dictation -p 'test_*.py'
+# Execute the old stable state/payload migration, conflicting profile choices,
+# online recovery from fail-closed state, the receipt-to-marker crash/retry
+# transition, and failure of current-session activation after commit.
+python3 tools/dictation-qualification/test_upgrade_migration.py
 # ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
 # start without a display; the launcher entries the manager writes are valid.
 readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
@@ -1357,17 +1364,18 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
-# Direct-upstream dictation replaced the old Arctic runtime controller. Queue
-# an idempotent migration without removing the last working payload; the new
-# receipt marker is published only after every pinned file verifies.
+# Direct-upstream dictation replaced the old Arctic runtime controller. Exact
+# legacy payloads migrate synchronously and without a network, using signed
+# provenance shipped in this RPM. The direct marker is published only after
+# the binary, model and user config verify; failures keep every legacy byte and
+# fall back to the ordinary retryable online queue.
 if [ ! -e %{_sharedstatedir}/arctic/dictation/upstream-direct-v1 ]; then
   user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $6 ~ /^\/home\// { print $1; exit }')
   if [ -n "$user" ]; then
-    install -d -m 0755 %{_sharedstatedir}/arctic/dictation
-    printf '%s\n' "$user" | install -m 0600 /dev/stdin %{_sharedstatedir}/arctic/dictation/user
-    printf '%s\n' 1.1.0 | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/pending
-    printf '%s\n' queued | install -m 0644 /dev/stdin %{_sharedstatedir}/arctic/dictation/setup.state
-    systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
+    if ! %{_libexecdir}/arctic/arctic-voxtype-setup --migrate-legacy "$user" >/dev/null 2>&1; then
+      %{_libexecdir}/arctic/arctic-voxtype-setup --install "$user" --offline >/dev/null 2>&1 || :
+      systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
+    fi
   fi
 fi
 # Migrate old boot-wanted download services to post-boot retries once. Do not stop a

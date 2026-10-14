@@ -75,8 +75,11 @@ class DirectUpstreamIntegration(unittest.TestCase):
     def test_receipt_is_atomic_public_and_versioned(self):
         setup = (D / "arctic-voxtype-setup").read_text()
         self.assertIn('"integration":"upstream-direct-v1"', setup)
-        self.assertRegex(setup, r'chmod 0644 "\$receipt"; mv -f')
-        self.assertIn('install -m 0644 /dev/stdin "$STATE/upstream-direct-v1"', setup)
+        self.assertIn('durable_atomic_text "$STATE/verified.json" 0644 "$receipt_json"', setup)
+        self.assertIn('durable_atomic_text "$STATE/upstream-direct-v1" 0644 upstream-direct-v1', setup)
+        self.assertIn("os.fsync(stream.fileno())", setup)
+        self.assertIn("os.replace(temporary, path)", setup)
+        self.assertIn("os.fsync(directory)", setup)
         service = (ROOT / "packaging/systemd/voxtype.service").read_text()
         self.assertIn("ConditionPathExists=/var/lib/arctic/dictation/upstream-direct-v1", service)
         self.assertIn("ConditionPathExists=%h/.config/voxtype/config.toml", service)
@@ -115,7 +118,76 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertLess(setup.index('acquire_setup_lock\ncase'), setup.index('    --install)'))
         self.assertIn('reuse_legacy_model', setup)
         self.assertIn('cp --reflink=auto', setup)
-        self.assertLess(setup.index('upstream-direct-v1 | install'), setup.index('\n    cleanup_legacy_payload'))
+        self.assertLess(setup.index('durable_atomic_text "$STATE/upstream-direct-v1"'),
+                        setup.index('\n    cleanup_legacy_payload'))
+
+    def test_offline_upgrade_uses_shipped_signed_provenance_before_switching(self):
+        setup = (D / "arctic-voxtype-setup").read_text()
+        spec = (ROOT / "packaging/arctic-linux.spec").read_text()
+        provenance = D / "provenance/v1.1.0"
+        expected = {
+            "SHA256SUMS.txt": (2931, "3a2fa8661ac2dceeb0b52d4de85b71361de122a09298f3a85ca596ff0428fe4b"),
+            "SHA256SUMS.txt.asc": (228, "63155a999853a5816912a586610ab831273d2d493ca8e08679f817a7e383d455"),
+            "voxtype-1.1.0-linux-x86_64-baseline.asc": (228, "41b8b14315f55c9ffb03ccb28e99dfd115c7e5a7e7953ef158213d38b4162ed8"),
+            "voxtype-1.1.0-linux-x86_64-avx2.asc": (228, "fdf2c35826ea7590a703993c5bdf69804672a5a0c76312e66bc4f14399d8f2ce"),
+        }
+        for name, (size, digest) in expected.items():
+            payload = (provenance / name).read_bytes()
+            self.assertEqual(len(payload), size, name)
+            self.assertEqual(hashlib.sha256(payload).hexdigest(), digest, name)
+        with tempfile.TemporaryDirectory() as folder:
+            env = dict(os.environ, GNUPGHOME=folder)
+            os.chmod(folder, 0o700)
+            subprocess.run(["gpg", "--batch", "--import", str(D / "voxtype-release-key.asc")],
+                           env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(["gpg", "--batch", "--verify", str(provenance / "SHA256SUMS.txt.asc"),
+                            str(provenance / "SHA256SUMS.txt")], env=env, check=True,
+                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        sums = (provenance / "SHA256SUMS.txt").read_text()
+        for line in (
+            "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a  voxtype-1.1.0-linux-x86_64-baseline",
+            "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28  voxtype-1.1.0-linux-x86_64-avx2",
+        ):
+            self.assertIn(line, sums)
+        packaged = setup[setup.index("prepare_packaged_release_metadata() {"):
+                         setup.index("\n}\n", setup.index("prepare_packaged_release_metadata() {")) + 3]
+        self.assertIn('verify_signature "$PROVENANCE/SHA256SUMS.txt.asc"', packaged)
+        self.assertIn('verify_signature "$PROVENANCE/$name.asc" "$source"', packaged)
+        self.assertIn('trusted_exact_file "$source" 755', packaged)
+        migration = setup[setup.index("    --migrate-legacy)"):
+                          setup.index("    --resume)", setup.index("    --migrate-legacy)"))]
+        self.assertIn('setup_user "$2" legacy-only', migration)
+        setup_user = setup[setup.index("setup_user() {"):setup.index("\n}\n", setup.index("setup_user() {")) + 3]
+        self.assertLess(setup_user.index("legacy_payload_usable"), setup_user.index("prepare_release_metadata"))
+        self.assertIn('selected_profile=$(legacy_profile "$host_profile")', setup_user)
+        self.assertIn('quarantine_invalid_legacy_state', setup_user)
+        self.assertIn('[[ $legacy_state == valid ]] && legacy_payload_usable', setup_user)
+        self.assertIn('[[ $mode != legacy-only ]] || return 1', setup_user)
+        self.assertIn('trusted_exact_file "$target" 755', setup)
+        self.assertIn('trusted_exact_file "$target" 644', setup)
+        prepare_state = setup[setup.index("prepare_state_dir() {"):
+                              setup.index("\n}\n", setup.index("prepare_state_dir() {")) + 3]
+        self.assertIn('durable_sync_tree "$STATE" "$STATE_ROOT"', prepare_state)
+        self.assertLess(setup.index('prepare_state_dir\n    durable_atomic_text "$STATE/user"'),
+                        setup.index('durable_atomic_text "$STATE/pending"'))
+        posttrans = spec[spec.index("# Direct-upstream dictation replaced"):
+                         spec.index("# Migrate old boot-wanted", spec.index("# Direct-upstream dictation replaced"))]
+        self.assertIn('arctic-voxtype-setup --migrate-legacy "$user"', posttrans)
+        self.assertRegex(posttrans, r'if ! .*--migrate-legacy.*; then[\s\S]*--install "\$user" --offline[\s\S]*arctic-dictation-setup\.timer')
+        self.assertLess(setup.index('durable_atomic_text "$STATE/verified.json"'),
+                        setup.index('durable_atomic_text "$STATE/upstream-direct-v1"'))
+        self.assertLess(setup.index('durable_sync_tree "$DEST"'),
+                        setup.index('durable_atomic_text "$STATE/verified.json"'))
+        self.assertLess(setup.index('durable_sync_tree "$MODELS"'),
+                        setup.index('durable_atomic_text "$STATE/verified.json"'))
+        self.assertLess(setup.index('durable_atomic_text "$STATE/upstream-direct-v1"'),
+                        setup.index('\n    cleanup_legacy_payload'))
+        self.assertLess(setup_user.index('durable_atomic_text "$STATE/upstream-direct-v1"'),
+                        setup_user.index('\n    trap - ERR'))
+        self.assertLess(setup.index('\n    cleanup_legacy_payload'),
+                        setup.index('durable_remove "$STATE/pending"'))
+        self.assertIn('systemctl --user daemon-reload >/dev/null 2>&1 || :', setup_user)
+        self.assertIn('systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :', setup_user)
 
     def test_runtime_error_cache_is_per_uid_and_no_follow(self):
         adapter = (D / "arctic-dictation").read_text()
@@ -152,6 +224,9 @@ class DirectUpstreamIntegration(unittest.TestCase):
 
     def test_user_config_rejects_symlinks_without_touching_targets(self):
         helper = D / "arctic-voxtype-configure"
+        helper_text = helper.read_text()
+        self.assertIn('sync_user_file "$config"', helper_text)
+        self.assertIn('os.fsync(parent)', helper_text)
         model = "/opt/arctic/voxtype/models/ggml-small.bin"
         with tempfile.TemporaryDirectory() as folder:
             root = pathlib.Path(folder); home = root / "home"; home.mkdir()

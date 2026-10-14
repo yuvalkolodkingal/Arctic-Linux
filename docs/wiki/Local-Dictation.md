@@ -27,6 +27,16 @@ system packages add to these totals. Optional Vulkan acceleration is a separate
 **66,342,968-byte (66.3 MB)** download. Setup verifies upstream signatures,
 exact sizes and SHA-256 hashes before publishing any file as ready.
 
+When an existing Arctic system updates from the retired controller, exact
+already-installed VoxType and model bytes are migrated locally. Signed release
+provenance included in the RPM lets that transition finish while offline; the
+old payload is removed only after the direct setup receipt and marker are
+durable. The last verified profile remains selected if a later profile change
+was interrupted. A mismatch keeps the old bytes and queues the normal repair
+path, and a restart during migration resumes from the durable queue.
+If the old receipt is damaged, the offline attempt preserves it and the payload;
+the next online retry quarantines that receipt and performs a signed repair.
+
 ## Record and insert
 
 1. Focus the text field where the words should go.

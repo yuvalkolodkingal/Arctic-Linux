@@ -374,6 +374,21 @@ conservatively selected AVX2/Turbo Q5 path is 593,194,923 bytes. Optional Vulkan
 is an explicit later 66,342,968-byte download and must pass real local model
 initialization before selection.
 
+Upgrades from the retired Arctic controller first attempt an offline migration
+from its exact pinned payload. The RPM ships the signed upstream 1.1.0 manifest
+and detached CPU signatures for that purpose. It verifies the reused binary and
+model, writes the new user configuration, then publishes the direct receipt and
+marker before deleting legacy payload names. If any check fails, every legacy
+payload byte is retained and the ordinary online retry queue is enabled. The
+root-owned verified receipt is authoritative over a conflicting pending profile
+choice. File and parent-directory fsyncs make the queue-to-marker transition
+crash durable; the marker is committed before cleanup and the queue is removed
+afterward. A malformed but structurally trusted legacy receipt fails the first
+offline attempt closed, then the normal online resume quarantines it and uses
+fresh signed metadata for repair. Current-session user-service activation is
+best effort after the commit point and cannot rewrite a completed migration as
+a pre-commit setup failure.
+
 The systemd user service runs official VoxType directly with local-only,
 error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and
 `voxtype record cancel`; the Arctic adapter handles only status, retry, language
