@@ -1,4 +1,5 @@
 import hashlib
+import os
 import pathlib
 import re
 import subprocess
@@ -11,7 +12,7 @@ D = ROOT / "packaging/dictation"
 
 class DirectUpstreamIntegration(unittest.TestCase):
     def test_shells_parse_and_old_runtime_is_gone(self):
-        for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-voxtype-setup", "bash"),
+        for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-dictation-toggle", "sh"), ("arctic-voxtype-setup", "bash"),
                             ("arctic-voxtype-host-profile", "sh")):
             subprocess.run([shell, "-n", str(D / name)], check=True)
         for name in ("dictation.py", "child_exec.py", "arctic-dictation-install", "arctic-dictation-setup"):
@@ -22,8 +23,9 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertNotIn("record toggle", adapter)
         self.assertNotIn("record cancel", adapter)
         binds = (ROOT / "dotfiles/.config/mango/arctic/binds.conf").read_text()
-        self.assertIn("voxtype record toggle", binds)
+        self.assertIn("spawn,arctic-dictation-toggle", binds)
         self.assertIn("voxtype record cancel", binds)
+        self.assertIn("voxtype record toggle", (D / "arctic-dictation-toggle").read_text())
         shell = (ROOT / "shell/DictationService.qml").read_text()
         self.assertIn("['voxtype', 'record', 'toggle']", shell)
         self.assertIn("Session.runtimeDir + '/voxtype/state'", shell)
@@ -50,6 +52,7 @@ class DirectUpstreamIntegration(unittest.TestCase):
         for name in ("VOXTYPE_ON_DEMAND_LOADING", "VOXTYPE_MAX_DURATION_SECS", "VOXTYPE_AUDIO_DEVICE", "SONIOX_API_KEY"):
             self.assertIn(name, unit)
         self.assertIn("UMask=0077", unit)
+        self.assertIn("RestrictAddressFamilies=AF_UNIX", unit)
         self.assertNotIn("input", unit.lower())
 
     def test_embedded_key_has_expected_fingerprint(self):
@@ -123,6 +126,33 @@ class DirectUpstreamIntegration(unittest.TestCase):
             self.assertEqual(classify([flags, flags]), "small-v2", missing)
         mixed = " ".join(flag for flag in required.split() if flag != "fma")
         self.assertEqual(classify([required, mixed]), "small-v2")
+
+    def test_activation_guard_calls_only_upstream_and_never_exposes_command_error(self):
+        helper = D / "arctic-dictation-toggle"
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder); log = root / "calls"
+            def stub(name, body):
+                path = root / name
+                path.write_text("#!/bin/sh\n" + body + "\n"); path.chmod(0o755)
+            stub("arctic-dictation", 'printf \'%s\\n\' "$STATUS"')
+            stub("voxtype", 'printf \'voxtype %s\\n\' "$*" >>"$CALLS"; printf \'private transcript\\n\' >&2; exit "${VOXTYPE_RC:-0}"')
+            stub("notify-send", 'printf \'notify %s\\n\' "$*" >>"$CALLS"')
+            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin", CALLS=str(log))
+            env["STATUS"] = '{"state":"unavailable","ready":false}'
+            unavailable = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(unavailable.returncode, 69)
+            self.assertNotIn("private", unavailable.stdout + unavailable.stderr)
+            self.assertNotIn("voxtype", log.read_text())
+            log.write_text("")
+            env["STATUS"] = '{"state":"ready","ready":true}'
+            ready = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(ready.returncode, 0)
+            self.assertEqual(log.read_text().strip(), "voxtype record toggle")
+            log.write_text(""); env["VOXTYPE_RC"] = "1"
+            failed = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(failed.returncode, 69)
+            self.assertNotIn("private", failed.stdout + failed.stderr)
+            self.assertIn("Dictation is not ready", log.read_text())
 
     def test_active_state_clears_stale_sanitized_error(self):
         adapter = (D / "arctic-dictation").read_text()

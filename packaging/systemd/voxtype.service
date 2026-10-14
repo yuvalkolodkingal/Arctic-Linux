@@ -9,6 +9,10 @@ ConditionPathExists=%h/.config/voxtype/config.toml
 [Service]
 Type=simple
 UMask=0077
+# Arctic's managed daemon needs only local Wayland, PipeWire and control sockets.
+# This also prevents a user-edited config or inherited child hook from reaching
+# a remote transcription endpoint.
+RestrictAddressFamilies=AF_UNIX
 # -q suppresses upstream info-level transcript excerpts. Remove inherited
 # overrides that could bypass Arctic's local-only, no-hotkey and safe-output
 # config; explicitly select that canonical file.

@@ -886,6 +886,7 @@ install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir
 # Dictation keeps large upstream binaries and models out of the live image. The
 # installer/first-boot bootstrap fetches and verifies them for the installed host.
 install -Dpm 0755 packaging/dictation/arctic-dictation %{buildroot}%{_bindir}/arctic-dictation
+install -Dpm 0755 packaging/dictation/arctic-dictation-toggle %{buildroot}%{_bindir}/arctic-dictation-toggle
 install -Dpm 0755 packaging/dictation/voxtype %{buildroot}%{_bindir}/voxtype
 install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-setup
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
@@ -1582,6 +1583,7 @@ fi
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
 %{_bindir}/arctic-dictation
+%{_bindir}/arctic-dictation-toggle
 %{_bindir}/voxtype
 %{_libexecdir}/arctic/arctic-voxtype-setup
 %{_libexecdir}/arctic/arctic-voxtype-host-profile
