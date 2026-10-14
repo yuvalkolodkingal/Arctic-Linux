@@ -11,6 +11,13 @@ D = ROOT / "packaging/dictation"
 
 
 class DirectUpstreamIntegration(unittest.TestCase):
+    def test_status_projects_official_upstream_microphone_disconnect_errors(self):
+        adapter = (D / "arctic-dictation").read_text()
+        self.assertIn("*'Audio stream error, capture is now dead:'*", adapter)
+        self.assertIn("*'failed during this recording; the transcript will be short or empty.'*", adapter)
+        self.assertLess(adapter.index("*'Audio stream error, capture is now dead:'*"),
+                        adapter.index("*'Transcription failed:'*"))
+
     def test_shells_parse_and_old_runtime_is_gone(self):
         for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-dictation-toggle", "sh"), ("arctic-voxtype-setup", "bash"),
                             ("arctic-voxtype-configure", "sh"),

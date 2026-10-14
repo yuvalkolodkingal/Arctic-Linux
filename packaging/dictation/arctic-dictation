@@ -85,7 +85,7 @@ status() {
                 recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
                     --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
                 case "$recent" in
-                    *'Failed to start audio:'*|*'Failed to create audio capture:'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
+                    *'Failed to start audio:'*|*'Failed to create audio capture:'*|*'Audio stream error, capture is now dead:'*|*'failed during this recording; the transcript will be short or empty.'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
                     *'Transcription failed: Model not found:'*|*'Transcription failed: Failed to load model:'*) printf '%s\n' model >"$runtime/voxtype-error" ;;
                     *'Transcription failed:'*) printf '%s\n' transcription >"$runtime/voxtype-error" ;;
                     *'Output failed:'*) printf '%s\n' output >"$runtime/voxtype-error" ;;
