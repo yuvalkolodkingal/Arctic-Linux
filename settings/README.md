@@ -99,18 +99,26 @@ update with dnf; the older `arctic-theme` → only Winter and Polar night; no `w
 rotation and position only (plus wdisplays if installed); no NetworkManager, BlueZ or PipeWire →
 a note.
 
-Dictation uses the local `arctic-dictation` controller. Settings shows setup, download,
-recording, transcription and error states; language and acceleration can change while idle.
-The online installer downloads VoxType and a multilingual Whisper model after the OS copy;
-offline installation queues retryable setup. Recording stays unavailable until both are
-verified. Setup discloses app and model download sizes before authorization. The live ISO
-contains only the controller and frontend.
+Dictation runs the official VoxType 1.1.0 daemon. `arctic-dictation` is a
+setup/readiness adapter only; recording, transcription and insertion remain
+upstream VoxType operations. Settings shows setup, download, recording,
+transcription and fixed error states; language and CPU/Vulkan selection can
+change while idle.
 
-Focus a text field and release **Super + Ctrl + X** to start recording; the same shortcut
-stops and inserts text. **Super + Ctrl + Backspace** cancels. On the visible taskbar, the
-dictation pill can start, stop or cancel without focusing Settings. With a hidden taskbar,
-the pill shows recording or transcription status and the shortcuts remain available.
-QML consumes status only and never receives the transcript.
+The online installer downloads one signed VoxType binary and one multilingual
+Whisper model after the OS copy. Offline installation queues retryable setup.
+Recording stays unavailable until the binary and model are verified. Setup
+discloses 506,181,191 bytes for baseline/Small or 593,194,923 bytes for
+AVX2/Turbo Q5; optional Vulkan adds 66,342,968 bytes. The live ISO contains the
+adapter and frontend, not the executable payload or model.
+
+Focus a text field and press **Super + Ctrl + X** to start; press it again to
+stop and insert. **Super + Ctrl + Backspace** invokes upstream cancellation.
+The taskbar pill exposes current state and opens Settings for recovery. QML
+consumes sanitized status only and never receives the transcript. The managed
+VoxType config is `~/.config/voxtype/config.toml`; models load on demand to avoid
+permanent idle RAM/VRAM use. Vulkan failure requires an explicit CPU selection
+and a new recording.
 
 ## Developing
 

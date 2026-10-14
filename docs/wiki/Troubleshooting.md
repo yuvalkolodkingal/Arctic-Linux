@@ -369,9 +369,10 @@ again). `wf-recorder` must be installed.
 Open **Settings → Dictation**. Its setup/error message says what is missing; choose
 **Set up / retry…** when online. A failed model download is separate from OS installation.
 For a microphone problem, choose the input and unmute it in Sound settings. Cancel recording
-or transcription with `Super + Ctrl + Backspace`. If Vulkan fails, that phrase is discarded;
-CPU is selected for the next explicit recording. A CPU compatibility error offers
-**Use compatibility model…** and discloses its download first. See [Local dictation](Local-Dictation).
+or transcription with `Super + Ctrl + Backspace`. If Vulkan fails, that phrase is not retried:
+select **CPU** in Dictation settings and make a new recording. If the executable or model is
+missing or damaged, choose **Set up / retry…** to verify and repair it. See
+[Local dictation](Local-Dictation).
 
 ### The bar hides at the wrong time
 

@@ -24,7 +24,8 @@ seconds. Other evaluations shared the host during these runs, so elapsed times
 are preliminary and do not establish a causal speed improvement. A portable
 baseline Turbo pilot was stopped after approximately 31 minutes with only three
 of ten clips complete. Those clips took 817.97, 496.49 and 578.82 seconds, each
-exceeding the controller's 240-second transcription bound. Its failed partial
+exceeding the retired Arctic controller's former 240-second transcription bound. The direct
+VoxType integration has no such downstream inference timeout. Its failed partial
 report supports keeping Small on legacy CPUs; it provides no complete accuracy
 measurement for portable Turbo.
 
@@ -33,7 +34,11 @@ model without an audio device/session. It observed the microphone error,
 terminated the owned engine, and erased its private files. This verifies that
 specific container failure path only.
 
-Final-image acceptance still needs online setup, offline queue and recovery,
-actual recording, Hebrew/English insertion, cancellation and locking, missing
-models and microphones, and a failed GPU attempt followed by an explicit CPU
-retry. Source and container reports cannot replace those tests.
+These measurements predate the direct official-service integration. Their fixed-audio
+hypotheses can inform model choice, but their controller lifecycle, installer, cancellation and
+privacy behavior cannot validate the replacement.
+
+Final-image acceptance still needs online setup, offline queue and recovery, actual recording,
+Hebrew/English insertion, cancellation and locking, missing models and microphones, a failed GPU
+attempt followed by an explicit CPU retry, and transcript leakage checks. Source, container and
+retired-candidate reports cannot replace those tests.
