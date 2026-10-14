@@ -26,6 +26,8 @@ jobs:
           sparse-checkout: |
             .github
             tools
+            packaging
+            iso
           persist-credentials: false
       - name: Install the bounded image evidence decoder
         timeout-minutes: 7
