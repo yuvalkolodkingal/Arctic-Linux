@@ -2,6 +2,7 @@
 from contextlib import redirect_stdout
 import importlib.util
 import io
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -19,6 +20,7 @@ def load(name, relative):
 
 runner = load('performance_prescreen_runner', 'tools/performance/run-paired.py')
 screen = load('performance_prescreen_screen', 'tools/native-functional/screen-evidence.py')
+guest = load('performance_prescreen_guest', 'tools/performance/guest.py')
 
 
 class PerformanceEvidencePrescreenTest(unittest.TestCase):
@@ -56,6 +58,17 @@ class PerformanceEvidencePrescreenTest(unittest.TestCase):
         self.assertEqual(error.category, 'performance-baseline-install-serial')
         self.assertEqual(error.screening_failure, 'sensitive_text')
         self.assertNotIn('mystery@unknown.service', output)
+
+    def test_sanitized_unknown_unit_record_passes_early_prescreen_without_raw_text(self):
+        private = 'mystery@unknown.service\nprivate.person@example.invalid\n'
+        summary = guest.private_diagnostic_summary('systemd-failed-units', private)
+        content = ('ARCTIC-PERFORMANCE ' + json.dumps(dict(
+            stage='installed', check='system_failed_units', value=summary),
+            sort_keys=True) + '\n').encode()
+        self.assertNotIn(private.encode(), content)
+        member = self.member('runs/candidate/3/serial-boot.log', content)
+        runner.pre_screen_evidence_members(self.out, [member], screen)
+        self.assertEqual(member[1].read_bytes(), content)
 
     def test_unknown_private_filename_is_never_emitted(self):
         relative = 'runs/baseline/2/private-person@example.invalid.log'
