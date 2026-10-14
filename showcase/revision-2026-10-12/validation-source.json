@@ -71,7 +71,7 @@
   },
   "exact_capture_execution_manifest": {
     "path": "showcase/capture/exact_image/execution-manifest.json",
-    "sha256": "8ee556f66dbb13c2b542c76fac6dae7c9b6e57fc2777c275b2d456bcccdf2956",
+    "sha256": "6d24f863138508c5e5ed7d5c4fc36c064c6268865cb49c16faec7b64d040ad88",
     "execution_files": 11,
     "all_hashes_recomputed": true
   },

@@ -22,7 +22,18 @@
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750"
   },
-  "image": null,
-  "ready": false,
+  "image": {
+    "run_id": 38616494387,
+    "artifact_id": 11924131449,
+    "archive_bytes": 1936409910,
+    "archive_sha256": "78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73",
+    "source_sha": "da59f68a967c39205b2aa7648f3c11224247982c",
+    "name": "Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso",
+    "bytes": 1936222208,
+    "sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
+  },
+  "ready": true,
   "release_acceptance": false
 }
