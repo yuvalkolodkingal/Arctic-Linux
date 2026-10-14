@@ -195,7 +195,7 @@ class PublicEvidenceTests(unittest.TestCase):
                       and isinstance(n.func, ast.Attribute) and n.func.attr == 'navigate'}
         labels = {'failure-' + n for n in gates} | direct | {n + suffix for n in navigation
                   for suffix in ('-before-location', '-navigation-confirmed')}
-        self.assertEqual(len(labels), 13)
+        self.assertEqual(len(labels), 15)
         expected = {'gui-%02d-' % index + label + '.png' for index in range(len(labels)) for label in labels}
         self.assertEqual({n for n in G.NATIVE_PUBLIC_EVIDENCE_FILES if n.startswith('gui-') and n.endswith('.png')}, expected)
         self.assertEqual({n for n in G.NATIVE_PUBLIC_EVIDENCE_FILES if n.startswith('gui-launch-')},
@@ -209,7 +209,7 @@ class PublicEvidenceTests(unittest.TestCase):
     def test_unknown_public_names_aliases_and_private_symlinks_fail_before_bulk(self):
         names = ('unexpected.log', 'home-private/database.log', 'Home/database.log', 'config.json',
                  'renderer-trial-private/reference.png', 'gui-launch-130.log', 'gui-launch-01.log',
-                 'gui-13-editor-save-confirmed.png', 'gui-00-private-label.png',
+                 'gui-15-editor-save-confirmed.png', 'gui-00-private-label.png',
                  'wrong-password-control/Unicode-\u05e9.txt')
         for name in names:
             with self.subTest(name=name):
