@@ -75,6 +75,36 @@ class Channel:
             raise c.Invalid("unattended channel is not UTF-8") from error
 
 
+class InstallProgress:
+    """Send only an enumerated, content-free lifecycle projection to the host."""
+
+    def __init__(self, channel: Channel):
+        self.channel = channel
+        self.sequence = 0
+        self.stage = None
+
+    def emit(self, stage: str, status: str):
+        value = {"schema": "arctic-showcase-install-progress-v1",
+                 "sequence": self.sequence, "stage": stage, "status": status,
+                 "release_acceptance": False}
+        c.install_progress(value)
+        self.channel.write(c.INSTALL_PROGRESS_PREFIX
+                           + json.dumps(value, sort_keys=True, separators=(",", ":")))
+        self.sequence += 1
+
+    def start(self, stage: str):
+        self.stage = stage
+        self.emit(stage, "started")
+
+    def pass_stage(self, stage: str):
+        c.require(self.stage == stage, "installation progress stage differs")
+        self.emit(stage, "passed")
+
+    def fail(self):
+        if self.stage is not None and self.sequence < 64:
+            self.emit(self.stage, "failed")
+
+
 def _run(argv, *, env=None, timeout=30, maximum=256_000, check=True):
     c.require(type(argv) is list and argv and all(type(item) is str for item in argv),
               "unattended command differs")
@@ -229,72 +259,97 @@ def _mount_installed_target(target=Path("/mnt/sysroot")):
 
 def live_install(timeout: int):
     c.require(os.geteuid() == 0 and len(PASSWORD) == 38, "live automation identity differs")
-    account, vt, environment = _wait(lambda: _graphical_environment("liveuser"), 300,
-                                     "live graphical session unavailable")
-    _run(["/usr/bin/chvt", str(vt)])
-    pid, _ = _wait(lambda: _find_ipc(account, environment, "installer", "state"), 180,
-                   "real installer IPC unavailable")
-    pages = ("welcome", "keyboard", "timezone", "disk", "encryption",
-             "account", "apps", "summary")
-    values = {
-        "keyboard": {"layout": "us", "variant": ""},
-        "network": {"offline": False},
-        "disk": {"disk": "/dev/vda", "mode": "erase"},
-        "encryption": {"enabled": False},
-        "account": {"full_name": "Arctic Showcase", "username": USERNAME,
-                    "hostname": HOSTNAME, "password": PASSWORD, "confirm": PASSWORD,
-                    "autologin": True, "same_as_disk": False},
-        "apps": {},
-    }
-    def complete_page(expected):
-        def ready():
-            value = c.strict_json(_installer_call(account, environment, pid, "state"))
-            return value if value.get("page") == value.get("current") == expected \
-                and value.get("ready") is True and value.get("connected") is True \
-                and not value.get("busy") and not value.get("failure") else None
-        state = _wait(ready, 90, "installer page did not become ready")
-        if expected in values:
-            c.require(_installer_call(account, environment, pid, "fill", values[expected]) == "ok",
-                      "installer fixed choice failed")
-            def valid():
+    channel = Channel(timeout, require_nonroot=False)
+    progress = InstallProgress(channel)
+    try:
+        progress.start("live-helper")
+        progress.pass_stage("live-helper")
+        progress.start("graphical-session")
+        account, vt, environment = _wait(lambda: _graphical_environment("liveuser"), 300,
+                                         "live graphical session unavailable")
+        _run(["/usr/bin/chvt", str(vt)])
+        progress.pass_stage("graphical-session")
+        progress.start("installer-ipc")
+        pid, _ = _wait(lambda: _find_ipc(account, environment, "installer", "state"), 180,
+                       "real installer IPC unavailable")
+        progress.pass_stage("installer-ipc")
+        pages = ("welcome", "keyboard", "timezone", "disk", "encryption",
+                 "account", "apps", "summary")
+        values = {
+            "keyboard": {"layout": "us", "variant": ""},
+            "network": {"offline": False},
+            "disk": {"disk": "/dev/vda", "mode": "erase"},
+            "encryption": {"enabled": False},
+            "account": {"full_name": "Arctic Showcase", "username": USERNAME,
+                        "hostname": HOSTNAME, "password": PASSWORD, "confirm": PASSWORD,
+                        "autologin": True, "same_as_disk": False},
+            "apps": {},
+        }
+        def complete_page(expected):
+            stage = "page-" + expected
+            progress.start(stage)
+            def ready():
                 value = c.strict_json(_installer_call(account, environment, pid, "state"))
                 return value if value.get("page") == value.get("current") == expected \
-                    and value.get("ready") is True and value.get("valid") is True \
+                    and value.get("ready") is True and value.get("connected") is True \
                     and not value.get("busy") and not value.get("failure") else None
-            state = _wait(valid, 90, "installer fixed choice did not become valid")
-        c.require(state.get("valid") is True, "installer fixed choice is invalid")
-        c.require(_installer_call(account, environment, pid, "next") == "ok",
-                  "installer Next failed")
-    for expected in pages[:2]:
-        complete_page(expected)
-    # A wired online machine intentionally skips Network. If the shipped UI
-    # shows it while connectivity settles, choose online and require validity.
-    def after_keyboard():
-        value = c.strict_json(_installer_call(account, environment, pid, "state"))
-        return value if value.get("page") == value.get("current") \
-            and value.get("page") in ("network", "timezone") \
-            and value.get("ready") is True and value.get("connected") is True \
-            and not value.get("busy") and not value.get("failure") else None
-    next_state = _wait(after_keyboard, 90, "installer online route did not advance")
-    if next_state["page"] == "network":
-        complete_page("network")
-    for expected in pages[2:]:
-        complete_page(expected)
-    def finished():
-        value = c.strict_json(_installer_call(account, environment, pid, "state"))
-        return value if value.get("page") == value.get("current") == "done" \
-            and value.get("percent") == 100 and not value.get("failure") else None
-    _wait(finished, min(timeout, 5100), "online installation did not complete")
-    target = _mount_installed_target()
-    try:
-        seal = guest.seal_installation(target_root=target)
-        c.install_seal(seal)
-    finally:
-        _run(["/usr/bin/umount", str(target)], timeout=60)
-    channel = Channel(timeout, require_nonroot=False)
-    try:
+            state = _wait(ready, 90, "installer page did not become ready")
+            if expected in values:
+                c.require(_installer_call(account, environment, pid, "fill", values[expected]) == "ok",
+                          "installer fixed choice failed")
+                def valid():
+                    value = c.strict_json(_installer_call(account, environment, pid, "state"))
+                    return value if value.get("page") == value.get("current") == expected \
+                        and value.get("ready") is True and value.get("valid") is True \
+                        and not value.get("busy") and not value.get("failure") else None
+                state = _wait(valid, 90, "installer fixed choice did not become valid")
+            c.require(state.get("valid") is True, "installer fixed choice is invalid")
+            c.require(_installer_call(account, environment, pid, "next") == "ok",
+                      "installer Next failed")
+            progress.pass_stage(stage)
+        for expected in pages[:2]:
+            complete_page(expected)
+        # A wired online machine intentionally skips Network. If the shipped UI
+        # shows it while connectivity settles, choose online and require validity.
+        progress.start("online-route")
+        def after_keyboard():
+            value = c.strict_json(_installer_call(account, environment, pid, "state"))
+            return value if value.get("page") == value.get("current") \
+                and value.get("page") in ("network", "timezone") \
+                and value.get("ready") is True and value.get("connected") is True \
+                and not value.get("busy") and not value.get("failure") else None
+        next_state = _wait(after_keyboard, 90, "installer online route did not advance")
+        progress.pass_stage("online-route")
+        if next_state["page"] == "network":
+            complete_page("network")
+        for expected in pages[2:]:
+            complete_page(expected)
+        progress.start("installation")
+        def finished():
+            value = c.strict_json(_installer_call(account, environment, pid, "state"))
+            return value if value.get("page") == value.get("current") == "done" \
+                and value.get("percent") == 100 and not value.get("failure") else None
+        _wait(finished, min(timeout, 5100), "online installation did not complete")
+        progress.pass_stage("installation")
+        progress.start("target-mount")
+        target = _mount_installed_target()
+        progress.pass_stage("target-mount")
+        progress.start("install-seal")
+        try:
+            seal = guest.seal_installation(target_root=target)
+            c.install_seal(seal)
+        finally:
+            _run(["/usr/bin/umount", str(target)], timeout=60)
+        progress.pass_stage("install-seal")
+        progress.start("host-handoff")
         channel.write(c.INSTALL_PREFIX + json.dumps(seal, sort_keys=True, separators=(",", ":")))
         c.require(channel.read() == c.INSTALL_ACK, "host did not authorize installed boot")
+    except Exception:
+        try:
+            progress.fail()
+        except Exception:
+            pass
+        raise
     finally:
         channel.close()
 
