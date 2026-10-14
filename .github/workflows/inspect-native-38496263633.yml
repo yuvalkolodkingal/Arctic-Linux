@@ -1,0 +1,167 @@
+name: Inspect screened native 38496263633 evidence
+
+on:
+  push:
+    branches: [codex/inspect-native-38496263633]
+    paths: [.github/workflows/inspect-native-38496263633.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify fixed screened archive and report bounded diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, struct, subprocess, tempfile, zipfile
+          from collections import Counter
+          from pathlib import Path, PurePosixPath
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH = 'codex/inspect-native-38496263633'
+          ARTIFACT_ID = 11864772858
+          RUN_ID = 38496263633
+          RUN_SHA = '9601a4e8b448840572785099c1f0764cf22b748a'
+          ARCHIVE_BYTES = 58415759
+          ARCHIVE_SHA256 = '9dc5172d04af296770c70c97c2a95be052ff2898fc0778d616be317d2b31682f'
+          assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH
+          endpoint = f'repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['name'] == 'native-candidate-qualification'
+          assert metadata['expired'] is False
+          assert metadata['size_in_bytes'] == ARCHIVE_BYTES
+          assert metadata['digest'] == 'sha256:' + ARCHIVE_SHA256
+          assert metadata['workflow_run']['id'] == RUN_ID
+          assert metadata['workflow_run']['head_sha'] == RUN_SHA
+
+          with tempfile.TemporaryDirectory(prefix='arctic-native-screened-') as folder:
+              archive_path = Path(folder) / 'screened.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              archive_raw = archive_path.read_bytes()
+              assert len(archive_raw) == ARCHIVE_BYTES
+              assert hashlib.sha256(archive_raw).hexdigest() == ARCHIVE_SHA256
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert 2 <= len(items) <= 1001
+                  assert len({item.filename for item in items}) == len(items)
+                  total = 0
+                  by_name = {}
+                  for item in items:
+                      path = PurePosixPath(item.filename)
+                      assert item.filename == path.as_posix()
+                      assert not path.is_absolute() and '..' not in path.parts and '.' not in path.parts
+                      assert not item.is_dir()
+                      assert (item.external_attr >> 16 & 0o170000) in (0, stat.S_IFREG)
+                      assert not item.flag_bits & 1
+                      assert 0 <= item.file_size <= 128 * 1024 * 1024
+                      total += item.file_size
+                      assert total <= 512 * 1024 * 1024
+                      by_name[item.filename] = item
+                  assert 'upload-screening.json' in by_name
+                  screening_raw = archive.read('upload-screening.json')
+                  assert len(screening_raw) <= 1024 * 1024
+                  screening = json.loads(screening_raw)
+                  assert set(screening) <= {'scope', 'files', 'source_formats'}
+                  assert screening['scope'] == 'Owned synthetic QEMU VM only; no host desktop, VM disks or credentials'
+                  assert type(screening['files']) is dict
+                  assert set(screening['files']) == set(by_name) - {'upload-screening.json'}
+                  redactions = 0
+                  categories = Counter()
+                  verified = {}
+                  for name, receipt in screening['files'].items():
+                      assert set(receipt) == {'original_sha256', 'uploaded_sha256', 'bytes', 'redactions'}
+                      assert re.fullmatch('[0-9a-f]{64}', receipt['original_sha256'])
+                      assert re.fullmatch('[0-9a-f]{64}', receipt['uploaded_sha256'])
+                      assert type(receipt['bytes']) is int and receipt['bytes'] == by_name[name].file_size
+                      assert type(receipt['redactions']) is int and receipt['redactions'] >= 0
+                      raw = archive.read(name)
+                      assert len(raw) == receipt['bytes']
+                      assert hashlib.sha256(raw).hexdigest() == receipt['uploaded_sha256']
+                      redactions += receipt['redactions']
+                      categories[name.split('/', 1)[0] if '/' in name else 'root'] += 1
+                      verified[name] = raw
+                  print('ARCTIC-SCREENED-SUMMARY ' + json.dumps({
+                      'artifact_id': ARTIFACT_ID, 'run_id': RUN_ID, 'run_sha': RUN_SHA,
+                      'archive_bytes': ARCHIVE_BYTES, 'archive_sha256': ARCHIVE_SHA256,
+                      'members': len(items), 'expanded_bytes': total,
+                      'redactions': redactions, 'categories': dict(sorted(categories.items())),
+                  }, sort_keys=True))
+
+                  def strict_json(name, limit=4 * 1024 * 1024):
+                      raw = verified.get(name)
+                      if raw is None:
+                          return None
+                      assert len(raw) <= limit
+                      return json.loads(raw.decode('utf-8', errors='strict'))
+
+                  execution = strict_json('execution.json')
+                  assert type(execution) is dict
+                  selected_execution = {key: execution.get(key) for key in (
+                      'status', 'error', 'candidate_iso_source', 'iso_bytes', 'iso_sha256',
+                      'source_image_run', 'vm_base_tool_image_id', 'vm_tool_image_id',
+                      'harness_evidence', 'native_stages', 'taskbar_displays',
+                  ) if key in execution}
+                  print('ARCTIC-EXECUTION ' + json.dumps(selected_execution, sort_keys=True))
+                  for name in (
+                      'native-stages.json',
+                      'harness/native-stop-install.json', 'harness/native-stop-boot.json',
+                      'taskbar/taskbar-state.json', 'taskbar/taskbar-report.json',
+                      'taskbar/serial-taskbar-report.json', 'taskbar/serial-taskbar-provenance.json',
+                  ):
+                      value = strict_json(name)
+                      if value is not None:
+                          encoded = json.dumps(value, sort_keys=True)
+                          assert len(encoded.encode()) <= 512 * 1024
+                          print('ARCTIC-SELECTED-JSON-BEGIN ' + name)
+                          print(encoded)
+                          print('ARCTIC-SELECTED-JSON-END ' + name)
+
+                  prefixes = (
+                      'ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
+                      'ARCTIC-NATIVE-RUNNER-END ', 'ARCTIC-NATIVE-ERROR ',
+                      'ARCTIC-TASKBAR-', 'Traceback ', 'RuntimeError:',
+                  )
+                  contains = ('ERROR:', 'FAILED', ' failed', 'Failure', 'No such file', 'Permission denied')
+                  for name in ('native-harness.log', 'harness/test.log', 'harness/test-install-stage.log',
+                               'harness/serial-boot.log', 'harness/taskbar-boot.log.bounded-prefix.bin'):
+                      raw = verified.get(name)
+                      if raw is None:
+                          continue
+                      assert len(raw) <= 128 * 1024 * 1024
+                      text = raw.decode('utf-8', errors='strict')
+                      selected = []
+                      for line in re.split('[\r\n]+', text):
+                          if line.startswith(prefixes) or any(token in line for token in contains):
+                              assert len(line.encode()) <= 256 * 1024
+                              selected.append(line[:16384])
+                      selected = selected[-300:]
+                      print('ARCTIC-SELECTED-TEXT-BEGIN ' + name + ' ' + str(len(selected)))
+                      print('\n'.join(selected))
+                      print('ARCTIC-SELECTED-TEXT-END ' + name)
+
+                  image_rows = []
+                  for name, raw in verified.items():
+                      if not name.endswith('.png') or not (name.startswith('native-installed/') or name.startswith('taskbar/')):
+                          continue
+                      assert len(raw) >= 24 and raw[:8] == b'\x89PNG\r\n\x1a\n' and raw[12:16] == b'IHDR'
+                      width, height = struct.unpack('>II', raw[16:24])
+                      assert 1 <= width <= 8192 and 1 <= height <= 8192 and width * height <= 16_777_216
+                      image_rows.append({'category': name.split('/', 1)[0], 'bytes': len(raw),
+                                         'sha256': hashlib.sha256(raw).hexdigest(),
+                                         'width': width, 'height': height})
+                  # Hashes/dimensions provide evidence identity without publishing pixels or guest-chosen paths.
+                  assert len(image_rows) <= 600
+                  for index in sorted({0, max(0, len(image_rows) // 2), max(0, len(image_rows) - 1)}):
+                      if image_rows:
+                          print('ARCTIC-SELECTED-IMAGE ' + json.dumps(image_rows[index], sort_keys=True))
+                  print('ARCTIC-SELECTED-IMAGE-COUNT ' + str(len(image_rows)))
+          PY
