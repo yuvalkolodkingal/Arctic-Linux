@@ -145,6 +145,41 @@ class ContractControls(unittest.TestCase):
         gate.update(status='unrun', code='gate-' + gate['id'] + '-invalid')
         self.rejects(report, 'gate-code-status')
 
+    def test_dependent_unrun_gates_require_a_concrete_source_owned_failure(self):
+        report = synthetic('online-installed')
+        failed, dependent = report['gates'][:2]
+        failed.update(status='failed', code='gate-' + failed['id'] + '-invalid', observations={})
+        dependent.update(status='unrun', code='prerequisite-or-collector-failed', observations={})
+        report['status'] = 'failed'
+        result = c.validate(report, report['context'], fixture_manifest=FIXTURES)
+        self.assertEqual(result['status'], 'failed')
+        self.assertFalse(result['release_acceptance'])
+        with self.assertRaisesRegex(c.Invalid, '^image-dictation-gates-incomplete$'):
+            c.validate_report(report, report['context'], FIXTURES)
+
+        no_failure = synthetic('online-installed')
+        no_failure['gates'][0].update(
+            status='unrun', code='prerequisite-or-collector-failed', observations={})
+        no_failure['status'] = 'failed'
+        self.rejects(no_failure, 'gate-code-status')
+
+    def test_dependent_unrun_cannot_mask_hostile_or_accepting_reports(self):
+        for mutation, code in (
+                (lambda report: report.update(status='passed'), 'gate-code-status'),
+                (lambda report: report.update(release_acceptance=True), 'report-schema-scope'),
+                (lambda report: report['gates'][1].update(code='private-transcript'),
+                 'gate-code-status'),
+                (lambda report: report['gates'][0].update(code='attackercontrolledtoken'),
+                 'gate-code-status')):
+            report = synthetic('online-installed')
+            report['gates'][0].update(
+                status='failed', code='gate-' + report['gates'][0]['id'] + '-invalid', observations={})
+            report['gates'][1].update(
+                status='unrun', code='prerequisite-or-collector-failed', observations={})
+            report['status'] = 'failed'
+            mutation(report)
+            self.rejects(report, code)
+
     def test_exact_binary_model_and_fixture_pins_are_required(self):
         report = synthetic('online-installed')
         report['samples'][0]['binary_sha256'] = c.ASSETS['cpu']['sha256']

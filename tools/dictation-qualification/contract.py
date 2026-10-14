@@ -232,6 +232,12 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
     require(len(ids) == len(report['gates']) == len(set(ids))
             and set(ids) == gates(expected['phase'], profile),
             'report-missing-duplicate-extra-gates')
+    # The guest collector completes the fixed gate inventory after a checked
+    # gate aborts a dependent sequence.  These placeholders are useful only
+    # when a source-owned, concrete failed gate already explains the failure;
+    # an all-placeholder report remains a collector failure and is rejected.
+    concrete_failure = any(isinstance(gate, dict) and gate.get('status') == 'failed'
+                           for gate in report['gates'])
     for gate in report['gates']:
         require(set(gate) == {'id', 'status', 'evidence_kind', 'code', 'observations'},
                 'gate-fields')
@@ -246,8 +252,14 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                 'gate-' + gate['id'] + '-' + label for label in ERROR_LABELS},
                 'gate-code-status')
         else:
-            require(gate['id'] == 'microphone-disconnect-error'
-                    and gate['code'] == 'gate-microphone-disconnect-error-isolation-unavailable',
+            isolated_microphone = (gate['id'] == 'microphone-disconnect-error'
+                                   and gate['code'] ==
+                                   'gate-microphone-disconnect-error-isolation-unavailable')
+            dependent_unrun = (gate['code'] == 'prerequisite-or-collector-failed'
+                               and report['status'] == 'failed'
+                               and report['release_acceptance'] is False
+                               and concrete_failure)
+            require(isolated_microphone or dependent_unrun,
                     'gate-code-status')
         observed = gate['observations']
         require(isinstance(observed, dict) and set(observed) <= OBSERVATIONS,
