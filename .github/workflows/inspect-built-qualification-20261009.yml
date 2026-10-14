@@ -1,4 +1,4 @@
-name: Inspect candidate 37903438836 metadata
+name: Inspect external producer receipt 38489618652
 
 on:
   push:
@@ -15,43 +15,181 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Verify fixed retained metadata archive and report image identity
+      - name: Verify fixed producer receipt and report only reviewed identity fields
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 -B - <<'PY'
-          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          import hashlib
+          import json
+          import os
+          import re
+          import stat
+          import subprocess
+          import tempfile
+          import zipfile
           from pathlib import Path
-          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
-          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-candidate-379034'
-          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11604117213'
-          digest = '12753a67841065e424587b57829ca5d5631c1574326473e3cdd82e101fde08c2'
-          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
-          assert metadata['name'] == 'arctic-iso-metadata' and not metadata['expired']
-          assert metadata['workflow_run']['id'] == 37903438836
-          assert metadata['workflow_run']['head_sha'] == 'e2a62bb8945f7fe9975cb862986af4dd2be0873d'
-          assert metadata['size_in_bytes'] == 31830 and metadata['digest'] == 'sha256:' + digest
-          sensitive = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|password\s*[:=]\s*\S+|Authorization\s*[:=]|https?://[^\s]*\?[^\s]', re.I)
-          with tempfile.TemporaryDirectory(prefix='arctic-iso-metadata-') as folder:
-              path = Path(folder) / 'retained.zip'
-              with path.open('xb') as output:
-                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
-              assert path.stat().st_size == 31830 and hashlib.sha256(path.read_bytes()).hexdigest() == digest
-              with zipfile.ZipFile(path) as archive:
-                  items = archive.infolist()
-                  assert len(items) <= 30 and sum(item.file_size for item in items) < 2_000_000
-                  assert len({item.filename for item in items}) == len(items)
-                  for item in items:
-                      p = Path(item.filename)
-                      assert not p.is_absolute() and '..' not in p.parts
-                      assert (item.external_attr >> 16 & 0o170000) in (0, 0o100000), 'Unsupported metadata member type'
-                      print('ARCTIC-ISO-METADATA-MEMBER', item.filename, item.file_size)
-                      if p.name == 'BUILD-INFO' or p.suffix in ('.sha256', '.build-info'):
-                          assert item.file_size < 100_000
-                          text = archive.read(item).decode('utf-8', errors='strict')
-                          assert not sensitive.search(text), 'Sensitive metadata refused'
-                          assert len(text.splitlines()) <= 300
-                          print('ARCTIC-ISO-METADATA-BEGIN', item.filename)
-                          print(text)
-                          print('ARCTIC-ISO-METADATA-END', item.filename)
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH_REF = 'refs/heads/codex/inspect-candidate-379034'
+          ARTIFACT_ID = 11862874916
+          RUN_ID = 38489618652
+          SOURCE_SHA = 'e556b8a6f829deb6cff3c441278574c62b5f6f8b'
+          ARCHIVE_BYTES = 1700
+          ARCHIVE_SHA256 = 'bf837e8b829099270d564f21cbb93b7dcbd2e07ec16c7fc0147120ed0f179057'
+          RECEIPT_MEMBER = 'PERFORMANCE-PLAN.json'
+          RECEIPT_SCHEMA = 'arctic-producer-performance-receipt-v1'
+          PRODUCER_MODE = 'frozen-external-paired-v1'
+          IMAGE = {
+              'name': 'Arctic-Linux-1.2-candidate-38489618652-1-x86_64.iso',
+              'bytes': 1934796800,
+              'sha256': '97a6b905640ce6782ae303992e4b292c744ff7abedf7ea26f4b28f918568f140',
+          }
+          INPUTS = {
+              'expected_source_sha': SOURCE_SHA,
+              'release': False,
+              'tag': '',
+              'prerelease': True,
+              'draft': False,
+              'nix_acceptance': False,
+              'performance_acceptance': False,
+              'boot_test': True,
+              'performance_mode': PRODUCER_MODE,
+          }
+          STARTUP_LANES = {
+              'bios-install': ('bios', 'install'),
+              'uefi-safe': ('uefi', 'safe'),
+              'uefi-try': ('uefi', 'try'),
+          }
+          HASH = re.compile(r'[0-9a-f]{64}')
+
+          def require(condition, message):
+              if not condition:
+                  raise RuntimeError(message)
+
+          def typed_equal(actual, expected):
+              return (type(actual) is dict and set(actual) == set(expected)
+                      and all(type(actual[key]) is type(value) and actual[key] == value
+                              for key, value in expected.items()))
+
+          def unique_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  require(type(key) is str and key not in result,
+                          'Duplicate or non-string producer receipt JSON field')
+                  result[key] = value
+              return result
+
+          def reject_constant(value):
+              raise RuntimeError('Non-finite producer receipt JSON number: ' + value)
+
+          require(os.environ.get('GITHUB_REPOSITORY') == REPOSITORY,
+                  'Inspector repository differs')
+          require(os.environ.get('GITHUB_REF') == BRANCH_REF,
+                  'Inspector branch differs')
+          require(os.environ.get('GITHUB_EVENT_NAME') == 'push',
+                  'Inspector event differs')
+          require(os.environ.get('GITHUB_RUN_ATTEMPT') == '1',
+                  'Inspector must be a fresh first attempt')
+
+          endpoint = f'repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}'
+          metadata_raw = subprocess.check_output(
+              ['gh', 'api', endpoint], timeout=60)
+          require(0 < len(metadata_raw) <= 100_000, 'Artifact metadata response is oversized')
+          metadata = json.loads(metadata_raw.decode('utf-8', errors='strict'),
+                                object_pairs_hook=unique_object,
+                                parse_constant=reject_constant)
+          run = metadata.get('workflow_run') if type(metadata) is dict else None
+          require(type(run) is dict, 'Artifact workflow identity is absent')
+          require(type(metadata.get('id')) is int and metadata['id'] == ARTIFACT_ID
+                  and metadata.get('name') == 'arctic-external-producer-receipt'
+                  and metadata.get('expired') is False
+                  and type(metadata.get('size_in_bytes')) is int
+                  and metadata['size_in_bytes'] == ARCHIVE_BYTES
+                  and metadata.get('digest') == 'sha256:' + ARCHIVE_SHA256
+                  and type(run.get('id')) is int and run['id'] == RUN_ID
+                  and run.get('head_sha') == SOURCE_SHA,
+                  'Fixed producer receipt artifact metadata differs')
+
+          with tempfile.TemporaryDirectory(prefix='arctic-producer-receipt-') as folder:
+              archive_path = Path(folder) / 'receipt.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output,
+                                 check=True, timeout=60)
+              archive_raw = archive_path.read_bytes()
+              require(len(archive_raw) == ARCHIVE_BYTES
+                      and hashlib.sha256(archive_raw).hexdigest() == ARCHIVE_SHA256,
+                      'Downloaded producer receipt archive identity differs')
+
+              with zipfile.ZipFile(archive_path) as archive:
+                  members = archive.infolist()
+                  require(len(members) == 1, 'Producer receipt archive member count differs')
+                  member = members[0]
+                  mode = member.external_attr >> 16
+                  require(member.filename == RECEIPT_MEMBER and not member.is_dir()
+                          and stat.S_ISREG(mode) and not (member.flag_bits & 1)
+                          and 0 < member.file_size <= 32_768
+                          and 0 < member.compress_size <= 32_768,
+                          'Producer receipt archive member is unsafe or malformed')
+                  raw = archive.read(member)
+                  require(len(raw) == member.file_size and archive.testzip() is None,
+                          'Producer receipt archive failed integrity validation')
+
+          receipt_sha256 = hashlib.sha256(raw).hexdigest()
+          require(len(raw) <= 32_768, 'Producer receipt exceeds its contract size')
+          receipt = json.loads(raw.decode('utf-8', errors='strict'),
+                               object_pairs_hook=unique_object,
+                               parse_constant=reject_constant)
+          require(raw == (json.dumps(receipt, sort_keys=True, indent=2) + '\n').encode(),
+                  'Producer receipt is not in its canonical JSON encoding')
+          receipt_fields = {
+              'schema', 'repository', 'workflow', 'event', 'source_sha', 'run_id',
+              'run_attempt', 'mode', 'release_acceptance', 'inputs', 'image',
+              'startup_results',
+          }
+          require(type(receipt) is dict and set(receipt) == receipt_fields,
+                  'Producer receipt field inventory differs')
+          require(receipt['schema'] == RECEIPT_SCHEMA
+                  and receipt['repository'] == REPOSITORY
+                  and receipt['workflow'] == '.github/workflows/iso.yml'
+                  and receipt['event'] == 'workflow_dispatch'
+                  and receipt['source_sha'] == SOURCE_SHA
+                  and type(receipt['run_id']) is int and receipt['run_id'] == RUN_ID
+                  and type(receipt['run_attempt']) is int and receipt['run_attempt'] == 1
+                  and receipt['mode'] == PRODUCER_MODE
+                  and receipt['release_acceptance'] is False,
+                  'Producer receipt source, run, mode or scope differs')
+          require(typed_equal(receipt['inputs'], INPUTS),
+                  'Producer receipt dispatch inputs differ')
+          require(typed_equal(receipt['image'], IMAGE),
+                  'Producer receipt image identity differs')
+
+          startup = receipt['startup_results']
+          require(type(startup) is dict and set(startup) == set(STARTUP_LANES),
+                  'Producer startup lane inventory differs')
+          for lane, (firmware, boot_mode) in STARTUP_LANES.items():
+              result = startup[lane]
+              require(type(result) is dict and set(result) == {
+                          'firmware', 'mode', 'status', 'serial_bytes', 'serial_sha256'}
+                      and result['firmware'] == firmware
+                      and result['mode'] == boot_mode
+                      and result['status'] == 'passed'
+                      and type(result['serial_bytes']) is int
+                      and 0 < result['serial_bytes'] <= 10_000_000
+                      and type(result['serial_sha256']) is str
+                      and HASH.fullmatch(result['serial_sha256']) is not None,
+                      'Producer startup lane identity is malformed: ' + lane)
+
+          print('ARCTIC-PRODUCER-RECEIPT-SHA256', receipt_sha256)
+          print('ARCTIC-PRODUCER-IMAGE',
+                f'run_id={RUN_ID}', f'source_sha={SOURCE_SHA}', f'mode={PRODUCER_MODE}',
+                f'name={IMAGE["name"]}', f'bytes={IMAGE["bytes"]}',
+                f'sha256={IMAGE["sha256"]}')
+          for lane in sorted(STARTUP_LANES):
+              result = startup[lane]
+              print('ARCTIC-PRODUCER-STARTUP', f'lane={lane}',
+                    f'firmware={result["firmware"]}', f'mode={result["mode"]}',
+                    f'status={result["status"]}',
+                    f'serial_bytes={result["serial_bytes"]}',
+                    f'serial_sha256={result["serial_sha256"]}')
           PY
