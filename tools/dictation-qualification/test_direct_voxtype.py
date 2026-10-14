@@ -142,14 +142,56 @@ on_transcription = false
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
         with tempfile.TemporaryDirectory() as temp:
             binds = Path(temp) / 'binds.conf'
-            binds.write_text('bindr=SUPER+CTRL,x,spawn,voxtype record toggle\n'
+            guard = Path(temp) / 'arctic-dictation-toggle'
+            guard.write_text('voxtype record toggle >/dev/null 2>&1\n')
+            checker.user_bindings = binds
+            binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation-toggle\n'
                              'bindr=SUPER+CTRL,BackSpace,spawn,voxtype record cancel\n')
-            with patch.object(guest, 'SKEL_BINDINGS', binds):
+            with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
                 self.assertEqual(checker.command_contract(), {'command_count': 4})
             binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation toggle\n')
-            with patch.object(guest, 'SKEL_BINDINGS', binds), \
+            with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
                     self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
                 checker.command_contract()
+
+    def test_command_contract_requires_both_skel_and_active_user_bindings(self):
+        checker = self.checker()
+        checker.cmd = Mock(side_effect=lambda argv, check=True: SimpleNamespace(
+            stdout=(b'  start x\n  stop x\n  toggle x\n  cancel x\n'
+                    if argv == ['/usr/bin/voxtype', 'record', '--help'] else b''),
+            stderr=b'', returncode=2 if argv[:1] == ['/usr/bin/arctic-dictation'] else 0))
+        checker.record = Mock()
+        valid = 'spawn,arctic-dictation-toggle\nspawn,voxtype record cancel\n'
+        with tempfile.TemporaryDirectory() as temp:
+            skel, active, guard = Path(temp) / 'skel', Path(temp) / 'active', Path(temp) / 'guard'
+            skel.write_text(valid); active.write_text(valid)
+            guard.write_text('voxtype record toggle >/dev/null 2>&1\n')
+            skel.chmod(0o600); active.chmod(0o600)
+            checker.user_bindings = active
+            with patch.object(guest, 'SKEL_BINDINGS', skel), patch.object(guest, 'TOGGLE', guard), \
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
+                self.assertEqual(checker.command_contract(), {'command_count': 4})
+                active.write_text('spawn,arctic-dictation-toggle\n')
+                with self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
+                    checker.command_contract()
+                active.write_text(valid); skel.write_text('spawn,voxtype record cancel\n')
+                with self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
+                    checker.command_contract()
+
+    def test_owned_binding_reader_rejects_writable_and_non_utf8_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / 'binds.conf'
+            path.write_text('spawn,voxtype record toggle\n')
+            path.chmod(0o600)
+            self.assertEqual(guest.owned_text(path, os.getuid(), 'unsafe'), path.read_text())
+            path.chmod(0o622)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest.owned_text(path, os.getuid(), 'unsafe')
+            path.chmod(0o600); path.write_bytes(b'\xff')
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest.owned_text(path, os.getuid(), 'unsafe')
 
     def test_journal_decoder_retains_full_strings_and_rejects_truncation(self):
         raw = (json.dumps({'MESSAGE': 'English private fixture'}) + '\n'
@@ -163,8 +205,11 @@ on_transcription = false
             root = Path(temp)
             paths = []
             for index, _name in enumerate((
-                    'packaging/dictation/arctic-dictation', 'packaging/dictation/voxtype',
+                    'packaging/dictation/arctic-dictation',
+                    'packaging/dictation/arctic-dictation-toggle',
+                    'packaging/dictation/voxtype',
                     'packaging/dictation/arctic-voxtype-setup',
+                    'packaging/dictation/arctic-voxtype-host-profile',
                     'packaging/dictation/voxtype-release-key.asc',
                     'packaging/dictation/org.arcticlinux.dictation.policy',
                     'packaging/systemd/voxtype.service',
@@ -175,11 +220,14 @@ on_transcription = false
                 path.chmod(0o600)
                 paths.append(path)
             with patch.object(guest, 'owned_file', side_effect=lambda path, size=None: Path(path).stat()), \
-                    patch.object(guest, 'ADAPTER', paths[0]), patch.object(guest, 'VOXTYPE', paths[1]), \
-                    patch.object(guest, 'SETUP', paths[2]), patch.object(guest, 'KEY', paths[3]), \
-                    patch.object(guest, 'POLICY', paths[4]), patch.object(guest, 'UNIT', paths[5]), \
-                    patch.object(guest, 'SETUP_SERVICE', paths[6]), \
-                    patch.object(guest, 'SETUP_TIMER', paths[7]):
+                    patch.object(guest, 'ADAPTER', paths[0]), patch.object(guest, 'TOGGLE', paths[1]), \
+                    patch.object(guest, 'VOXTYPE', paths[2]), \
+                    patch.object(guest, 'SETUP', paths[3]), \
+                    patch.object(guest, 'HOST_PROFILE', paths[4]), \
+                    patch.object(guest, 'KEY', paths[5]), \
+                    patch.object(guest, 'POLICY', paths[6]), patch.object(guest, 'UNIT', paths[7]), \
+                    patch.object(guest, 'SETUP_SERVICE', paths[8]), \
+                    patch.object(guest, 'SETUP_TIMER', paths[9]):
                 first = guest.installed_integration_sha()
                 paths[1].write_text('changed')
                 self.assertNotEqual(first, guest.installed_integration_sha())
@@ -232,6 +280,31 @@ on_transcription = false
                 patch.object(guest, 'sha', side_effect=installed_hash), \
                 self.assertRaisesRegex(guest.Invalid, '^receipt-selected-assets-pin$'):
             checker.payload()
+
+    def test_recovery_uses_root_service_only_when_pending(self):
+        checker = self.checker()
+        enabled = SimpleNamespace(stdout=b'enabled\n', stderr=b'', returncode=0)
+        ready = {'ready': True}
+        with tempfile.TemporaryDirectory() as temp, patch.object(guest, 'SYSTEM', Path(temp)), \
+                patch.object(guest, 'run', return_value=enabled) as command:
+            checker.adapter = Mock(return_value=ready)
+            self.assertEqual(checker.recovery(),
+                             {'ready': True, 'pending': False, 'automatic_ready': True})
+            self.assertFalse(any(call.args[0][:2] == ['systemctl', 'start']
+                                 for call in command.call_args_list))
+        with tempfile.TemporaryDirectory() as temp, patch.object(guest, 'SYSTEM', Path(temp)), \
+                patch.object(guest, 'run', return_value=enabled) as command:
+            (Path(temp) / 'pending').write_text('1.1.0\n')
+            def status(*_args, **_kwargs):
+                if any(call.args[0][:2] == ['systemctl', 'start']
+                       for call in command.call_args_list):
+                    (Path(temp) / 'pending').unlink(missing_ok=True)
+                    return ready
+                return {'ready': False}
+            checker.adapter = Mock(side_effect=status)
+            self.assertEqual(checker.recovery(),
+                             {'ready': True, 'pending': False, 'automatic_ready': False})
+            command.assert_any_call(['systemctl', 'start', 'arctic-dictation-setup.service'], 750)
 
 
 if __name__ == '__main__':

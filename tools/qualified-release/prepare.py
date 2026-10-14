@@ -368,8 +368,10 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
         ('pins_sha256', 'tools/dictation-accuracy/pins.json'))}
     integration_files = (
         'packaging/dictation/arctic-dictation',
+        'packaging/dictation/arctic-dictation-toggle',
         'packaging/dictation/voxtype',
         'packaging/dictation/arctic-voxtype-setup',
+        'packaging/dictation/arctic-voxtype-host-profile',
         'packaging/dictation/voxtype-release-key.asc',
         'packaging/dictation/org.arcticlinux.dictation.policy',
         'packaging/systemd/voxtype.service',

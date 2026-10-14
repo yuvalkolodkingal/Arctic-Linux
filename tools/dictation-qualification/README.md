@@ -30,12 +30,17 @@ The installed integration must provide:
 - `/usr/bin/arctic-dictation`, limited to setup status, retry, language and
   backend configuration. The checker requires it to reject recording verbs.
 - `/usr/libexec/arctic/arctic-voxtype-setup`, the privileged pinned downloader.
-- `/usr/lib/systemd/user/voxtype.service`, running `/usr/bin/voxtype -q daemon`
-  without enabling transcript-bearing Rust info logs.
+- `/usr/libexec/arctic/arctic-voxtype-host-profile`, the common all-logical-CPU
+  compatibility/AVX2 selector used by setup, status and the runtime selector.
+- `/usr/lib/systemd/user/voxtype.service`, running the canonical per-user config
+  through `/usr/bin/voxtype ... -q daemon`, with a private umask, AF_UNIX-only
+  sockets and inherited config/log overrides removed.
 - Per-user `~/.config/voxtype/config.toml` with local Whisper, constrained Hebrew
   and English, `state_file = "auto"`, upstream evdev hotkeys disabled, wtype as
   the only insertion driver and transcript notifications disabled.
-- Direct Mango bindings for upstream `record toggle` and `record cancel`.
+- Mango activation through the transcript-suppressing
+  `/usr/bin/arctic-dictation-toggle` readiness guard, which invokes upstream
+  `record toggle`, plus a direct upstream `record cancel` binding.
 - `/var/lib/arctic/dictation/upstream-direct-v1` plus the flat
   `/var/lib/arctic/dictation/verified.json` receipt only after both selected
   payload files pass their pinned size and SHA-256 checks.

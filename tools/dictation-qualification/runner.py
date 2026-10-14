@@ -68,7 +68,7 @@ TRUSTED_CONTRACT_ERRORS = frozenset({
     'report-profile-descriptor', 'report-hardware-fields', 'report-hardware-profile',
     'report-payload-pins', 'report-payload-pin-types', 'report-disk-type',
     'report-missing-duplicate-extra-gates', 'gate-fields', 'gate-status',
-    'gate-safe-code', 'gate-observation-fields', 'report-status-derived',
+    'gate-safe-code', 'gate-code-status', 'gate-observation-fields', 'report-status-derived',
     'image-dictation-gates-incomplete'})
 
 COLLECTOR_SETUP_STAGES = (
@@ -328,8 +328,10 @@ def sha(path):
 
 INTEGRATION_FILES = (
     'packaging/dictation/arctic-dictation',
+    'packaging/dictation/arctic-dictation-toggle',
     'packaging/dictation/voxtype',
     'packaging/dictation/arctic-voxtype-setup',
+    'packaging/dictation/arctic-voxtype-host-profile',
     'packaging/dictation/voxtype-release-key.asc',
     'packaging/dictation/org.arcticlinux.dictation.policy',
     'packaging/systemd/voxtype.service',

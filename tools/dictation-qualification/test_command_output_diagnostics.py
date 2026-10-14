@@ -60,7 +60,7 @@ class OutputBounds(unittest.TestCase):
             checker.gate('transcript-log-notification-leak-scan',lambda:guest.run(['private argv'],output_role='interval-journal'),'interval-log-scan')
         result=checker.report['gates'][0];code=result['code']
         self.assertEqual(result['status'],'failed');self.assertEqual(result['observations'],{})
-        self.assertRegex(code,r'^command-output-bound-journal-o[0-9]+-e[0-9]+$');self.assertLessEqual(len(code),80)
+        self.assertEqual(code,'gate-transcript-log-notification-leak-scan-invalid');self.assertLessEqual(len(code),80)
         self.assertNotIn('private',json.dumps(result));self.assertNotIn('argv',json.dumps(result))
 
 if __name__=='__main__':unittest.main()

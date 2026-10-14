@@ -30,7 +30,9 @@ HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
 VOXTYPE = Path('/usr/bin/voxtype')
 ADAPTER = Path('/usr/bin/arctic-dictation')
+TOGGLE = Path('/usr/bin/arctic-dictation-toggle')
 SETUP = Path('/usr/libexec/arctic/arctic-voxtype-setup')
+HOST_PROFILE = Path('/usr/libexec/arctic/arctic-voxtype-host-profile')
 KEY = Path('/usr/share/arctic/dictation/voxtype-release-key.asc')
 POLICY = Path('/usr/share/polkit-1/actions/org.arcticlinux.dictation.policy')
 UNIT = Path('/usr/lib/systemd/user/voxtype.service')
@@ -47,6 +49,14 @@ COLLECTOR_ERROR_TYPES = ((Invalid, 'invalid'), (OSError, 'os-error'),
                          (ValueError, 'value-error'), (subprocess.TimeoutExpired, 'timeout'),
                          (KeyError, 'key-error'), (TypeError, 'type-error'))
 COLLECTOR_SETUP_STAGE = 'resource-limits'
+GATE_FAILURE_CODES = {
+    name: {label: 'gate-' + name + '-' + label for _error, label in COLLECTOR_ERROR_TYPES}
+    for name in EXPECTED_KINDS
+}
+
+
+class MicrophoneIsolationUnavailable(Invalid):
+    """Exact source-owned signal for a fixture the guest cannot isolate."""
 
 def mark_collector_setup(stage):
     """Record only one source-owned setup stage; never retain failure material."""
@@ -56,10 +66,8 @@ def mark_collector_setup(stage):
     COLLECTOR_SETUP_STAGE = stage
 
 
-def collector_diagnostic_code(stage, error):
-    """Project setup failures using only built-in type metadata and identity."""
-    require(type(stage) is str and stage in COLLECTOR_SETUP_STAGES,
-            'unknown-collector-setup-stage')
+def caught_error_label(error):
+    """Map a caught family without consulting its instance or foreign metaclass."""
     # isinstance() may consult a hostile exception instance's __class__ when
     # an earlier candidate does not match. Read the actual type's MRO through
     # type's built-in descriptor so no foreign instance or metaclass accessor,
@@ -67,13 +75,22 @@ def collector_diagnostic_code(stage, error):
     try:
         bases = type.__getattribute__(type(error), '__mro__')
     except BaseException:
-        return 'collector-unknown'
+        return 'unknown'
     if type(bases) is not tuple:
-        return 'collector-unknown'
+        return 'unknown'
     for error_class, label in COLLECTOR_ERROR_TYPES:
         if any(base is error_class for base in bases):
-            return 'collector-' + stage + '-' + label
-    return 'collector-unknown'
+            return label
+    return 'unknown'
+
+
+def collector_diagnostic_code(stage, error):
+    """Project setup failures using only built-in type metadata and identity."""
+    require(type(stage) is str and stage in COLLECTOR_SETUP_STAGES,
+            'unknown-collector-setup-stage')
+    label = caught_error_label(error)
+    return ('collector-unknown' if label == 'unknown'
+            else 'collector-' + stage + '-' + label)
 
 def verify_small_cpu_fixture(cpuinfo):
     """Check every declared two-vCPU Small fixture before any application gate.
@@ -206,6 +223,23 @@ def owned_file(path, size=None):
     require(size is None or info.st_size == size, 'installed-file-size')
     return info
 
+
+def owned_text(path, uid, code):
+    """Read one bounded regular config through a no-follow descriptor."""
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        info = os.fstat(fd)
+        require(stat.S_ISREG(info.st_mode) and info.st_uid == uid
+                and not info.st_mode & 0o022 and 0 < info.st_size <= 64 * 1024, code)
+        raw = os.read(fd, info.st_size + 1)
+        require(len(raw) == info.st_size, code)
+    finally:
+        os.close(fd)
+    try:
+        return raw.decode('utf-8')
+    except UnicodeError:
+        raise Invalid(code) from None
+
 def desktop():
     users = []
     for path in Path('/proc').glob('[0-9]*'):
@@ -332,8 +366,10 @@ def receiver(path, nonce):
 def installed_integration_sha():
     files = (
         ('packaging/dictation/arctic-dictation', ADAPTER),
+        ('packaging/dictation/arctic-dictation-toggle', TOGGLE),
         ('packaging/dictation/voxtype', VOXTYPE),
         ('packaging/dictation/arctic-voxtype-setup', SETUP),
+        ('packaging/dictation/arctic-voxtype-host-profile', HOST_PROFILE),
         ('packaging/dictation/voxtype-release-key.asc', KEY),
         ('packaging/dictation/org.arcticlinux.dictation.policy', POLICY),
         ('packaging/systemd/voxtype.service', UNIT),
@@ -388,6 +424,7 @@ class Checker:
         self.prefix += ['XDG_CONFIG_HOME=' + str(Path(self.account.pw_dir) / '.config')]
         self.state_path = self.runtime / 'voxtype/state'
         self.config_path = Path(self.account.pw_dir) / '.config/voxtype/config.toml'
+        self.user_bindings = Path(self.account.pw_dir) / '.config/mango/arctic/binds.conf'
         self.phrases, self.snapshots = [], []
         self.loop = self.window = self.player = None
         self.old_source = self.source = None
@@ -415,12 +452,12 @@ class Checker:
                   'code': 'collector-failed', 'observations': {}}
         try:
             result.update(status='passed', code='observed', observations=fn() or {})
-        except Invalid as error:
-            result['code'] = str(error)
-            if str(error) == 'microphone-isolation-unavailable':
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            label = caught_error_label(error)
+            result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
+            if type(error) is MicrophoneIsolationUnavailable:
+                result['code'] = 'gate-microphone-disconnect-error-isolation-unavailable'
                 result['status'] = 'unrun'
-        except (OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError):
-            pass
         self.report['gates'].append(result)
         return result['status'] == 'passed'
 
@@ -573,15 +610,22 @@ class Checker:
         for forbidden in ('start', 'stop', 'toggle', 'cancel'):
             result = self.cmd([str(ADAPTER), forbidden], check=False)
             require(result.returncode != 0, 'setup-adapter-controls-recording')
-        binds = SKEL_BINDINGS.read_text()
-        require('spawn,voxtype record toggle' in binds
-                and 'spawn,voxtype record cancel' in binds,
-                'mango-not-bound-directly-to-upstream')
+        guard = owned_text(TOGGLE, 0, 'dictation-toggle-guard-unsafe')
+        require('voxtype record toggle' in guard,
+                'dictation-toggle-guard-not-upstream')
+        for path, uid in ((SKEL_BINDINGS, 0), (self.user_bindings, self.account.pw_uid)):
+            binds = owned_text(path, uid, 'mango-bindings-unsafe')
+            require('spawn,arctic-dictation-toggle' in binds
+                    and 'spawn,voxtype record cancel' in binds,
+                    'mango-not-bound-directly-to-upstream')
         return {'command_count': 4}
 
     def state_contract(self):
         unit = UNIT.read_text()
-        require('ExecStart=/usr/bin/voxtype -q daemon' in unit
+        require('ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon' in unit
+                and 'ConditionPathExists=%h/.config/voxtype/config.toml' in unit
+                and 'UMask=0077' in unit
+                and 'RestrictAddressFamilies=AF_UNIX' in unit
                 and 'UnsetEnvironment=RUST_LOG' in unit
                 and 'Environment=RUST_LOG=' not in unit,
                 'upstream-service-privacy-contract')
@@ -880,7 +924,8 @@ class Checker:
             objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
             remaining = [row for row in objects if row.get('type') == 'PipeWire:Interface:Node'
                          and row.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
-            require(not remaining, 'microphone-isolation-unavailable')
+            if remaining:
+                raise MicrophoneIsolationUnavailable()
             self.record('stop', check=False)
             self.observe('microphone-idle', lambda: self.state() == 'idle', 30)
             require((self.root / 'received.private').read_bytes() == b'',
@@ -1083,10 +1128,13 @@ class Checker:
         return {'ready': True}
 
     def recovery(self):
+        require(run(['systemctl', 'is-enabled', 'arctic-dictation-setup.timer']).stdout.strip() == b'enabled',
+                'recovery-timer-not-enabled')
         automatic = self.adapter('status').get('ready') is True and not (SYSTEM / 'pending').exists()
         require(automatic or (SYSTEM / 'pending').is_file(),
                 'recovery-neither-pending-nor-ready')
-        self.adapter('retry')
+        if not automatic:
+            run(['systemctl', 'start', 'arctic-dictation-setup.service'], 750)
         value = wait(lambda: (row if (row := self.adapter('status')).get('ready') is True
                               and not (SYSTEM / 'pending').exists() else None), 750)
         require(value.get('ready') is True, 'recovery-not-ready')

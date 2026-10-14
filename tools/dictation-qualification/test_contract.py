@@ -134,6 +134,17 @@ class ContractControls(unittest.TestCase):
         report = synthetic(); report['gates'][0]['code'] = 'private sentence'
         self.rejects(report, 'gate-safe-code')
 
+    def test_failed_and_unrun_codes_are_source_owned(self):
+        report = synthetic()
+        gate = report['gates'][0]
+        gate.update(status='failed', code='attackercontrolledtoken', observations={})
+        report['status'] = 'failed'
+        self.rejects(report, 'gate-code-status')
+        gate['code'] = 'gate-' + gate['id'] + '-invalid'
+        self.assertEqual(c.validate(report, report['context'])['status'], 'failed')
+        gate.update(status='unrun', code='gate-' + gate['id'] + '-invalid')
+        self.rejects(report, 'gate-code-status')
+
     def test_exact_binary_model_and_fixture_pins_are_required(self):
         report = synthetic('online-installed')
         report['samples'][0]['binary_sha256'] = c.ASSETS['cpu']['sha256']

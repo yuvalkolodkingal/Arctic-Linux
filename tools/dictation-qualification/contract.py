@@ -98,6 +98,7 @@ OBSERVATIONS = {
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
 }
+ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
@@ -238,6 +239,16 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
         require(gate['evidence_kind'] == EXPECTED_KINDS[gate['id']], 'gate-evidence-kind')
         require(isinstance(gate['code'], str) and re.fullmatch('[a-z0-9-]{1,80}', gate['code']),
                 'gate-safe-code')
+        if gate['status'] == 'passed':
+            require(gate['code'] == 'observed', 'gate-code-status')
+        elif gate['status'] == 'failed':
+            require(gate['code'] in {
+                'gate-' + gate['id'] + '-' + label for label in ERROR_LABELS},
+                'gate-code-status')
+        else:
+            require(gate['id'] == 'microphone-disconnect-error'
+                    and gate['code'] == 'gate-microphone-disconnect-error-isolation-unavailable',
+                    'gate-code-status')
         observed = gate['observations']
         require(isinstance(observed, dict) and set(observed) <= OBSERVATIONS,
                 'gate-observation-fields')

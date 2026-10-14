@@ -41,7 +41,7 @@ class JournalMessageSemantics(unittest.TestCase):
         checker=guest.Checker.__new__(guest.Checker);checker.gates={'transcript-log-notification-leak-scan'};checker.report={'gates':[]}
         checker.gate('transcript-log-notification-leak-scan',lambda:guest.journal_messages(b'{"MESSAGE":null,"PRIVATE":"transcript-canary"}'),'interval-log-scan')
         gate=checker.report['gates'][0]
-        self.assertEqual(gate['status'],'failed');self.assertEqual(gate['code'],'journal-message-type');self.assertEqual(gate['observations'],{})
+        self.assertEqual(gate['status'],'failed');self.assertEqual(gate['code'],'gate-transcript-log-notification-leak-scan-invalid');self.assertEqual(gate['observations'],{})
         self.assertNotIn('transcript-canary',json.dumps(gate));self.assertNotIn('PRIVATE',json.dumps(gate))
     def test_command_bound_remains_strict_at_sixteen_MiB_including_stderr(self):
         limit=16*1024*1024
