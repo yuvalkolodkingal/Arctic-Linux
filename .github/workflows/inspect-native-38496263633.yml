@@ -170,6 +170,21 @@ jobs:
                           selected['case'] = {key: row['case'].get(key) for key in ('output', 'scale', 'edge')}
                       trace_summary.append(selected)
                   print('ARCTIC-TASKBAR-TRACE-TAIL ' + json.dumps(trace_summary, sort_keys=True))
+                  client_rows = []
+                  for row in trace:
+                      if row.get('event') != 'client-snapshot' or type(row.get('raw')) is not dict:
+                          continue
+                      clients = row['raw'].get('clients', [])
+                      if type(clients) is not list:
+                          continue
+                      for client in clients:
+                          if type(client) is dict and client.get('appid', client.get('app_id')) == 'ArcticTaskbarAcceptance':
+                              client_rows.append({key: client.get(key) for key in (
+                                  'id', 'monitor', 'x', 'y', 'width', 'height', 'is_visible', 'is_maximized',
+                                  'is_fullscreen', 'is_focused', 'appid', 'app_id',
+                              ) if key in client})
+                  assert client_rows
+                  print('ARCTIC-TASKBAR-LAST-CLIENT ' + json.dumps(client_rows[-1], sort_keys=True))
 
                   failing_image = 'taskbar/Virtual-2-2-top-auto-covered-rest.png'
                   raw = verified.get(failing_image)
@@ -224,6 +239,9 @@ jobs:
                       'hidden_limit': 0.1, 'sampled_pixels': len(pixels), 'row_changed': row_changed,
                       'foot_pixels': unique_colors[foot], 'unique_colors': len(unique_colors),
                       'top_colors': [list(color) + [count] for color, count in unique_colors.most_common(8)],
+                      'changed_mask': [''.join('1' if max(abs(a-b) for a,b in zip(tuple(rows[y][x*3:x*3+3]), foot)) > 10 else '0'
+                                               for x in range(center_x-radius, center_x+radius+1))
+                                       for y in range(center_y-radius, center_y+radius+1)],
                   }, sort_keys=True))
 
                   prefixes = ('ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
