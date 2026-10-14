@@ -48,7 +48,7 @@
     "sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
     "source_sha": "da59f68a967c39205b2aa7648f3c11224247982c"
   },
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }
