@@ -22,7 +22,7 @@
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/reliability/exact-artifact.py": "f4b9b03dbed5c716c15eb32cf964e1fde5691cdd6bb59774dbfeb02f7f968526",
-    "tools/reliability/guest.py": "29baf77234d3ca468fffba63048840dd4797a94bc893ed980dcac5ffdea82846",
+    "tools/reliability/guest.py": "d59c5ac1c40849a8c136788dc1c3fcd12298f76d4469c6240bdaaf7a97b367b5",
     "tools/reliability/profiles/lightweight.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
     "tools/reliability/report.py": "c1732ebc40779682ca839bd86ce22722fda6183554db08e8077e2bd5a1403900",
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
