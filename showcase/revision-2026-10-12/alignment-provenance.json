@@ -1,68 +1,136 @@
 {
-  "source_commit": "38a4a93ae1112e022dd1c7161e15b048bdd4bcc6",
-  "workflow_run": {
-    "id": 38299503545,
-    "url": "https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38299503545",
-    "conclusion": "success"
-  },
-  "artifact": {
-    "id": 11769902895,
-    "name": "showcase-river-whisper-alignment",
-    "bytes": 44296,
-    "sha256": "81ffcd41f208a37daaff453f1054edea5f22ca86ec6895b6ea22855148a08c96"
-  },
+  "status": "verified_direct_voxtype_master_locally_aligned",
+  "source_commit": null,
+  "source_branch": "codex/showcase-direct-voxtype-source-20261014",
+  "workflow_run": null,
   "audio": {
-    "file": "narration-river-final.mp3",
-    "bytes": 12182090,
-    "sha256": "d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb",
-    "container_duration_seconds": 507.512041
+    "file": "narration-river-direct-voxtype-final-2026-10-14.mp3",
+    "preserved_outside_git": true,
+    "published": false,
+    "bytes": 13201492,
+    "sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
+    "ffprobe_duration_seconds": 550.034286,
+    "pyav_duration_seconds": 549.987846,
+    "container_accounting_difference_seconds": 0.04644,
+    "decoded_sample_rate_hz": 44100,
+    "decoded_channels": 1,
+    "decoded_samples": 24254464,
+    "status": "verified_unpublished_direct_voxtype_river_master"
   },
   "verifier_versions": {
-    "python": "3.12.15",
+    "python": "3.12.14",
     "faster-whisper": "1.2.1",
     "av": "16.0.1",
-    "ctranslate2": "4.8.2",
+    "ctranslate2": "4.8.3",
     "huggingface-hub": "2.2.0",
     "tokenizers": "0.23.3",
-    "preflight_seconds": 1,
-    "preflight_segments": 1,
-    "preflight_words": 3,
-    "transcript_in_ci_log": false
+    "transcript_in_ci_log": false,
+    "alignment_runs": 2,
+    "alignment_outputs_byte_identical": true,
+    "model": "base.en",
+    "model_execution": "local_cpu_int8_offline_cached_after_initial_download"
   },
-  "metrics": {
-    "audio_duration_seconds": 507.512041,
+  "determinism": {
+    "runs": 2,
+    "same_audio_sha256_each_run": true,
+    "all_alignment_outputs_byte_identical": true,
+    "network_during_transcription": false,
+    "model_cache_mode": "offline"
+  },
+  "locked_text": {
+    "bytes": 9093,
+    "sha256": "23d1eab240865ea3230a1448a098abaed2b3e5fa9a1ee58e0a4eaab12e96215e",
+    "segment_concatenation_byte_identical": true,
+    "scene_narration_byte_identical": true,
+    "caption_cues": 130,
+    "scenes": 38
+  },
+  "automated_intelligibility": {
+    "audio_duration_seconds": 549.987846,
     "model": "base.en",
     "detected_language": "en",
     "detected_language_probability": 1,
-    "expected_words": 1355,
-    "asr_words": 1363,
-    "edit_distance": 56,
-    "word_error_rate": 0.041328,
-    "sequence_ratio": 0.967623,
-    "exact_token_coverage": 0.97048,
-    "corrected_winter_phrase_token_coverage": 1,
+    "expected_words": 1473,
+    "asr_words": 1486,
+    "edit_distance": 58,
+    "word_error_rate": 0.039375,
+    "sequence_ratio": 0.969246,
+    "exact_token_coverage": 0.973523,
+    "minimum_cue_exact_token_coverage": 0.666667,
+    "cues_below_half_exact_token_coverage": 0,
+    "cues_without_exact_tokens": 0,
+    "corrected_winter_phrase_token_coverage": 1.0,
+    "wallpaper_hide_restore_phrase_token_coverage": 1.0,
+    "whats_new_phrase_token_coverage": 1.0,
+    "explicit_cpu_recovery_phrase_token_coverage": 1.0,
+    "local_privacy_phrase_token_coverage": 1.0,
     "banned_old_phrase_detected": false,
-    "caption_cues": 128,
+    "caption_cues": 130,
     "scenes": 38,
     "transcript_in_ci_log": false
   },
+  "objective_audio_checks": {
+    "full_ffmpeg_decode_errors": 0,
+    "codec": "mp3float",
+    "sample_rate_hz": 44100,
+    "channels": 1,
+    "decoded_samples": 24254464,
+    "decoded_duration_seconds": 549.987846,
+    "integrated_loudness_lufs": -24.5,
+    "loudness_range_lu": 2.3,
+    "true_peak_dbfs": -1.9,
+    "sample_peak_dbfs": -1.919,
+    "rms_dbfs": -25.267,
+    "dc_offset": 1.599279e-06,
+    "hard_clipped_samples_ge_0_999": 0,
+    "join": {
+      "join_sample_index": 12328960,
+      "join_seconds": 279.568254,
+      "join_boundary_sample_delta": 0.000141357,
+      "join_window_max_adjacent_delta": 0.103272557,
+      "join_boundary_delta_fraction_of_window_max": 0.001369,
+      "join_pre_250ms_rms_dbfs": -73.617,
+      "join_post_250ms_rms_dbfs": -19.419,
+      "join_contiguous_below_minus_60_dbfs_seconds": 0.38229,
+      "join_contiguous_below_minus_60_dbfs_start_seconds": 279.211633,
+      "join_contiguous_below_minus_60_dbfs_end_seconds": 279.593923
+    },
+    "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval and its sample step is below the largest adjacent step in the surrounding 500 ms. Human listening remains pending."
+  },
   "committed_outputs": {
-    "timing.json": "abbefa1b7fbbff58ce67eec2c5dc806690c8207dbe8d5b2c0ce3679f30d6ac28",
-    "caption-text-aligned.json": "4cb707aa6147d78ff0d121e049ddbe765db0f3a7bc3a5682bcf7dc5a26c8bde3",
-    "captions.srt": "3ad2908368001805da493f497272989ad1394ad60505f2ebd540053ffa24738c",
-    "captions.vtt": "4f7859b8fac44ea060284e12ea720f88f360684091d231b34f456aa4090e4f59",
-    "chapters.txt": "49366d971de0eae30cfb3feb9c498a4becb9e0998d3c44c9fe1dc3e77f2231ab",
-    "whisper-verification.json": "6d92ca8ffe7727a5b7dcf356feba1dfb2a43956b7f97b322ec0d1b86464144e9",
-    "verifier-versions.json": "cf8e583eb75abc211f794314756d7ec46840cbf8a15c708b59e5e2c96f095bc0"
+    "timing.json": "e1bfb43fa69fbad23180ed80c2e9c8b9d607fe9a3303f2c5781b99792445afed",
+    "caption-text-aligned.json": "64758639a37060707992f7c561aee5c815cbc0e08dc7d156dd9d3ff32752ebc1",
+    "captions.srt": "df65b0df6e106cc2abfd245c3abf712aa73a877c524ecab9bb384859bc4c58a4",
+    "captions.vtt": "d269f5a95b522eeea7980b2b2cfb0b7bcf50aad4031ceaed15d5c90f6434a333",
+    "chapters.txt": "007e563d0ac803fd64e30a92c458985c283a54b360f18f0662c59e0c86c0c59f",
+    "whisper-verification.json": "a131027693cf37a5f29f04718292d84d7b70d4a7ded76a6c4217da583a4eee6e",
+    "verifier-versions.json": "d3dc6af8f246014313364b29c34bfb6b4479052a76b21aef153e2b2ac02dc74d"
   },
   "excluded_from_git": [
+    "narration-river-direct-voxtype-final-2026-10-14.mp3",
+    "river-segment-01.mp3",
+    "river-segment-02.mp3",
     "whisper-transcript.txt",
     "whisper-words.json"
   ],
+  "log_privacy": {
+    "standard_output": "numeric_summary_only",
+    "asr_library_log_level": "error",
+    "transcript_in_ci_log": false,
+    "note": "Transcript-bearing outputs are ephemeral verifier inputs; they remain outside Git and are excluded from uploaded workflow artifacts.",
+    "transcript_outputs_public": false,
+    "transcript_outputs_uploaded": false
+  },
   "limitations": [
-    "Whisper base.en verifies intelligibility and supplies word-aligned evidence; it is not a human listening review.",
-    "Word error rate is measured against the approved narration text.",
-    "Unmatched caption edge words are locally interpolated from adjacent exact-token timestamps.",
-    "The MP3 container duration is 507.512041 seconds in PyAV; earlier ffprobe reporting was 507.559184 seconds, a 0.047143-second container-accounting difference."
-  ]
+    "This is local deterministic alignment against the unpublished assembled master; no remote workflow artifact is claimed for this revision.",
+    "Whisper base.en supplies automated intelligibility and timing evidence; it is not a human listening review.",
+    "Objective level, clipping and join metrics do not prove subjective voice quality or pronunciation.",
+    "The final image captures, strict render, subtitle mux, representative-frame review and release binding remain pending.",
+    "PyAV reports 549.987846 seconds while ffprobe container accounting reports 550.034286 seconds, a 0.046440-second difference."
+  ],
+  "superseded_evidence": {
+    "old_custom_controller_master_sha256": "ae4792c1877291a4815e48139b9ceec1b611e12fdacf27741a1238769762d765",
+    "old_custom_controller_master_duration_seconds": 518.37898,
+    "status": "superseded_old_wording"
+  }
 }

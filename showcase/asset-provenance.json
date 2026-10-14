@@ -85,16 +85,6 @@
     "crop": null
   },
   {
-    "scene": "dictationrecord",
-    "source": "showcase/assets/dictation-recording-current.png",
-    "crop": null
-  },
-  {
-    "scene": "dictationrecovery",
-    "source": "showcase/assets/dictation-recovery-qualification.png",
-    "crop": null
-  },
-  {
     "scene": "settings",
     "source": "docs/wiki/images/settings-search.png",
     "crop": null
@@ -102,11 +92,6 @@
   {
     "scene": "appearance",
     "source": "docs/wiki/images/settings-appearance.png",
-    "crop": null
-  },
-  {
-    "scene": "winter",
-    "source": "shell/dev/screenshots/wallpapers-winter.png",
     "crop": null
   },
   {
@@ -132,11 +117,6 @@
   {
     "scene": "shortcuts",
     "source": "docs/wiki/images/keys.png",
-    "crop": null
-  },
-  {
-    "scene": "updates",
-    "source": "docs/wiki/images/settings-updates.png",
     "crop": null
   },
   {
@@ -188,22 +168,112 @@
     ]
   },
   {
-    "artifact": {
-      "id": 11762348140,
-      "sha256": "26c5d39f914d6d7ae9dcfab558fc37dd593a9d901896e4f8f854b48e535e0126"
-    },
-    "sources": [
-      {
-        "path": "dictation-indicator-online-installed.png",
-        "sha256": "341b144e1f1ee92c0e365de39463946dcddf279db1105c0615680bc3a6a3b853",
-        "output": "showcase/assets/dictation-recording-current.png"
+    "scene": "dictationsetup",
+    "capture_contract": {
+      "status": "pending_qualified_direct_voxtype_iso",
+      "required_evidence": [
+        "signature-checked official VoxType 1.1.0 identity and ready status",
+        "verified automatic online setup",
+        "offline not-ready state with retry"
+      ],
+      "source": null,
+      "output": "showcase/assets/dictation-setup-current.png",
+      "sha256": null,
+      "qualified_iso": null,
+      "human_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
       },
-      {
-        "path": "dictation-indicator-recovered-offline.png",
-        "sha256": "252c27ecc4c417311ab49913aa060b54034b7fe548eae83f4f3f2ad12274a230",
-        "output": "showcase/assets/dictation-recovery-qualification.png"
-      }
-    ]
+      "acceptance": "Capture must come from the qualified release candidate and be manually reviewed before render readiness is enabled."
+    }
+  },
+  {
+    "scene": "dictationrecord",
+    "capture_contract": {
+      "status": "pending_qualified_direct_voxtype_iso",
+      "required_evidence": [
+        "readiness helper invoking official voxtype record toggle",
+        "Arctic indicator following official VoxType runtime state",
+        "successful local text insertion"
+      ],
+      "source": null,
+      "output": "showcase/assets/dictation-recording-current.png",
+      "sha256": null,
+      "qualified_iso": null,
+      "human_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      },
+      "acceptance": "Capture must come from the qualified release candidate and be manually reviewed before render readiness is enabled."
+    }
+  },
+  {
+    "scene": "dictationrecovery",
+    "capture_contract": {
+      "status": "pending_qualified_direct_voxtype_iso",
+      "required_evidence": [
+        "visible GPU setup failure",
+        "explicit CPU selection and ready status",
+        "Hebrew and English multilingual configuration"
+      ],
+      "source": null,
+      "output": {
+        "gpu_failure": "showcase/assets/dictation-recovery-gpu-failure-current.png",
+        "cpu_ready": "showcase/assets/dictation-recovery-cpu-ready-current.png"
+      },
+      "sha256": null,
+      "qualified_iso": null,
+      "human_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      },
+      "acceptance": "Capture must come from the qualified release candidate and be manually reviewed before render readiness is enabled."
+    }
+  },
+  {
+    "scene": "winter",
+    "capture_contract": {
+      "status": "pending_qualified_direct_voxtype_iso",
+      "required_evidence": [
+        "Delete hiding one packaged wallpaper for the current account",
+        "Restore making the hidden packaged wallpaper available again",
+        "personal wallpaper choice remaining unchanged"
+      ],
+      "source": null,
+      "output": "showcase/assets/wallpaper-hide-restore-current.png",
+      "sha256": null,
+      "qualified_iso": null,
+      "human_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      },
+      "acceptance": "Capture must come from the qualified release candidate and be manually reviewed before render readiness is enabled."
+    }
+  },
+  {
+    "scene": "updates",
+    "capture_contract": {
+      "status": "pending_qualified_direct_voxtype_iso",
+      "required_evidence": [
+        "What's New appearing once after an installed update",
+        "release notes reopening from Settings",
+        "signed stable update state"
+      ],
+      "source": null,
+      "output": "showcase/assets/whats-new-current.png",
+      "sha256": null,
+      "qualified_iso": null,
+      "human_review": {
+        "status": "pending",
+        "reviewer": null,
+        "reviewed_at": null
+      },
+      "acceptance": "Capture must come from the qualified release candidate and be manually reviewed before render readiness is enabled."
+    }
   },
   {
     "continuous_os_recording": false,

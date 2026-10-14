@@ -1,0 +1,382 @@
+#!/usr/bin/env python3
+"""Host-owned unattended QMP controller for exact-image showcase capture."""
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import os
+import re
+import subprocess
+import struct
+import time
+import zlib
+from pathlib import Path
+
+from PIL import Image
+
+try:
+    from . import bundle
+    from . import contract as c
+    from . import host
+except ImportError:
+    import bundle
+    import contract as c
+    import host
+
+
+QCODE = {" ": "spc", "=": "equal", ",": "comma", ".": "dot", "-": "minus",
+         "/": "slash", ";": "semicolon", "'": "apostrophe", "\\": "backslash",
+         "`": "grave_accent", "[": "bracket_left", "]": "bracket_right", "\n": "ret"}
+SHIFTED = {"_": "minus", ":": "semicolon", "+": "equal", '"': "apostrophe",
+           ">": "dot", "<": "comma", "|": "backslash", "&": "7", "*": "8",
+           "(": "9", ")": "0", "$": "4", "~": "grave_accent", "!": "1",
+           "@": "2", "#": "3", "%": "5", "^": "6", "{": "bracket_left",
+           "}": "bracket_right", "?": "slash"}
+
+
+def chord_for(character: str):
+    if character.isalnum() and character.isascii():
+        return ["shift", character.lower()] if character.isupper() else [character]
+    if character in QCODE:
+        return [QCODE[character]]
+    if character in SHIFTED:
+        return ["shift", SHIFTED[character]]
+    raise c.Invalid("unattended text contains an unsupported character")
+
+
+def controller_decode(path: Path):
+    """Decode a metadata-free host QMP RGB PNG at a bounded firmware/desktop size."""
+    data = path.read_bytes()
+    c.require(8 < len(data) <= host.MAX_PNG_BYTES and data.startswith(b"\x89PNG\r\n\x1a\n"),
+              "controller screenshot is not a bounded PNG")
+    at, state, idats, dimensions = 8, "ihdr", 0, None
+    while at < len(data):
+        c.require(state != "end" and at + 12 <= len(data),
+                  "controller PNG framing differs")
+        length = struct.unpack(">I", data[at:at + 4])[0]
+        c.require(length <= host.MAX_PNG_BYTES - 12 and at + 12 + length <= len(data),
+                  "controller PNG chunk length differs")
+        end = at + 12 + length
+        kind, body = data[at + 4:at + 8], data[at + 8:end - 4]
+        crc = struct.unpack(">I", data[end - 4:end])[0]
+        c.require(zlib.crc32(kind + body) & 0xffffffff == crc, "controller PNG CRC differs")
+        if kind == b"IHDR":
+            c.require(state == "ihdr" and at == 8 and length == 13,
+                      "controller PNG IHDR differs")
+            width, height, depth, color, compression, filtering, interlace = struct.unpack(
+                ">IIBBBBB", body)
+            c.require(640 <= width <= 3840 and 480 <= height <= 2160
+                      and (depth, color, compression, filtering, interlace) == (8, 2, 0, 0, 0),
+                      "controller PNG geometry or mode differs")
+            dimensions, state = (width, height), "idat"
+        elif kind == b"IDAT":
+            c.require(state == "idat" and length > 0, "controller PNG IDAT differs")
+            idats += 1
+        elif kind == b"IEND":
+            c.require(state == "idat" and idats > 0 and length == 0,
+                      "controller PNG IEND differs")
+            state = "end"
+        else:
+            raise c.Invalid("controller PNG contains metadata or an unapproved chunk")
+        at = end
+    c.require(state == "end" and at == len(data), "controller PNG trailing bytes differ")
+    try:
+        with Image.open(path) as image:
+            c.require(image.format == "PNG" and image.mode == "RGB"
+                      and image.size == dimensions and image.info == {},
+                      "controller PNG decode differs")
+            image.load()
+            return image.copy()
+    except (OSError, ValueError) as error:
+        raise c.Invalid("controller PNG decode failed") from error
+
+
+class Controller:
+    """Finite host state machine. Guest JSON and messages never choose actions."""
+
+    LIVE_COMMAND = (
+        "sudo sh -c 'set -eu; d=/run/arctic-showcase-tooling; install -d -m 0700 $d; "
+        "IFS= read -r line </dev/virtio-ports/org.arctic.showcase.capture; "
+        "case \"$line\" in \"ARCTIC-SHOWCASE-TOOLING-V1 \"*) ;; *) exit 1;; esac; "
+        "printf %s \"${line#ARCTIC-SHOWCASE-TOOLING-V1 }\" | base64 -d | gzip -d | tar -x -C $d; "
+        "cd $d; exec python3 unattended.py live-install --timeout 5400'"
+    )
+    INSTALLED_COMMAND = (
+        "sudo sh -c 'set -eu; d=/run/user/1000/arctic-showcase-tooling; install -d -m 0700 -o 1000 -g 1000 $d; "
+        "IFS= read -r line </dev/virtio-ports/org.arctic.showcase.capture; "
+        "case \"$line\" in \"ARCTIC-SHOWCASE-TOOLING-V1 \"*) ;; *) exit 1;; esac; "
+        "printf %s \"${line#ARCTIC-SHOWCASE-TOOLING-V1 }\" | base64 -d | gzip -d | tar -x -C $d; "
+        "chown -R 1000:1000 $d; cd $d; exec python3 unattended.py installed-root-launch --timeout 5400'"
+    )
+    PASSWORD = "ArcticShowcase-Disposable-2026-Only!!!"
+    # The typed command deliberately does not contain the OCR marker; only an
+    # initialized shell executing printf can assemble the visible proof.
+    SHELL_PROOF = ("printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
+                   "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
+                   "\\105\\101\\104\\131\\n'")
+
+    def __init__(self, qmp, runtime: Path, ocr, private_fragments, tooling_sha256: str):
+        c.require(tooling_sha256 and c.fullmatch(c.HEX64, tooling_sha256),
+                  "unattended tooling identity missing")
+        self.qmp = qmp
+        self.runtime = runtime
+        self.ocr = ocr
+        self.fragments = tuple(private_fragments)
+        self.tooling_sha256 = tooling_sha256
+        self.events = []
+        self.counter = 0
+
+    def record(self, stage, kind, detail):
+        c.require(type(stage) is str and re.fullmatch(r"[a-z0-9-]{1,64}", stage),
+                  "controller stage differs")
+        self.events.append({"index": len(self.events), "stage": stage,
+                            "kind": kind, "detail": detail})
+
+    def _input(self, events):
+        self.qmp.command("input-send-event", {"events": events})
+
+    def press(self, stage: str, *names: str, gap=.18):
+        c.require(names and len(names) <= 8, "unattended key sequence differs")
+        for name in names:
+            chord = name.split("-") if "-" in name else [name]
+            down = [{"type": "key", "data": {"down": True,
+                     "key": {"type": "qcode", "data": item}}} for item in chord]
+            up = [{"type": "key", "data": {"down": False,
+                   "key": {"type": "qcode", "data": item}}} for item in reversed(chord)]
+            self._input(down + up)
+            time.sleep(gap)
+        self.record(stage, "keys", {"names": list(names)})
+
+    def type_text(self, stage: str, command_id: str, value: str, gap=.012):
+        c.require(1 <= len(value) <= 4096, "unattended typed text length differs")
+        for character in value:
+            chord = chord_for(character)
+            down = [{"type": "key", "data": {"down": True,
+                     "key": {"type": "qcode", "data": item}}} for item in chord]
+            up = [{"type": "key", "data": {"down": False,
+                   "key": {"type": "qcode", "data": item}}} for item in reversed(chord)]
+            self._input(down + up)
+            time.sleep(gap)
+        self.record(stage, "text", {"command": command_id, "characters": len(value),
+                    "sha256": hashlib.sha256(value.encode()).hexdigest()})
+
+    def type_secret(self, stage: str):
+        c.require(len(self.PASSWORD) == 38, "reviewed disposable credential differs")
+        for character in self.PASSWORD:
+            chord = chord_for(character)
+            down = [{"type": "key", "data": {"down": True,
+                     "key": {"type": "qcode", "data": item}}} for item in chord]
+            up = [{"type": "key", "data": {"down": False,
+                   "key": {"type": "qcode", "data": item}}} for item in reversed(chord)]
+            self._input(down + up)
+            time.sleep(.025)
+        self.record(stage, "secret", {"source": "reviewed-disposable-controller-constant",
+                    "characters": 38})
+
+    def _shot(self, label):
+        self.counter += 1
+        path = self.runtime / f"controller-{self.counter:03d}-{label}.png"
+        c.require(not path.exists(), "controller screenshot path reused")
+        self.qmp.screendump(path)
+        info = host._regular_new(path, host.MAX_PNG_BYTES)
+        image = controller_decode(path)
+        text = self.ocr(path)
+        c.privacy_text(text, self.fragments)
+        return path, info, image, text
+
+    def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
+                    visible=False, retain=False, exact_output=False):
+        deadline = time.monotonic() + seconds
+        last = None
+        while time.monotonic() < deadline:
+            path = None
+            try:
+                path, info, image, text = self._shot(expectation)
+                folded = text.casefold()
+                colors = image.resize((32, 20)).getcolors(maxcolors=640)
+                nonblank = colors is not None and len(colors) >= 16
+                if ((not phrases or all(phrase.casefold() in folded for phrase in phrases))
+                        and (not exact_output or image.size == (1280, 800))
+                        and (not visible or nonblank)):
+                    detail = {"bytes": info.st_size, "sha256": c.sha256(path),
+                              "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                              "expectation": expectation, "width": image.width,
+                              "height": image.height}
+                    self.record(stage, "screen", detail)
+                    kept = path if retain else None
+                    if retain:
+                        path = None
+                    else:
+                        path.unlink(missing_ok=True)
+                        path = None
+                    return kept, text
+                last = "screen expectation absent"
+            except (c.Invalid, OSError) as error:
+                last = str(error)
+            finally:
+                if path is not None and path.exists():
+                    path.unlink(missing_ok=True)
+            time.sleep(2)
+        raise c.Invalid(last or "controller screen timed out")
+
+    def pointer_click(self, stage: str, x: int, y: int):
+        c.require(0 <= x < 1280 and 0 <= y < 800, "controller pointer is outside output")
+        move = [{"type": "abs", "data": {"axis": "x", "value": x * 0x7fff // 1279}},
+                {"type": "abs", "data": {"axis": "y", "value": y * 0x7fff // 799}}]
+        self._input(move)
+        time.sleep(.4)
+        self._input([{"type": "btn", "data": {"down": True, "button": "left"}}])
+        time.sleep(.15)
+        self._input([{"type": "btn", "data": {"down": False, "button": "left"}}])
+        self.record(stage, "pointer", {"x": x, "y": y, "button": "left",
+                    "target": "wallpaper-hide-button"})
+
+    def _tsv(self, path: Path):
+        bundle.approved_ocr_identity()
+        argv = [c.OCR_IDENTITY["path"], str(path), *c.OCR_IDENTITY["controller_invocation"]]
+        try:
+            result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.DEVNULL, timeout=60, check=False,
+                                    env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise c.Invalid("controller coordinate OCR failed") from error
+        c.require(result.returncode == 0 and len(result.stdout) <= 512_000,
+                  "controller coordinate OCR failed")
+        rows = list(csv.DictReader(io.StringIO(result.stdout.decode("utf-8", "strict")),
+                                   delimiter="\t"))
+        c.require(1 <= len(rows) <= 20_000, "controller OCR row count differs")
+        return rows
+
+    def wallpaper_hide(self):
+        path, _ = self.wait_screen("winter", "wallpaper-page",
+                                   ("Wallpaper", "Butterfly", "Gold"), seconds=120, retain=True,
+                                   exact_output=True)
+        # Acquire coordinates from host OCR only. Guest diagnostics cannot
+        # identify the target or influence the fixed geometric offset.
+        try:
+            rows = [row for row in self._tsv(path) if row.get("text")]
+        finally:
+            path.unlink(missing_ok=True)
+        words = [row for row in rows if row.get("text", "").strip().casefold()
+                 in ("butterfly", "in", "gold")]
+        targets = []
+        for first in words:
+            if first["text"].strip().casefold() != "butterfly":
+                continue
+            line = [row for row in rows if row.get("block_num") == first.get("block_num")
+                    and row.get("par_num") == first.get("par_num")
+                    and row.get("line_num") == first.get("line_num")]
+            sequence = " ".join(row["text"].strip() for row in line).casefold()
+            if "butterfly in gold" in sequence:
+                targets.append(first)
+        c.require(len(targets) == 1, "wallpaper target OCR is absent or ambiguous")
+        target = targets[0]
+        left, top = int(target["left"]), int(target["top"])
+        x, y = left + 133, top - 71
+        c.require(300 <= x <= 1180 and 80 <= y <= 700,
+                  "derived wallpaper control is outside reviewed window")
+        self.pointer_click("winter", x, y)
+        self.wait_screen("winter", "wallpaper-hide-dialog",
+                         ("Hide", "Butterfly", "Gold", "packaged picture", "restore"),
+                         seconds=60, exact_output=True)
+
+    def boot_live_and_start(self):
+        self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
+        self.press("live-boot", "home", "down", "ret")
+        self.wait_screen("live-boot", "live-installer-visible", ("Install", "Arctic"), seconds=600,
+                         visible=True)
+        self.press("live-console", "ctrl-alt-f6")
+        self.wait_screen("live-console", "live-console-login", ("login",), seconds=60)
+        self.type_text("live-console", "live-username", "liveuser")
+        self.press("live-console", "ret")
+        time.sleep(2)
+        self.press("live-console", "ret")
+        self.type_text("live-install", "live-install", self.LIVE_COMMAND)
+        self.press("live-install", "ret")
+        self.record("live-install", "command", {"id": "live-install"})
+
+    def verify_install_complete(self):
+        self.wait_screen("install-complete", "installer-done",
+                         ("Arctic Linux is ready", "Remove the USB stick"), seconds=5400,
+                         exact_output=True)
+
+    def boot_installed_and_start(self):
+        # A generic nonblank frame can be firmware or Plymouth. Retry the fixed
+        # VT chord until OCR sees the installed system's real login prompt.
+        deadline = time.monotonic() + 900
+        while True:
+            c.require(time.monotonic() < deadline, "installed console login timed out")
+            self.press("installed-console", "ctrl-alt-f6")
+            try:
+                self.wait_screen("installed-boot", "installed-login-ready", ("login",), seconds=10)
+                break
+            except c.Invalid:
+                time.sleep(3)
+        self.type_text("installed-console", "installed-username", c.CONTROLLER["account"]["username"])
+        self.press("installed-console", "ret")
+        self.wait_screen("installed-console", "installed-password-prompt", ("Password",), seconds=45)
+        self.type_secret("installed-console")
+        self.press("installed-console", "ret")
+        time.sleep(2)
+        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
+        self.press("installed-console", "ret")
+        self.wait_screen("installed-console", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",),
+                         seconds=90)
+        self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
+        self.press("installed-scenes", "ret")
+        self.wait_screen("installed-console", "installed-sudo-password", ("password",), seconds=45)
+        self.type_secret("installed-console")
+        self.press("installed-console", "ret")
+        self.record("installed-scenes", "command", {"id": "installed-scenes"})
+
+    def authorize_scene(self, scene: str):
+        c.require(scene in c.SCENES, "controller scene differs")
+        self.record(scene, "command", {"id": scene})
+        if scene == "dictationsetup":
+            self.wait_screen(scene, "dictation-ready-page",
+                             ("Dictation is ready", "Local setup", "Recording", "Audio stays here"),
+                             seconds=1800, exact_output=True)
+        elif scene == "winter":
+            self.wallpaper_hide()
+        else:
+            self.wait_screen(scene, "whats-new-layer",
+                             ("What", "new", "Arctic Linux", "Local dictation"), seconds=120,
+                             exact_output=True)
+
+    def dismiss_first_login(self):
+        """Dismiss the fresh account's top-layer welcome using host pixels/input."""
+        self.wait_screen("installed-boot", "first-login-welcome",
+                         ("Welcome", "Arctic Linux"), seconds=300, exact_output=True)
+        self.press("installed-boot", "esc")
+        self.wait_screen("installed-boot", "first-login-dismissed",
+                         ("Dictation is ready", "Local setup", "Recording", "Audio stays here"),
+                         seconds=120, exact_output=True)
+        self.record("dictation-readiness", "command", {"id": "dictation-readiness"})
+
+    def verify_scene(self, scene: str):
+        """Recheck host pixels after untrusted guest diagnostics have completed."""
+        c.require(scene in c.SCENES, "controller scene differs")
+        if scene == "dictationsetup":
+            expectation = "dictation-ready-page"
+            phrases = ("Dictation is ready", "Local setup", "Recording", "Audio stays here")
+        elif scene == "winter":
+            expectation = "wallpaper-hide-dialog"
+            phrases = ("Hide", "Butterfly", "Gold", "packaged picture", "restore")
+        else:
+            expectation = "whats-new-layer"
+            phrases = ("What", "new", "Arctic Linux", "Local dictation")
+        self.wait_screen(scene, expectation, phrases, seconds=120, exact_output=True)
+
+    def qmp_event(self, stage, operation):
+        c.require(operation in ("eject-exact-iso", "system-reset", "quit"),
+                  "controller QMP operation differs")
+        self.record(stage, "qmp", {"operation": operation})
+
+    def trace(self):
+        value = {"schema": "arctic-showcase-unattended-trace-v1",
+                 "contract": dict(c.CONTROLLER), "tooling_sha256": self.tooling_sha256,
+                 "events": self.events, "status": "completed",
+                 "guest_diagnostics_used": False, "release_acceptance": False}
+        c.controller_trace(value)
+        return value

@@ -6,9 +6,7 @@ on:
       - codex/showcase-river-production
     paths:
       - .github/workflows/showcase-river-verify.yml
-      - showcase/revision-2026-10-12/align-river.py
-      - showcase/revision-2026-10-12/caption-text.json
-      - showcase/revision-2026-10-12/storyboard.json
+      - showcase/**
   workflow_dispatch:
 
 permissions:
@@ -28,41 +26,57 @@ jobs:
       PYTHONUNBUFFERED: "1"
       HF_HUB_DISABLE_PROGRESS_BARS: "1"
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           persist-credentials: false
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: "3.12"
 
       - name: Install pinned verifier
         run: |
-          python -m pip install --disable-pip-version-check faster-whisper==1.2.1 av==16.0.1
+          python -m pip install --disable-pip-version-check faster-whisper==1.2.1 av==16.0.1 Pillow==11.3.0
+
+      - name: Resolve the current direct-VoxType River master for private verification
+        id: voice
+        run: |
+          python showcase/revision-2026-10-12/resolve-voice.py \
+            --receipt showcase/revision-2026-10-12/voice-timing.json \
+            --purpose private-render \
+            --github-output "$GITHUB_OUTPUT"
 
       - name: Download and verify River master
         env:
           GH_TOKEN: ${{ github.token }}
-          SOURCE_TAG: showcase-river-source-2026-10-12
-          MASTER_SHA256: d172dbfb691f51a88e02e1222300068b7a07d263ea63a11897142493fa8574cb
+          SOURCE_TAG: ${{ steps.voice.outputs.source_tag }}
+          MASTER_ASSET: ${{ steps.voice.outputs.master_asset }}
+          MASTER_BYTES: ${{ steps.voice.outputs.master_bytes }}
+          MASTER_SHA256: ${{ steps.voice.outputs.master_sha256 }}
+          MASTER_DURATION: ${{ steps.voice.outputs.master_duration }}
         run: |
           mkdir -p showcase/revision-2026-10-12/work
           gh release download "$SOURCE_TAG" \
             --repo "$GITHUB_REPOSITORY" \
-            --pattern narration-river-final.mp3 \
+            --pattern "$MASTER_ASSET" \
             --dir showcase/revision-2026-10-12/work
+          test "$(stat -c %s "showcase/revision-2026-10-12/work/$MASTER_ASSET")" = "$MASTER_BYTES"
           printf '%s  %s\n' "$MASTER_SHA256" \
-            showcase/revision-2026-10-12/work/narration-river-final.mp3 | sha256sum --check -
+            "showcase/revision-2026-10-12/work/$MASTER_ASSET" | sha256sum --check -
           python - <<'PY'
           import av
-          path = "showcase/revision-2026-10-12/work/narration-river-final.mp3"
+          import os
+          path = "showcase/revision-2026-10-12/work/" + os.environ["MASTER_ASSET"]
           with av.open(path) as container:
               measured = float(container.duration / av.time_base)
-          assert abs(measured - 507.559184) <= 0.08, measured
+          assert abs(measured - float(os.environ["MASTER_DURATION"])) <= 0.08, measured
           print(f"measured_duration_seconds={measured:.6f}")
           PY
 
       - name: Preflight pinned decoder and one-second transcription
+        env:
+          MASTER_ASSET: ${{ steps.voice.outputs.master_asset }}
+          MASTER_DURATION: ${{ steps.voice.outputs.master_duration }}
         run: |
           python - <<'PY'
           import importlib.metadata
@@ -72,9 +86,11 @@ jobs:
           from faster_whisper import WhisperModel
           from faster_whisper.audio import decode_audio
 
-          audio = Path("showcase/revision-2026-10-12/work/narration-river-final.mp3")
+          import os
+          audio = Path("showcase/revision-2026-10-12/work") / os.environ["MASTER_ASSET"]
           samples = decode_audio(str(audio), sampling_rate=16000)
-          assert 8_000_000 < len(samples) < 8_300_000, len(samples)
+          expected_samples = float(os.environ["MASTER_DURATION"]) * 16000
+          assert abs(len(samples) - expected_samples) <= 32000, len(samples)
           model = WhisperModel("base.en", device="cpu", compute_type="int8")
           segments, info = model.transcribe(
               str(audio),
@@ -103,14 +119,28 @@ jobs:
           PY
 
       - name: Run local Whisper verification and alignment
+        env:
+          MASTER_ASSET: ${{ steps.voice.outputs.master_asset }}
+          MASTER_DURATION: ${{ steps.voice.outputs.master_duration }}
         run: |
           python showcase/revision-2026-10-12/align-river.py \
-            --audio showcase/revision-2026-10-12/work/narration-river-final.mp3 \
+            --audio "showcase/revision-2026-10-12/work/$MASTER_ASSET" \
             --captions showcase/revision-2026-10-12/caption-text.json \
             --storyboard showcase/revision-2026-10-12/storyboard.json \
             --output showcase/revision-2026-10-12/work/aligned \
             --model base.en \
+            --expected-duration "$MASTER_DURATION" \
             > showcase/revision-2026-10-12/work/verification-summary.json
+
+      - name: Run objective audio and segment-join checks
+        env:
+          MASTER_ASSET: ${{ steps.voice.outputs.master_asset }}
+        run: |
+          python showcase/revision-2026-10-12/verify-river-audio.py \
+            --audio "showcase/revision-2026-10-12/work/$MASTER_ASSET" \
+            --receipt showcase/revision-2026-10-12/voice-timing.json \
+            --output showcase/revision-2026-10-12/work/objective-audio-checks.json \
+            > showcase/revision-2026-10-12/work/objective-audio-summary.json
 
       - name: Verify log-safe outputs
         run: |
@@ -122,15 +152,20 @@ jobs:
           summary = json.loads((root / "verification-summary.json").read_text())
           assert report == summary
           assert report["transcript_in_ci_log"] is False
-          assert report["caption_cues"] == 128
+          assert report["caption_cues"] == 130
           assert report["scenes"] == 38
           assert not report["banned_old_phrase_detected"]
           assert (root / "aligned/whisper-transcript.txt").stat().st_size > 1000
+          objective = json.loads((root / "objective-audio-checks.json").read_text())
+          objective_summary = json.loads((root / "objective-audio-summary.json").read_text())
+          assert objective == objective_summary
+          assert objective["full_ffmpeg_decode_errors"] == 0
+          assert objective["hard_clipped_samples_ge_0_999"] == 0
           print(json.dumps(report, sort_keys=True))
           PY
 
       - name: Upload alignment evidence
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: showcase-river-whisper-alignment
           path: |
@@ -140,8 +175,7 @@ jobs:
             showcase/revision-2026-10-12/work/aligned/captions.vtt
             showcase/revision-2026-10-12/work/aligned/chapters.txt
             showcase/revision-2026-10-12/work/aligned/whisper-verification.json
-            showcase/revision-2026-10-12/work/aligned/whisper-transcript.txt
-            showcase/revision-2026-10-12/work/aligned/whisper-words.json
             showcase/revision-2026-10-12/work/verifier-versions.json
+            showcase/revision-2026-10-12/work/objective-audio-checks.json
           if-no-files-found: error
           retention-days: 30

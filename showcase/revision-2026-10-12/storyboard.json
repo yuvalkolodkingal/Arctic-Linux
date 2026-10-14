@@ -111,7 +111,7 @@
     "title": "Let Arctic do the setup.",
     "body": "Follow the progress as the system and selected apps are installed.",
     "image": "installer-10-installing",
-    "narration": "The progress screen shows the system and your selected apps being installed. An optional app download can be retried or skipped. Dictation has its own setup queue, so a missing model never stops the whole operating system from installing."
+    "narration": "The progress screen shows the system and your selected apps being installed. An optional app download can be retried or skipped. VoxType setup runs separately, so a missing model never stops the operating system from installing."
   },
   {
     "id": "done",
@@ -213,33 +213,50 @@
     "id": "dictationsetup",
     "chapter": "04 · Speak, locally",
     "title": "Prepare dictation during installation.",
-    "body": "Local Whisper. Hebrew and English. Readiness shown in Settings.",
-    "image": "dictation-setup",
-    "source": "showcase/assets/dictation-setup-current.png",
-    "shortcut": "Settings → Dictation",
+    "body": "Signed official VoxType. Verified local multilingual Whisper. Ready only after setup.",
+    "shortcut": "arctic-dictation status · Settings → Dictation",
     "capture_required": true,
-    "narration": "Dictation uses Voxtype and a multilingual Whisper model on this computer. Online installation downloads and verifies the engine and model. Offline installation queues setup for first boot. Settings shows the download size, progress, and any retry needed. Recording stays unavailable until setup is ready."
+    "narration": "Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.",
+    "type": "evidence",
+    "tag": "Qualified direct-VoxType ISO capture required",
+    "evidence": [
+      "Signature-checked official VoxType 1.1.0 binaries and verified local model",
+      "Automatic online setup finishes independently of OS installation",
+      "Offline setup stays visibly not ready until retry succeeds"
+    ]
   },
   {
     "id": "dictationrecord",
     "chapter": "04 · Speak, locally",
     "title": "Press. Speak. Press again.",
-    "body": "Start explicitly. Stop to insert. Cancel at any time.",
-    "image": "dictation-recording",
-    "source": "showcase/assets/dictation-recording-current.png",
-    "shortcut": "Super + Ctrl + X · Start / stop\nSuper + Ctrl + Backspace · Cancel",
+    "body": "Mango checks readiness, then runs VoxType's official toggle. Arctic status stays visible.",
+    "shortcut": "Mango → arctic-dictation-toggle → voxtype record toggle",
     "capture_required": true,
-    "narration": "Focus a text field, press Super, Control and X, and speak. Press the same keys again to stop and insert. A visible indicator follows recording and transcription, even with the bar hidden. Super, Control and Backspace cancels. Audio stays local, and status messages never display the transcript."
+    "narration": "Focus a text field and press Arctic's Mango shortcut, whose readiness guard runs VoxType's official record toggle. Press the same shortcut again to stop, transcribe, and insert with VoxType. Arctic's dictation pill follows VoxType's recording and transcription state, even when the taskbar is hidden. Audio and transcription stay on this computer. VoxType runs in quiet mode, and Arctic's notifications and status output do not include transcript text.",
+    "type": "evidence",
+    "tag": "Qualified direct-VoxType ISO capture required",
+    "evidence": [
+      "Readiness helper calls official voxtype record toggle",
+      "Arctic indicator follows official VoxType runtime state",
+      "Local insertion with quiet VoxType and transcript-free Arctic status"
+    ]
   },
   {
     "id": "dictationrecovery",
     "chapter": "04 · Speak, locally",
     "title": "Clear status. A way to recover.",
-    "body": "Choose Hebrew or English. CPU is available when acceleration fails.",
-    "image": "dictation-settings",
-    "source": "showcase/assets/dictation-settings-current.png",
+    "body": "Explicit GPU or CPU setup, with measured limitations.",
     "capture_required": true,
-    "narration": "Choose Hebrew, English, or local language detection. Supported hardware can use Vulkan acceleration. If the GPU fails, Arctic discards that recording and selects the CPU for your next attempt. Record again explicitly. Accuracy and speed depend on the model, your voice, and the computer."
+    "narration": "VoxType uses one local multilingual Whisper model for Hebrew, English, and automatic language detection. Supported hardware can enable VoxType's Vulkan backend. If GPU setup fails, the error stays visible and the user can explicitly switch VoxType to CPU. In a hosted Westmere CPU test, the small model measured 7.77 percent English word error and 42.0 percent Hebrew word error. It took 15.79 times the English audio duration and 11.63 times the Hebrew duration, so that CPU result was not real time.",
+    "shortcut": "arctic-dictation set-backend vulkan|cpu · arctic-dictation status",
+    "type": "evidence",
+    "tag": "Qualified direct-VoxType ISO capture required",
+    "evidence": [
+      "Local multilingual Whisper · Hebrew and English",
+      "Vulkan when supported · explicit CPU recovery",
+      "Hosted Westmere small-model test: 7.77% EN WER · 42.0% HE WER",
+      "CPU fixture was slower than real time"
+    ]
   },
   {
     "id": "settings",
@@ -259,7 +276,7 @@
     "source": "showcase/assets/bar-settings-current.png",
     "shortcut": "Settings → Appearance",
     "capture_required": true,
-    "narration": "Put the bar on any edge, and choose always visible, auto-hide, or dodge windows. Move the pointer to its edge, or use the keyboard, to reveal it. Recording indicators remain visible. The installer keeps its bar available while you're in the live session."
+    "narration": "Put the bar on any edge, and choose always visible, auto-hide, or dodge windows. Move the pointer to its edge, or use the keyboard, to reveal it. Arctic's dictation indicator remains visible. The installer keeps its bar available while you're in the live session."
   },
   {
     "id": "appearance",
@@ -274,13 +291,17 @@
     "id": "winter",
     "chapter": "05 · Make it yours",
     "title": "A fresh coat.",
-    "body": "Snow-coloured surfaces, with real photo backgrounds.",
-    "image": "theme-winter",
-    "theme": "light",
+    "body": "Photo backgrounds you can hide and restore per account.",
     "shortcut": "Super + Shift + W · Wallpapers",
-    "narration": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule.",
-    "source": "shell/dev/screenshots/wallpapers-winter.png",
-    "capture_required": true
+    "narration": "Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule. Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
+    "capture_required": true,
+    "type": "evidence",
+    "tag": "Final-image capture pending",
+    "evidence": [
+      "Delete hides a packaged wallpaper for this account",
+      "Restore brings hidden defaults back",
+      "Personal wallpaper choices stay untouched"
+    ]
   },
   {
     "id": "ember",
@@ -332,9 +353,16 @@
     "id": "updates",
     "chapter": "07 · Keep it running",
     "title": "Updates fit around your work.",
-    "body": "Signed stable packages. Background downloads. Install at restart.",
-    "image": "settings-updates",
-    "narration": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates."
+    "body": "Signed stable updates, with a one-time What's New summary.",
+    "narration": "Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. After each update, What's New shows the changes once, with release notes ready to reopen later. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates.",
+    "type": "evidence",
+    "capture_required": true,
+    "tag": "Final-image capture pending",
+    "evidence": [
+      "What's New appears once after each installed update",
+      "Release notes remain available from Settings → Updates",
+      "Signed stable packages install at restart"
+    ]
   },
   {
     "id": "lock",
@@ -343,7 +371,7 @@
     "body": "The clock stays visible. Notifications keep their text private while locked.",
     "image": "lock-screen",
     "shortcut": "Super + L · Lock",
-    "narration": "Super and L locks the desktop. The clock stays visible, and notifications show a count without their contents. Arctic also locks before sleeping. Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away."
+    "narration": "Super and L locks the desktop. The clock stays visible, and notifications show a count without their contents. Arctic also locks before sleeping. Your session stays protected when you step away."
   },
   {
     "id": "outro",

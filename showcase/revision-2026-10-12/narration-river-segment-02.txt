@@ -1,0 +1,31 @@
+Open Remove apps from the launcher to manage Fedora packages, Flatpaks, web apps, and terminal entries. Arctic shows the proposed removal before you confirm. It protects the desktop, your login shell, and your only terminal from an accidental removal.
+
+Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.
+
+Focus a text field and press Arctic's Mango shortcut, whose readiness guard runs VoxType's official record toggle. Press the same shortcut again to stop, transcribe, and insert with VoxType. Arctic's dictation pill follows VoxType's recording and transcription state, even when the taskbar is hidden. Audio and transcription stay on this computer. VoxType runs in quiet mode, and Arctic's notifications and status output do not include transcript text.
+
+VoxType uses one local multilingual Whisper model for Hebrew, English, and automatic language detection. Supported hardware can enable VoxType's Vulkan backend. If GPU setup fails, the error stays visible and the user can explicitly switch VoxType to CPU. In a hosted Westmere CPU test, the small model measured 7.77 percent English word error and 42.0 percent Hebrew word error. It took 15.79 times the English audio duration and 11.63 times the Hebrew duration, so that CPU result was not real time.
+
+Super and S opens Arctic Settings. Search for a setting instead of hunting through pages. Changes apply straight away, and Control and Z undoes the last one.
+
+Put the bar on any edge, and choose always visible, auto-hide, or dodge windows. Move the pointer to its edge, or use the keyboard, to reveal it. Arctic's dictation indicator remains visible. The installer keeps its bar available while you're in the live session.
+
+Choose Winter or Polar night, or let a wallpaper provide the desktop's colours. The palette follows through the shell, window borders, terminal, and supported apps. Your own pictures stay selected when you change themes.
+
+Winter keeps the same layout with soft, snow-coloured surfaces. The wallpaper picker includes the project's growing photo collection, alongside pictures you add yourself. You can set a favourite, or let the wallpaper change on a schedule. Built-in wallpapers can be deleted from your view and restored later, without affecting another account.
+
+One new choice is Ember Clouds, City Silhouette: warm clouds above the dark outline of the city. It's the artist's finished photograph, preserved at its original resolution. Set it from the wallpaper picker, or browse the full collection on the project's gallery.
+
+Quick settings puts the everyday controls together: volume, brightness, Wi-Fi, Bluetooth, and power mode. Night light makes evenings more comfortable, while Keep awake is handy during a presentation or long task.
+
+The network menu lets you join Wi-Fi and manage saved connections or a VPN. Nearby bar menus handle Bluetooth devices, speakers, microphones, and sound levels for individual apps.
+
+At your desk, arrange monitors and adjust their resolution, scale, and rotation. Super and P switches screen modes. Arctic also handles USB drives, printing, and scanning, with settings when you need them.
+
+You don't have to memorise every shortcut. Super and slash opens a searchable guide. Settings lets you add your own shortcuts, choose default apps, and decide what starts when you sign in.
+
+Arctic's signed stable repository keeps existing systems up to date. Updates download in the background and install when you restart. After each update, What's New shows the changes once, with release notes ready to reopen later. Settings shows the latest check and anything waiting. Save your work before choosing Restart and install. There is no need to reinstall for desktop package updates.
+
+Super and L locks the desktop. The clock stays visible, and notifications show a count without their contents. Arctic also locks before sleeping. Your session stays protected when you step away.
+
+That's Arctic Linux: a guided installer, a calm desktop, useful native apps, and local dictation when setup is complete. Find published downloads and the full wiki on GitHub. The release page tells you which image has been published, and which checks were performed.

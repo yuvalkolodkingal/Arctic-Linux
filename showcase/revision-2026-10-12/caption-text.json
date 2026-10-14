@@ -1,6 +1,6 @@
 {
   "language": "en",
-  "timing_status": "pending_audio_alignment",
+  "timing_status": "pending_direct_voxtype_river_alignment",
   "cues": [
     {
       "scene": "intro",
@@ -292,7 +292,7 @@
     {
       "scene": "installing",
       "sentence": 3,
-      "text": "Dictation has its own setup queue, so a missing model never stops the whole operating system from installing.",
+      "text": "VoxType setup runs separately, so a missing model never stops the operating system from installing.",
       "start": null,
       "end": null
     },
@@ -530,105 +530,105 @@
     {
       "scene": "dictationsetup",
       "sentence": 1,
-      "text": "Dictation uses Voxtype and a multilingual Whisper model on this computer.",
+      "text": "Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationsetup",
       "sentence": 2,
-      "text": "Online installation downloads and verifies the engine and model.",
+      "text": "During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationsetup",
       "sentence": 3,
-      "text": "Offline installation queues setup for first boot.",
+      "text": "An offline installation leaves a clear retry for first boot and reports that dictation is not ready.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationsetup",
       "sentence": 4,
-      "text": "Settings shows the download size, progress, and any retry needed.",
+      "text": "The local multilingual model supports Hebrew and English without sending audio to a service.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationsetup",
       "sentence": 5,
-      "text": "Recording stays unavailable until setup is ready.",
+      "text": "Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecord",
       "sentence": 1,
-      "text": "Focus a text field, press Super, Control and X, and speak.",
+      "text": "Focus a text field and press Arctic's Mango shortcut, whose readiness guard runs VoxType's official record toggle.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecord",
       "sentence": 2,
-      "text": "Press the same keys again to stop and insert.",
+      "text": "Press the same shortcut again to stop, transcribe, and insert with VoxType.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecord",
       "sentence": 3,
-      "text": "A visible indicator follows recording and transcription, even with the bar hidden.",
+      "text": "Arctic's dictation pill follows VoxType's recording and transcription state, even when the taskbar is hidden.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecord",
       "sentence": 4,
-      "text": "Super, Control and Backspace cancels.",
+      "text": "Audio and transcription stay on this computer.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecord",
       "sentence": 5,
-      "text": "Audio stays local, and status messages never display the transcript.",
+      "text": "VoxType runs in quiet mode, and Arctic's notifications and status output do not include transcript text.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecovery",
       "sentence": 1,
-      "text": "Choose Hebrew, English, or local language detection.",
+      "text": "VoxType uses one local multilingual Whisper model for Hebrew, English, and automatic language detection.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecovery",
       "sentence": 2,
-      "text": "Supported hardware can use Vulkan acceleration.",
+      "text": "Supported hardware can enable VoxType's Vulkan backend.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecovery",
       "sentence": 3,
-      "text": "If the GPU fails, Arctic discards that recording and selects the CPU for your next attempt.",
+      "text": "If GPU setup fails, the error stays visible and the user can explicitly switch VoxType to CPU.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecovery",
       "sentence": 4,
-      "text": "Record again explicitly.",
+      "text": "In a hosted Westmere CPU test, the small model measured 7.77 percent English word error and 42.0 percent Hebrew word error.",
       "start": null,
       "end": null
     },
     {
       "scene": "dictationrecovery",
       "sentence": 5,
-      "text": "Accuracy and speed depend on the model, your voice, and the computer.",
+      "text": "It took 15.79 times the English audio duration and 11.63 times the Hebrew duration, so that CPU result was not real time.",
       "start": null,
       "end": null
     },
@@ -670,7 +670,7 @@
     {
       "scene": "bar",
       "sentence": 3,
-      "text": "Recording indicators remain visible.",
+      "text": "Arctic's dictation indicator remains visible.",
       "start": null,
       "end": null
     },
@@ -720,6 +720,13 @@
       "scene": "winter",
       "sentence": 3,
       "text": "You can set a favourite, or let the wallpaper change on a schedule.",
+      "start": null,
+      "end": null
+    },
+    {
+      "scene": "winter",
+      "sentence": 4,
+      "text": "Built-in wallpapers can be deleted from your view and restored later, without affecting another account.",
       "start": null,
       "end": null
     },
@@ -831,20 +838,27 @@
     {
       "scene": "updates",
       "sentence": 3,
-      "text": "Settings shows the latest check and anything waiting.",
+      "text": "After each update, What's New shows the changes once, with release notes ready to reopen later.",
       "start": null,
       "end": null
     },
     {
       "scene": "updates",
       "sentence": 4,
-      "text": "Save your work before choosing Restart and install.",
+      "text": "Settings shows the latest check and anything waiting.",
       "start": null,
       "end": null
     },
     {
       "scene": "updates",
       "sentence": 5,
+      "text": "Save your work before choosing Restart and install.",
+      "start": null,
+      "end": null
+    },
+    {
+      "scene": "updates",
+      "sentence": 6,
       "text": "There is no need to reinstall for desktop package updates.",
       "start": null,
       "end": null
@@ -873,7 +887,7 @@
     {
       "scene": "lock",
       "sentence": 4,
-      "text": "Starting a lock cancels dictation, so a phrase isn't inserted after you've stepped away.",
+      "text": "Your session stays protected when you step away.",
       "start": null,
       "end": null
     },
