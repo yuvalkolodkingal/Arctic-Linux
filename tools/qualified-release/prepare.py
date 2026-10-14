@@ -1125,7 +1125,8 @@ def release_notes(proof, comparison):
               'The retained exact-image CPU sessions measured the same fixed public-read-speech samples after an online install '
               'and after recovery of an offline installation, with transcription network access disabled. '
               'WER and CER are aggregate word/character edit rates, not an accuracy-parity claim. '
-              'Elapsed time is the sum across the listed phrases and includes recording and controller insertion completion, '
+              'Elapsed time is the sum across the listed phrases and includes recording, official VoxType transcription '
+              'and `wtype` text-insertion completion, '
               'not pure decoder time or a median per-phrase latency.', '',
               '| CPU profile | Installed phase | Language | Samples | WER (%) | CER (%) | Audio (s) | Total elapsed (s) |',
               '|---|---|---|---:|---:|---:|---:|---:|']
