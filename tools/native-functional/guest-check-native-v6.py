@@ -1036,8 +1036,20 @@ class Smoke:
               'assert a.get_string("Exec")=="/usr/libexec/arctic/arctic-celluloid %U"; '
               'assert a.get_string("TryExec")=="/usr/bin/celluloid"; '
               'a.launch_action(sys.argv[1],Gio.AppLaunchContext())')
-        result=self.cmd(['/usr/bin/python3','-c',code,action],timeout=15)
-        require(result[0]==0,'Gio DesktopAppInfo action launch failed')
+        # The launched app inherits the helper's descriptors. Use the existing
+        # regular-file GUI launch path so waiting for the helper cannot wait for
+        # the long-lived Celluloid process to close a captured PIPE.
+        self.launch(['/usr/bin/python3','-c',code,action])
+        helper=self.launches[-1]
+        try:
+            returncode=helper.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            helper.terminate()
+            try: helper.wait(timeout=2)
+            except subprocess.TimeoutExpired: helper.kill();helper.wait(timeout=2)
+            raise RuntimeError('Gio DesktopAppInfo action helper timed out') from None
+        self.steps[-1].update(status='launch-helper-completed',returncode=returncode)
+        require(returncode==0,'Gio DesktopAppInfo action launch failed')
 
     def product_renderer_contract(self, player):
         launcher=Path('/usr/libexec/arctic/arctic-celluloid')
@@ -1279,6 +1291,15 @@ class Smoke:
 
     def user_mkdir(self, path):
         self.cmd(['mkdir','-p',str(path)])
+
+    def owned_media_directory(self):
+        path=self.root/'media file opener'
+        self.user_mkdir(path)
+        info=path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid==self.uid
+                and not info.st_mode&0o022 and path.resolve()==path,
+                'file-manager media fixture directory owner/type differs')
+        return path
 
     def trace(self, event, **values):
         item = dict(event=event, monotonic_ns=time.monotonic_ns(), gate=self.active_gate)
@@ -1590,7 +1611,7 @@ class Smoke:
         archiver = self.fresh_window(lambda:self.keys(files,'-k','Home','-k','Return'),
                                      'xarchiver',r'xarchiver',native=False)
         self.wait(lambda:archive.name in self.alive(archiver).get('title',''))
-        media_dir=self.root/'media file opener';media_dir.mkdir()
+        media_dir=self.owned_media_directory()
         source=self.write('file-manager-media-input.raw',visual_reference_frame()*10)
         media_file=media_dir/'file-manager-reference.mkv'
         self.cmd(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-f','rawvideo',
@@ -2553,7 +2574,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '2b4f67c4230023ea8fb2adb7d6e49816f6d554c2742af7c9f3fe8afc0e3f63d0'
+    native_source_sha = '351eb90719c98bea1ac5b49d9a87a4581a03f3b5804d749b0d45ce598b2bbcc6'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

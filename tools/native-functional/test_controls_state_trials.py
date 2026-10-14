@@ -32,8 +32,48 @@ PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95
 TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
 
 
+def restore_runtime_failure_fix(source):
+    """Reverse only the post-VM ownership and inherited-descriptor fixes."""
+    fixed_gio="""        # The launched app inherits the helper's descriptors. Use the existing
+        # regular-file GUI launch path so waiting for the helper cannot wait for
+        # the long-lived Celluloid process to close a captured PIPE.
+        self.launch(['/usr/bin/python3','-c',code,action])
+        helper=self.launches[-1]
+        try:
+            returncode=helper.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            helper.terminate()
+            try: helper.wait(timeout=2)
+            except subprocess.TimeoutExpired: helper.kill();helper.wait(timeout=2)
+            raise RuntimeError('Gio DesktopAppInfo action helper timed out') from None
+        self.steps[-1].update(status='launch-helper-completed',returncode=returncode)
+        require(returncode==0,'Gio DesktopAppInfo action launch failed')
+"""
+    old_gio="""        result=self.cmd(['/usr/bin/python3','-c',code,action],timeout=15)
+        require(result[0]==0,'Gio DesktopAppInfo action launch failed')
+"""
+    owned_directory="""    def owned_media_directory(self):
+        path=self.root/'media file opener'
+        self.user_mkdir(path)
+        info=path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid==self.uid
+                and not info.st_mode&0o022 and path.resolve()==path,
+                'file-manager media fixture directory owner/type differs')
+        return path
+
+"""
+    replacements=((fixed_gio,old_gio),(owned_directory,''),
+                  ("        media_dir=self.owned_media_directory()\n",
+                   "        media_dir=self.root/'media file opener';media_dir.mkdir()\n"))
+    for index,(new,old) in enumerate(replacements):
+        if source.count(new)!=1:raise AssertionError(f'Runtime failure inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    return source
+
+
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_runtime_failure_fix(source)
     substitutions=(
         ("            require(1<=len(players)<=2,'controls trial primary player inventory differs')\n            for player in players: retire_renderer_player(player,self.uid)\n","            require(1<=len(players)<=3,'controls trial primary player inventory differs')\n            retired=[row['player'] for row in primary.get('player_attempts',[])\n                     if row.get('owned_player_cleanup_completed') is True]\n            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==\n                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),\n                    'controls trial prior retired player identity differs')\n            retired_keys={(p['pid'],p['start_ticks']) for p in retired}\n            for player in players:\n                if (player['pid'],player['start_ticks']) not in retired_keys:\n                    retire_renderer_player(player,self.uid)\n"),
         ('    def visual_media(self):\n        fixture,expected,source_sha=self.visual_fixture()\n        # This release gate admits exactly one fresh product-wrapper player.\n        # A failed or unmatched capture cannot create another acceptance path.\n        player_attempt=1\n        player_attempt_limit=1\n',"    def visual_media(self, restart=None):\n        player_attempt_limit=2\n        if restart is None:\n            fixture,expected,source_sha=self.visual_fixture()\n            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])\n        else:\n            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}\n                    and type(restart['player_attempts']) is list\n                    and len(restart['player_attempts'])==1,\n                    'visual player restart state differs')\n            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']\n            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']\n                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']\n                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],\n                    'visual player restart fixture identity differs')\n        player_attempt=len(restart['player_attempts'])+1\n        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')\n"),
@@ -374,6 +414,49 @@ class ControlsStateTrials(unittest.TestCase):
         return Mock(root=root,user=pwd.getpwuid(os.getuid()),uid=os.getuid(),stage='live',
                     prefix=['synthetic-owned-prefix','XDG_CONFIG_HOME='+str(config)],
                     original_prefix=['synthetic-owned-prefix'])
+
+    def test_media_fixture_directory_is_created_by_and_guarded_for_desktop_uid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary);smoke.uid=os.getuid()
+            smoke.cmd=Mock(side_effect=lambda argv:Path(argv[-1]).mkdir(mode=0o700))
+            path=smoke.owned_media_directory()
+            self.assertEqual(path,smoke.root/'media file opener')
+            self.assertEqual(path.stat().st_uid,smoke.uid)
+            smoke.cmd.assert_called_once_with(['mkdir','-p',str(path)])
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary);smoke.uid=os.getuid()
+            def writable(argv):
+                Path(argv[-1]).mkdir();Path(argv[-1]).chmod(0o777)
+            smoke.cmd=Mock(side_effect=writable)
+            with self.assertRaisesRegex(RuntimeError,'directory owner/type differs'):
+                smoke.owned_media_directory()
+
+    def test_gio_action_helper_uses_regular_file_descriptors_and_launches_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary)
+            smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
+            helper=Mock();helper.wait.return_value=0
+            with patch.object(N.subprocess,'Popen',return_value=helper) as popen:
+                smoke.gio_desktop_action('new-window')
+            popen.assert_called_once()
+            argv=popen.call_args.args[0]
+            self.assertEqual(argv.count('/usr/bin/python3'),1)
+            self.assertEqual(argv[-1],'new-window')
+            self.assertIs(popen.call_args.kwargs['stdout'],popen.call_args.kwargs['stderr'])
+            self.assertIsNot(popen.call_args.kwargs['stdout'],subprocess.PIPE)
+            helper.wait.assert_called_once_with(timeout=15)
+            self.assertEqual(smoke.steps,[dict(argv=argv[len(smoke.prefix):],
+                status='launch-helper-completed',log=str(smoke.root/'gui-launch-0.log'),returncode=0)])
+
+    def test_gio_action_helper_timeout_fails_without_second_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary)
+            smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
+            helper=Mock();helper.wait.side_effect=[subprocess.TimeoutExpired('helper',15),0]
+            with patch.object(N.subprocess,'Popen',return_value=helper) as popen, \
+                    self.assertRaisesRegex(RuntimeError,'action helper timed out'):
+                smoke.gio_desktop_action('enqueue')
+            popen.assert_called_once();helper.terminate.assert_called_once();helper.kill.assert_not_called()
 
     def test_whole_source_guest_and_unchanged_capture_oracle_rollback(self):
         new=(HERE/'native_smoke.py').read_text();old=restore_controls_native(new)
