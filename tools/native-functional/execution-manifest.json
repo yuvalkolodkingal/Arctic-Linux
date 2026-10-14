@@ -6,12 +6,12 @@
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
-    "tools/native-functional/evidence.py": "8d011014d8263ada5b919a69d16910ff46f009a4dbbd07371a2d2a42ca894503",
+    "tools/native-functional/evidence.py": "29f0094bb20643b8f1a02c20505fbcadd653e93b9028c454fc2763be6c40acaf",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/runner.py": "1c333091a15b5b26fb932074526c44af3d9b41a4818c0107ac0cd3141bde68c0",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/native-functional/source-provenance.json": "78899128b0243c0048b1fc270160e9ca8dc7800b5ff731d9cdbddeed363bea3b",
+    "tools/native-functional/source-provenance.json": "b991b96f48a8f131a4e8101ec32c57d91e60a2608844596b46787b17a4422988",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "285c67aa190535ea68e9c7451ac8cccd245f511e36d33960ead2956fc6a5eafb",
     "tools/native-functional/taskbar-runtime.py": "297ee48eac1cea021713830f625f47453e84da0abf2bdcd1856c7b4e8082bbb4",
@@ -32,6 +32,6 @@
     "producer_mode": "frozen-external-paired-v1",
     "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false
 }

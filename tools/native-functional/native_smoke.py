@@ -929,6 +929,27 @@ class NativeProtocolDrain:
 # END NATIVE_PROTOCOL_DIAGNOSTICS
 
 
+def rename_noreplace(source_directory,source_name,target_directory,target_name):
+    """Atomically quarantine one directory entry without replacing another."""
+    import ctypes
+    import errno
+    require(all(type(value) is int and value>=0 for value in (source_directory,target_directory))
+            and all(isinstance(name,str) and name and '/' not in name and name not in ('.','..')
+                    for name in (source_name,target_name)),
+            'invalid atomic quarantine request')
+    libc=ctypes.CDLL(None,use_errno=True)
+    operation=libc.renameat2
+    operation.argtypes=(ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint)
+    operation.restype=ctypes.c_int
+    if operation(source_directory,os.fsencode(source_name),target_directory,
+                 os.fsencode(target_name),1)==0:  # RENAME_NOREPLACE
+        return
+    code=ctypes.get_errno()
+    if code==errno.ENOENT: raise FileNotFoundError(code,os.strerror(code))
+    if code==errno.EEXIST: raise FileExistsError(code,os.strerror(code))
+    raise OSError(code,os.strerror(code))
+
+
 class Smoke:
     def __init__(self, prefix, stage):
         require(prefix[:2] == ['runuser', '-u'] and prefix[3:5] == ['--', 'env'], 'invalid desktop prefix')
@@ -1636,19 +1657,71 @@ class Smoke:
         require(isinstance(ipc,Path) and ipc==self.root/'celluloid-ipc.sock'
                 and sum(item is player for item in self.owned)==1,
                 'moving player retirement target differs')
-        retire_renderer_player(player,self.uid)
-        def fully_retired():
+        # A pathname-bound Unix socket normally survives its listener. Pin the
+        # live endpoint before signalling, then atomically quarantine it in a
+        # root-owned directory. The desktop UID cannot replace the quarantined
+        # entry between its held-fd identity check and unlink.
+        fields=('st_dev','st_ino','st_mode','st_uid','st_gid','st_nlink')
+        directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            root_info=os.fstat(directory)
+            require(root_info.st_uid==self.uid and stat.S_ISDIR(root_info.st_mode)
+                    and not root_info.st_mode&0o077,
+                    'moving player IPC directory is not private')
+            root_identity=(root_info.st_dev,root_info.st_ino)
+            held=os.open(ipc.name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=directory)
             try:
-                info=ipc.lstat()
-                require(stat.S_ISSOCK(info.st_mode) and info.st_uid==self.uid,
+                before=os.fstat(held)
+                require(stat.S_ISSOCK(before.st_mode) and before.st_uid==self.uid and before.st_nlink==1,
                         'moving player IPC owner/type differs')
-                socket_absent=False
-            except FileNotFoundError:
-                socket_absent=True
-            return socket_absent and self.clients().get(player['client_id']) is None
-        self.wait(fully_retired,5,'moving player process/socket/compositor retirement')
-        return dict(process_identity_retired=True,owned_ipc_absent=True,
-                    compositor_client_absent=True,release_acceptance=False)
+                ipc_identity=tuple(getattr(before,key) for key in fields)
+                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+                    peer.settimeout(2);peer.connect(str(ipc))
+                    pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+                    require((pid,uid)==(player['pid'],self.uid),'moving player IPC peer differs')
+                after=os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)
+                require(tuple(getattr(after,key) for key in fields)==ipc_identity,
+                        'moving player IPC identity changed during proof')
+                retire_renderer_player(player,self.uid)
+                quarantine=Path(tempfile.mkdtemp(prefix='.celluloid-ipc-retired-',dir=self.root))
+                quarantine_info=quarantine.lstat()
+                require(stat.S_ISDIR(quarantine_info.st_mode)
+                        and quarantine_info.st_uid==os.geteuid() and not quarantine_info.st_mode&0o077,
+                        'moving player IPC quarantine is not private')
+                quarantine_directory=os.open(quarantine,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+                try:
+                    retired_name='endpoint.sock'
+                    try: rename_noreplace(directory,ipc.name,quarantine_directory,retired_name)
+                    except FileNotFoundError: pass
+                    else:
+                        retired=os.open(retired_name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,
+                                        dir_fd=quarantine_directory)
+                        try:
+                            retired_info=os.fstat(retired)
+                            if tuple(getattr(retired_info,key) for key in fields)!=ipc_identity:
+                                try: rename_noreplace(quarantine_directory,retired_name,directory,ipc.name)
+                                except (FileNotFoundError,FileExistsError,OSError): pass
+                                raise RuntimeError('moving player IPC identity changed before quarantine')
+                            os.unlink(retired_name,dir_fd=quarantine_directory)
+                        finally: os.close(retired)
+                finally: os.close(quarantine_directory)
+            finally: os.close(held)
+            def fully_retired():
+                path_info=self.root.lstat()
+                require(stat.S_ISDIR(path_info.st_mode) and path_info.st_uid==self.uid
+                        and not path_info.st_mode&0o077
+                        and (path_info.st_dev,path_info.st_ino)==root_identity,
+                        'moving player IPC directory identity changed after quarantine')
+                try: os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)
+                except FileNotFoundError: socket_absent=True
+                else:
+                    require(False,'moving player IPC path was recreated after quarantine')
+                    socket_absent=False
+                return socket_absent and self.clients().get(player['client_id']) is None
+            self.wait(fully_retired,5,'moving player process/socket/compositor retirement')
+            return dict(process_identity_retired=True,owned_ipc_absent=True,
+                        compositor_client_absent=True,release_acceptance=False)
+        finally: os.close(directory)
 
     def media(self):
         fixture,decoder = self.media_fixture()

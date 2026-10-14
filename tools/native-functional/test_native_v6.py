@@ -34,41 +34,147 @@ class NewControls(unittest.TestCase):
     def test_moving_player_retirement_requires_exact_owned_process_socket_and_unmap(self):
         with tempfile.TemporaryDirectory() as t:
             root=Path(t);ipc=root/'celluloid-ipc.sock'
-            player=dict(client_id='11',pid=71,start_ticks=7,executable='/usr/bin/celluloid',
+            endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(ipc));endpoint.listen(1)
+            player=dict(client_id='11',pid=os.getpid(),start_ticks=7,executable='/usr/bin/celluloid',
                         executable_sha256='a'*64,is_xwayland=False)
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
             smoke.clients=Mock(return_value={})
             smoke.wait=Mock(side_effect=lambda fn,*args:fn() or (_ for _ in ()).throw(RuntimeError('not retired')))
-            with patch.object(N,'retire_renderer_player') as retire:
-                value=smoke.retire_moving_player(player,ipc)
-            retire.assert_called_once_with(player,os.getuid())
-            self.assertEqual(value,dict(process_identity_retired=True,owned_ipc_absent=True,
-                compositor_client_absent=True,release_acceptance=False))
-            with patch.object(N,'retire_renderer_player') as retire:
-                with self.assertRaisesRegex(RuntimeError,'target differs'):
-                    smoke.retire_moving_player(dict(player),ipc)
-                with self.assertRaisesRegex(RuntimeError,'target differs'):
-                    smoke.retire_moving_player(player,root/'other.sock')
-                retire.assert_not_called()
+            try:
+                with patch.object(N,'retire_renderer_player') as retire:
+                    value=smoke.retire_moving_player(player,ipc)
+                retire.assert_called_once_with(player,os.getuid())
+                self.assertFalse(ipc.exists())
+                self.assertEqual(value,dict(process_identity_retired=True,owned_ipc_absent=True,
+                    compositor_client_absent=True,release_acceptance=False))
+                with patch.object(N,'retire_renderer_player') as retire:
+                    with self.assertRaisesRegex(RuntimeError,'target differs'):
+                        smoke.retire_moving_player(dict(player),ipc)
+                    with self.assertRaisesRegex(RuntimeError,'target differs'):
+                        smoke.retire_moving_player(player,root/'other.sock')
+                    retire.assert_not_called()
+            finally: endpoint.close()
 
-    def test_moving_player_retirement_fails_closed_while_socket_or_client_remains(self):
-        for retained in ('socket','client'):
-          with self.subTest(retained=retained),tempfile.TemporaryDirectory() as t:
+    def test_moving_player_retirement_fails_closed_while_client_remains(self):
+        with tempfile.TemporaryDirectory() as t:
             root=Path(t);ipc=root/'celluloid-ipc.sock'
-            player=dict(client_id='11',pid=71,start_ticks=7,executable='/usr/bin/celluloid',
+            endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(ipc));endpoint.listen(1)
+            player=dict(client_id='11',pid=os.getpid(),start_ticks=7,executable='/usr/bin/celluloid',
                         executable_sha256='a'*64,is_xwayland=False)
-            endpoint=None
-            if retained=='socket':
-                endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(ipc))
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
-            smoke.clients=Mock(return_value={'11':dict(pid=71)} if retained=='client' else {})
+            smoke.clients=Mock(return_value={'11':dict(pid=player['pid'])})
             smoke.wait=Mock(side_effect=lambda fn,*args:fn() or (_ for _ in ()).throw(RuntimeError('not retired')))
             try:
                 with patch.object(N,'retire_renderer_player'):
                     with self.assertRaisesRegex(RuntimeError,'not retired'):
                         smoke.retire_moving_player(player,ipc)
+                self.assertFalse(ipc.exists())
+            finally: endpoint.close()
+
+    def test_moving_player_retirement_rejects_pre_quarantine_replacement_and_inode_aba(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);ipc=root/'celluloid-ipc.sock'
+            original=socket.socket(socket.AF_UNIX);original.bind(str(ipc));original.listen(1)
+            original_inode=ipc.lstat().st_ino
+            replacement=None
+            player=dict(client_id='11',pid=os.getpid(),start_ticks=7,executable='/usr/bin/celluloid',
+                        executable_sha256='a'*64,is_xwayland=False)
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            smoke.clients=Mock(return_value={})
+            actual=N.rename_noreplace
+            def replace(source_directory,source_name,target_directory,target_name):
+                nonlocal replacement
+                if source_name==ipc.name and replacement is None:
+                    ipc.unlink()
+                    replacement=socket.socket(socket.AF_UNIX);replacement.bind(str(ipc));replacement.listen(1)
+                    self.assertNotEqual(ipc.lstat().st_ino,original_inode)
+                return actual(source_directory,source_name,target_directory,target_name)
+            try:
+                with patch.object(N,'retire_renderer_player'),patch.object(N,'rename_noreplace',side_effect=replace):
+                    with self.assertRaisesRegex(RuntimeError,'identity changed before quarantine'):
+                        smoke.retire_moving_player(player,ipc)
+                self.assertTrue(ipc.is_socket())
             finally:
-                if endpoint is not None:endpoint.close()
+                original.close()
+                if replacement is not None: replacement.close()
+
+    def test_moving_player_retirement_rejects_post_quarantine_recreation_without_deleting_it(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);ipc=root/'celluloid-ipc.sock'
+            original=socket.socket(socket.AF_UNIX);original.bind(str(ipc));original.listen(1)
+            replacement=None
+            player=dict(client_id='11',pid=os.getpid(),start_ticks=7,executable='/usr/bin/celluloid',
+                        executable_sha256='a'*64,is_xwayland=False)
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            smoke.clients=Mock(return_value={})
+            actual=N.rename_noreplace
+            def recreate(source_directory,source_name,target_directory,target_name):
+                nonlocal replacement
+                result=actual(source_directory,source_name,target_directory,target_name)
+                if source_name==ipc.name and replacement is None:
+                    replacement=socket.socket(socket.AF_UNIX);replacement.bind(str(ipc));replacement.listen(1)
+                return result
+            smoke.wait=Mock(side_effect=lambda fn,*args:fn() or (_ for _ in ()).throw(RuntimeError('not retired')))
+            try:
+                with patch.object(N,'retire_renderer_player'),patch.object(N,'rename_noreplace',side_effect=recreate):
+                    with self.assertRaisesRegex(RuntimeError,'recreated after quarantine'):
+                        smoke.retire_moving_player(player,ipc)
+                self.assertTrue(ipc.is_socket())
+            finally:
+                original.close()
+                if replacement is not None: replacement.close()
+
+    def test_moving_player_retirement_rejects_parent_rename_and_moved_root_recreation(self):
+        with tempfile.TemporaryDirectory() as t:
+            base=Path(t);root=base/'fixture';root.mkdir(mode=0o700)
+            moved=base/'moved-fixture';ipc=root/'celluloid-ipc.sock'
+            original=socket.socket(socket.AF_UNIX);original.bind(str(ipc));original.listen(1)
+            replacement=None
+            player=dict(client_id='11',pid=os.getpid(),start_ticks=7,executable='/usr/bin/celluloid',
+                        executable_sha256='a'*64,is_xwayland=False)
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            smoke.clients=Mock(return_value={})
+            def relocate(fn,*_):
+                nonlocal replacement
+                root.rename(moved);root.mkdir(mode=0o700)
+                replacement=socket.socket(socket.AF_UNIX)
+                replacement.bind(str(moved/ipc.name));replacement.listen(1)
+                return fn()
+            smoke.wait=Mock(side_effect=relocate)
+            try:
+                with patch.object(N,'retire_renderer_player'):
+                    with self.assertRaisesRegex(RuntimeError,'directory identity changed after quarantine'):
+                        smoke.retire_moving_player(player,ipc)
+                self.assertTrue((moved/ipc.name).is_socket())
+            finally:
+                original.close()
+                if replacement is not None: replacement.close()
+
+    def test_atomic_quarantine_never_replaces_existing_target(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);source=root/'source';target=root/'target'
+            source.write_bytes(b'source');target.write_bytes(b'target')
+            directory=os.open(root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                with self.assertRaises(FileExistsError):
+                    N.rename_noreplace(directory,source.name,directory,target.name)
+            finally: os.close(directory)
+            self.assertEqual(source.read_bytes(),b'source')
+            self.assertEqual(target.read_bytes(),b'target')
+
+    def test_moving_player_retirement_rejects_different_ipc_peer(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);ipc=root/'celluloid-ipc.sock'
+            endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(ipc));endpoint.listen(1)
+            player=dict(client_id='11',pid=os.getpid()+100000,start_ticks=7,
+                        executable='/usr/bin/celluloid',executable_sha256='a'*64,is_xwayland=False)
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            try:
+                with patch.object(N,'retire_renderer_player') as retire:
+                    with self.assertRaisesRegex(RuntimeError,'IPC peer differs'):
+                        smoke.retire_moving_player(player,ipc)
+                    retire.assert_not_called()
+            finally: endpoint.close()
 
     def test_media_preserves_moving_proof_then_retires_before_static_player(self):
         source=(HERE/'native_smoke.py').read_text();tree=ast.parse(source)

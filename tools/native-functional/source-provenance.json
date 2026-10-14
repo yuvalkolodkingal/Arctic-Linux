@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "c4934cbed1d3c0919fb90065c714ad1944dea2f45cd68a2cc1c439970eb2ba98",
+  "native_source_sha256": "a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0",
   "files": {
-    "native_smoke.py": "c4934cbed1d3c0919fb90065c714ad1944dea2f45cd68a2cc1c439970eb2ba98",
-    "guest-check-native-v6.py": "c7c81d58daabef5b300ca80f6f7812335015bddb25cf482e7cb94c9366725206",
+    "native_smoke.py": "a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0",
+    "guest-check-native-v6.py": "b578d77d52177cf781aeb445580f43056c7755bafe816eb853741298308b3d1d",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e"
   },
@@ -27,14 +27,14 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_v6.py": "1ebb2e63e214c23bf38f82ee667652354970788bee91f91f929d87a64044fdad",
+    "test_native_v6.py": "a556df7964c4681eccc35354ee5b19573308af85e38be5e73cff44dd45ea19d4",
     "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
     "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_controls_state_trials.py": "7e06e7168a1d0e30d105900804d1827c07ee47ca34bcb7ff46d4259b6c23aa32",
+    "test_controls_state_trials.py": "c619436d5aa6bbd20ebfd19021fe11f85ed47b17838f407f2e587b4aabf48acb",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -294,7 +294,15 @@
     "static_capture_attempt_limit": 1,
     "static_capture_deadline_seconds": 9.5,
     "oracle_thresholds_fixture_and_renderer_contract_unchanged": true,
-    "release_acceptance": false
+    "release_acceptance": false,
+    "followup_failure_run": 38643643989,
+    "followup_artifact_id": 11931399593,
+    "followup_artifact_sha256": "c9140f94bfa5eca16824ebe51b52f654ca725800efedfda5d448dc59a473df9b",
+    "followup_diagnosis": "the exact moving process retired and its compositor client was absent in the final snapshot, but the pathname-bound Unix IPC socket remained in the filesystem after its listener exited, so the combined retirement predicate could never pass",
+    "owned_ipc_retirement": "before signalling, connect to the exact socket and require SO_PEERCRED PID/UID while pinning its inode with O_PATH; after the exact pidfd-bound process retires, atomically move the pathname with renameat2(RENAME_NOREPLACE) into a root-owned private quarantine, compare the quarantined entry to the held fd, unlink there, and keep the original directory fd open through the final exact-client wait",
+    "wrong_peer_replaced_inode_nonprivate_directory_and_retained_client_fail_closed": true,
+    "race_and_inode_aba_control": "the desktop UID cannot mutate the quarantined directory; deterministic pre-quarantine replacement, held-inode ABA, post-quarantine path recreation, parent-directory relocation with moved-root socket recreation and existing-target tests all preserve replacements and fail closed",
+    "directory_relocation_control": "the final predicate reads the socket basename through the still-open original dirfd and independently requires the absolute evidence-root path to retain the pinned directory device/inode, owner, type and private mode; renaming or replacing the root fails closed"
   },
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
   "single_primary_capture": {
