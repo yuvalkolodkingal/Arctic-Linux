@@ -1,0 +1,82 @@
+name: Inspect final ISO performance failure receipt
+
+on:
+  push:
+    branches: [codex/qualification-dispatch-20261010]
+    paths: [.github/workflows/inspect-performance-failure-38546614623.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/qualification-dispatch-20261010' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Verify and report the fixed unqualified failure summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+
+          repository = 'yuvalkolodkingal/Arctic-Linux'
+          run_id = 38546614623
+          source = '91d8dd3a65658c22480acdea0d1aef36b3bb40d5'
+          artifact_id = 11887309047
+          artifact_name = 'external-paired-performance'
+          archive_bytes = 1259
+          archive_sha256 = 'e60a427aa3c65df06c000059e53431ff702787952a973b0798f8bba9177c705d'
+          assert os.environ['GITHUB_REPOSITORY'] == repository
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/qualification-dispatch-20261010'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          assert re.fullmatch(r'[0-9a-f]{40}', source)
+          assert re.fullmatch(r'[0-9a-f]{64}', archive_sha256)
+          run = json.loads(subprocess.check_output([
+              'gh', 'api', f'repos/{repository}/actions/runs/{run_id}']))
+          assert run['status'] == 'completed' and run['conclusion'] == 'failure'
+          assert run['run_attempt'] == 1 and run['head_sha'] == source
+          endpoint = f'repos/{repository}/actions/artifacts/{artifact_id}'
+          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
+          assert metadata['id'] == artifact_id and metadata['name'] == artifact_name
+          assert metadata['expired'] is False
+          assert metadata['size_in_bytes'] == archive_bytes
+          assert metadata['digest'] == 'sha256:' + archive_sha256
+          assert metadata['workflow_run']['id'] == run_id
+          assert metadata['workflow_run']['head_sha'] == source
+          with tempfile.TemporaryDirectory(prefix='arctic-performance-failure-') as folder:
+              archive_path = Path(folder) / 'failure.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
+              raw = archive_path.read_bytes()
+              assert len(raw) == archive_bytes
+              assert hashlib.sha256(raw).hexdigest() == archive_sha256
+              with zipfile.ZipFile(archive_path) as archive:
+                  members = archive.infolist()
+                  assert {member.filename for member in members} == {
+                      'unqualified-failure-phase.json', 'upload-screening.json'}
+                  for member in members:
+                      assert not Path(member.filename).is_absolute()
+                      assert '..' not in Path(member.filename).parts
+                      assert stat.S_IFMT(member.external_attr >> 16) in (0, stat.S_IFREG)
+                      assert 0 < member.file_size <= 16_384
+                  summary_raw = archive.read('unqualified-failure-phase.json')
+                  screening_raw = archive.read('upload-screening.json')
+          summary = json.loads(summary_raw)
+          screening = json.loads(screening_raw)
+          assert summary['schema'] == 'arctic-paired-failure-phase-v1'
+          assert summary['status'] == 'unqualified_fixed_observations_only'
+          assert summary['release_acceptance'] is False
+          assert summary['performance_acceptance'] is False
+          assert summary['original_evidence_uploaded'] is False
+          receipt = screening['files']['unqualified-failure-phase.json']
+          assert receipt['bytes'] == len(summary_raw)
+          assert receipt['sha256'] == hashlib.sha256(summary_raw).hexdigest()
+          compact = json.dumps(summary, sort_keys=True, separators=(',', ':'))
+          assert len(compact.encode()) <= 4096
+          escaped = compact.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
+          print(f'::notice title=ARCTIC_PERFORMANCE_FAILURE_SUMMARY::{escaped}')
+          PY
