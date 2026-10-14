@@ -280,10 +280,10 @@ def failure_phase_summary(work, screen_failure):
         unknown = dict(status='unknown', code='none', exception_class='none',
             last_observer_phase='unavailable')
         envelope = result['guest_envelope']  # envelope-only
-        pins = dict(guest='4892222d52beb2c2007a457f43b4f0389e81b279222e22aa923d49fa6ff1b0d5',
+        pins = dict(guest='088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d',
             causal='bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562')
-        observer = dict(source_sha256='19fb089b8885a1e0ce6b2827db9b87acade30bef3a331486ca05d0a051ddea8b',
-            frozen_sha256='c16a9947baa293502791af88f60e14bcd8dea0b852286536a75598afef371d1b',
+        observer = dict(source_sha256='7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed',
+            frozen_sha256='733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7',
             comparator_sha256='d3d3ac5dcdf9066b73ac91a48c968dd7f84cd43f3c5571939d7c1041f879a0cf')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only

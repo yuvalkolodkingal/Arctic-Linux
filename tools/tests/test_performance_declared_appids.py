@@ -132,7 +132,7 @@ class DeclaredAppidControls(unittest.TestCase):
                     self.assertEqual(order, ['warm:'+r for r in G.ROLE_ORDER])
 
     def test_original_whole_byte_declaration_reproduces_real_strict_guard_rejection(self):
-        raw = (ROOT/'tools/performance/guest.py').read_bytes()
+        raw = L.before_private_diagnostic_summary((ROOT/'tools/performance/guest.py').read_bytes())
         current = b"appids=tuple(app['appids'])"
         self.assertEqual(raw.count(current), 2)
         old = raw.replace(current, b"appids=list(app['appids'])")

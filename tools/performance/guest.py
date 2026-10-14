@@ -834,14 +834,14 @@ def measure(prefix, declared=None, workload=None, order=None, complete=True, pre
                  observation_bounds=bounds, poll_sleep_seconds=MAPPING_POLL_SECONDS,
                  observer=MAPPING_OBSERVER))
     emit('final_idle', snapshot())
-    emit('system_failed_units', run(['systemctl', '--failed', '--no-pager']))
+    emit('system_failed_units', collect_private_diagnostic('systemd-failed-units', ['systemctl', '--failed', '--no-legend', '--plain', '--no-pager']))
     emit('flatpak', run(['flatpak', 'list', '--system', '--columns=ref,active,size']))
     # Enumerating the dependency graph can be very slow under TCG. A missing supplemental
     # graph must not discard the actual memory/window measurements or block an offline install.
     try:
-        emit('critical_chain', run(['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))
-    except (RuntimeError, subprocess.TimeoutExpired) as error:
-        emit('critical_chain_unmeasured', str(error))
+        emit('critical_chain', collect_private_diagnostic('systemd-critical-chain', ['systemd-analyze', '--no-pager', 'critical-chain'], timeout=120))
+    except RuntimeError:
+        emit('critical_chain_unmeasured', dict(schema='arctic-private-diagnostic-summary-v1', category='systemd-critical-chain', status='unavailable', raw_error_included=False))
     if complete:
         emit('done', True)
 
@@ -940,6 +940,54 @@ def main(preconditioned=False, functional=False, causal_precision=False):
             raise RuntimeError('Keep awake did not restore its initial off state')
     # Completion requires all workload lifecycle and session-state cleanup.
     emit('done', True)
+
+
+PRIVATE_DIAGNOSTIC_CATEGORIES = frozenset({'systemd-failed-units', 'systemd-critical-chain'})
+PRIVATE_DIAGNOSTIC_ERRORS = {
+    'invalid-input': 'Invalid private diagnostic summary input',
+    'oversized-input': 'Private diagnostic output exceeds bounded summary input',
+    'command-unavailable': 'Private diagnostic command unavailable',
+}
+
+
+def private_diagnostic_summary(category, content):
+    """Discard source-owned supplemental text and expose only bounded counts.
+
+    systemctl and systemd-analyze can render templated units with ``@``. In a
+    JSON record those tokens are followed by an escaped newline, so the strict
+    external evidence scanner correctly cannot apply its whole-line public
+    systemd-unit proofs. These diagnostics are not comparison inputs. Keep the
+    original scanner unchanged and prevent the raw command output from ever
+    entering the guest serial evidence.
+
+    The digest covers only this public summary, not the discarded text. Hashing
+    a possibly private email, path or unit would preserve a dictionary oracle.
+    """
+    if category not in PRIVATE_DIAGNOSTIC_CATEGORIES or type(content) is not str:
+        # Supplemental diagnostics stay outside the frozen observer's reviewed
+        # exception inventory, so any such failure remains fail-closed unknown.
+        raise RuntimeError(PRIVATE_DIAGNOSTIC_ERRORS['invalid-input'])
+    encoded = content.encode('utf-8')
+    if len(encoded) > 1024 * 1024:
+        raise RuntimeError(PRIVATE_DIAGNOSTIC_ERRORS['oversized-input'])
+    lines = content.splitlines()
+    summary = dict(schema='arctic-private-diagnostic-summary-v1', category=category,
+        status='raw-text-discarded', record_count=sum(bool(line.strip()) for line in lines))
+    public = json.dumps(summary, sort_keys=True, separators=(',', ':'),
+                        ensure_ascii=True, allow_nan=False).encode()
+    summary['summary_sha256'] = hashlib.sha256(public).hexdigest()
+    return summary
+
+
+def collect_private_diagnostic(category, argv, timeout=45):
+    """Run one supplemental command without reflecting its output on failure."""
+    if category not in PRIVATE_DIAGNOSTIC_CATEGORIES:
+        raise RuntimeError(PRIVATE_DIAGNOSTIC_ERRORS['invalid-input'])
+    try:
+        content = run(argv, timeout=timeout)
+    except (RuntimeError, subprocess.TimeoutExpired):
+        raise RuntimeError(PRIVATE_DIAGNOSTIC_ERRORS['command-unavailable']) from None
+    return private_diagnostic_summary(category, content)
 
 
 if __name__ == '__main__':
