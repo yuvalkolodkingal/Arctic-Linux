@@ -164,6 +164,7 @@ jobs:
                   for row in trace[-30:]:
                       selected = {key: row.get(key) for key in (
                           'event', 'gate', 'error', 'output', 'scale', 'edge', 'mode', 'label', 'shown',
+                          'polls', 'elapsed_seconds', 'timeout_seconds',
                       ) if key in row}
                       if 'case' in row and type(row['case']) is dict:
                           selected['case'] = {key: row['case'].get(key) for key in ('output', 'scale', 'edge')}
@@ -213,10 +214,15 @@ jobs:
                             for y in range(center_y-radius, center_y+radius+1)
                             for x in range(center_x-radius, center_x+radius+1)]
                   fraction = sum(max(abs(a-b) for a,b in zip(pixel, foot)) > 10 for pixel in pixels) / len(pixels)
+                  row_changed = [sum(max(abs(a-b) for a,b in zip(tuple(rows[y][x*3:x*3+3]), foot)) > 10
+                                     for x in range(center_x-radius, center_x+radius+1))
+                                 for y in range(center_y-radius, center_y+radius+1)]
+                  unique_colors = Counter(pixels)
                   print('ARCTIC-TASKBAR-FAILING-PROBE ' + json.dumps({
                       'path': failing_image, 'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest(),
                       'width': width, 'height': height, 'non_foot_fraction': fraction,
-                      'hidden_limit': 0.1, 'sampled_pixels': len(pixels),
+                      'hidden_limit': 0.1, 'sampled_pixels': len(pixels), 'row_changed': row_changed,
+                      'foot_pixels': unique_colors[foot], 'unique_colors': len(unique_colors),
                   }, sort_keys=True))
 
                   prefixes = ('ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
