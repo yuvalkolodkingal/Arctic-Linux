@@ -32,6 +32,6 @@
     "producer_mode": "frozen-external-paired-v1",
     "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false
 }
