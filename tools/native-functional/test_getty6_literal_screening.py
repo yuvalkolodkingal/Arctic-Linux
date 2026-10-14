@@ -23,8 +23,8 @@ BACKEND_OBSERVER_ADDITIONS = (
 
 INSTALLED_IDENTITY_START = b'def installed_user_command(nonce):\n'
 INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
-INSTALLED_IDENTITY_BYTES = 4312
-INSTALLED_IDENTITY_SHA256 = 'd22d8bf36fd1a1ee926305dd54949e9fb1186aa95614ff58bafc936b5b0dfc81'
+INSTALLED_IDENTITY_BYTES = 5221
+INSTALLED_IDENTITY_SHA256 = '42d2aab4497e7d5d61c6954740b671697965b6e5b51a3955f5657c663892874e'
 INSTALLED_PROOF_REPLACEMENTS = (
     (b"    'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),\n"
      b"        ('fresh installed proof did not complete', 'proof-incomplete'),\n"
@@ -33,7 +33,9 @@ INSTALLED_PROOF_REPLACEMENTS = (
      b"        ('installed user login did not reach its identity challenge', 'identity-login-failed'),\n"
      b"        ('installed user identity response differs', 'identity-response-differs'),\n"
      b"        ('installed user identity deadline exceeded', 'identity-deadline'),\n"
-     b"        ('exact installed user identity was not observed; sudo input refused', 'identity-response-absent'),\n"
+     b"        ('installed user identity challenge was not issued; sudo input refused', 'identity-challenge-not-sent'),\n"
+     b"        ('exact installed user identity was not observed after exact prompt; sudo input refused', 'identity-response-after-prompt-absent'),\n"
+     b"        ('exact installed user identity was not observed after readiness fallback; sudo input refused', 'identity-response-after-fallback-absent'),\n"
      b"        ('installed guest proof failed', 'helper-failed'),\n"
      b"        ('fresh installed authentication/receipt is ambiguous', 'helper-ambiguous'),\n"
      b"        ('fresh installed helper context/authentication differs', 'helper-binding')),\n",

@@ -48,7 +48,9 @@ DIAGNOSTIC_LITERALS = {
         ('installed user login did not reach its identity challenge', 'identity-login-failed'),
         ('installed user identity response differs', 'identity-response-differs'),
         ('installed user identity deadline exceeded', 'identity-deadline'),
-        ('exact installed user identity was not observed; sudo input refused', 'identity-response-absent'),
+        ('installed user identity challenge was not issued; sudo input refused', 'identity-challenge-not-sent'),
+        ('exact installed user identity was not observed after exact prompt; sudo input refused', 'identity-response-after-prompt-absent'),
+        ('exact installed user identity was not observed after readiness fallback; sudo input refused', 'identity-response-after-fallback-absent'),
         ('installed guest proof failed', 'helper-failed'),
         ('fresh installed authentication/receipt is ambiguous', 'helper-ambiguous'),
         ('fresh installed helper context/authentication differs', 'helper-binding')),
@@ -392,6 +394,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     command = installed_user_command(nonce)
     require(expected not in command, 'installed user command can mimic its response')
     sent = False
+    sent_after_exact_prompt = False
     greeting_exit_sent = False
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
@@ -420,22 +423,35 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         if not sent and observed_line is not None and observed_line != 'Password:':
             if not installed_shell_ready(observed_line):
                 # Fish can render its greeting before the first prompt and
-                # discard input typed during startup. One nonsecret Return is
-                # sufficient to reveal a fresh prompt; no challenge or secret
-                # is sent until the exact shell identity is visible.
+                # discard input typed during startup. Send one nonsecret Return
+                # first. If OCR still cannot identify the cosmetic prompt on a
+                # later physical frame, the nonsecret challenge itself is the
+                # authoritative readiness/identity proof. Sudo input remains
+                # forbidden until its fresh exact response is visible.
                 if not greeting_exit_sent:
                     require(time.monotonic() + .3 < deadline,
                             'installed user identity deadline exceeded')
                     vm.keys('ret')
                     greeting_exit_sent = True
+                else:
+                    require(time.monotonic() + len(command)*.08 + .3 < deadline,
+                            'installed user identity deadline exceeded')
+                    vm.type_text(command, gap=.08); vm.keys('ret')
+                    require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+                    sent = True
             else:
                 require(time.monotonic() + len(command)*.08 + .3 < deadline,
                         'installed user identity deadline exceeded')
                 vm.type_text(command, gap=.08); vm.keys('ret')
                 require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
                 sent = True
+                sent_after_exact_prompt = True
         time.sleep(.5)
-    raise RuntimeError('exact installed user identity was not observed; sudo input refused')
+    if not sent:
+        raise RuntimeError('installed user identity challenge was not issued; sudo input refused')
+    if sent_after_exact_prompt:
+        raise RuntimeError('exact installed user identity was not observed after exact prompt; sudo input refused')
+    raise RuntimeError('exact installed user identity was not observed after readiness fallback; sudo input refused')
 
 
 def boot_installed(vm, startup, vmtest, out, context):

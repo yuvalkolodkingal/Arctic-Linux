@@ -47,7 +47,9 @@ Console login and sudo use a random disposable credential stored only in private
 test-CD data. Secret input is permitted only after host OCR observes the actual
 last getty or sudo password prompt. The Fish home prompt was checked against the
 officially signed Fedora 4.6.0 package bytes; that static inspection is not proof of a
-future candidate's runtime prompt. A mismatch fails before further secret input.
+future candidate's runtime prompt. After one nonsecret Return, an unrecognized
+cosmetic prompt may receive only the nonsecret challenge. Sudo input remains
+forbidden until the fresh exact UID/name response is physically observed.
 
 The four live guest captures, actual VT-away host capture and two pre-input console
 prompt captures form a mandatory seven-image manual review inventory. The OCR

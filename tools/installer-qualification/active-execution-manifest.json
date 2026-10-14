@@ -7,7 +7,7 @@
     "tools/installer-qualification/active-guest.py": "7a8d96c29526acd89cc635428b5f9e02175d89b32e285a551549795ed4ef48a8",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
-    "tools/installer-qualification/driver.py": "ecc749625ac6f078edfc0e3c453284d8e13443bc08ba00001645b286f746f23b",
+    "tools/installer-qualification/driver.py": "3202ad1dbe1ae3dba7d499ddad521c6e349870048dda7540bc15a06a8eb47194",
     "tools/installer-qualification/evidence.py": "de5e491879b457414965cc9ad81051d622a50d3c9306cebd77ae11107642564d",
     "tools/installer-qualification/guest.py": "c5c7a420b1e3af552fee8440a9f4fa39b638ed4a05ad1deef3b6639629cf5745",
     "tools/installer-qualification/installed-guest.py": "1e2e592d97878f7348ad6d81e1ef617ee04634f6188d8992824100f657c6be1e",

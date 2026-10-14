@@ -92,6 +92,35 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertEqual(calls[0], ('keys', ('ret',)))
         self.assertNotIn(self.secret, repr(calls))
 
+    def test_unrecognized_cosmetic_prompt_uses_one_nonsecret_readiness_fallback(self):
+        expected = (D.installed_user_line(self.nonce) + '\n').encode()
+        proof, calls, _ = self.exercise([
+            b'Welcome to fish, the friendly interactive shell\n',
+            b'arcticqual at arctic-qual home prompt\n', expected])
+        self.assertIs(type(proof), dict)
+        self.assertEqual([call[0] for call in calls], ['keys', 'text', 'keys'])
+        self.assertEqual(calls[0], ('keys', ('ret',)))
+        self.assertNotIn(self.secret, repr(calls))
+
+    def test_absent_response_reports_fixed_challenge_basis_without_private_text(self):
+        cases = (
+            ([b''], 'installed user identity challenge was not issued; sudo input refused', []),
+            ([b'arcticqual@arctic-qual ~>\n'],
+             'exact installed user identity was not observed after exact prompt; sudo input refused',
+             ['text', 'keys']),
+            ([b'Welcome to fish, the friendly interactive shell\n'],
+             'exact installed user identity was not observed after readiness fallback; sudo input refused',
+             ['keys', 'text', 'keys']),
+        )
+        for outputs, message, expected_calls in cases:
+            with self.subTest(message=message):
+                error, calls, _ = self.exercise(outputs)
+                self.assertIs(type(error), RuntimeError)
+                self.assertEqual(error.args, (message,))
+                self.assertEqual([call[0] for call in calls], expected_calls)
+                self.assertNotIn(self.secret, repr(error))
+                self.assertNotIn(self.nonce, repr(error))
+
     def test_wrong_or_replayed_response_never_authorizes_sudo(self):
         wrong = (
             (D.installed_user_line(self.nonce) + '\n').encode(),
@@ -124,7 +153,9 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             'installed user login did not reach its identity challenge': 'identity-login-failed',
             'installed user identity response differs': 'identity-response-differs',
             'installed user identity deadline exceeded': 'identity-deadline',
-            'exact installed user identity was not observed; sudo input refused': 'identity-response-absent',
+            'installed user identity challenge was not issued; sudo input refused': 'identity-challenge-not-sent',
+            'exact installed user identity was not observed after exact prompt; sudo input refused': 'identity-response-after-prompt-absent',
+            'exact installed user identity was not observed after readiness fallback; sudo input refused': 'identity-response-after-fallback-absent',
             'installed guest proof failed': 'helper-failed',
         }
         for message, label in expected.items():
