@@ -223,6 +223,7 @@ jobs:
                       'width': width, 'height': height, 'non_foot_fraction': fraction,
                       'hidden_limit': 0.1, 'sampled_pixels': len(pixels), 'row_changed': row_changed,
                       'foot_pixels': unique_colors[foot], 'unique_colors': len(unique_colors),
+                      'top_colors': [list(color) + [count] for color, count in unique_colors.most_common(8)],
                   }, sort_keys=True))
 
                   prefixes = ('ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
