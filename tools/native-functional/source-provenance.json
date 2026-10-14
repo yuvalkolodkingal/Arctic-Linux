@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b",
+  "native_source_sha256": "3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b",
   "files": {
-    "native_smoke.py": "c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b",
-    "guest-check-native-v6.py": "31131b4deddb87ea0a7b3f92f78d6ba9785084f929e385d068f87ddf0fe59274",
+    "native_smoke.py": "3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b",
+    "guest-check-native-v6.py": "73b7ec978882c2b163c9ff787134f30c7d10a6f3b92918995413d30b97712e8b",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -27,14 +27,14 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "92bca07bec90b481f6e0aa40be5c7b488c6d878c33ea0830f8bc06a913b27cfa",
     "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
-    "test_native_v6.py": "1dc72f3ab0423a829549a5bc00bbb92bf3dc7a0c6eb83a175a916f59bd12dd54",
+    "test_native_v6.py": "5e0a5f138da884931bdb9f4717b46acd1dbb986780efa1cd56aec063a5de376f",
     "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
-    "test_native_protocol_diagnostics.py": "06d8feb918d66c9aab3aa0d728c2b38b095d3489fa6a65bee3de4f78e5d8395c",
+    "test_native_protocol_diagnostics.py": "b90440c4c23e1d1a229a076b46e269a458606f83b4e45a6f8e5cfca492983dbd",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
-    "test_native_capture_controls.py": "b058a9a3c328639181cb2de7867aaceacde73f35517ba4791bac09c9c830dcc3",
+    "test_native_capture_controls.py": "f4b152b8d557cdb3a65bbfe6056088c4bd65e05f8bf16bbd6e941e3134e21937",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "72a6ce278d3a7a779d26633a05078fe6edb92d9f17539952ed4b33ccaa99b8e3",
+    "test_controls_state_trials.py": "4ab2bbc29b3cb71c2fcea00b5ddc0ac983214fbae7c27581307701bc0a028b44",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -88,7 +88,10 @@
       "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
     },
     "playback_clock_advancement_required": true,
-    "capture_retry_bound": "six fresh captures within eight seconds"
+    "capture_retry_bound": "six fresh captures within eight seconds",
+    "primary_private_initial_state": "show-controls true, exact keyfile set plus readback before each owned player launch",
+    "primary_transition": "verified true-to-false through the existing authenticated Celluloid action",
+    "maximum_owned_player_attempts_seeded": 2
   },
   "bulk_evidence_transport": {
     "UART_records_unchanged": [
@@ -330,6 +333,22 @@
     "matrix_edges_scales_outputs_modes_cases_unchanged": true,
     "pixel_oracle_pointer_product_iso_and_cleanup_gates_unchanged": true,
     "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
+  },
+  "primary_private_controls_seed": {
+    "trigger": "causal primary false-to-false captures had zero reference-color candidates while same-fixture true-to-false control matched",
+    "scope": "disposable primary reference players only; exact private XDG_CONFIG_HOME and GSETTINGS_BACKEND=keyfile",
+    "maximum_owned_player_attempts": 2,
+    "set_and_readback_before_each_launch": true,
+    "supported_authenticated_hide_action_retained": true,
+    "capture_attempt_limit_per_player": 6,
+    "oracle_thresholds_unchanged": true,
+    "timeouts_unchanged": true,
+    "taskbar_matrix_pointer_and_product_unchanged": true,
+    "causal_run_id": 38506968441,
+    "causal_artifact_id": 11869217337,
+    "causal_artifact_sha256": "207c74795b8c914697801fe39426e41e69aca22ca8d487f4250ddd8d2f4df65a",
+    "inspector_run_id": 38510136841,
     "release_acceptance": false
   }
 }
