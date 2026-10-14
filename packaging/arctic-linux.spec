@@ -890,6 +890,7 @@ install -Dpm 0755 packaging/dictation/arctic-dictation-toggle %{buildroot}%{_bin
 install -Dpm 0755 packaging/dictation/voxtype %{buildroot}%{_bindir}/voxtype
 install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-setup
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
+install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
 install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
@@ -1587,6 +1588,7 @@ fi
 %{_bindir}/voxtype
 %{_libexecdir}/arctic/arctic-voxtype-setup
 %{_libexecdir}/arctic/arctic-voxtype-host-profile
+%{_libexecdir}/arctic/arctic-voxtype-configure
 %{_datadir}/arctic/dictation/
 %{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 %{_unitdir}/arctic-dictation-setup.service

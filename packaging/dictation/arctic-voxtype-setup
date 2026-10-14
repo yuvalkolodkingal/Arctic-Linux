@@ -127,17 +127,26 @@ asset_values() {
     esac
 }
 install_asset() {
-    local variant=$1 tmp=$2 keyring=$3 name bytes sha sig_bytes sig_sha
+    local variant=$1 tmp=$2 keyring=$3 name bytes sha sig_bytes sig_sha target legacy=
     local -a values
     name="voxtype-$VERSION-linux-x86_64-$variant"
     mapfile -t values < <(asset_values "$variant")
     bytes=${values[0]}; sha=${values[1]}; sig_bytes=${values[2]}; sig_sha=${values[3]}
+    grep -Fq "$sha  $name" "$tmp/SHA256SUMS.txt"
+    target="$DEST/voxtype-$variant"
+    case "$variant" in baseline) legacy="$DEST/voxtype-cpu" ;; avx2) legacy="$DEST/voxtype-cpu-avx2" ;; esac
+    if [[ -x $target ]] && verify_file "$target" "$bytes" "$sha"; then return; fi
+    if [[ -n $legacy && -f $legacy && ! -L $legacy && $(stat -c %u:%a "$legacy") == 0:755 ]] && verify_file "$legacy" "$bytes" "$sha"; then
+        cp --reflink=auto -- "$legacy" "$target.new"
+        chmod 0755 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
+        mv -f "$target.new" "$target"
+        return
+    fi
     download_pinned "$RELEASE/$name" "$CACHE/$name" "$bytes" "$sha"
     download_pinned "$RELEASE/$name.asc" "$CACHE/$name.asc" "$sig_bytes" "$sig_sha"
-    grep -Fq "$sha  $name" "$tmp/SHA256SUMS.txt"
     verify_signature "$CACHE/$name.asc" "$CACHE/$name" "$keyring"
-    install -D -m 0755 "$CACHE/$name" "$DEST/voxtype-$variant.new"
-    mv -f "$DEST/voxtype-$variant.new" "$DEST/voxtype-$variant"
+    install -D -m 0755 "$CACHE/$name" "$target.new"
+    mv -f "$target.new" "$target"
 }
 prepare_release_metadata() {
     prepare_keyring "$2"
@@ -155,58 +164,27 @@ as_user() {
     runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" "$@"
 }
 configure_user() {
-    local user=$1 home=$2 model=$3 config="$home/.config/voxtype/config.toml" group temporary backup
-    group=$(id -gn "$user")
-    install -d -m 0700 -o "$user" -g "$group" "$home/.config/voxtype"
-    backup="$config.pre-arctic-voxtype-v1"
-    if [ -s "$config" ] && [ ! -e "$backup" ]; then
-        install -m 0600 -o "$user" -g "$group" "$config" "$backup"
-    fi
-    temporary=$(mktemp "$home/.config/voxtype/config.toml.XXXXXX")
-    cat >"$temporary" <<CONFIG
-# Managed safe defaults for Arctic's local-only VoxType integration.
-engine = "whisper"
-state_file = "auto"
+    local user=$1 home=$2 model=$3
+    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model"
+}
 
-[hotkey]
-enabled = false
+reuse_legacy_model() {
+    local name=$1 bytes=$2 sha=$3 source="$DEST/$1" target="$MODELS/$1"
+    [[ -f $target ]] && verify_file "$target" "$bytes" "$sha" && return 0
+    [[ -f $source && ! -L $source && $(stat -c %u:%a "$source") == 0:644 ]] || return 1
+    verify_file "$source" "$bytes" "$sha" || return 1
+    mkdir -p "$MODELS"
+    cp --reflink=auto -- "$source" "$target.new"
+    chmod 0644 "$target.new"; verify_file "$target.new" "$bytes" "$sha"
+    mv -f "$target.new" "$target"
+}
 
-[audio]
-device = "default"
-sample_rate = 16000
-max_duration_secs = 60
-pause_media = false
-duck_media = false
-
-[whisper]
-mode = "local"
-model = "$model"
-language = ["he", "en"]
-translate = false
-on_demand_loading = true
-
-[text]
-filter_filler_words = false
-
-[output]
-mode = "type"
-driver_order = ["wtype"]
-fallback_to_clipboard = false
-auto_submit = false
-shift_enter_newlines = false
-wait_for_modifier_release = false
-
-[output.notification]
-on_recording_start = false
-on_recording_stop = false
-on_transcription = false
-
-[osd]
-enabled = false
-CONFIG
-    chown "$user:$group" "$temporary"; chmod 0600 "$temporary"
-    as_user "$user" "$home" /usr/bin/voxtype --config "$temporary" config get whisper.language --json >/dev/null
-    mv -f "$temporary" "$config"
+cleanup_legacy_payload() {
+    # Keep the old controller payload usable until the direct receipt and marker
+    # are both durable. Exact compatible bytes were copied/reflinked above.
+    [[ -r $STATE/verified.json && -r $STATE/upstream-direct-v1 ]] || return
+    rm -f -- "$DEST/voxtype-cpu" "$DEST/voxtype-cpu-avx2" "$DEST/voxtype-vulkan" \
+        "$DEST/$SMALL_NAME" "$DEST/$TURBO_NAME"
 }
 
 setup_user() {
@@ -223,10 +201,12 @@ setup_user() {
         binary_bytes=$BASELINE_BYTES; binary_sha=$BASELINE_SHA
     fi
     install_asset "$cpu" "$tmp" "$keyring"
-    download_pinned "$model_url" "$CACHE/$model_name" "$model_bytes" "$model_sha"
-    install -D -m 0644 "$CACHE/$model_name" "$MODELS/$model_name.new"
-    mv -f "$MODELS/$model_name.new" "$MODELS/$model_name"
     model_path="$MODELS/$model_name"
+    if ! reuse_legacy_model "$model_name" "$model_bytes" "$model_sha"; then
+        download_pinned "$model_url" "$CACHE/$model_name" "$model_bytes" "$model_sha"
+        install -D -m 0644 "$CACHE/$model_name" "$model_path.new"
+        mv -f "$model_path.new" "$model_path"
+    fi
     configure_user "$user" "$home" "$model_path"
     systemctl --global enable voxtype.service >/dev/null
     printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
@@ -235,6 +215,7 @@ setup_user() {
         "$VERSION" "$SOURCE_COMMIT" "$FINGERPRINT" "$user" "$profile" "$cpu" "$binary_bytes" "$binary_sha" "$model_path" "${model_name#ggml-}" "$model_bytes" "$model_sha" >"$receipt"
     chmod 0644 "$receipt"; mv -f "$receipt" "$STATE/verified.json"
     printf '%s\n' upstream-direct-v1 | install -m 0644 /dev/stdin "$STATE/upstream-direct-v1"
+    cleanup_legacy_payload
     rm -f "$STATE/pending" "$STATE/setup.error"; printf '%s\n' ready | install -m 0644 /dev/stdin "$STATE/setup.state"
     uid=$(id -u "$user")
     if [ -S "/run/user/$uid/bus" ]; then

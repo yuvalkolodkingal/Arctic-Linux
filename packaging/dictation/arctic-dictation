@@ -2,6 +2,22 @@
 # Arctic setup/readiness adapter. Recording and transcription commands are
 # intentionally absent: Mango and the shell invoke official VoxType directly.
 set -eu
+private_runtime() {
+    uid=$(id -u)
+    base=${XDG_RUNTIME_DIR:-/run/user/$uid}
+    if [ -z "$base" ] || [ ! -d "$base" ] || [ -L "$base" ] || [ "$(stat -c %u:%a "$base" 2>/dev/null || true)" != "$uid:700" ]; then
+        runtime=/tmp/arctic-$uid
+    else
+        runtime=$base/arctic
+    fi
+    if [ ! -e "$runtime" ] && [ ! -L "$runtime" ]; then mkdir -m 0700 "$runtime" 2>/dev/null || return 1; fi
+    [ ! -L "$runtime" ] && [ -d "$runtime" ] && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    printf '%s\n' "$runtime"
+}
+clear_runtime_error() {
+    runtime=$(private_runtime 2>/dev/null) || return 0
+    rm -f "$runtime/voxtype-error"
+}
 status() {
     state=unavailable error= language=auto backend=cpu integrity_ready=false
     if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ]; then
@@ -60,9 +76,10 @@ status() {
                 he) language=he ;;
                 en) language=en ;;
             esac
-            runtime=${XDG_RUNTIME_DIR:-/tmp}/arctic
-            mkdir -p -m 0700 "$runtime"
-            if [ "$state" = recording ] || [ "$state" = transcribing ]; then
+            if ! runtime=$(private_runtime); then
+                state=error
+                error='The private dictation runtime directory is unsafe. Sign out and back in before trying again.'
+            elif [ "$state" = recording ] || [ "$state" = transcribing ]; then
                 rm -f "$runtime/voxtype-error"
             else
                 recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
@@ -107,7 +124,7 @@ case ${1:-} in
     retry)
         [ $# = 1 ] || exit 2
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --retry; then
-            rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+            clear_runtime_error
             systemctl --user daemon-reload || :
             systemctl --user enable --now voxtype.service || :
         fi
@@ -125,14 +142,14 @@ case ${1:-} in
             voxtype --config "$config" config get whisper.language --json >/dev/null
         fi
         systemctl --user restart voxtype.service || :
-        rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+        clear_runtime_error
         status
         ;;
     set-backend)
         [ $# = 2 ] || exit 2
         case "$2" in cpu|vulkan) ;; *) exit 2 ;; esac
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --backend "$2"; then
-            rm -f "${XDG_RUNTIME_DIR:-/tmp}/arctic/voxtype-error"
+            clear_runtime_error
             systemctl --user daemon-reload || :
             systemctl --user enable voxtype.service || :
             systemctl --user restart voxtype.service || :

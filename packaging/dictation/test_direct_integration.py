@@ -13,6 +13,7 @@ D = ROOT / "packaging/dictation"
 class DirectUpstreamIntegration(unittest.TestCase):
     def test_shells_parse_and_old_runtime_is_gone(self):
         for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-dictation-toggle", "sh"), ("arctic-voxtype-setup", "bash"),
+                            ("arctic-voxtype-configure", "sh"),
                             ("arctic-voxtype-host-profile", "sh")):
             subprocess.run([shell, "-n", str(D / name)], check=True)
         for name in ("dictation.py", "child_exec.py", "arctic-dictation-install", "arctic-dictation-setup"):
@@ -34,22 +35,33 @@ class DirectUpstreamIntegration(unittest.TestCase):
 
     def test_release_identity_integrity_and_privacy_are_pinned(self):
         setup = (D / "arctic-voxtype-setup").read_text()
+        config = (D / "arctic-voxtype-configure").read_text()
         for value in (
             "e2638ca63f566f1682bcedc0abea8e4b25211c21",
             "9CCF7915B750CAE8B095ED1AA3FC9F33FD209279",
             "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
-            "download_pinned", "verify_signature", 'language = ["he", "en"]',
-            'driver_order = ["wtype"]', "fallback_to_clipboard = false",
-            "on_demand_loading = true", "filter_filler_words = false",
+            "download_pinned", "verify_signature",
         ):
             self.assertIn(value, setup)
+        for value in ('language = ["he", "en"]', 'driver_order = ["wtype"]',
+                      "fallback_to_clipboard = false", "on_demand_loading = true",
+                      "filter_filler_words = false"):
+            self.assertIn(value, config)
         unit = (ROOT / "packaging/systemd/voxtype.service").read_text()
         self.assertIn("UnsetEnvironment=RUST_LOG", unit)
         self.assertIn("ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon", unit)
         self.assertIn("VOXTYPE_REMOTE_ENDPOINT", unit)
         self.assertIn("VOXTYPE_WHISPER_API_KEY", unit)
-        for name in ("VOXTYPE_ON_DEMAND_LOADING", "VOXTYPE_MAX_DURATION_SECS", "VOXTYPE_AUDIO_DEVICE", "SONIOX_API_KEY"):
+        for name in (
+            "VOXTYPE_ON_DEMAND_LOADING", "VOXTYPE_THREADS", "VOXTYPE_GPU_ISOLATION", "VOXTYPE_GPU_DEVICE",
+            "VOXTYPE_FLASH_ATTENTION", "VOXTYPE_VULKAN_DEVICE", "VOXTYPE_OPENVINO_DIR", "VOXTYPE_OPENVINO_DEVICE",
+            "VOXTYPE_OPENVINO_MODEL", "VOXTYPE_MAX_DURATION_SECS", "VOXTYPE_AUDIO_DEVICE", "VOXTYPE_AUDIO_FEEDBACK",
+            "VOXTYPE_PAUSE_MEDIA", "VOXTYPE_DUCK_MEDIA", "VOXTYPE_DUCK_MEDIA_VOLUME_PERCENT", "VOXTYPE_DUCK_MEDIA_FADE_MS",
+            "VOXTYPE_WTYPE_SHIFT_PREFIX", "VOXTYPE_PRE_TYPE_DELAY", "VOXTYPE_TYPE_DELAY", "VOXTYPE_DOTOOL_XKB_LAYOUT",
+            "VOXTYPE_DOTOOL_XKB_VARIANT", "VOXTYPE_EITYPE_XKB_LAYOUT", "VOXTYPE_EITYPE_XKB_VARIANT",
+            "VOXTYPE_RESTORE_CLIPBOARD_DELAY_MS", "SONIOX_API_KEY",
+        ):
             self.assertIn(name, unit)
         self.assertIn("UMask=0077", unit)
         self.assertIn("RestrictAddressFamilies=AF_UNIX", unit)
@@ -101,6 +113,17 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertIn('flock --exclusive --timeout 10 9', setup)
         self.assertIn('stat -c %u:%a "$lockdir"', setup)
         self.assertLess(setup.index('acquire_setup_lock\ncase'), setup.index('    --install)'))
+        self.assertIn('reuse_legacy_model', setup)
+        self.assertIn('cp --reflink=auto', setup)
+        self.assertLess(setup.index('upstream-direct-v1 | install'), setup.index('\n    cleanup_legacy_payload'))
+
+    def test_runtime_error_cache_is_per_uid_and_no_follow(self):
+        adapter = (D / "arctic-dictation").read_text()
+        self.assertIn('base=${XDG_RUNTIME_DIR:-/run/user/$uid}', adapter)
+        self.assertIn('runtime=/tmp/arctic-$uid', adapter)
+        self.assertIn('[ ! -L "$runtime" ]', adapter)
+        self.assertIn('stat -c %u:%a "$runtime"', adapter)
+        self.assertNotIn('${XDG_RUNTIME_DIR:-/tmp}/arctic', adapter)
 
     def test_bad_complete_partial_is_restarted_and_unready_pill_opens_settings(self):
         setup = (D / "arctic-voxtype-setup").read_text()
@@ -126,6 +149,31 @@ class DirectUpstreamIntegration(unittest.TestCase):
             self.assertEqual(classify([flags, flags]), "small-v2", missing)
         mixed = " ".join(flag for flag in required.split() if flag != "fma")
         self.assertEqual(classify([required, mixed]), "small-v2")
+
+    def test_user_config_rejects_symlinks_without_touching_targets(self):
+        helper = D / "arctic-voxtype-configure"
+        model = "/opt/arctic/voxtype/models/ggml-small.bin"
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder); home = root / "home"; home.mkdir()
+            outside = root / "outside"; outside.mkdir()
+            (home / ".config").symlink_to(outside, target_is_directory=True)
+            linked_dir = subprocess.run([str(helper), model], env=dict(os.environ, HOME=str(home)), capture_output=True)
+            self.assertNotEqual(linked_dir.returncode, 0)
+            self.assertEqual(list(outside.iterdir()), [])
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder); home = root / "home"; directory = home / ".config/voxtype"
+            directory.mkdir(parents=True); target = root / "target"; target.write_text("root-readable sentinel")
+            (directory / "config.toml").symlink_to(target)
+            linked_config = subprocess.run([str(helper), model], env=dict(os.environ, HOME=str(home)), capture_output=True)
+            self.assertNotEqual(linked_config.returncode, 0)
+            self.assertEqual(target.read_text(), "root-readable sentinel")
+            self.assertFalse((directory / "config.toml.pre-arctic-voxtype-v1").exists())
+        setup = (D / "arctic-voxtype-setup").read_text()
+        configure_start = setup.index("configure_user() {")
+        configure = setup[configure_start:setup.index("\n}\n", configure_start) + 3]
+        self.assertIn("as_user", configure)
+        for root_operation in ("install ", "chown", "mktemp", "mv "):
+            self.assertNotIn(root_operation, configure)
 
     def test_activation_guard_calls_only_upstream_and_never_exposes_command_error(self):
         helper = D / "arctic-dictation-toggle"
