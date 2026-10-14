@@ -176,8 +176,11 @@ class Lines:
         self.timeout = timeout
         self.buffer = bytearray()
 
-    def read(self):
-        deadline = time.monotonic() + self.timeout
+    def read(self, timeout=None):
+        duration = self.timeout if timeout is None else min(self.timeout, timeout)
+        c.require(type(duration) is int and 1 <= duration <= 7200,
+                  "private capture channel timeout differs")
+        deadline = time.monotonic() + duration
         while b"\n" not in self.buffer:
             remaining = deadline - time.monotonic()
             c.require(remaining > 0, "private capture channel timed out")
@@ -365,6 +368,115 @@ def _remove_path(path: Path):
         path.unlink(missing_ok=True)
 
 
+def _install_seal(lines: Lines, progress: list) -> str:
+    """Consume only strict lifecycle projections until the install seal arrives."""
+    c.require(type(progress) is list and not progress, "installation progress already exists")
+    while True:
+        if not progress:
+            stage_timeout = 300
+        elif progress[-1]["status"] == "passed":
+            stage_timeout = 60
+        else:
+            stage_timeout = {
+                "live-helper": 300, "graphical-session": 360, "installer-ipc": 240,
+                "page-welcome": 180, "page-keyboard": 180, "online-route": 180,
+                "page-network": 180, "page-timezone": 180, "page-disk": 180,
+                "page-encryption": 180, "page-account": 180, "page-apps": 180,
+                "page-summary": 180, "installation": 5400, "target-mount": 180,
+                "install-seal": 180, "host-handoff": 60,
+            }[progress[-1]["stage"]]
+        line = lines.read(stage_timeout)
+        if line.startswith(c.INSTALL_PROGRESS_PREFIX):
+            value = c.strict_json(line[len(c.INSTALL_PROGRESS_PREFIX):])
+            c.install_progress(value)
+            c.require(value["sequence"] == len(progress) and len(progress) < 63,
+                      "installation progress sequence differs")
+            if progress:
+                previous = progress[-1]
+                c.require(previous["status"] != "failed",
+                          "installation progress continued after failure")
+                if value["status"] == "passed":
+                    c.require(previous["stage"] == value["stage"]
+                              and previous["status"] == "started",
+                              "installation progress completion differs")
+                elif value["status"] == "failed":
+                    c.require(previous["stage"] == value["stage"]
+                              and previous["status"] == "started",
+                              "installation progress failure differs")
+                else:
+                    c.require(previous["status"] == "passed",
+                              "installation progress transition differs")
+                    started = [item["stage"] for item in progress
+                               if item["status"] == "started"]
+                    if previous["stage"] == "online-route":
+                        expected = {"page-network", "page-timezone"}
+                    elif previous["stage"] == "page-network":
+                        expected = {"page-timezone"}
+                    else:
+                        order = ["live-helper", "graphical-session", "installer-ipc",
+                                 "page-welcome", "page-keyboard", "online-route",
+                                 "page-timezone", "page-disk", "page-encryption",
+                                 "page-account", "page-apps", "page-summary", "installation",
+                                 "target-mount", "install-seal", "host-handoff"]
+                        c.require(previous["stage"] in order[:-1],
+                                  "installation progress has no next stage")
+                        expected = {order[order.index(previous["stage"]) + 1]}
+                    c.require(value["stage"] in expected and value["stage"] not in started,
+                              "installation progress stage order differs")
+            else:
+                c.require(value["stage"] == "live-helper"
+                          and value["status"] in ("started", "failed"),
+                          "installation progress start differs")
+            progress.append(value)
+            if value["status"] == "failed":
+                raise c.Invalid("guest installation reported a bounded failure")
+            continue
+        c.require(line.startswith(c.INSTALL_PREFIX), "installed image seal missing")
+        c.require(progress and progress[-1]["stage"] == "host-handoff"
+                  and progress[-1]["status"] == "started",
+                  "installed image seal arrived before completed lifecycle")
+        return line
+
+
+def _failure_code(error, cleanup_failure) -> str:
+    if cleanup_failure is not None:
+        return "cleanup-failed"
+    message = str(error)
+    if message == "private capture channel timed out":
+        return "private-channel-timeout"
+    if message == "guest installation reported a bounded failure":
+        return "guest-install-failed"
+    if message.startswith("capture VM exited"):
+        return "vm-exited"
+    if isinstance(error, OSError):
+        return "host-io-failed"
+    return "capture-contract-failed"
+
+
+def _write_failure_report(path: Path, phase: str, progress: list, error, cleanup_failure):
+    value = {"schema": "arctic-showcase-capture-failure-v1", "status": "failed",
+             "release_acceptance": False, "image": dict(c.IMAGE), "host_phase": phase,
+             "failure_code": _failure_code(error, cleanup_failure),
+             "guest_progress": list(progress), "private_runtime_removed": True,
+             "screens_exported": False, "logs_exported": False, "pixels_exported": False,
+             "privacy": {"content": "no guest text, logs, screenshots or pixels exported",
+                         "human_review": "not_applicable"}}
+    c.capture_failure(value)
+    data = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    c.require(len(data) <= 32_768, "capture failure projection is oversized")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                 | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        at = 0
+        while at < len(data):
+            written = os.write(fd, data[at:])
+            c.require(written > 0, "capture failure projection write failed")
+            at += written
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def _open_guest_channel(path=None):
     """Open the protected virtio port as the active non-root desktop user."""
     channel = Path(path) if path is not None else Path("/dev/virtio-ports") / c.VM_CHANNEL
@@ -393,6 +505,11 @@ def host_mode(args) -> int:
     capture_source = destination.with_name(destination.name + ".screened-source")
     for path in (destination, archive_path, digest_path, capture_source):
         c.require(not path.exists() and not path.is_symlink(), "refusing to replace capture output")
+    failure_path = Path(args.failure_report).absolute() if args.failure_report else None
+    if failure_path is not None:
+        c.require(failure_path not in (destination, archive_path, digest_path, capture_source)
+                  and not failure_path.exists() and not failure_path.is_symlink(),
+                  "refusing to replace capture failure projection")
     execution = dict(c.REVIEWED_EXECUTION)
     c.execution(execution)
     runtime = destination.with_name(destination.name + ".private-runtime")
@@ -408,6 +525,8 @@ def host_mode(args) -> int:
     process_group_stopped = False
     success = None
     tooling_sha256 = None
+    guest_progress = []
+    phase = "vm-start"
     try:
         listener.bind(str(channel_path))
         os.chmod(channel_path, 0o600)
@@ -435,14 +554,17 @@ def host_mode(args) -> int:
         c.require(args.unattended and args.display == "none" and args.accel == "kvm",
                   "exact capture requires the reviewed unattended KVM controller")
         controller = automation.Controller(qmp, runtime, ocr, fragments, tooling_sha256)
+        phase = "live-boot"
         controller.boot_live_and_start()
-        seal_line = lines.read()
-        c.require(seal_line.startswith(c.INSTALL_PREFIX), "installed image seal missing")
+        phase = "live-install"
+        seal_line = _install_seal(lines, guest_progress)
         # This is an operator transition signal. Its JSON is guest-supplied
         # context and is deliberately not an acceptance/capture predicate.
         seal_context = c.strict_json(seal_line[len(c.INSTALL_PREFIX):])
         c.require(type(seal_context) is dict, "installed image context is not an object")
+        phase = "install-screen-verification"
         controller.verify_install_complete()
+        phase = "installed-transition"
         qmp.eject_iso()
         controller.qmp_event("installed-transition", "eject-exact-iso")
         lines.write(c.INSTALL_ACK)
@@ -452,7 +574,9 @@ def host_mode(args) -> int:
         # same reviewed helper again; the installed probe itself came from and
         # remains bound to the immutable live-install marker.
         lines.write(TOOLING_PREFIX + tooling)
+        phase = "installed-boot"
         controller.boot_installed_and_start()
+        phase = "capture-scenes"
         capture = host.Capture(runtime / "captures", execution, provenance, ocr_identity,
                                qmp.screendump, ocr, fragments)
         for expected_scene in c.SCENES:
@@ -472,6 +596,7 @@ def host_mode(args) -> int:
             lines.write(ack)
             receipts.append(receipt)
         c.require(process.poll() is None, "capture VM exited before bundle export")
+        phase = "cleanup"
         qmp.quit()
         controller.qmp_event("shutdown", "quit")
         _stop_process_group(process)
@@ -531,6 +656,17 @@ def host_mode(args) -> int:
         if failure is not None or cleanup_failure is not None:
             _close_independently([lambda path=path: _remove_path(path)
                                   for path in (destination, archive_path, digest_path)])
+            safe_projection = (not runtime.exists() and not capture_source.exists()
+                               and not any(path.exists() for path in
+                                           (destination, archive_path, digest_path)))
+            if failure_path is not None and safe_projection:
+                report_error = failure if failure is not None else cleanup_failure
+                try:
+                    _write_failure_report(failure_path, phase, guest_progress,
+                                          report_error, cleanup_failure)
+                except BaseException as error:
+                    if failure is None:
+                        failure = error
     if failure is not None:
         raise failure
     if cleanup_failure is not None:
@@ -590,6 +726,7 @@ def parser():
     host_parser.add_argument("--unattended", action="store_true")
     host_parser.add_argument("--timeout", type=int, default=1800)
     host_parser.add_argument("--ocr-timeout", type=int, default=60)
+    host_parser.add_argument("--failure-report")
     guest_parser = subparsers.add_parser("guest", help="request one prepared scene capture",
                                          allow_abbrev=False)
     guest_parser.add_argument("--scene", choices=c.SCENES, required=True)

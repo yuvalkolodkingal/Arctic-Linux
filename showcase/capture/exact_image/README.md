@@ -78,6 +78,21 @@ one-use request. Changing or forging guest diagnostic JSON produces the same
 host receipt for the same pixels. The guest-local installed marker is contextual
 evidence and never release acceptance.
 
+The live installer helper also emits a fixed, content-free lifecycle projection
+over the same owned channel. Each message contains only a sequence number, one
+reviewed stage name and `started`, `passed` or `failed`; the host rejects skipped,
+reordered, duplicated or post-failure messages. This projection does not enter a
+successful capture receipt and cannot relax an installer, screen, scene, privacy
+or human-review gate. It lets a guest-side IPC, installer or seal failure end the
+host wait promptly instead of leaving QEMU's still-open character device silent
+until the outer channel timeout. The pre-Python shell has a fixed EXIT trap that
+can emit only the sequence-zero `live-helper:failed` projection when archive
+validation, extraction or Python launch fails. The host also limits the first
+bootstrap record to five minutes and applies reviewed per-stage deadlines after
+that; only the real installation stage retains its 90-minute allowance. An
+unexpected Python `Exception` is re-raised after a best-effort fixed failure
+record, so its message and guest content never cross the private channel.
+
 The fresh disposable account's top-layer welcome is expected. After the
 Dictation page is open behind it, the host requires `Welcome to Arctic Linux`
 pixels, sends one QMP Escape, and requires both `Dictation is ready` and the
@@ -121,8 +136,13 @@ changes, and only on attempt 1. The activation commit must be a direct child of
 the reviewed preparation commit and may change only
 `.github/qualification-20261014.showcase-capture`. The workflow has read-only
 repository and Actions permissions, verifies every execution-file hash, uses a
-GitHub-hosted Ubuntu 24.04 KVM runner, and uploads only a successfully validated,
-bounded `exact-image-showcase-captures-unreviewed` artifact for 14 days.
+GitHub-hosted Ubuntu 24.04 KVM runner, and uploads a successfully validated,
+bounded `exact-image-showcase-captures-unreviewed` artifact for 14 days. A failed
+host attempt may instead upload one separately validated failure projection. It
+is at most 32 KiB, mode 0600 before upload, remains `release_acceptance:false`,
+and contains no guest text, error strings, logs, screenshots or pixels. The
+workflow first proves that all private runtime, image and capture paths were
+removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
 version, language data and both OCR invocations are pinned in the receipt contract.
 
@@ -132,6 +152,7 @@ The host invocation is:
 showcase/capture/exact_image/capture_vm.py host \
   --candidate-iso /private/Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso \
   --output /private/arctic-showcase-captures \
+  --failure-report /private/showcase-failure-projection.json \
   --display none --accel kvm --unattended --timeout 7200
 ```
 
@@ -158,6 +179,16 @@ cancelled during capture; neither run produced an artifact. The prepared final
 candidate keeps the same 85-minute online-install completion budget used by the
 dictation qualification lane and gives the private host channel 120 minutes.
 Acceptance rules and capture predicates are unchanged.
+
+Final-candidate run `38627574077` later timed out on the first host channel read,
+before the installed-disk seal, ISO ejection, reset, installed boot or any scene
+capture. The old protocol exported no partial state and discarded the private
+runtime, so that run cannot identify which guest-side installer, IPC, mount or
+seal operation stopped. Its roughly 120-minute wait proves only that QEMU kept
+the virtio-serial connection open after the helper stopped or became silent.
+The bounded lifecycle projection fixes that observability and early-termination
+defect. A fresh exact-image run is still required to establish whether the
+underlying operation succeeds; the old timeout is not reusable capture evidence.
 
 These tests cover the transport, fixed VM topology, QMP input records, OCR-derived
 pointer, exact online installer choices, dictation readiness gate, guest-forgery

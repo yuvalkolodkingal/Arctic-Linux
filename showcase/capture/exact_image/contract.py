@@ -66,8 +66,16 @@ REQUEST_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-REQUEST "
 ACK_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-ACK "
 INSTALL_PREFIX = "ARCTIC-SHOWCASE-INSTALL-SEALED "
 INSTALL_ACK = "ARCTIC-SHOWCASE-INSTALL-BOOT-ACK"
+INSTALL_PROGRESS_PREFIX = "ARCTIC-SHOWCASE-INSTALL-PROGRESS "
 AUTOMATION_READY_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-READY "
 AUTOMATION_GO_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-GO "
+INSTALL_PROGRESS_STAGES = (
+    "live-helper", "graphical-session", "installer-ipc",
+    "page-welcome", "page-keyboard", "online-route", "page-network",
+    "page-timezone", "page-disk", "page-encryption", "page-account",
+    "page-apps", "page-summary", "installation", "target-mount",
+    "install-seal", "host-handoff",
+)
 HEX32 = re.compile(r"[0-9a-f]{32}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -197,7 +205,7 @@ def controller_trace(value) -> None:
     }
     text_commands = {
         "live-username": (8, "4f8841fb7db59dee76d1f5b74e14010bb1beabce549fa6da7b790f5497dd0f94"),
-        "live-install": (359, "611f82bcad1908fa9f9ac8ab51af345364198eb25da419a694821d464436b95e"),
+        "live-install": (623, "86818a073728d6702ca128ccb0b3c4e881a170f3887d7386129047ec97a14bde"),
         "installed-username": (14, "b8214c27644e8af628d5030b053746bea3f72aca7325a066a912de18aef48c0a"),
         "installed-shell-proof": (119, "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"),
         "installed-scenes": (417, "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"),
@@ -412,6 +420,53 @@ def install_seal(value) -> None:
     image_identity(value["iso"])
     probe_identity(value["probe"])
     channel_access(value["channel_access"])
+
+
+def install_progress(value) -> None:
+    """Validate the privacy-safe live-install lifecycle projection."""
+    require(type(value) is dict and set(value) == {
+        "schema", "sequence", "stage", "status", "release_acceptance"
+    } and value["schema"] == "arctic-showcase-install-progress-v1"
+        and type(value["sequence"]) is int and 0 <= value["sequence"] < 64
+        and value["stage"] in INSTALL_PROGRESS_STAGES
+        and value["status"] in ("started", "passed", "failed")
+        and value["release_acceptance"] is False,
+        "installation progress differs")
+
+
+def capture_failure(value) -> None:
+    """Validate the bounded host projection exported after a failed attempt."""
+    require(type(value) is dict and set(value) == {
+        "schema", "status", "release_acceptance", "image", "host_phase",
+        "failure_code", "guest_progress", "private_runtime_removed",
+        "screens_exported", "logs_exported", "pixels_exported", "privacy"
+    } and value["schema"] == "arctic-showcase-capture-failure-v1"
+        and value["status"] == "failed" and value["release_acceptance"] is False
+        and value["host_phase"] in (
+            "vm-start", "live-boot", "live-install", "install-screen-verification",
+            "installed-transition", "installed-boot", "capture-scenes", "cleanup"
+        )
+        and value["failure_code"] in (
+            "private-channel-timeout", "guest-install-failed", "capture-contract-failed",
+            "vm-exited", "cleanup-failed", "host-io-failed"
+        )
+        and value["private_runtime_removed"] is True
+        and value["screens_exported"] is False and value["logs_exported"] is False
+        and value["pixels_exported"] is False
+        and value["privacy"] == {
+            "content": "no guest text, logs, screenshots or pixels exported",
+            "human_review": "not_applicable",
+        }, "capture failure projection differs")
+    image_identity(value["image"])
+    progress = value["guest_progress"]
+    require(type(progress) is list and len(progress) <= 63,
+            "capture failure progress count differs")
+    for index, item in enumerate(progress):
+        install_progress(item)
+        require(item["sequence"] == index, "capture failure progress sequence differs")
+    if value["failure_code"] == "guest-install-failed":
+        require(progress and progress[-1]["status"] == "failed",
+                "guest installation failure projection differs")
 
 
 def vm_provenance(value) -> None:
