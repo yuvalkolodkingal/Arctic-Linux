@@ -44,6 +44,7 @@ UNIT = Path('/usr/lib/systemd/user/voxtype.service')
 SETUP_SERVICE = Path('/usr/lib/systemd/system/arctic-dictation-setup.service')
 SETUP_TIMER = Path('/usr/lib/systemd/system/arctic-dictation-setup.timer')
 SKEL_BINDINGS = Path('/etc/skel/.config/mango/arctic/binds.conf')
+PACKAGED_BINDINGS = Path('/usr/share/arctic/mango/binds.conf')
 PAYLOAD = Path('/opt/arctic/voxtype/1.1.0')
 MODELS = Path('/opt/arctic/voxtype/models')
 SYSTEM = Path('/var/lib/arctic/dictation')
@@ -271,6 +272,33 @@ def owned_text(path, uid, code):
         return raw.decode('utf-8')
     except UnicodeError:
         raise Invalid(code) from None
+
+
+def _owned_binding_link(path, link_uid, target, target_uid, code):
+    """Read one binding through an exact, non-replaceable absolute link."""
+    path, target = Path(path), Path(target)
+    try:
+        link = path.lstat()
+        parent = path.parent.lstat()
+        # Linux ignores symlink mode bits. Its parent controls replacement, so
+        # require that directory to be owned by the link owner and closed to
+        # group/other writes as well as checking the link's own UID.
+        require(target.is_absolute()
+                and stat.S_ISLNK(link.st_mode) and link.st_uid == link_uid
+                and stat.S_ISDIR(parent.st_mode) and parent.st_uid == link_uid
+                and not parent.st_mode & 0o022
+                and os.readlink(path) == str(target), code)
+        # Open the named package path itself with O_NOFOLLOW. This rejects a
+        # missing, replaced or chained target even after the exact link text
+        # has been checked above.
+        return owned_text(target, target_uid, code)
+    except OSError:
+        raise Invalid(code) from None
+
+
+def owned_binding_link(path, link_uid, code):
+    """Read only Arctic's root-owned packaged Mango binding."""
+    return _owned_binding_link(path, link_uid, PACKAGED_BINDINGS, 0, code)
 
 def desktop():
     users = []
@@ -669,7 +697,7 @@ class Checker:
         require('voxtype record toggle' in guard,
                 'dictation-toggle-guard-not-upstream')
         for path, uid in ((SKEL_BINDINGS, 0), (self.user_bindings, self.account.pw_uid)):
-            binds = owned_text(path, uid, 'mango-bindings-unsafe')
+            binds = owned_binding_link(path, uid, 'mango-bindings-unsafe')
             require('spawn,arctic-dictation-toggle' in binds
                     and 'spawn,voxtype record cancel' in binds,
                     'mango-not-bound-directly-to-upstream')

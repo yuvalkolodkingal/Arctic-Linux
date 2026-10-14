@@ -149,11 +149,13 @@ on_transcription = false
             binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation-toggle\n'
                              'bindr=SUPER+CTRL,BackSpace,spawn,voxtype record cancel\n')
             with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
-                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()):
                 self.assertEqual(checker.command_contract(), {'command_count': 4})
             binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation toggle\n')
             with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
                     patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
                     self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
                 checker.command_contract()
 
@@ -172,7 +174,8 @@ on_transcription = false
             skel.chmod(0o600); active.chmod(0o600)
             checker.user_bindings = active
             with patch.object(guest, 'SKEL_BINDINGS', skel), patch.object(guest, 'TOGGLE', guard), \
-                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()):
                 self.assertEqual(checker.command_contract(), {'command_count': 4})
                 active.write_text('spawn,arctic-dictation-toggle\n')
                 with self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
@@ -193,6 +196,79 @@ on_transcription = false
             path.chmod(0o600); path.write_bytes(b'\xff')
             with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
                 guest.owned_text(path, os.getuid(), 'unsafe')
+
+    def test_owned_binding_link_accepts_only_exact_absolute_packaged_target(self):
+        uid = os.getuid()
+        valid = 'spawn,arctic-dictation-toggle\nspawn,voxtype record cancel\n'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            parent = root / 'config'
+            parent.mkdir(mode=0o700)
+            target = root / 'packaged-binds.conf'
+            target.write_text(valid)
+            target.chmod(0o600)
+            link = parent / 'binds.conf'
+            link.symlink_to(target)
+            self.assertEqual(
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe'), valid)
+
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid + 1, target, uid, 'unsafe')
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, root / 'other', uid, 'unsafe')
+
+            link.unlink()
+            link.symlink_to('../packaged-binds.conf')
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            link.unlink()
+            link.write_text(valid)
+            link.chmod(0o600)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+    def test_owned_binding_link_pins_root_owned_packaged_path(self):
+        path = Path('/home/arctic/.config/mango/arctic/binds.conf')
+        with patch.object(guest, '_owned_binding_link', return_value='binds') as reader:
+            self.assertEqual(guest.owned_binding_link(path, 1000, 'unsafe'), 'binds')
+        reader.assert_called_once_with(path, 1000, guest.PACKAGED_BINDINGS, 0, 'unsafe')
+
+    def test_owned_binding_link_rejects_chained_writable_missing_and_unsafe_parent(self):
+        uid = os.getuid()
+        valid = 'spawn,arctic-dictation-toggle\nspawn,voxtype record cancel\n'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            parent = root / 'config'
+            parent.mkdir(mode=0o700)
+            target = root / 'packaged-binds.conf'
+            final = root / 'final-binds.conf'
+            final.write_text(valid)
+            final.chmod(0o600)
+            target.symlink_to(final)
+            link = parent / 'binds.conf'
+            link.symlink_to(target)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.unlink()
+            target.write_text(valid)
+            target.chmod(0o622)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.unlink()
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.write_text(valid)
+            target.chmod(0o600)
+            parent.chmod(0o770)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+            parent.chmod(0o700)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid + 1, 'unsafe')
 
     def test_journal_decoder_retains_full_strings_and_rejects_truncation(self):
         raw = (json.dumps({'MESSAGE': 'English private fixture'}) + '\n'

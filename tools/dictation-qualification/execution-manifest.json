@@ -1,5 +1,5 @@
 {
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "image": {
     "run_id": 38616494387,
@@ -24,7 +24,7 @@
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
     "tools/dictation-qualification/contract.py": "e2a88d3382c37190c76b78de68818d7e1875c37871b6cd62c8b70bc6293c0a3a",
-    "tools/dictation-qualification/guest_check.py": "c59692fc809471186da120384f13a3cd3d534c498cdf7f99ae96c28e5cdca67c",
+    "tools/dictation-qualification/guest_check.py": "e1d8f7f670cc37e4706d52b6b1b2f6a609434531984434bd5f7160c37a686faa",
     "tools/dictation-qualification/runner.py": "e24e5333a616e5650f0318b56f7e354dd449e4ddd85bf3640970e7abe32fb056",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
