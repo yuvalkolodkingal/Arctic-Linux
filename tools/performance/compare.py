@@ -868,5 +868,22 @@ MAPPING_PROFILES += (
 # candidate-profile-9c442-end
 
 
+# candidate-profile-9a88-begin
+MAPPING_PROFILES += (
+    dict(executable_sha256='9a88aa4b6e9bc47ee33a876e9f922af884f6d645abf063ef56874bdd30edee65',
+         native_audit_sha256='2c4aa538589935b4b23b68007bb0b2ef5c667c61c5c7ddda98e8ab6aaa1701b4',
+         function_file_offset=0x43110, function_size=4109,
+         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
+         instruction_file_offset=0x4361e, client_ext_offset=1584,
+         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+
+)
+# candidate-profile-9a88-end
+
 if __name__ == '__main__':
     raise SystemExit(main())

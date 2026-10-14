@@ -39,6 +39,10 @@ class ExceptionShapeTest(unittest.TestCase):
         # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
         for current, previous in (
+                (b'dafe6d744e55a4205c416ec67ba890ebaf5375be9bcf5fe48086bb145dcfddf0', b'a99761ab522b20285a07b282102c63adcc3caf63e1ec99f7fddf9f66aca95ac5'),
+                (b'f910e117803951c8838301590bf29986e8af6c2f049ef746236f2842ffbf4634', b'3b51ccffa915f059cea8527f426c9c3200356cbb73d6955e910d8518f8cfbb0d'),
+                (b'7b730fbb30852e7185a7ae0177b92c152a895f9593bcc4f54c28d25a1010a347', b'5cc98198d4ca2a6a19736f2fd32b0c002964e2b6d95b1d86d11a5149f56aab91'),
+                (b'184c4508b5c679c6edcd2179bf963154d2c15a3d0934ad6bd44f1c3e93dac6e5', b'bc9e83e35616c68b9776184c69920908fcb490ac7a822d705964f85d55e68c1f'),
                 (b'a99761ab522b20285a07b282102c63adcc3caf63e1ec99f7fddf9f66aca95ac5', b'94a0c4a8a46a16889db9568aae9b1dc2a7f3eda87f071bb47ba2f78dcc399122'),
                 (b'3b51ccffa915f059cea8527f426c9c3200356cbb73d6955e910d8518f8cfbb0d', b'2ef2f36a5056193b657985b5a494e2d8586df3ab704745e3e5d71f69d4a8e9b2'),
                 (b'5cc98198d4ca2a6a19736f2fd32b0c002964e2b6d95b1d86d11a5149f56aab91', b'8477a009b0a6adf0981e47380c3d18089b8400d177d58ad017597b2907cb53b1'),
