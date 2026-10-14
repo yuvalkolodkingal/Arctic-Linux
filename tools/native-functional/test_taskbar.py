@@ -17,6 +17,16 @@ spec.loader.exec_module(t)
 
 
 class Controls(unittest.TestCase):
+    def test_owned_background_client_executes_sleep_without_a_shell_prompt(self):
+        command = t.proof_window_command()
+        self.assertEqual(command[:4], ['/usr/bin/foot', '-c', '/dev/null',
+                                      '--app-id=ArcticTaskbarAcceptance'])
+        self.assertEqual(command[-3:], ['-e', '/usr/bin/sleep', '1800'])
+        self.assertEqual(command.count('-e'), 1)
+        self.assertNotIn('/bin/sh', command)
+        self.assertNotIn('/usr/bin/fish', command)
+        self.assertNotIn('/usr/bin/bash', command)
+
     def inventory(self, mode='auto', frame=True):
         values = []
         for name in ('DP-1', 'DP-2'):

@@ -33,6 +33,13 @@ BAR = 32
 FOOT_COLOR = (33, 131, 79)
 
 
+def proof_window_command():
+    """Launch the owned solid-colour client without invoking Foot's default shell."""
+    return ['/usr/bin/foot', '-c', '/dev/null', '--app-id=ArcticTaskbarAcceptance',
+            '-o', 'colors.background=21834f', '-o', 'main.pad=0x0',
+            '-e', '/usr/bin/sleep', '1800']
+
+
 def rectangle(value):
     result = {key: value[key] for key in ('x', 'y', 'width', 'height')}
     require(all(type(v) in (int, float) and math.isfinite(v) for v in result.values())
@@ -292,10 +299,8 @@ class Taskbar(Smoke):
             self.dispatch('focusmon,' + m['name'])
             self.dispatch('view,' + str(self.empty[m['name']]) + ',0')
         self.dispatch('focusmon,' + self.names[0])
-        self.proof = self.fresh_window(lambda: self.launch([
-            '/usr/bin/foot', '-c', '/dev/null', '--app-id=ArcticTaskbarAcceptance',
-            '-o', 'colors.background=21834f', '-o', 'main.pad=0x0',
-            '/usr/bin/sleep', '1800']), 'foot', '^ArcticTaskbarAcceptance$')
+        self.proof = self.fresh_window(lambda: self.launch(proof_window_command()),
+                                       'foot', '^ArcticTaskbarAcceptance$')
         self.pointer = subprocess.Popen(self.prefix + [str(self.pointer_path)], stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         require(self.pointer_reply() == 'READY', 'virtual pointer did not start')
