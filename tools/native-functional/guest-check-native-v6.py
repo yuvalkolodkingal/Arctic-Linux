@@ -2648,6 +2648,16 @@ def main():
                     relative = path.relative_to(root).as_posix()
                     if not native_public_evidence_member(relative):
                         continue
+                    # A failed gate adds one owned failure screenshot after the
+                    # normal navigation diagnostics.  Keep the strict 16 MiB
+                    # transport ceiling and prioritize that failure frame plus
+                    # the primary role/media/oracle artifacts needed to diagnose
+                    # it.  Passing runs retain their original byte-for-byte
+                    # inventory, and private profile paths remain excluded above.
+                    if (type(report) is dict and report.get('status') == 'failed'
+                            and relative.startswith('gui-') and relative.endswith('.png')
+                            and '-failure-' not in relative):
+                        continue
                     require(len(entries) < 128 and path.stat().st_size <= 4*1024*1024,
                             'native evidence file count/size exceeded bound')
                     data = path.read_bytes()

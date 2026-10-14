@@ -3,7 +3,7 @@
   "native_source_sha256": "351eb90719c98bea1ac5b49d9a87a4581a03f3b5804d749b0d45ce598b2bbcc6",
   "files": {
     "native_smoke.py": "351eb90719c98bea1ac5b49d9a87a4581a03f3b5804d749b0d45ce598b2bbcc6",
-    "guest-check-native-v6.py": "83200fdc25389fca44cf3f45e621a397045ed7f84c866086ebe197bd48008d6b",
+    "guest-check-native-v6.py": "827118bb36f954b765b64c14ecbf9d5ad6123b1ac83c9b831157982fe5619118",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e"
   },
@@ -33,8 +33,8 @@
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
-    "test_native_public_evidence.py": "616ccb191ce37aefc989bd85c3b26bb18a46887f57081853443cd85fa1161954",
-    "test_controls_state_trials.py": "9c68f8f9d9b6e3c423f160cbcba24095e2cc7c92299f5b6b300f1d3e20827e4f",
+    "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
+    "test_controls_state_trials.py": "c1c50f96e5554fc50201ab0617f86fce5db9f329fc6eea9fe31bd0950fc93523",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },

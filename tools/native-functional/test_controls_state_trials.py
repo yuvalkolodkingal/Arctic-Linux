@@ -384,6 +384,20 @@ def restore_controls_native(source):
 
 
 def restore_controls_guest(source):
+    failure_headroom="""                    # A failed gate adds one owned failure screenshot after the
+                    # normal navigation diagnostics.  Keep the strict 16 MiB
+                    # transport ceiling and prioritize that failure frame plus
+                    # the primary role/media/oracle artifacts needed to diagnose
+                    # it.  Passing runs retain their original byte-for-byte
+                    # inventory, and private profile paths remain excluded above.
+                    if (type(report) is dict and report.get('status') == 'failed'
+                            and relative.startswith('gui-') and relative.endswith('.png')
+                            and '-failure-' not in relative):
+                        continue
+"""
+    if source.count(failure_headroom)!=1:
+        raise AssertionError('Failure evidence headroom inverse occurrence differs')
+    source=source.replace(failure_headroom,'',1)
     native=(HERE/'native_smoke.py').read_text()
     boundary='\n\n# BEGIN NATIVE_BULK_TRANSPORT\n'
     original=restore_controls_native(native)
