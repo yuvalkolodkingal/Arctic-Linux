@@ -167,7 +167,9 @@ def fixture():
                       program_sha256='c' * 64, traineddata_sha256='b' * 64, version='tesseract 5.5.1')
     state['build']['ocr_host'] = ocr_engine
     prompts = dict(schema='arctic-active-password-prompts-v1', engine=ocr_engine,
-        login_shell=dict(prompt_kind='installed-user-shell', observed_line_sha256=A.digest(b'arcticqual@arctic-qual ~ >'), observed_ns=2),
+        login_shell=dict(prompt_kind='installed-user-nonce-identity', nonce=installed_report['authentication']['nonce'],
+            username='arcticqual', uid=1000,
+            observed_line_sha256=A.digest(('ARCTIC-USER '+installed_report['authentication']['nonce']+' uid=1000 user=arcticqual').encode()), observed_ns=2),
         private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
     for number, (key, text) in enumerate((('getty', 'Password:'), ('sudo', '[sudo] password for arcticqual:'))):
         image = Image.new('RGB', (1280, 720), 'black'); ImageDraw.Draw(image).text((20, 20), text, fill='white')

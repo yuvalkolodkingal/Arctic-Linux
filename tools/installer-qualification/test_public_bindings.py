@@ -241,7 +241,7 @@ class Controls(unittest.TestCase):
     def test_prompt_kind_hash_observation_order_and_capture_aliases_are_required(self):
         original = self.state['host']['password_prompt_evidence']
         def check(value):
-            return A.password_prompts_check(value, self.state['build'], self.state['required_images'], self.media.__getitem__)
+            return A.password_prompts_check(value, self.state['build'], self.state['required_images'], self.media.__getitem__, self.state['host']['installed_boot']['authentication'])
         check(original)
         for slot in ('getty', 'sudo'):
             safe = copy.deepcopy(original); safe[slot]['path'] = 'host/' + safe[slot]['path']; check(safe)
@@ -313,7 +313,11 @@ class Controls(unittest.TestCase):
                 def prompt(vm, startup, out, label, expected, password, archive=True):
                     key = {'installed-getty-password': 'getty', 'installed-sudo-password': 'sudo', 'installed-login-shell': 'login_shell'}[label]
                     return copy.deepcopy(self.state['host']['password_prompt_evidence'][key])
-                with patch.object(D, 'console_prompt', side_effect=prompt), patch.object(D, 'ocr_provenance', return_value=self.state['build']['ocr_host']), \
+                def identity(vm, startup, out, nonce, password):
+                    value = copy.deepcopy(self.state['host']['password_prompt_evidence']['login_shell'])
+                    value.update(nonce=nonce, observed_line_sha256=A.digest(('ARCTIC-USER '+nonce+' uid=1000 user=arcticqual').encode()))
+                    return value
+                with patch.object(D, 'console_prompt', side_effect=prompt), patch.object(D, 'console_user_identity', side_effect=identity), patch.object(D, 'ocr_provenance', return_value=self.state['build']['ocr_host']), \
                         patch.object(D, 'load', return_value=G), patch.object(D.time, 'sleep'):
                     report, serial, prompts = D.boot_installed(vm, startup, vmtest, root, self.state['context'])
                 self.assertEqual(serial, {'status': 'private_uart_validated_pending_public_projection'})
