@@ -13,7 +13,7 @@ import types
 import unittest
 from unittest.mock import patch
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 HERE = Path(__file__).resolve().parent
 SPEC = importlib.util.spec_from_file_location('installed_identity_driver', HERE / 'driver.py')
@@ -34,7 +34,8 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             records[index] = records[index][:-1] + ('0' if records[index][-1] != '0' else '1')
         return ('\n\n         '.join(records) + '\n').encode()
 
-    def exercise(self, outputs, *, size=(1280, 720), console=True):
+    def exercise(self, outputs, *, size=(1280, 720), console=True,
+                 identical_response_pixels=False):
         clock = [0.0]
         calls = []
         self.ocr_arguments = []
@@ -46,7 +47,13 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             probe = root / 'probe.png'
 
             def shot(_label):
-                Image.new('RGB', size).save(probe)
+                image = Image.new('RGB', size)
+                if size == (1280, 720):
+                    draw = ImageDraw.Draw(image)
+                    for index, box in enumerate(D.IDENTITY_RECORD_BOXES):
+                        draw.rectangle((80, box[1] + 5, 230, box[1] + 14),
+                                       fill=(30 if identical_response_pixels else 30 + index, 50, 70))
+                image.save(probe)
                 previous[0] = next(rows, previous[0])
                 region[0] = 0
                 return probe

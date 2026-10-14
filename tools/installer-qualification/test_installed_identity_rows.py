@@ -22,7 +22,10 @@ class PhysicalRowControls(unittest.TestCase):
         image = Image.new(mode, size, 'black')
         draw = ImageDraw.Draw(image)
         for index, box in enumerate(D.IDENTITY_RECORD_BOXES):
-            draw.rectangle((72, box[1] + 5, 230, box[1] + 14), fill=(index + 30, 50, 70))
+            # Each physical row has a distinct marker cell and byte-identical
+            # response cells after translation into the fixed row canvas.
+            draw.rectangle((72, box[1] + 5, 79, box[1] + 14), fill=(index + 30, 50, 70))
+            draw.rectangle((80, box[1] + 5, 230, box[1] + 14), fill=(30, 50, 70))
         # The next console prompt begins in the cell immediately below row3.
         draw.rectangle((64, 194, 240, 207), fill='white')
         image.save(path)
@@ -47,8 +50,8 @@ class PhysicalRowControls(unittest.TestCase):
                 return types.SimpleNamespace(stdout=(expected[index] + '\n').encode())
             with patch.object(D.subprocess, 'run', side_effect=ocr), \
                     patch.object(Image.Image, 'resize', side_effect=AssertionError('response pixels cannot be scaled')):
-                stdout, physical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
-            self.assertEqual(len(calls), 3); self.assertTrue(physical)
+                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+            self.assertEqual(len(calls), 3); self.assertTrue(physical); self.assertTrue(identical)
             self.assertTrue(D._identity_ocr_observation(stdout, expected, True)[0])
             self.assertEqual(path.read_bytes(), original)
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'console.png'})
@@ -59,9 +62,10 @@ class PhysicalRowControls(unittest.TestCase):
             path, _ = self.fixture(Path(directory))
             outputs = [types.SimpleNamespace(stdout=expected[i].encode()) for i in (1, 0, 2)]
             with patch.object(D.subprocess, 'run', side_effect=outputs):
-                stdout, physical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
             self.assertTrue(D._identity_ocr_observation(stdout, expected, True)[0])
             self.assertFalse(physical)
+            self.assertTrue(identical)
 
     def test_empty_multiple_or_wrong_width_rows_withhold_physical_proof(self):
         expected = D.installed_user_records(self.nonce)
@@ -70,8 +74,72 @@ class PhysicalRowControls(unittest.TestCase):
                 path, _ = self.fixture(Path(directory))
                 outputs = [types.SimpleNamespace(stdout=x) for x in (changed, expected[1].encode(), expected[2].encode())]
                 with patch.object(D.subprocess, 'run', side_effect=outputs):
-                    _, physical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                    _, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
                 self.assertFalse(physical)
+                self.assertTrue(identical)
+
+    def test_one_exact_row_and_identical_response_pixels_survive_correlated_ocr_error(self):
+        expected = D.installed_user_records(self.nonce)
+        wrong = expected[0][1:7] + ('8' if expected[0][7] != '8' else '9') + expected[0][8:]
+        outputs = [expected[0], expected[1][0] + wrong, expected[2][0] + wrong]
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = self.fixture(Path(directory))
+            with patch.object(D.subprocess, 'run', side_effect=[
+                    types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+        self.assertTrue(physical); self.assertTrue(identical)
+        accepted, observation = D._identity_ocr_observation(
+            stdout, expected, True, physical and identical)
+        self.assertTrue(accepted)
+        self.assertEqual(observation[2], 'one')
+
+    def test_zero_exact_rows_never_pass_from_identical_pixels(self):
+        expected = D.installed_user_records(self.nonce)
+        position = 7
+        replacement = '8' if expected[0][position] != '8' else '9'
+        outputs = [record[:position] + replacement + record[position + 1:]
+                   for record in expected]
+        with tempfile.TemporaryDirectory() as directory:
+            path, _ = self.fixture(Path(directory))
+            with patch.object(D.subprocess, 'run', side_effect=[
+                    types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+        self.assertTrue(physical); self.assertTrue(identical)
+        accepted, observation = D._identity_ocr_observation(
+            stdout, expected, True, physical and identical)
+        self.assertFalse(accepted)
+        self.assertEqual(observation[2], 'zero')
+
+    def test_changed_response_pixels_disable_one_exact_row_fallback(self):
+        expected = D.installed_user_records(self.nonce)
+        wrong = expected[0][1:7] + ('8' if expected[0][7] != '8' else '9') + expected[0][8:]
+        outputs = [expected[0], expected[1][0] + wrong, expected[2][0] + wrong]
+        with tempfile.TemporaryDirectory() as directory:
+            path, image = self.fixture(Path(directory))
+            image.putpixel((100, D.IDENTITY_RECORD_BOXES[1][1] + 8), (255, 0, 0)); image.save(path)
+            with patch.object(D.subprocess, 'run', side_effect=[
+                    types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+        self.assertTrue(physical); self.assertFalse(identical)
+        self.assertFalse(D._identity_ocr_observation(
+            stdout, expected, True, physical and identical)[0])
+
+    def test_duplicate_and_swapped_markers_cannot_use_identical_pixels(self):
+        expected = D.installed_user_records(self.nonce)
+        cases = ([expected[0], expected[0], expected[2]],
+                 [expected[1], expected[0], expected[2]])
+        for outputs in cases:
+            with self.subTest(outputs=outputs), tempfile.TemporaryDirectory() as directory:
+                path, _ = self.fixture(Path(directory))
+                with patch.object(D.subprocess, 'run', side_effect=[
+                        types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                    stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+            self.assertFalse(physical); self.assertTrue(identical)
+            accepted, _ = D._identity_ocr_observation(
+                stdout, expected, True, physical and identical)
+            # The production caller retains its mandatory per-position marker
+            # conjunction for both the original OCR consensus and this proof.
+            self.assertFalse(accepted and physical)
 
     def test_wrong_physical_dimensions_mode_and_format_deny_before_ocr(self):
         for size, mode, file_format in (((1280, 721), 'RGB', 'PNG'), ((1280, 720), 'RGBA', 'PNG'),

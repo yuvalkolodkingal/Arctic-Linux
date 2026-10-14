@@ -463,9 +463,11 @@ def _identity_count(value):
     return ('zero', 'one', 'two', 'three')[value] if value < 4 else 'four-or-more'
 
 
-def _identity_ocr_observation(stdout, expected, sent):
+def _identity_ocr_observation(stdout, expected, sent, physical_rows_proven=False):
     """Parse only fixed-width decimal records and return counts, never OCR text."""
     require(type(stdout) is bytes and len(stdout) <= 65536, 'prompt OCR exceeds bound')
+    require(type(physical_rows_proven) is bool,
+            'installed user identity physical proof differs')
     require(type(expected) is tuple and len(expected) == IDENTITY_RECORDS and
             len(set(expected)) == IDENTITY_RECORDS,
             'installed user identity records differ')
@@ -500,8 +502,19 @@ def _identity_ocr_observation(stdout, expected, sent):
     require(all(record[1:] == expected_response for record in expected) and
             tuple(record[0] for record in expected) == IDENTITY_MARKERS,
             'installed user identity records differ')
+    # A whole response may also be established by unchanged physical pixels:
+    # the three fixed row crops must have byte-identical response cells, every
+    # crop must OCR its own distinct marker, and at least one complete OCR row
+    # must equal its expected marker plus the full 60-bit response. This
+    # tolerates correlated OCR damage to an identical glyph in the other rows
+    # without accepting a near match, synthesizing text, or trusting pixels
+    # alone. The caller derives physical_rows_proven from the original frame's
+    # per-position marker reads and response pixels; it is never derived from a
+    # text-only consensus.
+    pixel_bound_exact = physical_rows_proven and len(exact) >= 1
     accepted = sent and len(numeric) == len(marked) == IDENTITY_RECORDS and \
-        {line[0] for line in marked} == set(IDENTITY_MARKERS) and consensus == expected_response
+        {line[0] for line in marked} == set(IDENTITY_MARKERS) and \
+        (consensus == expected_response or pixel_bound_exact)
     return accepted, observation
 
 
@@ -625,7 +638,7 @@ def installed_identity_ocr(path, deadline):
     """Read three distinct physical rows; preserve every original response bit."""
     raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
     from PIL import Image
-    outputs, regions_valid = [], True
+    outputs, regions_valid, response_regions = [], True, []
     with Image.open(io.BytesIO(raw)) as image:
         require(image.format == 'PNG' and image.mode == 'RGB' and image.size == (1280, 720),
                 'installed prompt physical dimensions differ')
@@ -636,6 +649,12 @@ def installed_identity_ocr(path, deadline):
             buffer = io.BytesIO()
             row = Image.new('RGB', (176, 24), 'black')
             row.paste(image.crop(box), (0, 0))
+            # The crop begins one console cell before the rendered record.
+            # Local x=8..15 is the distinct marker and x=16 begins the common
+            # 19-digit response. Compare all unchanged response pixels,
+            # including their padding, after translating each crop to the same
+            # fixed canvas. No pixels are resized, normalized, or exported.
+            response_regions.append(row.crop((16, 0, 176, 24)).tobytes())
             row.save(buffer, format='PNG')
             result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '7',
                 '-c', 'tessedit_char_whitelist=0123456789'], input=buffer.getvalue(),
@@ -651,7 +670,9 @@ def installed_identity_ocr(path, deadline):
     checked, _ = identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
     require(checked == raw and time.monotonic() < deadline,
             'installed user identity deadline exceeded')
-    return combined, regions_valid
+    responses_identical = len(response_regions) == IDENTITY_RECORDS and \
+        len(set(response_regions)) == 1
+    return combined, regions_valid, responses_identical
 
 
 def wait_installed_graphical_login(vm, vmtest):
@@ -695,13 +716,14 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
         if sent:
-            stdout, regions_valid = installed_identity_ocr(path, deadline)
+            stdout, regions_valid, responses_identical = installed_identity_ocr(path, deadline)
         else:
             result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
                                     capture_output=True, timeout=10, check=True)
-            stdout, regions_valid = result.stdout, True
+            stdout, regions_valid, responses_identical = result.stdout, True, False
         require(len(stdout) <= 65536, 'prompt OCR exceeds bound')
-        accepted, observation = _identity_ocr_observation(stdout, expected, sent)
+        accepted, observation = _identity_ocr_observation(
+            stdout, expected, sent, regions_valid and responses_identical)
         accepted = accepted and regions_valid
         if observation[:3] != ('zero', 'zero', 'zero'):
             if not sent:
