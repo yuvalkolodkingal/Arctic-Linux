@@ -28,8 +28,15 @@ LAUNCHER_SHA = E.LAUNCHER_SHA
 TASKBAR_FILES = {'tools/native-functional/taskbar.py', 'tools/native-functional/taskbar-runtime.py',
                  'tools/native-functional/taskbar-evidence.py', 'tools/native-functional/prepare-taskbar-tools.sh',
                  'tools/native-functional/taskbar-screencopy.c', 'tools/native-functional/taskbar-display.py',
-                 'shell/dev/virtual-pointer.c',
+                 'tools/native-functional/virtual-pointer.c',
                  'shell/dev/wlr-screencopy-unstable-v1.xml'}
+EXECUTION_FILES = {'.github/workflows/native-candidate-20261008.yml',
+                   'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
+                   'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
+                   'tools/native-functional/compose-photo-probe.py',
+                   'tools/native-functional/apps.py',
+                   'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
+                   'tools/native-functional/source-provenance.json'} | TASKBAR_FILES
 
 class R(E.R):
     @staticmethod
@@ -250,13 +257,7 @@ def verify(args):
     for name, expected in manifest['execution_files'].items():
         R.require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'Unsafe execution source path')
         R.pinned_file(execution / name, expected)
-    R.require(set(manifest['execution_files']) == {'.github/workflows/native-candidate-20261008.yml',
-              'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
-              'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
-              'tools/native-functional/compose-photo-probe.py',
-              'tools/native-functional/apps.py',
-              'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
-              'tools/native-functional/source-provenance.json'} | TASKBAR_FILES, 'Execution pin set differs')
+    R.require(set(manifest['execution_files']) == EXECUTION_FILES, 'Execution pin set differs')
     R.verify_iso(args.inputs)
 
 def checker_proof():
@@ -300,11 +301,12 @@ def run(args):
         taskbar_payload.mkdir()
         container='arctic-paired-native-'+uuid.uuid4().hex
         env=dict(os.environ,CONTAINER_ENGINE='docker',ARCTIC_VM_CONTAINER_NAME=container,ARCTIC_FEDORA_IMAGE=prepared)
-        R.execute(['bash', str(args.bundle/'prepare-taskbar-tools.sh'), str(args.bundle.parents[1]), str(taskbar_payload)],
+        R.execute(['bash', str(args.bundle/'prepare-taskbar-tools.sh'), str(args.bundle.parents[1]), str(taskbar_payload),
+                   '--pointer-source', 'tools/native-functional/virtual-pointer.c'],
                   args.evidence/'taskbar-build.log',15*60,args.bundle.parents[1],env,container)
         build = json.loads((taskbar_payload/'build-provenance.json').read_text())
         R.require(build['schema']=='arctic-taskbar-tools-v1' and build['release_acceptance'] is False
-                  and set(build['sources']) == {'shell/dev/virtual-pointer.c','tools/native-functional/taskbar-screencopy.c',
+                  and set(build['sources']) == {'tools/native-functional/virtual-pointer.c','tools/native-functional/taskbar-screencopy.c',
                                               'shell/dev/wlr-screencopy-unstable-v1.xml'}, 'Taskbar compilation source inventory differs')
         for name, expected in build['sources'].items(): R.pinned_file(args.bundle.parents[1]/name, expected)
         for name, expected in build['binaries'].items():

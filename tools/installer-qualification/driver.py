@@ -3,6 +3,7 @@
 import argparse
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,7 @@ import re
 import shutil
 import signal
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -42,7 +44,18 @@ DIAGNOSTIC_LITERALS = {
     'driver-collect': (('installer guest evidence did not complete in bound', 'evidence-incomplete'),),
     'driver-live-report': (('active live collector did not pass', 'collector-failed'),),
     'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),
-        ('fresh installed proof did not complete', 'proof-incomplete')),
+        ('fresh installed proof did not complete', 'proof-incomplete'),
+        ('fresh installed console was not visible', 'console-absent'),
+        ('exact console prompt was not observed; secret input refused', 'password-prompt-absent'),
+        ('installed user login did not reach its identity challenge', 'identity-login-failed'),
+        ('installed user identity response differs', 'identity-response-differs'),
+        ('installed user identity deadline exceeded', 'identity-deadline'),
+        ('installed user identity challenge was not issued; sudo input refused', 'identity-challenge-not-sent'),
+        ('exact installed user identity was not observed after exact prompt; sudo input refused', 'identity-response-after-prompt-absent'),
+        ('exact installed user identity was not observed after readiness fallback; sudo input refused', 'identity-response-after-fallback-absent'),
+        ('installed guest proof failed', 'helper-failed'),
+        ('fresh installed authentication/receipt is ambiguous', 'helper-ambiguous'),
+        ('fresh installed helper context/authentication differs', 'helper-binding')),
 }
 DIAGNOSTIC_CODES = frozenset(
     'installer-inner-' + stage + '-' + label for stage in DIAGNOSTIC_STAGES
@@ -64,6 +77,16 @@ WRITE_OBSERVATION_LABELS = (
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-collect-write-' + field + '-' + label
     for field, labels in WRITE_OBSERVATION_LABELS for label in labels)
+_IDENTITY_OBSERVATION_TOKEN = object()
+IDENTITY_OBSERVATION_LABELS = (
+    ('record-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('marker-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('exact-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('challenge-issued', ('true', 'false')),
+)
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-installed-proof-identity-' + field + '-' + label
+    for field, labels in IDENTITY_OBSERVATION_LABELS for label in labels)
 COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-constant',
     'output-head', 'request-poll', 'console-capture', 'output-transition',
     'target-write-progress', 'target-write-sample')
@@ -120,6 +143,22 @@ def write_observation_codes(error, controller_source):
                  for value, (field, _) in zip(observation[1:], WRITE_OBSERVATION_LABELS))
 
 
+def identity_observation_codes(error):
+    """Project only source-minted closed facts about a rejected OCR record."""
+    if type(error) is not RuntimeError or type(error.args) is not tuple or len(error.args) != 1 or \
+            type(error.args[0]) is not str or error.args[0] != 'installed user identity response differs':
+        return ()
+    observation = error.__dict__.get('_arctic_installer_identity_observation')
+    if type(observation) is not tuple or len(observation) != 1 + len(IDENTITY_OBSERVATION_LABELS) or \
+            observation[0] is not _IDENTITY_OBSERVATION_TOKEN:
+        return ()
+    if not all(type(value) is str and value in labels
+            for value, (_, labels) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS)):
+        return ()
+    return tuple('installer-inner-driver-installed-proof-identity-' + field + '-' + value
+                 for value, (field, _) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS))
+
+
 def diagnostic_code(stage, error, controller_source=None):
     require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer inner stage')
     if stage == 'driver-collect':
@@ -149,6 +188,13 @@ def diagnose(stage, error, controller_source=None):
             if code == 'installer-inner-driver-collect-guard-collection-034':
                 try:
                     observed = write_observation_codes(error, controller_source)
+                except Exception:
+                    observed = ()
+                for observation in observed:
+                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
+            if code == 'installer-inner-driver-installed-proof-identity-response-differs':
+                try:
+                    observed = identity_observation_codes(error)
                 except Exception:
                     observed = ()
                 for observation in observed:
@@ -354,18 +400,396 @@ def ocr_provenance():
                 version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
 
 
-def boot_installed(vm, startup, vmtest, out, context):
-    """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
-    deadline = time.monotonic() + 900
+IDENTITY_MARKERS = ('2', '4', '6')
+IDENTITY_TOKEN_DIGITS = 19
+IDENTITY_RECORDS = 3
+IDENTITY_CHALLENGE_IMAGES = tuple('installed-identity-challenge-' + str(index) + '.png'
+                                  for index in range(IDENTITY_RECORDS))
+IDENTITY_CHALLENGE_METADATA = 'installed-identity-challenges.json'
+# The unchanged challenge positions rows at ANSI lines 8, 10 and 12. The exact
+# 1280x720 installed console uses 8x16-pixel cells. Keep the 20-character rows
+# separate with eight horizontal and four vertical padding pixels. The final
+# crop stops before the following prompt's console cell; black canvas padding
+# keeps its OCR input height equal. No response pixels are changed or scaled.
+IDENTITY_RECORD_BOXES = ((64, 108, 240, 132), (64, 140, 240, 164), (64, 172, 240, 192))
+
+
+def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual'):
+    """Derive the OCR token from the nonce and all three installed identities."""
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
+            'installed user identity nonce differs')
+    require(type(user) is str and type(uid) is int and type(id_un) is str,
+            'installed user identity inputs differ')
+    fields = (nonce, user, str(uid), id_un)
+    require(all('\x00' not in value for value in fields), 'installed user identity inputs differ')
+    prefix = hashlib.sha256(('\x00'.join(fields) + '\x00').encode()).hexdigest()[:15]
+    return format(int(prefix, 16), '0' + str(IDENTITY_TOKEN_DIGITS) + 'd')
+
+
+def installed_user_records(nonce):
+    token = installed_user_token(nonce)
+    return tuple(marker + token for marker in IDENTITY_MARKERS)
+
+
+def installed_user_command(nonce):
+    """Return a nonsecret SHA-256 challenge whose numeric response is computed in-guest."""
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
+            'installed user identity nonce differs')
+    # coreutils is in the installed `core` pattern and is independently needed
+    # by the shipped image.  Fifteen SHA-256 hex digits retain 60 response bits;
+    # decimal rendering avoids letter confusions and three distinct records
+    # tolerate one damaged OCR line.  Short octal-encoded row markers keep each
+    # record at 20 digits, while blank rows and an inset bold layout keep the
+    # physical records distinct for OCR.  No expected record is present in the
+    # command text. Clearing occurs only after all identities and the digest have
+    # been computed successfully.
+    return ("sh -c 'u=$(id -u)||exit;n=$(id -un)||exit;"
+            "h=$(printf \"%s\\0%s\\0%s\\0%s\\0\" \"$1\" \"$USER\" \"$u\" \"$n\"|sha256sum|cut -c1-15);"
+            "d=$(printf %019u 0x$h)||exit;"
+            "printf \"\\033[2J\\033[8;10H\\033[1m\\062%s\\n\\n"
+            "         \\064%s\\n\\n"
+            "         \\066%s\\033[0m\\n\" \"$d\" \"$d\" \"$d\"' sh " + nonce)
+
+
+def installed_shell_ready(observed_line):
+    # Fish's prompt may lose the cosmetic space before its suffix in OCR. Both
+    # fixed forms still bind the intended account, host, home cwd and non-root
+    # prompt. A fresh nonce response below provides the authoritative identity.
+    return type(observed_line) is str and observed_line in (
+        'arcticqual@arctic-qual ~ >', 'arcticqual@arctic-qual ~>')
+
+
+def _identity_count(value):
+    return ('zero', 'one', 'two', 'three')[value] if value < 4 else 'four-or-more'
+
+
+def _identity_ocr_observation(stdout, expected, sent, physical_rows_proven=False):
+    """Parse only fixed-width decimal records and return counts, never OCR text."""
+    require(type(stdout) is bytes and len(stdout) <= 65536, 'prompt OCR exceeds bound')
+    require(type(physical_rows_proven) is bool,
+            'installed user identity physical proof differs')
+    require(type(expected) is tuple and len(expected) == IDENTITY_RECORDS and
+            len(set(expected)) == IDENTITY_RECORDS,
+            'installed user identity records differ')
+    text = stdout.decode()
+    lines = [re.sub(r'\s', '', line) for line in text.splitlines()]
+    numeric = [line for line in lines if re.fullmatch('[0-9]{' + str(len(expected[0])) + '}', line)]
+    marked = [line for line in numeric if line[:1] in IDENTITY_MARKERS]
+    exact = set(marked).intersection(expected)
+    # The three rows are an error-correcting rendering of the same 60-bit
+    # response.  Tesseract can damage a different glyph in each long row even
+    # though the fresh response is plainly present (the exact VM observation
+    # was three distinct markers, one exact row).  Reconstruct only when every
+    # expected marker occurs exactly once and at least two independently read
+    # rows agree on every response digit.  This retains the full expected
+    # response comparison and rejects duplicated rows, split votes and stale
+    # values; it does not authorize a merely close OCR string.
+    consensus = None
+    if len(marked) == IDENTITY_RECORDS and {line[0] for line in marked} == set(IDENTITY_MARKERS):
+        response_rows = [line[1:] for line in marked]
+        voted = []
+        for digits in zip(*response_rows):
+            digit = next((candidate for candidate in set(digits)
+                          if digits.count(candidate) >= 2), None)
+            if digit is None:
+                break
+            voted.append(digit)
+        if len(voted) == len(expected[0]) - 1:
+            consensus = ''.join(voted)
+    observation = (_identity_count(len(numeric)), _identity_count(len(marked)),
+                   _identity_count(len(exact)), 'true' if sent else 'false')
+    expected_response = expected[0][1:]
+    require(all(record[1:] == expected_response for record in expected) and
+            tuple(record[0] for record in expected) == IDENTITY_MARKERS,
+            'installed user identity records differ')
+    # A whole response may also be established by unchanged physical pixels:
+    # the three fixed row crops must have byte-identical response cells, every
+    # crop must OCR its own distinct marker, and at least one complete OCR row
+    # must equal its expected marker plus the full 60-bit response. This
+    # tolerates correlated OCR damage to an identical glyph in the other rows
+    # without accepting a near match, synthesizing text, or trusting pixels
+    # alone. The caller derives physical_rows_proven from the original frame's
+    # per-position marker reads and response pixels; it is never derived from a
+    # text-only consensus.
+    pixel_bound_exact = physical_rows_proven and len(exact) >= 1
+    accepted = sent and len(numeric) == len(marked) == IDENTITY_RECORDS and \
+        {line[0] for line in marked} == set(IDENTITY_MARKERS) and \
+        (consensus == expected_response or pixel_bound_exact)
+    return accepted, observation
+
+
+def _identity_mismatch_error(observation):
+    error = RuntimeError('installed user identity response differs')
+    error._arctic_installer_identity_observation = (_IDENTITY_OBSERVATION_TOKEN, *observation)
+    return error
+
+
+def identity_diagnostic_read(path, bound, generation=None):
+    """Read a bounded unchanged single-link regular file without following links."""
+    path = Path(path)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    stamp = lambda info: (info.st_dev, info.st_ino, info.st_mode, info.st_uid, info.st_nlink,
+                          info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+    try:
+        before = os.fstat(fd)
+        require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and not (before.st_mode & 0o022) and
+                0 < before.st_size <= bound, 'installed identity diagnostic file differs')
+        require(generation is None or stamp(before) == generation,
+                'installed identity diagnostic ownership differs')
+        chunks, remaining = [], before.st_size + 1
+        while remaining:
+            chunk = os.read(fd, min(remaining, 1024 * 1024))
+            if not chunk:
+                break
+            chunks.append(chunk); remaining -= len(chunk)
+        raw = b''.join(chunks)
+        require(len(raw) == before.st_size and stamp(before) == stamp(os.fstat(fd)) == stamp(path.lstat()),
+                'installed identity diagnostic file changed')
+        return raw, stamp(before)
+    finally:
+        os.close(fd)
+
+
+def identity_challenge_metadata(captures):
+    return dict(schema='arctic-installed-identity-challenge-failure-v1', status='failure-observation-only',
+                authentication=False, release_acceptance=False, captures=[entry[0] for entry in captures])
+
+
+def identity_challenge_capture(path, out, private_password, captures, deadline):
+    """Keep bounded original post-command pixels; never authorize from them."""
+    require(type(captures) is list and len(captures) < IDENTITY_RECORDS,
+            'installed identity diagnostic inventory differs')
+    require(type(private_password) is str and re.fullmatch('[a-z0-9]{32}', private_password),
+            'installed identity private-input guard differs')
+    path, out = Path(path), Path(out)
+    metadata = out / IDENTITY_CHALLENGE_METADATA
+    if captures:
+        prior, _ = identity_diagnostic_read(metadata, 8192, captures[-1][2])
+        require(json.loads(prior) == identity_challenge_metadata(captures),
+                'installed identity diagnostic inventory differs')
+    else:
+        require(not any(os.path.lexists(out / name) for name in (*IDENTITY_CHALLENGE_IMAGES,
+                    IDENTITY_CHALLENGE_METADATA, IDENTITY_CHALLENGE_METADATA + '.next')),
+                'installed identity diagnostic output must be unused')
+    raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
+    require(generation[3] == os.geteuid(), 'installed identity diagnostic ownership differs')
+    from PIL import Image
+    with Image.open(io.BytesIO(raw)) as image:
+        require(image.format == 'PNG' and image.size == (1280, 720),
+                'installed identity diagnostic physical dimensions differ')
+        image.verify()
+    remaining = deadline - time.monotonic()
+    require(remaining > 0, 'installed user identity deadline exceeded')
+    # Numeric-whitelisted authentication OCR cannot guard private input. Guard
+    # the same unchanged original physical frame without any whitelist.
+    guard = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                           capture_output=True, timeout=min(10, remaining), check=True)
+    require(type(guard.stdout) is bytes and len(guard.stdout) <= 65536 and
+            private_password not in guard.stdout.decode().lower(),
+            'private input unexpectedly appeared in console; image withheld')
+    checked, _ = identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+    require(checked == raw and time.monotonic() < deadline,
+            'installed user identity deadline exceeded')
+    name = IDENTITY_CHALLENGE_IMAGES[len(captures)]
+    destination = out / name
+    # These screened nonsecret pixels, like existing QEMU captures, must be
+    # readable by the outer hosted runner after the root container exits.
+    with os.fdopen(os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'wb') as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        stream.write(raw)
+    _, image_generation = identity_diagnostic_read(destination, 8 * 1024 * 1024)
+    record = dict(path=name, bytes=len(raw), sha256=hashlib.sha256(raw).hexdigest(), size=[1280, 720],
+                  post_command=True, pre_sudo=True, private_input_guard_passed=True)
+    pending = captures + [(record, image_generation, None)]
+    temporary = out / (IDENTITY_CHALLENGE_METADATA + '.next')
+    with os.fdopen(os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), 'w') as stream:
+        os.fchmod(stream.fileno(), 0o644)
+        json.dump(identity_challenge_metadata(pending), stream, sort_keys=True, allow_nan=False); stream.write('\n')
+    if captures:
+        identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    else:
+        require(not os.path.lexists(metadata), 'installed identity diagnostic ownership differs')
+    os.replace(temporary, metadata)
+    _, metadata_generation = identity_diagnostic_read(metadata, 8192)
+    captures.append((record, image_generation, metadata_generation))
+
+
+def discard_identity_challenges(out, captures):
+    """Successful authentication cannot export failure-only diagnostic members."""
+    if not captures:
+        return
+    metadata = Path(out) / IDENTITY_CHALLENGE_METADATA
+    raw, _ = identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    require(json.loads(raw) == identity_challenge_metadata(captures),
+            'installed identity diagnostic cleanup inventory differs')
+    for record, generation, _ in captures:
+        raw, _ = identity_diagnostic_read(Path(out) / record['path'], 8 * 1024 * 1024, generation)
+        require(hashlib.sha256(raw).hexdigest() == record['sha256'],
+                'installed identity diagnostic cleanup image differs')
+    for record, generation, _ in captures:
+        path = Path(out) / record['path']
+        identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+        path.unlink()
+    identity_diagnostic_read(metadata, 8192, captures[-1][2])
+    metadata.unlink()
+
+
+def installed_identity_ocr(path, deadline):
+    """Read three distinct physical rows; preserve every original response bit."""
+    raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
+    from PIL import Image
+    outputs, regions_valid, response_regions = [], True, []
+    with Image.open(io.BytesIO(raw)) as image:
+        require(image.format == 'PNG' and image.mode == 'RGB' and image.size == (1280, 720),
+                'installed prompt physical dimensions differ')
+        image.load()
+        for marker, box in zip(IDENTITY_MARKERS, IDENTITY_RECORD_BOXES):
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, 'installed user identity deadline exceeded')
+            buffer = io.BytesIO()
+            row = Image.new('RGB', (176, 24), 'black')
+            row.paste(image.crop(box), (0, 0))
+            # The crop begins one console cell before the rendered record.
+            # Local x=8..15 is the distinct marker and x=16 begins the common
+            # 19-digit response. Compare all unchanged response pixels,
+            # including their padding, after translating each crop to the same
+            # fixed canvas. No pixels are resized, normalized, or exported.
+            response_regions.append(row.crop((16, 0, 176, 24)).tobytes())
+            row.save(buffer, format='PNG')
+            result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '7',
+                '-c', 'tessedit_char_whitelist=0123456789'], input=buffer.getvalue(),
+                capture_output=True, timeout=min(10, remaining), check=True)
+            require(type(result.stdout) is bytes and len(result.stdout) <= 65536,
+                    'prompt OCR exceeds bound')
+            rows = [re.sub(r'\s', '', row) for row in result.stdout.decode().splitlines() if row.strip()]
+            regions_valid = regions_valid and len(rows) == 1 and \
+                re.fullmatch(marker + '[0-9]{19}', rows[0]) is not None
+            outputs.append(result.stdout)
+    combined = b'\n'.join(outputs)
+    require(len(combined) <= 65536, 'prompt OCR exceeds bound')
+    checked, _ = identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+    require(checked == raw and time.monotonic() < deadline,
+            'installed user identity deadline exceeded')
+    responses_identical = len(response_regions) == IDENTITY_RECORDS and \
+        len(set(response_regions)) == 1
+    return combined, regions_valid, responses_identical
+
+
+def wait_installed_graphical_login(vm, vmtest):
+    """Find the unchanged physical greeter even when boot leaves another VT active."""
+    started = time.monotonic()
+    deadline = started + 900
+    next_vt_probe = started + 60
+    vts = ('f1', 'f2', 'f3', 'f4', 'f5')
+    vt_index = 0
     while vm.alive() and time.monotonic() < deadline:
         shot = vm.shot('installed-login-probe')
         if shot and vmtest.looks_like_boot_menu(shot):
             vm.keys('ret')
+            # Let the selected installed entry start before probing its VTs.
+            next_vt_probe = max(next_vt_probe, time.monotonic() + 15)
         if shot and vmtest.classify(shot) == 'login':
-            break
+            return
+        now = time.monotonic()
+        if now >= next_vt_probe:
+            vm.cmd('send-key', keys=[{'type': 'qcode', 'data': key}
+                   for key in ('ctrl', 'alt', vts[vt_index])], **{'hold-time': 100})
+            vt_index = (vt_index + 1) % len(vts)
+            next_vt_probe = now + 5
         time.sleep(2)
-    else:
-        raise RuntimeError('fresh installed login display did not appear')
+    raise RuntimeError('fresh installed login display did not appear')
+
+
+def console_user_identity(vm, startup, out, nonce, private_password):
+    """Require a fresh redundant SHA-256 identity response before permitting sudo."""
+    deadline = time.monotonic() + 45
+    expected = installed_user_records(nonce)
+    command = installed_user_command(nonce)
+    require(not any(record in command for record in expected),
+            'installed user command can mimic its response')
+    sent = False
+    sent_after_exact_prompt = False
+    greeting_exit_sent = False
+    mismatch_observation = None
+    challenge_captures = []
+    while vm.alive() and time.monotonic() < deadline:
+        path = vm.shot('installed-login-shell-probe')
+        require(path and startup.console_screen(path), 'actual password console disappeared')
+        if sent:
+            stdout, regions_valid, responses_identical = installed_identity_ocr(path, deadline)
+        else:
+            result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                                    capture_output=True, timeout=10, check=True)
+            stdout, regions_valid, responses_identical = result.stdout, True, False
+        require(len(stdout) <= 65536, 'prompt OCR exceeds bound')
+        accepted, observation = _identity_ocr_observation(
+            stdout, expected, sent, regions_valid and responses_identical)
+        accepted = accepted and regions_valid
+        if observation[:3] != ('zero', 'zero', 'zero'):
+            if not sent:
+                raise _identity_mismatch_error(observation)
+            mismatch_observation = observation
+        if accepted:
+            from PIL import Image
+            with Image.open(path) as image:
+                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
+            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+            discard_identity_challenges(out, challenge_captures)
+            Path(path).unlink()
+            return dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=nonce,
+                        username='arcticqual', uid=1000,
+                        observed_line_sha256=hashlib.sha256(('\n'.join(expected)).encode('ascii')).hexdigest(),
+                        observed_ns=time.monotonic_ns())
+        if sent and observation[:3] != ('zero', 'zero', 'zero') and len(challenge_captures) < IDENTITY_RECORDS:
+            identity_challenge_capture(path, out, private_password, challenge_captures, deadline)
+        if not sent:
+            text = stdout.decode()
+            require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            observed_line = lines[-1].rstrip('_| ') if lines else None
+            require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
+                    'installed user login did not reach its identity challenge')
+        else:
+            observed_line = None
+        if not sent and observed_line is not None and observed_line != 'Password:':
+            if not installed_shell_ready(observed_line):
+                # Fish can render its greeting before the first prompt and
+                # discard input typed during startup. Send one nonsecret Return
+                # first. If OCR still cannot identify the cosmetic prompt on a
+                # later physical frame, the nonsecret challenge itself is the
+                # authoritative readiness/identity proof. Sudo input remains
+                # forbidden until its fresh exact response is visible.
+                if not greeting_exit_sent:
+                    require(time.monotonic() + .3 < deadline,
+                            'installed user identity deadline exceeded')
+                    vm.keys('ret')
+                    greeting_exit_sent = True
+                else:
+                    require(time.monotonic() + len(command)*.08 + .3 < deadline,
+                            'installed user identity deadline exceeded')
+                    vm.type_text(command, gap=.08); vm.keys('ret')
+                    require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+                    sent = True
+            else:
+                require(time.monotonic() + len(command)*.08 + .3 < deadline,
+                        'installed user identity deadline exceeded')
+                vm.type_text(command, gap=.08); vm.keys('ret')
+                require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+                sent = True
+                sent_after_exact_prompt = True
+        time.sleep(.5)
+    if mismatch_observation is not None:
+        raise _identity_mismatch_error(mismatch_observation)
+    if not sent:
+        raise RuntimeError('installed user identity challenge was not issued; sudo input refused')
+    if sent_after_exact_prompt:
+        raise RuntimeError('exact installed user identity was not observed after exact prompt; sudo input refused')
+    raise RuntimeError('exact installed user identity was not observed after readiness fallback; sudo input refused')
+
+
+def boot_installed(vm, startup, vmtest, out, context):
+    """Authenticate on a new QEMU boot of the same disk, with hidden TTY secrets."""
+    wait_installed_graphical_login(vm, vmtest)
     vm.cmd('send-key', keys=[{'type': 'qcode', 'data': k} for k in ('ctrl', 'alt', 'f6')], **{'hold-time': 100})
     time.sleep(4)
     require(startup.console_screen(vm.shot('installed-console-login')), 'fresh installed console was not visible')
@@ -377,8 +801,8 @@ def boot_installed(vm, startup, vmtest, out, context):
     vm.type_text('arcticqual', gap=.15); vm.keys('ret')
     getty = console_prompt(vm,startup,out,'installed-getty-password','Password:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
-    shell = console_prompt(vm,startup,out,'installed-login-shell','arcticqual@arctic-qual ~ >',password,archive=False)
     nonce = uuid.uuid4().hex
+    shell = console_user_identity(vm,startup,out,nonce,password)
     vm.type_text('sudo sh /dev/sr0 ' + nonce, gap=.08); vm.keys('ret')
     sudo = console_prompt(vm,startup,out,'installed-sudo-password','[sudo] password for arcticqual:',password)
     vm.type_text(password, gap=.1); vm.keys('ret')
@@ -400,9 +824,13 @@ def boot_installed(vm, startup, vmtest, out, context):
             require(report['context'] == context and report['authentication']['nonce'] == nonce,
                     'fresh installed helper context/authentication differs')
             prompts = dict(schema='arctic-active-password-prompts-v1',engine=ocr_provenance(),getty=getty,sudo=sudo,
-                login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},
+                login_shell=shell,
                 private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
-            return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts
+            # The outer runner independently validates the complete private
+            # UART, then replaces this marker with a receipt for its bounded
+            # public protocol projection.  Never retain a digest of private
+            # console text as a dictionary oracle.
+            return report, dict(status='private_uart_validated_pending_public_projection'), prompts
         time.sleep(.5)
     raise RuntimeError('fresh installed proof did not complete')
 

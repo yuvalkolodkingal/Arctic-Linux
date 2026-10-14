@@ -207,22 +207,33 @@ SECURITY_DIAGNOSTIC_SITES = {
     ('verify_security', 2): 'security-finish-verify-audit-mode',
     ('verify_security', 3): 'security-finish-verify-audit-lost',
     ('verify_security', 4): 'security-finish-verify-journal-projection',
-    ('verify_security', 5): 'security-finish-verify-audit-scan',
-    ('verify_security', 6): 'security-finish-verify-avc',
+    ('verify_security', 5): 'security-finish-verify-audit-summary',
+    ('verify_security', 9): 'security-finish-verify-avc',
+    ('scan_audit_interval', 2): 'security-finish-audit-total-bound',
+    ('scan_audit_interval', 17): 'security-finish-audit-read',
+    ('scan_audit_interval', 18): 'security-finish-audit-short-read',
+    ('scan_audit_interval', 19): 'security-finish-audit-overread',
+    ('scan_audit_interval', 27): 'security-finish-audit-record',
+    ('scan_audit_interval', 29): 'security-finish-audit-line-bound',
+    ('scan_audit_interval', 31): 'security-finish-audit-record',
     ('SecurityInterval.state', 2): 'security-finish-getenforce',
     ('SecurityInterval.state', 3): 'security-finish-audit-status-command',
     ('SecurityInterval.finish', 1): 'security-finish-state',
     ('SecurityInterval.finish', 2): 'security-finish-journal-stream',
     ('SecurityInterval.finish', 5): 'security-finish-audit-stat',
     ('SecurityInterval.finish', 7): 'security-finish-audit-rotation',
-    ('SecurityInterval.finish', 9): 'security-finish-audit-bound',
-    ('SecurityInterval.finish', 10): 'security-finish-audit-open',
-    ('SecurityInterval.finish', 11): 'security-finish-audit-seek',
-    ('SecurityInterval.finish', 12): 'security-finish-audit-read',
-    ('SecurityInterval.finish', 13): 'security-finish-audit-exists',
-    ('SecurityInterval.finish', 15): 'security-finish-new-audit-bound',
-    ('SecurityInterval.finish', 16): 'security-finish-new-audit-read',
-    ('SecurityInterval.finish', 17): 'security-finish-verify',
+    ('SecurityInterval.finish', 9): 'security-finish-audit-open',
+    ('SecurityInterval.finish', 10): 'security-finish-audit-open-stat',
+    ('SecurityInterval.finish', 11): 'security-finish-audit-open-identity',
+    ('SecurityInterval.finish', 13): 'security-finish-audit-seek',
+    ('SecurityInterval.finish', 14): 'security-finish-audit-scan',
+    ('SecurityInterval.finish', 15): 'security-finish-audit-exists',
+    ('SecurityInterval.finish', 17): 'security-finish-new-audit-stat',
+    ('SecurityInterval.finish', 18): 'security-finish-new-audit-open',
+    ('SecurityInterval.finish', 19): 'security-finish-new-audit-open-stat',
+    ('SecurityInterval.finish', 20): 'security-finish-new-audit-open-identity',
+    ('SecurityInterval.finish', 23): 'security-finish-new-audit-scan',
+    ('SecurityInterval.finish', 24): 'security-finish-verify',
 }
 SECURITY_DIAGNOSTIC_PHASES = frozenset((*SECURITY_DIAGNOSTIC_SITES.values(), 'security-finish-unknown'))
 ACTIVE_DIAGNOSTIC_PHASES = frozenset((
@@ -259,7 +270,8 @@ def security_interval_diagnostic(error, native):
     interval = source.get('SecurityInterval')
     if type(path) is not str or Path(path).name != 'native_smoke.py' or type(interval) is not type:
         return fallback
-    functions = [source.get(name) for name in ('execute', 'require', 'parse_audit_status', 'verify_security')]
+    functions = [source.get(name) for name in
+                 ('execute', 'require', 'parse_audit_status', 'verify_security', 'scan_audit_interval')]
     functions += [getattr(interval, name, None) for name in ('state', 'finish')]
     if not all(type(function) is FunctionType and function.__globals__ is source
                and function.__code__.co_filename == path for function in functions):

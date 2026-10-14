@@ -17,8 +17,9 @@ The formatter remains inside the already hash-pinned publisher helper.
 Storage means root-filesystem allocated bytes, not whole-disk use or the storage
 of a dictation-ready system. Paired offline installations precede the dictation
 payload download. Dictation download sizes describe pinned asset bytes;
-dependencies can add space. Aggregate elapsed time includes recording and
-controller insertion completion, rather than isolated decoder latency.
+dependencies can add space. Aggregate elapsed time includes recording, official
+VoxType transcription and `wtype` text-insertion completion, rather than
+isolated decoder latency.
 
 Relevant source controls, including original-serial replay and invalid-input
 rejection, run with:

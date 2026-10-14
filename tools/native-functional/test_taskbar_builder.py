@@ -34,7 +34,7 @@ def metadata_source():
 
 
 class TaskbarBuilderMetadataControls(unittest.TestCase):
-    def replay(self, packages):
+    def replay(self, packages, pointer_source='shell/dev/virtual-pointer.c'):
         writes = {}
 
         def command(argv, **kwargs):
@@ -58,7 +58,8 @@ class TaskbarBuilderMetadataControls(unittest.TestCase):
         with patch.object(subprocess, 'check_output', side_effect=command), \
              patch.object(Path, 'read_bytes', fixture_bytes), \
              patch.object(Path, 'write_text', write), \
-             patch.dict('os.environ', {'ARCTIC_INSTALLER_ACTIVE': '0'}):
+             patch.dict('os.environ', {'ARCTIC_INSTALLER_ACTIVE': '0',
+                                        'ARCTIC_TASKBAR_POINTER_SOURCE': pointer_source}):
             try:
                 exec(compile(metadata_source(), 'actual-taskbar-builder-metadata', 'exec'), {})
             except subprocess.CalledProcessError:
@@ -66,6 +67,20 @@ class TaskbarBuilderMetadataControls(unittest.TestCase):
                 raise
         self.assertEqual(set(writes), {'/payload/build-provenance.json'})
         return json.loads(writes['/payload/build-provenance.json'])
+
+    def test_default_and_native_pointer_sources_have_separate_exact_inventories(self):
+        common = {'tools/native-functional/taskbar-screencopy.c',
+                  'shell/dev/wlr-screencopy-unstable-v1.xml'}
+        default = self.replay(OBSERVED_PACKAGES)
+        native = self.replay(OBSERVED_PACKAGES, 'tools/native-functional/virtual-pointer.c')
+        self.assertEqual(set(default['sources']), common | {'shell/dev/virtual-pointer.c'})
+        self.assertEqual(set(native['sources']), common | {'tools/native-functional/virtual-pointer.c'})
+        with self.assertRaises(AssertionError):
+            self.replay(OBSERVED_PACKAGES, 'unreviewed/virtual-pointer.c')
+
+    def test_native_runner_selects_the_native_pointer_source_explicitly(self):
+        runner = (HERE / 'runner.py').read_text()
+        self.assertIn("'--pointer-source', 'tools/native-functional/virtual-pointer.c'", runner)
 
     def test_observed_split_package_inventory_produces_complete_provenance(self):
         result = self.replay(OBSERVED_PACKAGES)

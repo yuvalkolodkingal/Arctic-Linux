@@ -33,6 +33,14 @@ BAR = 32
 FOOT_COLOR = (33, 131, 79)
 
 
+def proof_window_command():
+    """Launch the owned solid-colour client without invoking Foot's default shell."""
+    return ['/usr/bin/foot', '-c', '/dev/null', '--app-id=ArcticTaskbarAcceptance',
+            '-o', 'colors-dark.background=21834f',
+            '-o', 'colors-light.background=21834f', '-o', 'main.pad=0x0',
+            '-e', '/usr/bin/sleep', '1800']
+
+
 def rectangle(value):
     result = {key: value[key] for key in ('x', 'y', 'width', 'height')}
     require(all(type(v) in (int, float) and math.isfinite(v) for v in result.values())
@@ -165,9 +173,31 @@ class Taskbar(Smoke):
         if edge == 'bottom': y = m['height']-1
         if edge == 'left': x = 0
         if edge == 'right': x = m['width']-1
-        self.pointer.stdin.write(f'move {int(m["x"]+x-origin_x)} {int(m["y"]+y-origin_y)} {math.ceil(width)} {math.ceil(height)}\n')
+        target_x, target_y = int(m['x'] + x), int(m['y'] + y)
+        self.pointer.stdin.write(f'move {target_x-origin_x} {target_y-origin_y} {math.ceil(width)} {math.ceil(height)}\n')
         self.pointer.stdin.flush()
-        require(self.pointer_reply() == 'OK', 'virtual pointer reply failed')
+        require(self.pointer_reply() == 'OK', 'virtual pointer absolute reply failed')
+        # Mixed-scale output layouts can map protocol-absolute extents through
+        # physical pixels while Mango reports logical coordinates. Bind every
+        # acceptance observation to the requested logical cursor point, then
+        # correct only the measured delta with relative protocol motion.
+        for correction in range(5):
+            cursor = self.query('cursorpos')
+            require(type(cursor) is dict and type(cursor.get('x')) in (int, float)
+                    and type(cursor.get('y')) in (int, float)
+                    and math.isfinite(cursor['x']) and math.isfinite(cursor['y']),
+                    'invalid authoritative cursor position')
+            dx, dy = round(target_x - cursor['x']), round(target_y - cursor['y'])
+            if abs(target_x - cursor['x']) <= 1 and abs(target_y - cursor['y']) <= 1:
+                return
+            if correction == 4:
+                break
+            require(abs(dx) <= 32767 and abs(dy) <= 32767,
+                    'virtual pointer correction exceeds reviewed bound')
+            self.pointer.stdin.write(f'relative {dx} {dy}\n')
+            self.pointer.stdin.flush()
+            require(self.pointer_reply() == 'OK', 'virtual pointer relative reply failed')
+        raise RuntimeError('virtual pointer did not reach requested logical position')
 
     def pointer_reply(self):
         deadline = time.monotonic() + 3
@@ -270,10 +300,8 @@ class Taskbar(Smoke):
             self.dispatch('focusmon,' + m['name'])
             self.dispatch('view,' + str(self.empty[m['name']]) + ',0')
         self.dispatch('focusmon,' + self.names[0])
-        self.proof = self.fresh_window(lambda: self.launch([
-            '/usr/bin/foot', '-c', '/dev/null', '--app-id=ArcticTaskbarAcceptance',
-            '-o', 'colors.background=21834f', '-o', 'main.pad=0x0',
-            '/usr/bin/sleep', '1800']), 'foot', '^ArcticTaskbarAcceptance$')
+        self.proof = self.fresh_window(lambda: self.launch(proof_window_command()),
+                                       'foot', '^ArcticTaskbarAcceptance$')
         self.pointer = subprocess.Popen(self.prefix + [str(self.pointer_path)], stdin=subprocess.PIPE,
                                         stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         require(self.pointer_reply() == 'READY', 'virtual pointer did not start')

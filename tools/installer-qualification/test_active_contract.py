@@ -19,6 +19,7 @@ def load(name, path):
 
 
 A = load('active_contract_controls', HERE / 'active-contract.py')
+D = load('active_contract_producer_controls', HERE / 'driver.py')
 F = load('active_contract_idle_fixture', HERE / 'test_contract.py')
 T = load('active_contract_protected_transport_fixture', HERE / 'test_evidence.py')
 
@@ -146,11 +147,12 @@ def fixture():
         authentication=dict(nonce='d' * 32, username='arcticqual', uid=1000, status='exact_installed_uid_response'), release_acceptance=False)
     installed_serial = ('ARCTIC-ACTIVE-INSTALLED-READY=' + 'd' * 32 + ' user=arcticqual uid=1000\nARCTIC-ACTIVE-INSTALLED ' +
                         json.dumps(installed_report, sort_keys=True) + '\n').encode()
+    installed_public, installed_receipt = T.e.public_uart_receipt(installed_serial, installed=True)
     installed = dict(status='passed', live_qemu_pid=200, installed_qemu_pid=300, qemu_argv=installed_argv,
         target=dict(path='target.qcow2', virtual_bytes=context['disk_bytes'], serial=context['disk_serial'], backing_file=False),
         boot_id=installed_report['boot_id'], parent_live_boot_id=report['boot_id'], selinux=installed_report['selinux'],
         root=installed_report['root'], keyboard=installed_report['keyboard'], authentication=installed_report['authentication'],
-        serial=dict(bytes=len(installed_serial), sha256=A.digest(installed_serial)),
+        serial=installed_receipt,
         receipt_sha256=A.digest(json.dumps(installed_report, sort_keys=True).encode()))
     media['host/serial-installed.log'] = installed_serial
     media['host/installed-boot.json'] = json.dumps(installed_report, sort_keys=True).encode()
@@ -166,7 +168,9 @@ def fixture():
                       program_sha256='c' * 64, traineddata_sha256='b' * 64, version='tesseract 5.5.1')
     state['build']['ocr_host'] = ocr_engine
     prompts = dict(schema='arctic-active-password-prompts-v1', engine=ocr_engine,
-        login_shell=dict(prompt_kind='installed-user-shell', observed_line_sha256=A.digest(b'arcticqual@arctic-qual ~ >'), observed_ns=2),
+        login_shell=dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=installed_report['authentication']['nonce'],
+            username='arcticqual', uid=1000,
+            observed_line_sha256=A.digest(A.installed_identity_records(installed_report['authentication']['nonce']).encode()), observed_ns=2),
         private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
     for number, (key, text) in enumerate((('getty', 'Password:'), ('sudo', '[sudo] password for arcticqual:'))):
         image = Image.new('RGB', (1280, 720), 'black'); ImageDraw.Draw(image).text((20, 20), text, fill='white')
@@ -224,12 +228,15 @@ def fixture():
         for path in (folder / 'installer').iterdir():
             media['installer/' + path.name] = path.read_bytes()
     state['guest'], report, files = result['state'], result['report'], result['files']
-    state['transport'].update(serial_sha256=A.digest(serial), port_sha256=A.digest(port))
+    live_public, live_receipt = T.e.public_uart_receipt(serial)
+    state['guest']['serial'] = live_receipt
+    state['transport'].update(serial_sha256=live_receipt['sha256'], port_sha256=A.digest(port))
     state['diagnostic_streams'] = {
-        'serial.log': state['guest']['serial'], 'installer-port.log': state['guest']['port'],
+        'serial.log': live_receipt, 'installer-port.log': state['guest']['port'],
         'qemu-installer-live.log': dict(bytes=0, sha256=A.digest(b'')),
-        'serial-installed.log': installed['serial'], 'qemu-installer-installed.log': dict(bytes=0, sha256=A.digest(b''))}
-    media.update({'host/serial.log': serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
+        'serial-installed.log': installed_receipt, 'qemu-installer-installed.log': dict(bytes=0, sha256=A.digest(b''))}
+    media.update({'host/serial.log': live_public, 'host/serial-installed.log': installed_serial,
+                  'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
                   'host/qemu-installer-live.log.bounded-prefix.bin': b'', 'host/qemu-installer-installed.log.bounded-prefix.bin': b''})
     return report, state, files, media, serial
 
@@ -244,6 +251,18 @@ class Controls(unittest.TestCase):
         result = A.validate_execution(state, state['image'], state['context']['execution_sha'], serial, media.__getitem__)
         self.assertFalse(result['release_acceptance'])
         self.assertEqual(len(result['images']), 7)
+
+    def test_installed_identity_receipt_exactly_matches_the_real_producer(self):
+        nonce = 'd' * 32
+        produced = '\n'.join(D.installed_user_records(nonce))
+        self.assertEqual(A.installed_identity_records(nonce), produced)
+        self.assertEqual(A.digest(produced.encode('ascii')),
+                         '7799d3f7e961c0396784b702c2ae897ae7de80a5d566c2dd38889a4d1ec5ea65')
+        report, state, files, media, serial = fixture()
+        old = '731904' + D.installed_user_token(nonce)
+        state['host']['password_prompt_evidence']['login_shell']['observed_line_sha256'] = A.digest(old.encode('ascii'))
+        with self.assertRaises(RuntimeError):
+            A.validate_execution(state, state['image'], state['context']['execution_sha'], serial, media.__getitem__)
 
     def test_all_active_export_wrappers_reject_unknown_private_keys(self):
         report, original, files, media, serial = fixture()

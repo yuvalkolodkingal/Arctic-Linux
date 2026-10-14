@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c",
+  "native_source_sha256": "a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0",
   "files": {
-    "native_smoke.py": "8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c",
-    "guest-check-native-v6.py": "5c4d00347c6f735d336c0b54745914331df69d0f9f4be06bbfbe03e6eee2b4af",
+    "native_smoke.py": "a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0",
+    "guest-check-native-v6.py": "b578d77d52177cf781aeb445580f43056c7755bafe816eb853741298308b3d1d",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e"
   },
@@ -21,21 +21,21 @@
     "records",
     "validate_harness_serial"
   ],
-  "validators_source_sha256": "1cf453d97fbae6dbcef1b0c8c6706645833ffeccdc91310e25d39ea982ee4199",
+  "validators_source_sha256": "626dc818049bd1836529926566f40adf59d2a9cb9d708473cd215608b9e0197c",
   "each_selected_function_source_equal": false,
   "release_acceptance": false,
   "adapted_host_controls": {
-    "test_native_desktop_v6.py": "ee788396a13fdfa651a3abfad11038620458a6b9d05d5b2daf7c1a69ad3de181",
+    "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_v6.py": "e58c18e64b33985d87a6a2bbae9cc2759b37c74be15a3cbcda0fc8360bab1d33",
-    "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
-    "test_native_protocol_diagnostics.py": "440f330ae2d34709c19e6a11d7b072a1d6b8ef6eec8d7e6392f6fe2a7dfddc9c",
+    "test_native_v6.py": "a556df7964c4681eccc35354ee5b19573308af85e38be5e73cff44dd45ea19d4",
+    "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
+    "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
-    "test_native_public_evidence.py": "616ccb191ce37aefc989bd85c3b26bb18a46887f57081853443cd85fa1161954",
-    "test_controls_state_trials.py": "7bdb4a0f977366a92d6a4d0379d4cd67c777e44429478a79ede695e7587099ad",
-    "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
+    "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
+    "test_controls_state_trials.py": "c619436d5aa6bbd20ebfd19021fe11f85ed47b17838f407f2e587b4aabf48acb",
+    "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
@@ -46,7 +46,7 @@
     "release_acceptance": false
   },
   "controlled_renderer_trials": {
-    "trigger": "bounded primary static oracle attempts unmatched only",
+    "trigger": "not invoked from the primary acceptance path; retained diagnostic definition only",
     "interventions": [
       "GSK_RENDERER unset",
       "GSK_RENDERER=gl"
@@ -88,7 +88,9 @@
       "gsimpleaction.c": "4394f26f49ed227941a7e13b6f0be50ba380f89ad91030e65e551d8427119938"
     },
     "playback_clock_advancement_required": true,
-    "capture_retry_bound": "six fresh captures within eight seconds"
+    "capture_retry_bound": "one fresh capture; any failed or unmatched oracle hard-fails the gate",
+    "primary_player_attempt_limit": 1,
+    "controlled_diagnostics_invoked_from_primary": false
   },
   "bulk_evidence_transport": {
     "UART_records_unchanged": [
@@ -152,7 +154,7 @@
     "acceptance_validators_unchanged": true
   },
   "controls_state_trials": {
-    "trigger": "bounded primary static oracle attempts unmatched only; replaces the optional default/gl invocation",
+    "trigger": "not invoked from the primary acceptance path; retained optional diagnostic definition only",
     "ordered_interventions": [
       "private show-controls true to false",
       "private show-controls false to false"
@@ -172,29 +174,8 @@
     "video_widget_or_framebuffer_attested": false,
     "three_optional_public_slots_replaced_not_added": true,
     "release_acceptance": false,
-    "rendering_cause_proven": false
-  },
-  "capture_retry": {
-    "observed_failure_run": "38275826520",
-    "diagnosis": "first fullscreen screencopy contained transiently incomplete scaled palette content; two subsequent fresh owned-player trials matched the unchanged exact oracle",
-    "playback_clock_minimum_advance_seconds": 0.05,
-    "playback_clock_timeout_seconds": 5,
-    "capture_attempt_limit": 6,
-    "capture_deadline_seconds": 42,
-    "recapture_settle_seconds": 0.5,
-    "fresh_grim_capture_each_attempt": true,
-    "owned_identity_geometry_focus_monitor_unchanged_each_attempt": true,
-    "oracle_thresholds_unchanged": true,
-    "final_fixed_capture_paths": [
-      "celluloid-reference.png",
-      "visual-owned-window.rgb"
-    ],
-    "bounded_attempt_receipt": "visual-oracle.json rewritten after each completed attempt before any later deadline check",
-    "product_or_codec_failure_inferred": false,
-    "release_acceptance": false,
-    "deadline_basis": "six attempts times two existing three-second command maxima, five half-second settles, and a 3.5-second bounded margin",
-    "deadline_failure_run": "38343014126",
-    "deadline_failure_diagnosis": "five strict-oracle captures remained unmatched; the 8-second wall budget expired before the unchanged sixth attempt could run"
+    "rendering_cause_proven": false,
+    "primary_acceptance_path_can_use_trials": false
   },
   "installed_login_head_observation": {
     "failure_run": "38350659932",
@@ -272,23 +253,6 @@
     "taskbar_port_product_geometry_and_acceptance_unchanged": true,
     "release_acceptance": false
   },
-  "fresh_primary_player_restart": {
-    "trigger": "six strict primary captures all unmatched",
-    "maximum_owned_player_attempts": 2,
-    "same_command_fixture_playback_clock_focus_fullscreen_geometry_and_oracle": true,
-    "prior_owned_process_and_ipc_retired_before_restart": true,
-    "controlled_diagnostic_trials_cannot_admit": true,
-    "oracle_thresholds_unchanged": true,
-    "causal_run_id": 38447656906,
-    "causal_artifact_id": 11839152694,
-    "causal_artifact_sha256": "b50a91f57e087726cf28f914ff12cb4608cf01b65711d0d4579e75aef91d434f",
-    "release_acceptance": false,
-    "attempt_screenshot_paths": [
-      "celluloid-reference.png",
-      "celluloid-reference-player-2.png"
-    ],
-    "host_attempt_receipt_schema_exact": true
-  },
   "taskbar_context_media_protection": {
     "failure_run": 38476315147,
     "failure_artifact": 11855882054,
@@ -298,6 +262,60 @@
     "host_normalization": "Python/context files 0644 and native helpers 0755 before Rock Ridge creation, independent of runner umask",
     "guest_staging": "exact read-only ARCTICTEST device and ISO9660 mount are verified; regular files and directories only are copied to a root-owned non-writable staging tree and exposed at /run/t through a read-only nodev nosuid bind mount",
     "taskbar_hash_schema_port_geometry_and_acceptance_unchanged": true,
+    "release_acceptance": false
+  },
+  "audit_file_interval_streaming": {
+    "failure_run": 38582141613,
+    "failure_artifact_id": 11905708214,
+    "failure_artifact_sha256": "f5cb71662b4576c434b743db5146c84b025018938e63124c7fd855e4ba299412",
+    "diagnosis": "the completed 24-case taskbar matrix accumulated an audit interval above the prior 4 MiB aggregate cap, so the reader rejected it before scanning that interval",
+    "scan": "every byte through the fixed end-of-interval snapshot is streamed through SHA-256 and the AVC detector; record content is not retained or reported",
+    "summary_fields": [
+      "bytes",
+      "records",
+      "sha256"
+    ],
+    "line_bytes_limit": 1048576,
+    "record_count_limit": 500000,
+    "total_bytes_limit": 134217728,
+    "read_bytes": 65536,
+    "rotation_truncation_inode_and_exact_length_fail_closed": true,
+    "selinux_enforcing_audit_mode_audit_lost_and_zero_avc_requirements_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
+  },
+  "sequential_celluloid_renderers": {
+    "failure_run": 38640575556,
+    "failure_artifact_id": 11929973400,
+    "diagnosis": "the proved moving GL player remained mapped while the separate static GL oracle player advanced and decoded but presented a black video surface; earlier bounded controls trials with the same fixture, flags, hide action and timing matched immediately after all prior Celluloid players were retired",
+    "lifecycle": "the moving player's process identity, owned IPC socket and compositor client must all be absent before the one fresh static oracle player is launched",
+    "moving_decode_samples_screenshot_and_fullscreen_evidence_preserved": true,
+    "static_player_attempt_limit": 1,
+    "static_capture_attempt_limit": 1,
+    "static_capture_deadline_seconds": 9.5,
+    "oracle_thresholds_fixture_and_renderer_contract_unchanged": true,
+    "release_acceptance": false,
+    "followup_failure_run": 38643643989,
+    "followup_artifact_id": 11931399593,
+    "followup_artifact_sha256": "c9140f94bfa5eca16824ebe51b52f654ca725800efedfda5d448dc59a473df9b",
+    "followup_diagnosis": "the exact moving process retired and its compositor client was absent in the final snapshot, but the pathname-bound Unix IPC socket remained in the filesystem after its listener exited, so the combined retirement predicate could never pass",
+    "owned_ipc_retirement": "before signalling, connect to the exact socket and require SO_PEERCRED PID/UID while pinning its inode with O_PATH; after the exact pidfd-bound process retires, atomically move the pathname with renameat2(RENAME_NOREPLACE) into a root-owned private quarantine, compare the quarantined entry to the held fd, unlink there, and keep the original directory fd open through the final exact-client wait",
+    "wrong_peer_replaced_inode_nonprivate_directory_and_retained_client_fail_closed": true,
+    "race_and_inode_aba_control": "the desktop UID cannot mutate the quarantined directory; deterministic pre-quarantine replacement, held-inode ABA, post-quarantine path recreation, parent-directory relocation with moved-root socket recreation and existing-target tests all preserve replacements and fail closed",
+    "directory_relocation_control": "the final predicate reads the socket basename through the still-open original dirfd and independently requires the absolute evidence-root path to retain the pinned directory device/inode, owner, type and private mode; renaming or replacing the root fails closed"
+  },
+  "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
+  "single_primary_capture": {
+    "policy": "exactly one fresh product-wrapper Celluloid process and one screencopy",
+    "maximum_owned_player_attempts": 1,
+    "capture_attempt_limit": 1,
+    "first_failed_or_unmatched_oracle": "hard gate failure; no recapture, restart, or diagnostic acceptance path",
+    "playback_clock_minimum_advance_seconds": 0.05,
+    "playback_clock_timeout_seconds": 5,
+    "capture_command_timeout_seconds": 3,
+    "oracle_thresholds_unchanged": true,
+    "screenshot_path": "celluloid-reference.png",
+    "host_attempt_receipt_schema_exact": true,
     "release_acceptance": false
   }
 }

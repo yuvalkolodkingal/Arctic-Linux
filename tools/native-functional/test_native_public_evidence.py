@@ -163,7 +163,8 @@ class PublicEvidenceTests(unittest.TestCase):
         for offset in range(0, len(names), 64):
             batch = names[offset:offset + 64]
             for name in batch: self.write(name)
-            value = self.export(); target, copied = self.extract(value, 'batch-' + str(offset))
+            report = dict(evidence_root=str(self.root), status='limited-smoke-passed')
+            value = self.export(report=report); target, copied = self.extract(value, 'batch-' + str(offset))
             self.assertEqual(set(copied), set(batch))
             for name in batch:
                 self.assertEqual((target / name).read_bytes(), (self.root / name).read_bytes())
@@ -257,6 +258,32 @@ class PublicEvidenceTests(unittest.TestCase):
             self.write(name, b'x' * (4 * 1024 * 1024))
         value = self.export(); self.assertIn('total exceeded bound', value['result'][0])
         self.assertFalse(value['port'].raw)
+
+    def test_failed_report_prioritizes_failure_frame_within_original_total_bound(self):
+        normal = [
+            'gui-00-text-fixture-before-location.png',
+            'gui-01-text-fixture-navigation-confirmed.png',
+            'gui-04-archive-fixture-before-location.png',
+            'gui-05-archive-fixture-navigation-confirmed.png',
+        ]
+        retained = [
+            'gui-08-failure-open-codec-content-and-player-state.png',
+            'visual-owned-window.rgb',
+        ]
+        for name in normal + retained:
+            self.write(name, bytes([len(name) % 251]) * (3 * 1024 * 1024))
+        report = dict(evidence_root=str(self.root), status='failed')
+        old = self.export(original=True, report=report)
+        self.assertIn('native evidence total exceeded bound', old['result'][0])
+        self.assertFalse(old['port'].raw)
+        fixed = self.export(report=report)
+        target, copied = self.extract(fixed, 'failed-headroom')
+        self.assertEqual(set(copied), set(retained))
+        self.assertEqual(fixed['manifests'][0]['bytes'], 6 * 1024 * 1024)
+        self.assertTrue(all(not (target / name).exists() for name in normal))
+        self.assertTrue(all((target / name).read_bytes() == (self.root / name).read_bytes()
+                            for name in retained))
+        self.assertEqual(fixed['result'], ('RuntimeError: original native gate failed', True, False))
 
     def native_consumer_fixture(self):
         begin = dict(stage='live', native_source_sha256=E.NATIVE_SOURCE_SHA,

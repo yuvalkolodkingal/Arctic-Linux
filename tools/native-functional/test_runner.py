@@ -10,8 +10,29 @@ from unittest.mock import patch
 
 import runner as N
 
+REPOSITORY = N.HERE.parents[1]
+
 
 class ExecutionControls(unittest.TestCase):
+    def test_checked_in_manifest_matches_runner_inventory_and_repository_bytes(self):
+        manifest = json.loads((N.HERE / 'execution-manifest.json').read_text())
+        self.assertIs(manifest['release_acceptance'], False)
+        if manifest['ready'] is False:
+            # Main keeps historical evidence disabled.  The activation commit
+            # must set ready=true and repin every execution byte before a VM
+            # can start; the strict inventory checks below then become active.
+            return
+        self.assertIs(manifest['ready'], True)
+        self.assertEqual(set(manifest['execution_files']), N.EXECUTION_FILES)
+        self.assertIn('tools/native-functional/virtual-pointer.c', N.EXECUTION_FILES)
+        self.assertNotIn('shell/dev/virtual-pointer.c', N.EXECUTION_FILES)
+        for name, expected in manifest['execution_files'].items():
+            with self.subTest(name=name):
+                path = REPOSITORY / name
+                self.assertTrue(path.is_file())
+                self.assertFalse(path.is_symlink())
+                self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected)
+
     def test_taskbar_display_receipts_require_both_heads_and_the_pinned_controller(self):
         receipt = dict(schema='arctic-qemu-taskbar-display-v1', controller_sha256='a'*64,
             status='uiinfo_applied_pending_guest_two_output_evidence', display_backend='dbus',

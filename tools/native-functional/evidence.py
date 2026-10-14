@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
+NATIVE_SOURCE_SHA = 'a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '5c4d00347c6f735d336c0b54745914331df69d0f9f4be06bbfbe03e6eee2b4af')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'b578d77d52177cf781aeb445580f43056c7755bafe816eb853741298308b3d1d')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -381,14 +381,14 @@ def check_fullscreen(target,report,uid):
     base_keys={'player_attempt','player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit','capture_deadline_seconds',
                'accepted_capture_attempt','oracle','screenshot','product_renderer','owned_player_cleanup_completed','restart_eligible','release_acceptance'}
-    R.require(type(accepted) is int and accepted in (1,2) and visual.get('player_attempt')==accepted
-              and visual.get('player_attempt_limit')==2
-              and type(attempts) is list and len(attempts)==accepted,
+    R.require(accepted==1 and visual.get('player_attempt')==1
+              and visual.get('player_attempt_limit')==1
+              and type(attempts) is list and len(attempts)==1,
               'Fullscreen visual player-attempt inventory differs')
     for index,row in enumerate(attempts,1):
-        expected_keys=base_keys|({'cleanup'} if index==1 and accepted==2 else set())
+        expected_keys=base_keys
         R.require(type(row) is dict and set(row)==expected_keys and row['player_attempt']==index
-                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==6
+                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==1
                   and row['capture_deadline_seconds']==visual['capture_deadline_seconds']
                   and row['release_acceptance'] is False
                   and all(row[key]==visual[key] for key in ('fixture_sha256','input_rgb_sha256','expected_rgb_sha256')),
@@ -397,7 +397,7 @@ def check_fullscreen(target,report,uid):
         rows=row['capture_attempts']
         capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
                       'playback_time_seconds','owned_identity_geometry_unchanged'}
-        R.require(type(rows) is list and 1<=len(rows)<=6
+        R.require(type(rows) is list and len(rows)==1
                   and all(type(item) is dict and set(item)==capture_keys
                           and item['attempt']==number
                           and type(item['screenshot_sha256']) is str
@@ -415,32 +415,22 @@ def check_fullscreen(target,report,uid):
                   and row['oracle']==rows[-1].get('oracle')
                   and row['screenshot'].get('sha256')==rows[-1].get('screenshot_sha256'),
                   'Fullscreen visual capture-attempt binding differs')
-        if index<accepted:
-            cleanup=row['cleanup']
-            R.require(len(rows)==6 and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows)
-                      and row['oracle'].get('status')=='unmatched' and row['restart_eligible'] is True
-                      and row['owned_player_cleanup_completed'] is True and type(cleanup) is dict
-                      and set(cleanup)=={'process_identity_retired','owned_ipc_absent','owned_ipc_removed','release_acceptance'}
-                      and cleanup['process_identity_retired'] is True and cleanup['owned_ipc_absent'] is True
-                      and type(cleanup['owned_ipc_removed']) is bool and cleanup['release_acceptance'] is False,
-                      'Fullscreen failed visual player restart proof differs')
-        else:
-            accepted_fields=('player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
-                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-                'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')
-            R.require(all(row[key]==visual[key] for key in accepted_fields)
-                      and row['oracle'].get('status')=='matched' and row['restart_eligible'] is False
-                      and row['owned_player_cleanup_completed'] is False
-                      and all(x.get('oracle',{}).get('status')=='unmatched' for x in rows[:-1]),
-                      'Fullscreen accepted visual player proof differs')
-    if accepted==2:
-        failed_shot,accepted_shot=[row['screenshot'] for row in attempts]
-        R.require(Path(failed_shot['path']).name=='celluloid-reference.png'
-                  and Path(accepted_shot['path']).name=='celluloid-reference-player-2.png'
-                  and failed_shot['path']!=accepted_shot['path']
-                  and failed_shot['sha256']!=accepted_shot['sha256'],
-                  'Fullscreen retry screenshots are not distinct exact attempts')
+        accepted_fields=('player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
+            'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')
+        R.require(all(row[key]==visual[key] for key in accepted_fields)
+                  and row['oracle'].get('status')=='matched' and row['restart_eligible'] is False
+                  and row['owned_player_cleanup_completed'] is False
+                  and Path(row['screenshot']['path']).name=='celluloid-reference.png',
+                  'Fullscreen accepted visual player proof differs')
     check_product_renderer(moving.get('product_renderer'),moving['player'])
+    retirement=moving.get('retirement_before_static_oracle')
+    R.require(type(retirement) is dict
+              and set(retirement)=={'process_identity_retired','owned_ipc_absent',
+                                    'compositor_client_absent','release_acceptance'}
+              and retirement==dict(process_identity_retired=True,owned_ipc_absent=True,
+                                   compositor_client_absent=True,release_acceptance=False),
+              'Moving player was not fully retired before the static oracle player')
     R.require(visual.get('product_renderer')==attempts[-1].get('product_renderer'),
               'Accepted visual oracle/product renderer proof differs')
     expected=[moving['player'],*[row['player'] for row in attempts]]

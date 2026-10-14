@@ -121,15 +121,16 @@ class PrimaryControls(unittest.TestCase):
 
     def test_security_diagnostic_uses_only_reviewed_source_call_sites(self):
         clean = dict(selinux='Enforcing', audit=dict(enabled=1, lost=0))
+        audit = dict(bytes=0, records=0, sha256='0' * 64, avcs=0)
         cases = (
             ('security-finish-verify-selinux',
-             lambda: N.verify_security(dict(selinux='Permissive', audit=clean['audit']), clean, 0)),
+             lambda: N.verify_security(dict(selinux='Permissive', audit=clean['audit']), clean, 0, audit)),
             ('security-finish-verify-audit-mode',
-             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=0, lost=0)), 0)),
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=0, lost=0)), 0, audit)),
             ('security-finish-verify-audit-lost',
-             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=1, lost=1)), 0)),
+             lambda: N.verify_security(clean, dict(selinux='Enforcing', audit=dict(enabled=1, lost=1)), 0, audit)),
             ('security-finish-verify-avc',
-             lambda: N.verify_security(clean, clean, 0, 'type=AVC password=' + PRIVATE)),
+             lambda: N.verify_security(clean, clean, 0, dict(audit, avcs=1))),
             ('security-finish-audit-status-enabled', lambda: N.parse_audit_status('lost 0')),
             ('security-finish-audit-status-lost', lambda: N.parse_audit_status('enabled 1')),
         )
@@ -142,7 +143,8 @@ class PrimaryControls(unittest.TestCase):
                 self.assertNotIn(PRIVATE, masked)
                 self.assertIn('phase=' + expected, masked)
         functions = {function.__qualname__: function for function in
-                     (N.parse_audit_status, N.verify_security, N.SecurityInterval.state, N.SecurityInterval.finish)}
+                     (N.parse_audit_status, N.verify_security, N.scan_audit_interval,
+                      N.SecurityInterval.state, N.SecurityInterval.finish)}
         for (qualname, offset), label in G.SECURITY_DIAGNOSTIC_SITES.items():
             with self.subTest(label=label):
                 self.assertIn(functions[qualname].__code__.co_firstlineno + offset,

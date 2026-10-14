@@ -228,10 +228,11 @@ class Controls(unittest.TestCase):
             serial = ('ARCTIC-CONSOLE-READY=' + state['host']['console_authentication']['nonce'] +
                       ' user=liveuser uid=' + str(self.report['desktop_uid']) + '\n').encode() + uart
             guest['port'] = dict(bytes=len(port), sha256=E.digest(port))
-            guest['serial'] = dict(bytes=len(serial), sha256=E.digest(serial))
+            public_serial, public_receipt = E.public_uart_receipt(serial)
+            guest['serial'] = public_receipt
             state['diagnostic_streams'].update({'installer-port.log': guest['port'], 'serial.log': guest['serial']})
             state['transport'].update(port_sha256=guest['port']['sha256'], serial_sha256=guest['serial']['sha256'])
-            media.update({'host/serial.log': serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024]})
+            media.update({'host/serial.log': public_serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024]})
             self.assertEqual(guest['port_end']['end_sha256'], E.digest(E.canonical(guest['collector'])))
             self.assertEqual(guest['serial'], state['diagnostic_streams']['serial.log'])
             with self.subTest(path=path), self.assertRaises(RuntimeError):
@@ -240,7 +241,7 @@ class Controls(unittest.TestCase):
     def test_prompt_kind_hash_observation_order_and_capture_aliases_are_required(self):
         original = self.state['host']['password_prompt_evidence']
         def check(value):
-            return A.password_prompts_check(value, self.state['build'], self.state['required_images'], self.media.__getitem__)
+            return A.password_prompts_check(value, self.state['build'], self.state['required_images'], self.media.__getitem__, self.state['host']['installed_boot']['authentication'])
         check(original)
         for slot in ('getty', 'sudo'):
             safe = copy.deepcopy(original); safe[slot]['path'] = 'host/' + safe[slot]['path']; check(safe)
@@ -312,14 +313,20 @@ class Controls(unittest.TestCase):
                 def prompt(vm, startup, out, label, expected, password, archive=True):
                     key = {'installed-getty-password': 'getty', 'installed-sudo-password': 'sudo', 'installed-login-shell': 'login_shell'}[label]
                     return copy.deepcopy(self.state['host']['password_prompt_evidence'][key])
-                with patch.object(D, 'console_prompt', side_effect=prompt), patch.object(D, 'ocr_provenance', return_value=self.state['build']['ocr_host']), \
+                def identity(vm, startup, out, nonce, password):
+                    value = copy.deepcopy(self.state['host']['password_prompt_evidence']['login_shell'])
+                    value.update(nonce=nonce, observed_line_sha256=A.digest(A.installed_identity_records(nonce).encode()))
+                    return value
+                with patch.object(D, 'console_prompt', side_effect=prompt), patch.object(D, 'console_user_identity', side_effect=identity), patch.object(D, 'ocr_provenance', return_value=self.state['build']['ocr_host']), \
                         patch.object(D, 'load', return_value=G), patch.object(D.time, 'sleep'):
                     report, serial, prompts = D.boot_installed(vm, startup, vmtest, root, self.state['context'])
+                self.assertEqual(serial, {'status': 'private_uart_validated_pending_public_projection'})
                 reports.append(report)
-                receipt = copy.deepcopy(self.state['host']['installed_boot'])
-                receipt.update(boot_id=report['boot_id'], authentication=report['authentication'], serial=serial,
-                               receipt_sha256=A.digest(E.canonical(report)))
                 uart = (root / 'serial-installed.log').read_bytes()
+                _, public_receipt = E.public_uart_receipt(uart, installed=True)
+                receipt = copy.deepcopy(self.state['host']['installed_boot'])
+                receipt.update(boot_id=report['boot_id'], authentication=report['authentication'], serial=public_receipt,
+                               receipt_sha256=A.digest(E.canonical(report)))
                 self.assertEqual(A.installed_boot_check(receipt, self.state['context'], self.report, 200, uart), report)
                 for alteration in ('foreign-nonce', 'duplicate-ready', 'separated-ready', 'duplicate-report', 'foreign-binding'):
                     wrong = copy.deepcopy(receipt); changed = uart
@@ -331,7 +338,7 @@ class Controls(unittest.TestCase):
                         foreign = copy.deepcopy(report); foreign['context']['binding_id'] = 'e' * 32
                         changed = uart.splitlines(keepends=True)[0] + b'ARCTIC-ACTIVE-INSTALLED ' + E.canonical(foreign) + b'\n'
                         wrong['receipt_sha256'] = A.digest(E.canonical(foreign))
-                    wrong['serial'] = dict(bytes=len(changed), sha256=A.digest(changed))
+                    wrong['serial'] = E.public_uart_receipt(changed, installed=True)[1]
                     with self.subTest(alteration=alteration), self.assertRaises(RuntimeError):
                         A.installed_boot_check(wrong, self.state['context'], self.report, 200, changed)
         self.assertNotEqual(reports[0]['authentication']['nonce'], reports[1]['authentication']['nonce'])

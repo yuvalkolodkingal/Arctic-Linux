@@ -53,6 +53,13 @@ def exact(value, keys, message):
     require(type(value) is dict and set(value) == set(keys), message)
 
 
+def installed_identity_records(nonce):
+    """Rebuild the producer's three newline-separated physical responses."""
+    data = (nonce + '\x00arcticqual\x001000\x00arcticqual\x00').encode()
+    token = format(int(digest(data)[:15], 16), '019d')
+    return '\n'.join(marker + token for marker in ('2', '4', '6'))
+
+
 def packaged_source_hashes(tree):
     result = C.packaged_source_hashes(tree)
     for installed, source in PACKAGED_SOURCES.items():
@@ -440,8 +447,9 @@ def installed_boot_check(value, context, live_report, live_pid, serial_bytes):
     require(is_hash(auth['nonce'], 32) and auth['username'] == 'arcticqual' and type(auth['uid']) is int and auth['uid'] == 1000 and
             auth['status'] == 'exact_installed_uid_response', 'actual installed account console response differs')
     exact(value['serial'], {'bytes', 'sha256'}, 'active installed serial identity fields differ')
-    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and type(value['serial']['bytes']) is int and
-            len(serial_bytes) == value['serial']['bytes'] and digest(serial_bytes) == value['serial']['sha256'], 'active installed original serial bytes differ')
+    public_serial, public_receipt = C.public_uart_receipt(serial_bytes, installed=True)
+    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and
+            public_receipt == value['serial'], 'active installed public serial projection differs')
     rows = serial_bytes.decode('utf-8').splitlines()
     ready = 'ARCTIC-ACTIVE-INSTALLED-READY=' + auth['nonce'] + ' user=arcticqual uid=1000'
     require([line for line in rows if line.startswith('ARCTIC-ACTIVE-INSTALLED-READY=')] == [ready] and
@@ -507,12 +515,19 @@ def vm_argv_check(argv, context, installed=False):
     return target['file'], variables[0]
 
 
-def password_prompts_check(value, build, required_images, image_loader):
+def password_prompts_check(value, build, required_images, image_loader, authentication):
     exact(value, {'schema', 'engine', 'getty', 'sudo', 'login_shell', 'private_input_policy'}, 'active password prompt fields differ')
     shell = value['login_shell']
-    exact(shell, {'prompt_kind', 'observed_line_sha256', 'observed_ns'}, 'active authenticated shell proof fields differ')
-    require(shell['prompt_kind'] == 'installed-user-shell' and
-            shell['observed_line_sha256'] == digest(b'arcticqual@arctic-qual ~ >') and
+    exact(shell, {'prompt_kind', 'nonce', 'username', 'uid', 'observed_line_sha256', 'observed_ns'}, 'active authenticated shell proof fields differ')
+    require(type(authentication) is dict and set(authentication) == {'nonce', 'username', 'uid', 'status'} and
+            authentication['status'] == 'exact_installed_uid_response' and authentication.get('username') == 'arcticqual' and
+            type(authentication.get('uid')) is int and authentication['uid'] == 1000 and
+            type(authentication.get('nonce')) is str and re.fullmatch('[0-9a-f]{32}', authentication['nonce']) and
+            shell['prompt_kind'] == 'installed-user-sha256-decimal-identity' and
+            shell['nonce'] == authentication['nonce'] and shell['username'] == 'arcticqual' and
+            type(shell['uid']) is int and shell['uid'] == 1000 and
+            shell['observed_line_sha256'] == digest(
+                installed_identity_records(authentication['nonce']).encode('ascii')) and
             type(shell['observed_ns']) is int and shell['observed_ns'] > 0,
             'active authenticated shell observed-line proof differs')
     require(value['schema'] == 'arctic-active-password-prompts-v1' and
@@ -765,8 +780,11 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
     require(host['firmware'] == report['baseline']['engine']['hello']['firmware'] == 'uefi', 'active live firmware differs')
     auth = host['console_authentication']
     require(auth['status'] == 'exact_liveuser_uid_response' and is_hash(auth['nonce'], 32), 'active actual console authentication differs')
-    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and digest(serial_bytes) == guest['serial']['sha256'] == state['transport']['serial_sha256'] and
-            len(serial_bytes) == guest['serial']['bytes'], 'active protected actual serial identity differs')
+    public_serial, public_receipt = C.public_uart_receipt(serial_bytes)
+    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and
+            public_receipt == guest['serial'] == state['diagnostic_streams']['serial.log'] and
+            public_receipt['sha256'] == state['transport']['serial_sha256'],
+            'active protected public serial projection identity differs')
     require([line for line in serial_bytes.decode('utf-8').splitlines() if line.startswith('ARCTIC-CONSOLE-READY=')] ==
             ['ARCTIC-CONSOLE-READY=' + auth['nonce'] + ' user=liveuser uid=' + str(report['desktop_uid'])], 'active actual live UID response differs')
     require(image_loader is not None, 'active physical images and installed serial replay required')
@@ -791,6 +809,6 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
     installed_path, installed_variables = vm_argv_check(installed['qemu_argv'], context, installed=True)
     require(installed_path == target_path and installed_variables == variable_path, 'installed boot replaced target disk or UEFI variables')
     require(same(strict_json(image_loader('host/installed-boot.json')), installed_report), 'active installed receipt alias differs')
-    password_prompts_check(host['password_prompt_evidence'], build, state['required_images'], image_loader)
+    password_prompts_check(host['password_prompt_evidence'], build, state['required_images'], image_loader, installed_report['authentication'])
     return dict(status='passed_pending_manual_visual_review', images=list(REQUIRED_IMAGES),
                 installed_boot_id=installed['boot_id'], release_acceptance=False)

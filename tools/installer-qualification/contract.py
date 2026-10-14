@@ -4,6 +4,7 @@ This contract does not qualify an image by itself. All twelve physical images
 also require manual review, and the separate original native/install gates apply.
 """
 import hashlib
+import importlib.util
 import io
 import json
 import math
@@ -11,6 +12,13 @@ from pathlib import Path
 import re
 import sys
 from types import FunctionType
+
+HERE = Path(__file__).resolve().parent
+_evidence_spec = importlib.util.spec_from_file_location(
+    'installer_contract_public_uart', HERE / 'evidence.py')
+_evidence = importlib.util.module_from_spec(_evidence_spec)
+_evidence_spec.loader.exec_module(_evidence)
+public_uart_receipt = _evidence.public_uart_receipt
 
 _ASSERTION_TOKEN = object()
 
@@ -416,8 +424,11 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
                 for n, arg in enumerate(argv) if arg == '-drive'), 'installer VM hardware/isolation differs')
     auth = host['console_authentication']
     require(auth['status'] == 'exact_liveuser_uid_response' and is_hash(auth['nonce'], 32), 'actual console authentication receipt differs')
-    require(type(serial_bytes) is bytes and len(serial_bytes) <= 8 * 1024 * 1024 and digest(serial_bytes) == guest['serial']['sha256'] == state['transport']['serial_sha256'] and
-            len(serial_bytes) == guest['serial']['bytes'], 'protected actual serial identity differs')
+    public_serial, public_receipt = public_uart_receipt(serial_bytes)
+    require(type(serial_bytes) is bytes and len(serial_bytes) <= 8 * 1024 * 1024 and
+            public_receipt == guest['serial'] and
+            public_receipt['sha256'] == state['transport']['serial_sha256'],
+            'protected public serial projection identity differs')
     auth_lines = [line for line in serial_bytes.decode('utf-8').splitlines() if line.startswith('ARCTIC-CONSOLE-READY=')]
     require(auth_lines == ['ARCTIC-CONSOLE-READY=' + auth['nonce'] + ' user=liveuser uid=' + str(report['desktop_uid'])], 'actual live console UID response differs')
     require(image_loader is not None, 'physical host media replay required')
@@ -507,16 +518,16 @@ _ASSERTION_SITES = {
     ('contract.py', 'validate_execution', 76): 'idle-062',
     ('contract.py', 'validate_execution', 78): 'idle-063',
     ('contract.py', 'validate_execution', 85): 'idle-064',
-    ('contract.py', 'validate_execution', 86): 'idle-065',
-    ('contract.py', 'validate_execution', 89): 'idle-066',
-    ('contract.py', 'validate_execution', 90): 'idle-067',
-    ('contract.py', 'validate_execution', 93): 'idle-068',
-    ('contract.py', 'validate_execution', 97): 'idle-069',
-    ('contract.py', 'validate_execution', 100): 'idle-070',
-    ('contract.py', 'validate_execution', 102): 'idle-071',
-    ('contract.py', 'validate_execution', 104): 'idle-072',
-    ('contract.py', 'validate_execution', 105): 'idle-073',
-    ('contract.py', 'validate_execution', 106): 'idle-074',
+    ('contract.py', 'validate_execution', 87): 'idle-065',
+    ('contract.py', 'validate_execution', 92): 'idle-066',
+    ('contract.py', 'validate_execution', 93): 'idle-067',
+    ('contract.py', 'validate_execution', 96): 'idle-068',
+    ('contract.py', 'validate_execution', 100): 'idle-069',
+    ('contract.py', 'validate_execution', 103): 'idle-070',
+    ('contract.py', 'validate_execution', 105): 'idle-071',
+    ('contract.py', 'validate_execution', 107): 'idle-072',
+    ('contract.py', 'validate_execution', 108): 'idle-073',
+    ('contract.py', 'validate_execution', 109): 'idle-074',
     ('active-contract.py', 'exact', 1): 'active-001',
     ('active-contract.py', 'context_check', 1): 'active-002',
     ('active-contract.py', 'context_check', 2): 'active-003',
@@ -630,11 +641,11 @@ _ASSERTION_SITES = {
     ('active-contract.py', 'installed_boot_check', 20): 'active-111',
     ('active-contract.py', 'installed_boot_check', 21): 'active-112',
     ('active-contract.py', 'installed_boot_check', 23): 'active-113',
-    ('active-contract.py', 'installed_boot_check', 24): 'active-114',
-    ('active-contract.py', 'installed_boot_check', 28): 'active-115',
-    ('active-contract.py', 'installed_boot_check', 32): 'active-116',
-    ('active-contract.py', 'installed_boot_check', 34): 'active-117',
-    ('active-contract.py', 'installed_boot_check', 36): 'active-118',
+    ('active-contract.py', 'installed_boot_check', 25): 'active-114',
+    ('active-contract.py', 'installed_boot_check', 29): 'active-115',
+    ('active-contract.py', 'installed_boot_check', 33): 'active-116',
+    ('active-contract.py', 'installed_boot_check', 35): 'active-117',
+    ('active-contract.py', 'installed_boot_check', 37): 'active-118',
     ('active-contract.py', 'vm_argv_check', 1): 'active-119',
     ('active-contract.py', 'vm_argv_check', 6): 'active-120',
     ('active-contract.py', 'vm_argv_check', 12): 'active-121',
@@ -651,13 +662,13 @@ _ASSERTION_SITES = {
     ('active-contract.py', 'password_prompts_check', 1): 'active-132',
     ('active-contract.py', 'password_prompts_check', 3): 'active-133',
     ('active-contract.py', 'password_prompts_check', 4): 'active-134',
-    ('active-contract.py', 'password_prompts_check', 8): 'active-135',
-    ('active-contract.py', 'password_prompts_check', 12): 'active-136',
-    ('active-contract.py', 'password_prompts_check', 13): 'active-137',
-    ('active-contract.py', 'password_prompts_check', 23): 'active-138',
-    ('active-contract.py', 'password_prompts_check', 27): 'active-139',
-    ('active-contract.py', 'password_prompts_check', 33): 'active-140',
-    ('active-contract.py', 'password_prompts_check', 36): 'active-141',
+    ('active-contract.py', 'password_prompts_check', 15): 'active-135',
+    ('active-contract.py', 'password_prompts_check', 19): 'active-136',
+    ('active-contract.py', 'password_prompts_check', 20): 'active-137',
+    ('active-contract.py', 'password_prompts_check', 30): 'active-138',
+    ('active-contract.py', 'password_prompts_check', 34): 'active-139',
+    ('active-contract.py', 'password_prompts_check', 40): 'active-140',
+    ('active-contract.py', 'password_prompts_check', 43): 'active-141',
     ('active-contract.py', 'exported_inventories_check', 6): 'active-142',
     ('active-contract.py', 'exported_inventories_check', 10): 'active-143',
     ('active-contract.py', 'exported_inventories_check', 11): 'active-144',
@@ -721,14 +732,14 @@ _ASSERTION_SITES = {
     ('active-contract.py', 'validate_execution', 73): 'active-202',
     ('active-contract.py', 'validate_execution', 78): 'active-203',
     ('active-contract.py', 'validate_execution', 80): 'active-204',
-    ('active-contract.py', 'validate_execution', 81): 'active-205',
-    ('active-contract.py', 'validate_execution', 83): 'active-206',
-    ('active-contract.py', 'validate_execution', 85): 'active-207',
-    ('active-contract.py', 'validate_execution', 88): 'active-208',
-    ('active-contract.py', 'validate_execution', 93): 'active-209',
-    ('active-contract.py', 'validate_execution', 95): 'active-210',
-    ('active-contract.py', 'validate_execution', 97): 'active-211',
-    ('active-contract.py', 'validate_execution', 99): 'active-212',
-    ('active-contract.py', 'validate_execution', 105): 'active-213',
-    ('active-contract.py', 'validate_execution', 106): 'active-214',
+    ('active-contract.py', 'validate_execution', 82): 'active-205',
+    ('active-contract.py', 'validate_execution', 86): 'active-206',
+    ('active-contract.py', 'validate_execution', 88): 'active-207',
+    ('active-contract.py', 'validate_execution', 91): 'active-208',
+    ('active-contract.py', 'validate_execution', 96): 'active-209',
+    ('active-contract.py', 'validate_execution', 98): 'active-210',
+    ('active-contract.py', 'validate_execution', 100): 'active-211',
+    ('active-contract.py', 'validate_execution', 102): 'active-212',
+    ('active-contract.py', 'validate_execution', 108): 'active-213',
+    ('active-contract.py', 'validate_execution', 109): 'active-214',
 }
