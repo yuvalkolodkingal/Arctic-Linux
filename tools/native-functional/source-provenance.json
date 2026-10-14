@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b",
+  "native_source_sha256": "2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e",
   "files": {
-    "native_smoke.py": "3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b",
-    "guest-check-native-v6.py": "73b7ec978882c2b163c9ff787134f30c7d10a6f3b92918995413d30b97712e8b",
+    "native_smoke.py": "2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e",
+    "guest-check-native-v6.py": "9e61df24664e0da3e37effb822e34f023ea27d518932a4a5427f586d68a3bcbb",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "07804bbbba0a4858fec6d699c24000dc9d0c2b20bb85a2e0209497f1ccd655ae"
   },
@@ -25,16 +25,16 @@
   "each_selected_function_source_equal": false,
   "release_acceptance": false,
   "adapted_host_controls": {
-    "test_native_desktop_v6.py": "92bca07bec90b481f6e0aa40be5c7b488c6d878c33ea0830f8bc06a913b27cfa",
+    "test_native_desktop_v6.py": "22506c6f0e66ac22e5b2d8f927971247a83d9fb5e55143d072bc4e8325790bc1",
     "test_native_physical_v6.py": "82aac214be3d963f987d72cc01bf5709edad407dea3b9937afad06b7c8872497",
-    "test_native_v6.py": "5e0a5f138da884931bdb9f4717b46acd1dbb986780efa1cd56aec063a5de376f",
+    "test_native_v6.py": "563d5c4c0e6f5418b7b30401f8488143ba1f98e8e06a68aad549c56fe8d5128b",
     "test_native_smoke.py": "14a7b215cdc3cfda5c6a03af87a168e8944949f6589f9f4f285fa1a77c543969",
-    "test_native_protocol_diagnostics.py": "b90440c4c23e1d1a229a076b46e269a458606f83b4e45a6f8e5cfca492983dbd",
-    "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
+    "test_native_protocol_diagnostics.py": "3613e8fd265b42c4b45e642c04ab3dfac8d227840534a7d62bbe0fb46275d798",
+    "test_renderer_trials.py": "ccaccb647578f7d304fe1e37881a141531346fc145cb2f17eda5422a45c156b7",
     "test_native_capture_controls.py": "f4b152b8d557cdb3a65bbfe6056088c4bd65e05f8bf16bbd6e941e3134e21937",
     "test_native_bulk_transport.py": "1de533e0e1b5f8c8ceae289a47de81a4ae587e299c28ed08f842f9d0dc28c326",
     "test_native_public_evidence.py": "e77f082ccad5079cb967097da63c1fc00b4c4558c3665f3c9e662c3ef9e7dbbb",
-    "test_controls_state_trials.py": "4ab2bbc29b3cb71c2fcea00b5ddc0ac983214fbae7c27581307701bc0a028b44",
+    "test_controls_state_trials.py": "50fd596bf81bed1e5f55ff4317cbeca83f60c5b726546fcbbf1851317fb7e284",
     "test_security_journal_stream.py": "61f6deacc22e65a3ff5a60b122bc6139741c560e498537a6be935dbe0d11beec",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -350,5 +350,25 @@
     "causal_artifact_sha256": "207c74795b8c914697801fe39426e41e69aca22ca8d487f4250ddd8d2f4df65a",
     "inspector_run_id": 38510136841,
     "release_acceptance": false
+  },
+  "primary_renderer_realization": {
+    "causal_run_id": 38511087588,
+    "causal_artifact_id": 11870947979,
+    "causal_artifact_sha256": "b09a777c2548eeb86ae0495e78ca96834dde3209d6a6284f71c0cc8a90d7ee92",
+    "inspector_run_id": 38514189070,
+    "exact_artifact_head": "4c325e07e6dcbec8c180aa071f8270ba25cde95c",
+    "live_primary_oracle": "matched; rejected only because host schema omitted primary_controls_seed",
+    "installed_primary_observation": "two fresh owned players, six captures each, zero reference-color candidates in every capture",
+    "installed_control_observation": "subsequent true-to-false and false-to-false trials each matched 316224 checked interior pixels with zero mismatches using default realized Vulkan and GSK_RENDERER unset",
+    "causal_limit": "controlled trials followed the failed primary path and shared isolated cache history, so the exact rendering cause remains unproven",
+    "remedy": "require the owned primary default GTK renderer successful-realization message before primary IPC, playback, fullscreen, and screencopy",
+    "renderer_selected_or_forced": false,
+    "requested_GSK_RENDERER": "unset",
+    "realization_wait_seconds": 5,
+    "private_raw_stderr_exported": false,
+    "two_player_retry_six_capture_limit_oracle_tolerances_and_deadline_unchanged": true,
+    "taskbar_matrix_pointer_product_and_iso_unchanged": true,
+    "release_acceptance": false,
+    "rendering_cause_proven": false
   }
 }
