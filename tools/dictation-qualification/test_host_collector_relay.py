@@ -92,6 +92,19 @@ class CollectorHostRelayControls(unittest.TestCase):
             'ARCTIC-DICTATION-HOST-FAILURE online-installed collector '
             'collector-integration-invalid\n')
 
+    def test_installed_tty_crlf_collector_code_relays_without_payload(self):
+        record = (b'private transcript before\r\n'
+                  b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                  b'{"code":"collector-execution-os-error",'
+                  b'"release_acceptance":false}\r\n'
+                  b'private transcript after\r\n')
+        output = self.relay(record, phase='online-installed', stage='all')
+        self.assertEqual(
+            output,
+            'ARCTIC-DICTATION-HOST-FAILURE online-installed collector '
+            'collector-execution-os-error\n')
+        self.assertNotIn('private', output)
+
     def test_all_stage_rejects_duplicate_collector_records_across_install_and_boot(self):
         record = (b'ARCTIC-DICTATION-COLLECTOR-ERROR '
                   b'{"code":"collector-integration-invalid",'
@@ -137,6 +150,7 @@ class CollectorHostRelayControls(unittest.TestCase):
             b'{"code":"collector-integration-invalid","release_acceptance":false}\n'
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
             b'{"code":"collector-integration-invalid","release_acceptance":false}\n',
+            b'ARCTIC-DICTATION-COLLECTOR-ERROR ' + b' ' * 512 + b'\r\n',
         )
         for serial in records:
             with self.subTest(serial=serial):
@@ -154,6 +168,15 @@ class CollectorHostRelayControls(unittest.TestCase):
                 b'{"code":"collector-integration-invalid",'
                 b'"code":"private","release_acceptance":false}\n',
                 b'ARCTIC-DICTATION-COLLECTOR-ERROR {}',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",'
+                b'"release_acceptance":false}\r',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",\r'
+                b'"release_acceptance":false}\n',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",'
+                b'"release_acceptance":false}\r\r\n',
                 b'private transcript only\n'):
             with self.subTest(serial=serial):
                 output = self.relay(serial)

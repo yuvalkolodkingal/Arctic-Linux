@@ -172,8 +172,18 @@ def relay_collector_diagnostic(vm, phase, stage):
         if not selected:
             return
         code = 'collector-invalid-record'
-        if (len(selected) == 1 and len(selected[0]) <= 512
-                and selected[0].endswith(b'\n') and not selected[0].endswith(b'\r\n')):
+        if len(selected) == 1 and len(selected[0]) <= 512:
+            # collect.sh writes through /dev/ttyS0.  A normal Linux tty has
+            # OPOST|ONLCR enabled and therefore transports print()'s LF as
+            # CRLF.  Normalize only that complete terminal line ending; bare
+            # or embedded CR bytes remain invalid private input.
+            line = selected[0]
+            if line.endswith(b'\r\n'):
+                body = line[len(prefix):-2]
+            elif line.endswith(b'\n'):
+                body = line[len(prefix):-1]
+            else:
+                body = b''
             def strict_object(pairs):
                 value = {}
                 for key, item in pairs:
@@ -181,13 +191,13 @@ def relay_collector_diagnostic(vm, phase, stage):
                         raise ValueError('duplicate')
                     value[key] = item
                 return value
-            record = json.loads(selected[0][len(prefix):-1].decode('ascii'),
-                                object_pairs_hook=strict_object)
-            if (type(record) is dict and set(record) == {'code', 'release_acceptance'}
-                    and type(record.get('code')) is str
-                    and record['code'] in COLLECTOR_DIAGNOSTIC_CODES
-                    and record.get('release_acceptance') is False):
-                code = record['code']
+            if body and b'\r' not in body and b'\n' not in body:
+                record = json.loads(body.decode('ascii'), object_pairs_hook=strict_object)
+                if (type(record) is dict and set(record) == {'code', 'release_acceptance'}
+                        and type(record.get('code')) is str
+                        and record['code'] in COLLECTOR_DIAGNOSTIC_CODES
+                        and record.get('release_acceptance') is False):
+                    code = record['code']
         print('ARCTIC-DICTATION-HOST-FAILURE ' + phase + ' collector ' + code, flush=True)
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
         pass

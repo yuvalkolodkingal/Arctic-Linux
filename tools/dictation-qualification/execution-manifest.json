@@ -25,7 +25,7 @@
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
     "tools/dictation-qualification/contract.py": "91ea987e83080968456ad29ef85d73fce6f6d3228c628419884c77d487e4694a",
     "tools/dictation-qualification/guest_check.py": "c59692fc809471186da120384f13a3cd3d534c498cdf7f99ae96c28e5cdca67c",
-    "tools/dictation-qualification/runner.py": "1cb53e5d222b6689a590ce2b35917393fb7bd02a8c93c056e7808a54da61a175",
+    "tools/dictation-qualification/runner.py": "e24e5333a616e5650f0318b56f7e354dd449e4ddd85bf3640970e7abe32fb056",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
