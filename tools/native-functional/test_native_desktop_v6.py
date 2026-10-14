@@ -44,6 +44,13 @@ def fullscreen_fixture(value,visual,moving_shot):
   playback_clock={},capture_attempts=[capture],capture_attempt_limit=6,capture_deadline_seconds=42,
   accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],owned_player_cleanup_completed=False,
   restart_eligible=False,release_acceptance=False)
+ seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+  seed_readback_matched=True,release_acceptance=False)
+ renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
+  gtk_source_version='4.22.5',surface_kind='wayland-toplevel',video_widget_or_framebuffer_attested=False,
+  release_acceptance=False,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+  debug_observation='GSK_DEBUG=renderer')
+ accepted.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
  visual['player_attempts']=[accepted]
  visual.update({key:accepted[key] for key in ('player','player_state','actual_rgb_sha256','playback_clock','capture_attempts',
   'accepted_capture_attempt','oracle','screenshot')})
@@ -230,6 +237,14 @@ class FullscreenControls(unittest.TestCase):
       playback_clock={},capture_attempts=accepted_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
       accepted_capture_attempt=1,oracle=matched,screenshot=shots[2],owned_player_cleanup_completed=False,
       restart_eligible=False,release_acceptance=False)
+   seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+      seed_readback_matched=True,release_acceptance=False)
+   renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
+      gtk_source_version='4.22.5',surface_kind='wayland-toplevel',video_widget_or_framebuffer_attested=False,
+      release_acceptance=False,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+      debug_observation='GSK_DEBUG=renderer')
+   failed.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
+   accepted.update(primary_controls_seed=seed,primary_renderer_realization=renderer)
    visual=dict(player=players[2],player_attempt=2,player_attempt_limit=2,accepted_player_attempt=2,capture_attempt_limit=6,
       capture_deadline_seconds=42,screenshot=shots[2],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
       playback_clock=accepted['playback_clock'],capture_attempts=accepted_captures,accepted_capture_attempt=1,
@@ -273,6 +288,14 @@ class FullscreenControls(unittest.TestCase):
       (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
    rejected(lambda:(lambda x:(x[1]['player'].update(client_id=x[0]['player']['client_id']),
       (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player=copy.deepcopy(x[1]['player']),player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['primary_controls_seed'].update(seed_readback_matched=False),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['primary_renderer_realization'].update(status='unknown'),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1]['primary_renderer_realization'].update(requested_gsk_renderer='gl'),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   rejected(lambda:(lambda x:(x[1].pop('primary_renderer_realization'),
+      (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
 
 class HarnessControls(unittest.TestCase):
  def test_original_five_controller_and_default_false_guest_remain_exact(self):

@@ -248,10 +248,12 @@ class DrainAndExportControls(unittest.TestCase):
             child=Mock();drain=Mock();argv=['/usr/bin/celluloid','--no-existing-session','--new-window','fixture.mkv']
             order=[]
             drain.start.side_effect=lambda reader:order.append('drain-start')
-            with patch.object(N,'NativeProtocolDrain',return_value=drain),patch.object(N.subprocess,'Popen',return_value=child) as popen:
+            with patch.object(N,'NativeProtocolDrain',return_value=drain) as factory,patch.object(N.subprocess,'Popen',return_value=child) as popen:
                 popen.side_effect=lambda *a,**kw:(order.append('app-launch') or child)
                 smoke.launch_protocol_player(argv)
-            self.assertEqual(popen.call_args.args[0],smoke.prefix+['WAYLAND_DEBUG=client']+argv)
+            self.assertEqual(popen.call_args.args[0],smoke.prefix+['env','-u','GSK_RENDERER',
+                'GSK_DEBUG=renderer','WAYLAND_DEBUG=client']+argv)
+            self.assertEqual(factory.call_args.kwargs,dict(renderer=True))
             writer=popen.call_args.kwargs['stderr'];self.assertIs(type(writer),int)
             with self.assertRaises(OSError):os.fstat(writer)
             self.assertEqual(order,['drain-start','app-launch'])
@@ -289,7 +291,8 @@ class DrainAndExportControls(unittest.TestCase):
                 return (0,'{"success":true}','')
             def pipe():
                 pair=original_pipe();captures.extend(pair);return pair
-            def drain_factory():
+            def drain_factory(**kwargs):
+                self.assertEqual(kwargs,dict(renderer=True))
                 drain=original_drain();captures.append(drain.raw_fd);return drain
             def close(fd):closed.append(fd);original_close(fd)
             smoke.cmd=Mock(side_effect=command)
@@ -307,18 +310,18 @@ class DrainAndExportControls(unittest.TestCase):
                     owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
                  patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                 self.assertIsNone(smoke.gate('open-codec-content-and-player-state',smoke.visual_media))
-            self.assertEqual(factory.call_count,2);self.assertEqual(popen.call_count,2)
-            self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
+            self.assertEqual(factory.call_count,1);self.assertEqual(popen.call_count,1)
+            self.assertEqual(smoke.seed_primary_reference_controls.call_count,1)
             for call in popen.call_args_list:self.assertNotIn('WAYLAND_DEBUG=client',call.args[0])
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
-            self.assertIn('actual static visual fixture content unmatched',smoke.gates[-1]['detail'])
+            self.assertEqual(sleep.call_args_list,[])
+            self.assertIn('primary renderer realization capture unavailable',smoke.gates[-1]['detail'])
             self.assertNotIn('private optional',json.dumps(smoke.gates))
-            self.assertEqual(json.loads((smoke.root/'visual-oracle.json').read_bytes())['oracle']['status'],'unmatched')
-            self.assertTrue((smoke.root/'celluloid-reference.png').is_file())
-            self.assertEqual(json.loads((smoke.root/'0-native-protocol-viewport.json').read_bytes())['protocol']['status'],'unknown')
+            self.assertFalse((smoke.root/'visual-oracle.json').exists())
+            self.assertFalse((smoke.root/'celluloid-reference.png').exists())
+            self.assertFalse((smoke.root/'0-native-protocol-viewport.json').exists())
             for fd in captures:
                 with self.assertRaises(OSError):os.fstat(fd)
-            self.assertGreaterEqual(len(closed),4)
+            self.assertGreaterEqual(len(closed),3)
 
     def test_start_failure_cleanup_is_idempotent_even_after_fd_reuse(self):
         read,write=os.pipe();reader=os.fdopen(read,'rb',buffering=0);drain=N.NativeProtocolDrain();raw=drain.raw_fd
@@ -360,7 +363,8 @@ class DrainAndExportControls(unittest.TestCase):
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True
             smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
             original=N.NativeProtocolDrain;captures=[]
-            def factory():
+            def factory(**kwargs):
+                self.assertEqual(kwargs,dict(renderer=True))
                 drain=original();captures.append(drain);return drain
             argv=['/usr/bin/celluloid','--no-existing-session','fixture.mkv']
             with patch.object(N,'NativeProtocolDrain',side_effect=factory),\
@@ -395,6 +399,11 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
             smoke.seed_primary_reference_controls=Mock(return_value=dict(initial_visible=True,
                 seed_readback_matched=True,release_acceptance=False))
+            smoke.primary_renderer_realization=Mock(return_value=dict(status='reported-realized',renderer='vulkan',
+                message_count=1,capped=False,gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
+                video_widget_or_framebuffer_attested=False,release_acceptance=False,
+                owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+                debug_observation='GSK_DEBUG=renderer'))
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
                 release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
@@ -419,6 +428,7 @@ class DrainAndExportControls(unittest.TestCase):
                     smoke.visual_media()
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
             self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
+            self.assertEqual(smoke.primary_renderer_realization.call_count,2)
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True))
             self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[1],False))

@@ -29,9 +29,43 @@ STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
 FRESH_PLAYER_RESTART_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 PRIMARY_CONTROLS_SEED_NATIVE_SHA = '3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b'
+PRIMARY_RENDERER_REALIZATION_NATIVE_SHA = '2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e'
+
+
+def restore_primary_renderer_realization_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=PRIMARY_RENDERER_REALIZATION_NATIVE_SHA:
+        raise AssertionError('Primary renderer realization Native source differs')
+    start='    # BEGIN PRIMARY_RENDERER_REALIZATION\n';end='    # END PRIMARY_RENDERER_REALIZATION\n\n'
+    if source.count(start)!=1 or source.count(end)!=1:
+        raise AssertionError('Primary renderer realization inverse marker differs')
+    a=source.index(start);z=source.index(end,a)+len(end);source=source[:a]+source[z:]
+    substitutions=(("""        # Observe successful realization without selecting a renderer.  The
+        # installed guest can map the toplevel before its default renderer is
+        # ready to present the video surface.
+""","        # Only the already isolated static Celluloid, no renderer/command flag.\n"),
+        ("        self.primary_renderer_drain=None\n",''),
+        ("            drain=NativeProtocolDrain(renderer=True)\n","            drain=NativeProtocolDrain()\n"),
+        ("""                child=subprocess.Popen(self.prefix+['env','-u','GSK_RENDERER','GSK_DEBUG=renderer',
+                    'WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
+""","                child=subprocess.Popen(self.prefix+['WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)\n"),
+        ("        self.primary_renderer_drain=drain\n",''),
+        ("""        primary_renderer=(self.primary_renderer_realization(player)
+                          if getattr(self,'gui_v6',False) else None)
+""",''),
+        ("                  primary_renderer_realization=primary_renderer,\n",''),
+        ("""            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed',
+            'primary_renderer_realization')}
+""","            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed')}\n"))
+    for new,old in substitutions:
+        if source.count(new)!=1:raise AssertionError('Primary renderer realization inverse addition differs')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=PRIMARY_CONTROLS_SEED_NATIVE_SHA:
+        raise AssertionError('Pre-primary-renderer-realization Native source differs')
+    return source
 
 
 def restore_primary_controls_seed_native(source):
+    source=restore_primary_renderer_realization_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=PRIMARY_CONTROLS_SEED_NATIVE_SHA:
         raise AssertionError('Primary controls seed Native source differs')
     for start,end in (
@@ -237,6 +271,16 @@ def restore_controls_guest(source):
 
 
 class ControlsStateTrials(unittest.TestCase):
+    def test_primary_renderer_realization_inverse_is_exact_and_mutations_fail(self):
+        source=(HERE/'native_smoke.py').read_text()
+        restored=restore_primary_renderer_realization_native(source)
+        self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),PRIMARY_CONTROLS_SEED_NATIVE_SHA)
+        for changed in (source.replace("self.wait(realized,5,'owned primary renderer realization')",
+                                       "self.wait(realized,6,'owned primary renderer realization')",1),
+                        source.replace("'GSK_DEBUG=renderer'","'GSK_DEBUG=other'",1),
+                        source+'\n# unknown renderer mutation\n'):
+            with self.assertRaises(AssertionError):restore_primary_renderer_realization_native(changed)
+
     def parent(self,root):
         config=root/'config';config.mkdir(mode=0o700)
         return Mock(root=root,user=pwd.getpwuid(os.getuid()),uid=os.getuid(),stage='live',
@@ -455,6 +499,12 @@ class ControlsStateTrials(unittest.TestCase):
             seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
                       seed_readback_matched=True,release_acceptance=False)
             smoke.seed_primary_reference_controls=Mock(return_value=seed)
+            renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
+                gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
+                video_widget_or_framebuffer_attested=False,release_acceptance=False,
+                owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+                debug_observation='GSK_DEBUG=renderer')
+            smoke.primary_renderer_realization=Mock(return_value=renderer)
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False))
             smoke.controlled_controls_trials=Mock(return_value=dict(oracle=dict(status='matched'),release_acceptance=False))
             smoke.controlled_renderer_trials=Mock()
@@ -484,11 +534,13 @@ class ControlsStateTrials(unittest.TestCase):
                         smoke.visual_media()
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
                 self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
+                self.assertEqual(smoke.primary_renderer_realization.call_count,2)
                 smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
                 self.assertEqual([row['primary_controls_seed'] for row in actual['player_attempts']],[seed,seed])
+                self.assertEqual([row['primary_renderer_realization'] for row in actual['player_attempts']],[renderer,renderer])
                 self.assertEqual(smoke.controlled_controls_trials.call_args.args[3]['oracle'],actual['oracle'])
             finally:
                 for endpoint in endpoints:endpoint.close()

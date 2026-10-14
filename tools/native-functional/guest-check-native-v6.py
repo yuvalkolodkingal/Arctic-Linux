@@ -918,12 +918,15 @@ class Smoke:
         self.steps.append(dict(argv=argv, status='started-asynchronously', log=str(log)))
 
     def launch_protocol_player(self, argv):
-        # Only the already isolated static Celluloid, no renderer/command flag.
+        # Observe successful realization without selecting a renderer.  The
+        # installed guest can map the toplevel before its default renderer is
+        # ready to present the video surface.
         require(argv[0]=='/usr/bin/celluloid' and getattr(self,'gui_v6',False),
                 'native protocol diagnostic player selection differs')
+        self.primary_renderer_drain=None
         drain=None; reader=None; writer=None
         try:
-            drain=NativeProtocolDrain()
+            drain=NativeProtocolDrain(renderer=True)
             read,writer=os.pipe()
             try: reader=os.fdopen(read,'rb',buffering=0)
             except BaseException:
@@ -939,13 +942,37 @@ class Smoke:
         log=self.root/('gui-launch-'+str(len(self.launches))+'.log')
         try:
             with log.open('ab') as stream:
-                child=subprocess.Popen(self.prefix+['WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
+                child=subprocess.Popen(self.prefix+['env','-u','GSK_RENDERER','GSK_DEBUG=renderer',
+                    'WAYLAND_DEBUG=client']+argv,stdout=stream,stderr=writer)
         except BaseException:
             drain.finish(); raise
         finally: os.close(writer)
         self.launches.append(child)
         self.steps.append(dict(argv=argv,status='started-asynchronously',log=str(log)))
         self.native_protocol_drain=drain
+        self.primary_renderer_drain=drain
+
+    # BEGIN PRIMARY_RENDERER_REALIZATION
+    def primary_renderer_realization(self, player):
+        drain=getattr(self,'primary_renderer_drain',None)
+        require(drain is not None and getattr(drain,'renderer',None) is not None,
+                'primary renderer realization capture unavailable')
+        require(drain.bind(player,self.uid),'primary renderer stderr ownership differs')
+        def realized():
+            with drain.lock: value=drain.renderer.snapshot()
+            return value if value.get('status')=='reported-realized' else None
+        value=self.wait(realized,5,'owned primary renderer realization')
+        require(type(value) is dict and set(value)=={'status','renderer','message_count','capped','gtk_source_version',
+                'surface_kind','video_widget_or_framebuffer_attested','release_acceptance'}
+                and value['renderer'] in ('gl','vulkan','cairo') and value['message_count']>=1
+                and value['capped'] is False and value['gtk_source_version']=='4.22.5'
+                and value['surface_kind']=='wayland-toplevel'
+                and value['video_widget_or_framebuffer_attested'] is False
+                and value['release_acceptance'] is False,
+                'primary renderer realization receipt differs')
+        return dict(value,owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+                    debug_observation='GSK_DEBUG=renderer')
+    # END PRIMARY_RENDERER_REALIZATION
 
     def native_protocol_diagnostic(self, player, state, screenshot, client):
         value=dict(schema='arctic-native-owned-protocol-viewport-v1',stage=self.stage if self.stage in ('live','installed') else 'unknown',
@@ -1640,6 +1667,8 @@ class Smoke:
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
             self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
+        primary_renderer=(self.primary_renderer_realization(player)
+                          if getattr(self,'gui_v6',False) else None)
         require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
                         or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
                 'visual restart did not create a fresh owned player')
@@ -1761,6 +1790,7 @@ class Smoke:
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
                   primary_controls_seed=controls_seed,
+                  primary_renderer_realization=primary_renderer,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
@@ -1770,7 +1800,8 @@ class Smoke:
                           and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed')}
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed',
+            'primary_renderer_realization')}
         player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
         restart['player_attempts'].append(player_receipt)
         info['player_attempts']=restart['player_attempts']
@@ -2457,7 +2488,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b'
+    native_source_sha = '2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

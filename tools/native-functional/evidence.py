@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b'
+NATIVE_SOURCE_SHA = '2a7e8906004da0c1c826d24e6c7a2ac42df2661df21a48d0ba5292476675281e'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '73b7ec978882c2b163c9ff787134f30c7d10a6f3b92918995413d30b97712e8b')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', '9e61df24664e0da3e37effb822e34f023ea27d518932a4a5427f586d68a3bcbb')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -283,7 +283,8 @@ def check_fullscreen(target,report,uid):
     attempts=visual.get('player_attempts');accepted=visual.get('accepted_player_attempt')
     base_keys={'player_attempt','player','player_state','fixture_sha256','input_rgb_sha256','expected_rgb_sha256',
                'actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit','capture_deadline_seconds',
-               'accepted_capture_attempt','oracle','screenshot','owned_player_cleanup_completed','restart_eligible','release_acceptance'}
+               'accepted_capture_attempt','oracle','screenshot','primary_controls_seed','primary_renderer_realization',
+               'owned_player_cleanup_completed','restart_eligible','release_acceptance'}
     R.require(type(accepted) is int and accepted in (1,2) and visual.get('player_attempt')==accepted
               and visual.get('player_attempt_limit')==2
               and type(attempts) is list and len(attempts)==accepted,
@@ -296,6 +297,22 @@ def check_fullscreen(target,report,uid):
                   and row['release_acceptance'] is False
                   and all(row[key]==visual[key] for key in ('fixture_sha256','input_rgb_sha256','expected_rgb_sha256')),
                   'Fullscreen visual player-attempt schema/binding differs')
+        seed=row['primary_controls_seed'];renderer=row['primary_renderer_realization']
+        R.require(seed==dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+                  seed_readback_matched=True,release_acceptance=False)
+                  and type(renderer) is dict and set(renderer)=={'status','renderer','message_count','capped',
+                  'gtk_source_version','surface_kind','video_widget_or_framebuffer_attested','release_acceptance',
+                  'owned_stderr_binding_verified','requested_gsk_renderer','debug_observation'}
+                  and renderer['status']=='reported-realized' and renderer['renderer'] in ('gl','vulkan','cairo')
+                  and type(renderer['message_count']) is int and 1<=renderer['message_count']<=16
+                  and renderer['capped'] is False and renderer['gtk_source_version']=='4.22.5'
+                  and renderer['surface_kind']=='wayland-toplevel'
+                  and renderer['video_widget_or_framebuffer_attested'] is False
+                  and renderer['release_acceptance'] is False
+                  and renderer['owned_stderr_binding_verified'] is True
+                  and renderer['requested_gsk_renderer']=='unset'
+                  and renderer['debug_observation']=='GSK_DEBUG=renderer',
+                  'Fullscreen visual private seed/renderer realization differs')
         rows=row['capture_attempts']
         capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
                       'playback_time_seconds','owned_identity_geometry_unchanged'}

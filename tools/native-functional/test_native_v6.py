@@ -166,6 +166,12 @@ class NewControls(unittest.TestCase):
             seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
                       seed_readback_matched=True,release_acceptance=False)
             smoke.seed_primary_reference_controls=Mock(return_value=seed)
+            renderer=dict(status='reported-realized',renderer='vulkan',message_count=1,capped=False,
+                gtk_source_version='4.22.5',surface_kind='wayland-toplevel',
+                video_widget_or_framebuffer_attested=False,release_acceptance=False,
+                owned_stderr_binding_verified=True,requested_gsk_renderer='unset',
+                debug_observation='GSK_DEBUG=renderer')
+            smoke.primary_renderer_realization=Mock(return_value=renderer)
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
                                                                   release_acceptance=False))
             proofs=[dict(client_id=str(i),pid=122+i,start_ticks=i,executable='/usr/bin/celluloid',
@@ -237,6 +243,7 @@ class NewControls(unittest.TestCase):
             else:
                 self.assertEqual(smoke.fresh_window.call_count,2);retired.assert_called_once()
             self.assertEqual(smoke.seed_primary_reference_controls.call_count,smoke.fresh_window.call_count)
+            self.assertEqual(smoke.primary_renderer_realization.call_count,smoke.fresh_window.call_count)
             if case in ('restart-match','all-black'):
                 receipt=json.loads((root/'visual-oracle.json').read_text())
                 self.assertEqual(len(receipt['player_attempts']),2)
@@ -244,6 +251,7 @@ class NewControls(unittest.TestCase):
                 self.assertEqual([x['oracle']['status'] for x in receipt['player_attempts']],
                                  ['unmatched','matched' if case=='restart-match' else 'unmatched'])
                 self.assertEqual([x['primary_controls_seed'] for x in receipt['player_attempts']],[seed,seed])
+                self.assertEqual([x['primary_renderer_realization'] for x in receipt['player_attempts']],[renderer,renderer])
                 self.assertTrue(receipt['player_attempts'][0]['owned_player_cleanup_completed'])
                 self.assertEqual(receipt['accepted_player_attempt'],2 if case=='restart-match' else None)
                 paths=[Path(x['screenshot']['path']) for x in receipt['player_attempts']]
