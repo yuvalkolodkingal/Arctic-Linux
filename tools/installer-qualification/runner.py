@@ -475,11 +475,13 @@ def main():
                    ARCTIC_FEDORA_IMAGE=prepared)
         diagnostic_token = uuid.uuid4().hex
         env['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN'] = diagnostic_token
+        harness_succeeded = False
         try:
             diagnostic_stage = 'run-live'
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
                      str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log',
                     (80 if args.active_profile else 35) * 60, execution, env)
+            harness_succeeded = True
         except BaseException as error:
             diagnose(diagnostic_stage, error)
             relay_inner(args.evidence / 'installer-harness.log', diagnostic_token)
@@ -501,24 +503,29 @@ def main():
         C.require(live_receipt == state['guest']['serial'], 'live public UART projection receipt differs')
         state['diagnostic_streams']['serial.log'] = live_receipt
         installed_public = installed_private = None
-        if args.active_profile:
-            installed_private = (vm / 'serial-installed.log').read_bytes()
-            installed_public, installed_receipt = E.public_uart_receipt(installed_private, installed=True)
-            state['diagnostic_streams']['serial-installed.log'] = installed_receipt
-            state['host']['installed_boot']['serial'] = installed_receipt
         state['transport'] = dict(status='passed', report_path='installer/installer-report.json',
                                   report_sha256=sha(args.evidence / 'installer/installer-report.json'),
                                   port_sha256=sha(vm / 'installer-port.log'), serial_sha256=live_receipt['sha256'])
-        state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
-        state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
-                           if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
-        diagnostic_stage = 'execution-validation'
-        def validation_media(name):
-            if name == 'host/serial-installed.log' and installed_private is not None:
-                return installed_private
-            return (args.evidence / name).read_bytes()
-        contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], live_serial,
-                             validation_media)
+        if harness_succeeded:
+            if args.active_profile:
+                installed_boot = state['host'].get('installed_boot')
+                C.require(type(installed_boot) is dict and type(installed_boot.get('status')) is str and
+                          installed_boot['status'] == 'passed',
+                          'Successful installer harness has no passed installed boot proof')
+                installed_private = (vm / 'serial-installed.log').read_bytes()
+                installed_public, installed_receipt = E.public_uart_receipt(installed_private, installed=True)
+                state['diagnostic_streams']['serial-installed.log'] = installed_receipt
+                installed_boot['serial'] = installed_receipt
+            state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
+            state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
+                               if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
+            diagnostic_stage = 'execution-validation'
+            def validation_media(name):
+                if name == 'host/serial-installed.log' and installed_private is not None:
+                    return installed_private
+                return (args.evidence / name).read_bytes()
+            contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], live_serial,
+                                 validation_media)
         (args.evidence / 'host/serial.log').write_bytes(live_public)
         if installed_public is not None:
             (args.evidence / 'host/serial-installed.log').write_bytes(installed_public)

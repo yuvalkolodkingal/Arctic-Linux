@@ -40,6 +40,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.ocr_arguments = []
         rows = iter(outputs)
         previous = [b'']
+        region = [0]
         with tempfile.TemporaryDirectory(prefix='installed-identity-') as temporary:
             root = Path(temporary)
             probe = root / 'probe.png'
@@ -47,10 +48,16 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             def shot(_label):
                 Image.new('RGB', size).save(probe)
                 previous[0] = next(rows, previous[0])
+                region[0] = 0
                 return probe
 
             def ocr(*args, **kwargs):
                 self.ocr_arguments.append((args, kwargs))
+                if args[0][1] == 'stdin':
+                    lines = [line for line in previous[0].splitlines() if line.strip()]
+                    output = lines[region[0]] if len(lines) == 3 else previous[0]
+                    region[0] += 1
+                    return types.SimpleNamespace(stdout=output)
                 return types.SimpleNamespace(stdout=previous[0])
 
             vm = types.SimpleNamespace(

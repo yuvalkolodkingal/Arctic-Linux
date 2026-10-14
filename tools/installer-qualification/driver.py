@@ -406,6 +406,12 @@ IDENTITY_RECORDS = 3
 IDENTITY_CHALLENGE_IMAGES = tuple('installed-identity-challenge-' + str(index) + '.png'
                                   for index in range(IDENTITY_RECORDS))
 IDENTITY_CHALLENGE_METADATA = 'installed-identity-challenges.json'
+# The unchanged challenge positions rows at ANSI lines 8, 10 and 12. The exact
+# 1280x720 installed console uses 8x16-pixel cells. Keep the 20-character rows
+# separate with eight horizontal and four vertical padding pixels. The final
+# crop stops before the following prompt's console cell; black canvas padding
+# keeps its OCR input height equal. No response pixels are changed or scaled.
+IDENTITY_RECORD_BOXES = ((64, 108, 240, 132), (64, 140, 240, 164), (64, 172, 240, 192))
 
 
 def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual'):
@@ -615,6 +621,39 @@ def discard_identity_challenges(out, captures):
     metadata.unlink()
 
 
+def installed_identity_ocr(path, deadline):
+    """Read three distinct physical rows; preserve every original response bit."""
+    raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
+    from PIL import Image
+    outputs, regions_valid = [], True
+    with Image.open(io.BytesIO(raw)) as image:
+        require(image.format == 'PNG' and image.mode == 'RGB' and image.size == (1280, 720),
+                'installed prompt physical dimensions differ')
+        image.load()
+        for marker, box in zip(IDENTITY_MARKERS, IDENTITY_RECORD_BOXES):
+            remaining = deadline - time.monotonic()
+            require(remaining > 0, 'installed user identity deadline exceeded')
+            buffer = io.BytesIO()
+            row = Image.new('RGB', (176, 24), 'black')
+            row.paste(image.crop(box), (0, 0))
+            row.save(buffer, format='PNG')
+            result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '7',
+                '-c', 'tessedit_char_whitelist=0123456789'], input=buffer.getvalue(),
+                capture_output=True, timeout=min(10, remaining), check=True)
+            require(type(result.stdout) is bytes and len(result.stdout) <= 65536,
+                    'prompt OCR exceeds bound')
+            rows = [re.sub(r'\s', '', row) for row in result.stdout.decode().splitlines() if row.strip()]
+            regions_valid = regions_valid and len(rows) == 1 and \
+                re.fullmatch(marker + '[0-9]{19}', rows[0]) is not None
+            outputs.append(result.stdout)
+    combined = b'\n'.join(outputs)
+    require(len(combined) <= 65536, 'prompt OCR exceeds bound')
+    checked, _ = identity_diagnostic_read(path, 8 * 1024 * 1024, generation)
+    require(checked == raw and time.monotonic() < deadline,
+            'installed user identity deadline exceeded')
+    return combined, regions_valid
+
+
 def wait_installed_graphical_login(vm, vmtest):
     """Find the unchanged physical greeter even when boot leaves another VT active."""
     started = time.monotonic()
@@ -655,12 +694,15 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
-        arguments = ['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6']
         if sent:
-            arguments += ['-c', 'tessedit_char_whitelist=0123456789']
-        result = subprocess.run(arguments, capture_output=True, timeout=10, check=True)
-        require(len(result.stdout) <= 65536, 'prompt OCR exceeds bound')
-        accepted, observation = _identity_ocr_observation(result.stdout, expected, sent)
+            stdout, regions_valid = installed_identity_ocr(path, deadline)
+        else:
+            result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
+                                    capture_output=True, timeout=10, check=True)
+            stdout, regions_valid = result.stdout, True
+        require(len(stdout) <= 65536, 'prompt OCR exceeds bound')
+        accepted, observation = _identity_ocr_observation(stdout, expected, sent)
+        accepted = accepted and regions_valid
         if observation[:3] != ('zero', 'zero', 'zero'):
             if not sent:
                 raise _identity_mismatch_error(observation)
@@ -679,7 +721,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         if sent and observation[:3] != ('zero', 'zero', 'zero') and len(challenge_captures) < IDENTITY_RECORDS:
             identity_challenge_capture(path, out, private_password, challenge_captures, deadline)
         if not sent:
-            text = result.stdout.decode()
+            text = stdout.decode()
             require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
             lines = [line.strip() for line in text.splitlines() if line.strip()]
             observed_line = lines[-1].rstrip('_| ') if lines else None

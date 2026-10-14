@@ -57,7 +57,14 @@ SHA-256 over the fresh nonce, `$USER`, `id -u` and `id -un` using installed
 coreutils, clears its echoed command, and renders three short decimal records.
 Each record has a distinct one-digit row marker and the three 20-digit records are
 inset, bold and separated by blank rows. Every expected record is absent from the
-typed command. A digits-only OCR pass must observe exactly three records with
+typed command. Digits-only single-line OCR reads three fixed original-scale row
+regions derived from the challenge's ANSI positions and the exact 8×16 console
+cells. Each 176×24 OCR canvas holds unchanged response pixels with black padding;
+the final crop stops before the following prompt. The original 1280×720 captures
+stay unchanged. Whole-frame OCR can interpret identical small glyphs differently,
+so it is used for readiness and the private-input guard, rather than response
+recognition. The three physical regions must each contain exactly one 20-digit
+record with its expected marker in that position. The parser must observe exactly three records with
 distinct expected row markers on the physical 1280×720 console within the original
 45-second bound. At least two rows must agree on every one of the 19 response
 digits, and the complete consensus must equal the expected 60-bit response. Two
@@ -84,6 +91,13 @@ Changed inventories, extra fields, images or hashes fail closed. The workflow's
 strict original-byte screening must pass before these failure exports are uploaded.
 These images never authorize identity, sudo or release. A later successful identity
 check removes them, preserving the mandatory seven-image success inventory.
+
+If the real harness fails, the runner still checks the live restoration report
+and transport, records that primary failure and performs normal owned cleanup.
+It does not read a dependent installed serial stream or claim a completed
+execution. A successful harness must supply a typed passed installed-boot receipt
+before the private installed UART is read; all existing installed and execution
+validation remains required.
 Transport, canonical public UART protocol projections, every host request,
 candidate/source identities, write counters, installed boot receipt and image
 hashes are independently replayed after complete private UART validation.

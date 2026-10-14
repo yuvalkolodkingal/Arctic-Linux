@@ -135,7 +135,7 @@ class Controls(unittest.TestCase):
             def preserve(_vm, target, _active):
                 target.mkdir()
                 host = {'host_transitions': []}
-                if active: host['installed_boot'] = {'serial': {'status': 'withheld_pending_private_uart_validation'}}
+                if active: host['installed_boot'] = {'status': 'passed', 'serial': {'status': 'withheld_pending_private_uart_validation'}}
                 (target / 'host-execution.json').write_text(json.dumps(host))
                 (target / 'installer-host-transitions.json').write_text(json.dumps({'receipts': []}))
                 return {}
