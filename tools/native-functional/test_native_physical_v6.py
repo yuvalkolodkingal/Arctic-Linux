@@ -16,7 +16,7 @@ def chord(c):
  if c.isascii() and c.isalnum():return ['shift',c.lower()] if c.isupper() else [c]
  return {'/':['slash'],'-':['minus'],'_':['shift','minus'],' ':['spc']}[c]
 def request(index=0):
- actions=[('navigate','files with spaces'),('f4',None),('open-first',None),('navigate','archive file opener'),('open-first',None)]
+ actions=[('navigate','files with spaces'),('f4',None),('open-first',None),('navigate','archive file opener'),('open-first',None),('navigate','media file opener'),('open-first',None)]
  action,folder=actions[index];root='/tmp/arctic-native-smoke-test'
  return dict(schema='arctic-native-pcmanfm-physical-v1',stage='live',nonce=f'{index+1:032x}',boot_id='11111111-1111-1111-1111-111111111111',desktop_uid=1000,
   process=dict(pid=60,start_ticks=600,uid=1000,executable='/usr/bin/pcmanfm',executable_sha256='1'*64,is_xwayland=False,client_id='4'),
@@ -29,14 +29,14 @@ def serial(values,launcher_mutation=None):
 class PhysicalControls(unittest.TestCase):
  def fixture(self,folder):
   clock=Clock();vm=VM(Path(folder));c=C.Controller(vm,folder,'live','2'*64,clock=clock,sleep=clock.sleep,chord_for=chord);return c,vm,clock
- def test_actual_five_requests_keys_captures_and_one_use(self):
+ def test_actual_seven_requests_keys_captures_and_one_use(self):
   with tempfile.TemporaryDirectory() as d:
-   c,vm,_=self.fixture(d);values=[request(i) for i in range(5)]
-   for i in range(5):c.poll(serial(values[:i+1]))
+   c,vm,_=self.fixture(d);values=[request(i) for i in range(7)]
+   for i in range(7):c.poll(serial(values[:i+1]))
    old=len(vm.calls);c.poll(serial(values));self.assertEqual(len(vm.calls),old)
-   self.assertEqual(len(c.used),5);rows=[json.loads(x) for x in c.log.read_text().splitlines()]
-   self.assertEqual(sum(x['event']=='capture' for x in rows),12)
-   self.assertEqual(sum(x['event']=='physical-delivered' for x in rows),5)
+   self.assertEqual(len(c.used),7);rows=[json.loads(x) for x in c.log.read_text().splitlines()]
+   self.assertEqual(sum(x['event']=='capture' for x in rows),17)
+   self.assertEqual(sum(x['event']=='physical-delivered' for x in rows),7)
    for name,kw in vm.calls:
     self.assertEqual(name,'input-send-event');events=kw['events'];half=len(events)//2
     self.assertTrue(all(e['data']['down'] is True for e in events[:half]))
@@ -106,11 +106,11 @@ class PhysicalControls(unittest.TestCase):
   mapped=HERE.parent/'execution-tree/tools/native-functional-v6'
   if mapped.is_dir():N.HERE=mapped
   with tempfile.TemporaryDirectory() as d:
-   d=Path(d);vmout=d/'vm';vmout.mkdir();target=d/'native';target.mkdir();c,vm,_=self.fixture(vmout);values=[request(i) for i in range(5)]
-   for i in range(5):c.poll(serial(values[:i+1]))
+   d=Path(d);vmout=d/'vm';vmout.mkdir();target=d/'native';target.mkdir();c,vm,_=self.fixture(vmout);values=[request(i) for i in range(7)]
+   for i in range(7):c.poll(serial(values[:i+1]))
    trace=''.join(json.dumps(dict(event='physical-request',request=r))+'\n' for r in values)
    (target/'gui-trace.log').write_text(trace);(target/'gui-trace-summary.json').write_text('{"omitted_records":0}')
-   self.assertEqual(N.check_physical(serial(values),'live',vmout,target)['requests'],5)
+   self.assertEqual(N.check_physical(serial(values),'live',vmout,target)['requests'],7)
    (target/'gui-trace-summary.json').write_text('{"omitted_records":1}')
    with self.assertRaises(RuntimeError):N.check_physical(serial(values),'live',vmout,target)
    (target/'gui-trace-summary.json').write_text('{"omitted_records":0}')
@@ -155,7 +155,7 @@ class PhysicalControls(unittest.TestCase):
    serialfile.write_bytes(begin.encode()+b'gui: \xd7')
    with self.assertRaises(UnicodeDecodeError):serialfile.read_text() # actual final run uses this strict reader
    spec=importlib.util.spec_from_file_location('native_final_malformed',HERE/'evidence.py');N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
-   malformed=serial([request(i) for i in range(5)])+C.PREFIX+'{"nonce":'
+   malformed=serial([request(i) for i in range(7)])+C.PREFIX+'{"nonce":'
    with self.assertRaises(json.JSONDecodeError):N.check_physical(malformed,'live',d,d)
 
 

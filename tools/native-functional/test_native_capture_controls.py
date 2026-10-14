@@ -120,20 +120,20 @@ class CaptureControls(unittest.TestCase):
                 seen.append((list(smoke.prefix),list(argv)))
                 if fail:raise RuntimeError('synthetic launch failure')
             if fail:
-                with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
-            else:smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
+                with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
+            else:smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
             self.assertIs(smoke.prefix,initial)
             self.assertEqual(seen[0][0],initial+['GSETTINGS_BACKEND=keyfile'])
-            self.assertEqual(seen[0][1],['/usr/bin/celluloid'])
+            self.assertEqual(seen[0][1],['/usr/libexec/arctic/arctic-celluloid'])
             smoke.prefix=['GSETTINGS_BACKEND=dconf']; launch=Mock()
-            with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/bin/celluloid'],launch)
+            with self.assertRaises(RuntimeError):smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid'],launch)
             launch.assert_not_called()
 
     def test_non_gui_v6_launch_keeps_original_environment(self):
         smoke=N.Smoke.__new__(N.Smoke);smoke.prefix=['original-prefix'];smoke.reference_settings_config=Mock()
-        launch=Mock();smoke.launch_reference_player(['/usr/bin/celluloid','fixed-fixture'],launch)
+        launch=Mock();smoke.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','fixed-fixture'],launch)
         self.assertEqual(smoke.prefix,['original-prefix']);smoke.reference_settings_config.assert_not_called()
-        launch.assert_called_once_with(['/usr/bin/celluloid','fixed-fixture'])
+        launch.assert_called_once_with(['/usr/libexec/arctic/arctic-celluloid','fixed-fixture'])
 
     def socket_control(self,reply,expected_pid=None,expected_uid=None):
         with tempfile.TemporaryDirectory() as t:

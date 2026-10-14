@@ -164,6 +164,7 @@ class NewControls(unittest.TestCase):
             smoke.trace=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
             smoke.controlled_controls_trials=Mock();smoke.finish_native_protocol=Mock();smoke.player_fullscreen=Mock()
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
             proofs=[dict(client_id=str(i),pid=122+i,start_ticks=i,executable='/usr/bin/celluloid',
                          executable_sha256=str(i)*64,is_xwayland=False) for i in (1,2)]
             launched=[];active=[0]
