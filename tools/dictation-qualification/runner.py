@@ -332,6 +332,7 @@ INTEGRATION_FILES = (
     'packaging/dictation/voxtype',
     'packaging/dictation/arctic-voxtype-setup',
     'packaging/dictation/arctic-voxtype-host-profile',
+    'packaging/dictation/arctic-voxtype-configure',
     'packaging/dictation/voxtype-release-key.asc',
     'packaging/dictation/org.arcticlinux.dictation.policy',
     'packaging/systemd/voxtype.service',

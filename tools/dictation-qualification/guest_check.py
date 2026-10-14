@@ -33,6 +33,7 @@ ADAPTER = Path('/usr/bin/arctic-dictation')
 TOGGLE = Path('/usr/bin/arctic-dictation-toggle')
 SETUP = Path('/usr/libexec/arctic/arctic-voxtype-setup')
 HOST_PROFILE = Path('/usr/libexec/arctic/arctic-voxtype-host-profile')
+CONFIGURE = Path('/usr/libexec/arctic/arctic-voxtype-configure')
 KEY = Path('/usr/share/arctic/dictation/voxtype-release-key.asc')
 POLICY = Path('/usr/share/polkit-1/actions/org.arcticlinux.dictation.policy')
 UNIT = Path('/usr/lib/systemd/user/voxtype.service')
@@ -53,6 +54,29 @@ GATE_FAILURE_CODES = {
     name: {label: 'gate-' + name + '-' + label for _error, label in COLLECTOR_ERROR_TYPES}
     for name in EXPECTED_KINDS
 }
+SERVICE_UNSET_ENV = frozenset({
+    'RUST_LOG', 'VOXTYPE_CONFIG', 'VOXTYPE_ENGINE', 'VOXTYPE_MODEL',
+    'VOXTYPE_LANGUAGE', 'VOXTYPE_TRANSLATE', 'VOXTYPE_THREADS',
+    'VOXTYPE_ON_DEMAND_LOADING', 'VOXTYPE_GPU_ISOLATION',
+    'VOXTYPE_GPU_DEVICE', 'VOXTYPE_FLASH_ATTENTION', 'VOXTYPE_VULKAN_DEVICE',
+    'VOXTYPE_CPU_BACKUP', 'VOXTYPE_REMOTE_ENDPOINT',
+    'VOXTYPE_WHISPER_API_KEY', 'SONIOX_API_KEY', 'VOXTYPE_OPENVINO_DIR',
+    'VOXTYPE_OPENVINO_DEVICE', 'VOXTYPE_OPENVINO_MODEL',
+    'VOXTYPE_COHERE_MODEL_DIR', 'VOXTYPE_MEETING_DIARIZATION',
+    'VOXTYPE_HOTKEY', 'VOXTYPE_HOTKEY_ENABLED', 'VOXTYPE_CANCEL_KEY',
+    'VOXTYPE_AUDIO_DEVICE', 'VOXTYPE_MAX_DURATION_SECS',
+    'VOXTYPE_AUDIO_FEEDBACK', 'VOXTYPE_PAUSE_MEDIA', 'VOXTYPE_DUCK_MEDIA',
+    'VOXTYPE_DUCK_MEDIA_VOLUME_PERCENT', 'VOXTYPE_DUCK_MEDIA_FADE_MS',
+    'VOXTYPE_OUTPUT_MODE', 'VOXTYPE_APPEND_TEXT', 'VOXTYPE_AUTO_SUBMIT',
+    'VOXTYPE_SHIFT_ENTER_NEWLINES', 'VOXTYPE_PRE_TYPE_DELAY',
+    'VOXTYPE_TYPE_DELAY', 'VOXTYPE_FALLBACK_TO_CLIPBOARD',
+    'VOXTYPE_PASTE_KEYS', 'VOXTYPE_WTYPE_SHIFT_PREFIX',
+    'VOXTYPE_DOTOOL_XKB_LAYOUT', 'VOXTYPE_DOTOOL_XKB_VARIANT',
+    'VOXTYPE_EITYPE_XKB_LAYOUT', 'VOXTYPE_EITYPE_XKB_VARIANT',
+    'VOXTYPE_SMART_AUTO_SUBMIT', 'VOXTYPE_FILTER_FILLERS',
+    'VOXTYPE_SPOKEN_PUNCTUATION', 'VOXTYPE_RESTORE_CLIPBOARD',
+    'VOXTYPE_RESTORE_CLIPBOARD_DELAY_MS', 'VOXTYPE_CONTEXT',
+})
 
 
 class MicrophoneIsolationUnavailable(Invalid):
@@ -370,6 +394,7 @@ def installed_integration_sha():
         ('packaging/dictation/voxtype', VOXTYPE),
         ('packaging/dictation/arctic-voxtype-setup', SETUP),
         ('packaging/dictation/arctic-voxtype-host-profile', HOST_PROFILE),
+        ('packaging/dictation/arctic-voxtype-configure', CONFIGURE),
         ('packaging/dictation/voxtype-release-key.asc', KEY),
         ('packaging/dictation/org.arcticlinux.dictation.policy', POLICY),
         ('packaging/systemd/voxtype.service', UNIT),
@@ -622,12 +647,16 @@ class Checker:
 
     def state_contract(self):
         unit = UNIT.read_text()
+        unset = [word for line in unit.splitlines()
+                 if line.startswith('UnsetEnvironment=')
+                 for word in line.partition('=')[2].split()]
         require('ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon' in unit
                 and 'ConditionPathExists=%h/.config/voxtype/config.toml' in unit
                 and 'UMask=0077' in unit
                 and 'RestrictAddressFamilies=AF_UNIX' in unit
-                and 'UnsetEnvironment=RUST_LOG' in unit
-                and 'Environment=RUST_LOG=' not in unit,
+                and len(unset) == len(set(unset))
+                and set(unset) == SERVICE_UNSET_ENV
+                and not any(line.startswith('Environment=') for line in unit.splitlines()),
                 'upstream-service-privacy-contract')
         require(self.state() == 'idle', 'upstream-initial-state-not-idle')
         return {'allowed_state_count': 4}

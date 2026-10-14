@@ -210,6 +210,7 @@ on_transcription = false
                     'packaging/dictation/voxtype',
                     'packaging/dictation/arctic-voxtype-setup',
                     'packaging/dictation/arctic-voxtype-host-profile',
+                    'packaging/dictation/arctic-voxtype-configure',
                     'packaging/dictation/voxtype-release-key.asc',
                     'packaging/dictation/org.arcticlinux.dictation.policy',
                     'packaging/systemd/voxtype.service',
@@ -224,10 +225,11 @@ on_transcription = false
                     patch.object(guest, 'VOXTYPE', paths[2]), \
                     patch.object(guest, 'SETUP', paths[3]), \
                     patch.object(guest, 'HOST_PROFILE', paths[4]), \
-                    patch.object(guest, 'KEY', paths[5]), \
-                    patch.object(guest, 'POLICY', paths[6]), patch.object(guest, 'UNIT', paths[7]), \
-                    patch.object(guest, 'SETUP_SERVICE', paths[8]), \
-                    patch.object(guest, 'SETUP_TIMER', paths[9]):
+                    patch.object(guest, 'CONFIGURE', paths[5]), \
+                    patch.object(guest, 'KEY', paths[6]), \
+                    patch.object(guest, 'POLICY', paths[7]), patch.object(guest, 'UNIT', paths[8]), \
+                    patch.object(guest, 'SETUP_SERVICE', paths[9]), \
+                    patch.object(guest, 'SETUP_TIMER', paths[10]):
                 first = guest.installed_integration_sha()
                 paths[1].write_text('changed')
                 self.assertNotEqual(first, guest.installed_integration_sha())

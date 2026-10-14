@@ -32,6 +32,8 @@ The installed integration must provide:
 - `/usr/libexec/arctic/arctic-voxtype-setup`, the privileged pinned downloader.
 - `/usr/libexec/arctic/arctic-voxtype-host-profile`, the common all-logical-CPU
   compatibility/AVX2 selector used by setup, status and the runtime selector.
+- `/usr/libexec/arctic/arctic-voxtype-configure`, the bounded per-user managed
+  config writer used by setup.
 - `/usr/lib/systemd/user/voxtype.service`, running the canonical per-user config
   through `/usr/bin/voxtype ... -q daemon`, with a private umask, AF_UNIX-only
   sockets and inherited config/log overrides removed.

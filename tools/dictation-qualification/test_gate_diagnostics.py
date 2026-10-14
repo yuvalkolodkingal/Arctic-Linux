@@ -128,13 +128,42 @@ class GateDiagnosticControls(unittest.TestCase):
             unit = Path(temp) / 'voxtype.service'
             unit.write_text('ConditionPathExists=%h/.config/voxtype/config.toml\n'
                             'UMask=0077\nRestrictAddressFamilies=AF_UNIX\n'
-                            'UnsetEnvironment=RUST_LOG VOXTYPE_CONFIG\n'
+                            'UnsetEnvironment=' + ' '.join(sorted(guest.SERVICE_UNSET_ENV)) + '\n'
                             'ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon\n')
             original, guest.UNIT = guest.UNIT, unit
             try:
                 self.assertEqual(checker.state_contract(), {'allowed_state_count': 4})
+                unit.write_text(unit.read_text().replace('VOXTYPE_REMOTE_ENDPOINT ', ''))
+                with self.assertRaisesRegex(guest.Invalid, '^upstream-service-privacy-contract$'):
+                    checker.state_contract()
             finally:
                 guest.UNIT = original
+
+    def test_service_override_inventory_covers_remote_hotkey_output_and_logging(self):
+        expected = {
+            'RUST_LOG', 'VOXTYPE_CONFIG', 'VOXTYPE_ENGINE', 'VOXTYPE_MODEL',
+            'VOXTYPE_LANGUAGE', 'VOXTYPE_TRANSLATE', 'VOXTYPE_THREADS',
+            'VOXTYPE_ON_DEMAND_LOADING', 'VOXTYPE_GPU_ISOLATION',
+            'VOXTYPE_GPU_DEVICE', 'VOXTYPE_FLASH_ATTENTION', 'VOXTYPE_VULKAN_DEVICE',
+            'VOXTYPE_CPU_BACKUP', 'VOXTYPE_REMOTE_ENDPOINT',
+            'VOXTYPE_WHISPER_API_KEY', 'SONIOX_API_KEY', 'VOXTYPE_OPENVINO_DIR',
+            'VOXTYPE_OPENVINO_DEVICE', 'VOXTYPE_OPENVINO_MODEL',
+            'VOXTYPE_COHERE_MODEL_DIR', 'VOXTYPE_MEETING_DIARIZATION',
+            'VOXTYPE_HOTKEY', 'VOXTYPE_HOTKEY_ENABLED', 'VOXTYPE_CANCEL_KEY',
+            'VOXTYPE_AUDIO_DEVICE', 'VOXTYPE_MAX_DURATION_SECS',
+            'VOXTYPE_AUDIO_FEEDBACK', 'VOXTYPE_PAUSE_MEDIA', 'VOXTYPE_DUCK_MEDIA',
+            'VOXTYPE_DUCK_MEDIA_VOLUME_PERCENT', 'VOXTYPE_DUCK_MEDIA_FADE_MS',
+            'VOXTYPE_OUTPUT_MODE', 'VOXTYPE_APPEND_TEXT', 'VOXTYPE_AUTO_SUBMIT',
+            'VOXTYPE_SHIFT_ENTER_NEWLINES', 'VOXTYPE_PRE_TYPE_DELAY',
+            'VOXTYPE_TYPE_DELAY', 'VOXTYPE_FALLBACK_TO_CLIPBOARD',
+            'VOXTYPE_PASTE_KEYS', 'VOXTYPE_WTYPE_SHIFT_PREFIX',
+            'VOXTYPE_DOTOOL_XKB_LAYOUT', 'VOXTYPE_DOTOOL_XKB_VARIANT',
+            'VOXTYPE_EITYPE_XKB_LAYOUT', 'VOXTYPE_EITYPE_XKB_VARIANT',
+            'VOXTYPE_SMART_AUTO_SUBMIT', 'VOXTYPE_FILTER_FILLERS',
+            'VOXTYPE_SPOKEN_PUNCTUATION', 'VOXTYPE_RESTORE_CLIPBOARD',
+            'VOXTYPE_RESTORE_CLIPBOARD_DELAY_MS', 'VOXTYPE_CONTEXT',
+        }
+        self.assertEqual(guest.SERVICE_UNSET_ENV, expected)
 
 
 class CollectorDiagnosticControls(unittest.TestCase):
