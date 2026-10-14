@@ -30,6 +30,13 @@ TASKBAR_FILES = {'tools/native-functional/taskbar.py', 'tools/native-functional/
                  'tools/native-functional/taskbar-screencopy.c', 'tools/native-functional/taskbar-display.py',
                  'tools/native-functional/virtual-pointer.c',
                  'shell/dev/wlr-screencopy-unstable-v1.xml'}
+EXECUTION_FILES = {'.github/workflows/native-candidate-20261008.yml',
+                   'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
+                   'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
+                   'tools/native-functional/compose-photo-probe.py',
+                   'tools/native-functional/apps.py',
+                   'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
+                   'tools/native-functional/source-provenance.json'} | TASKBAR_FILES
 
 class R(E.R):
     @staticmethod
@@ -250,13 +257,7 @@ def verify(args):
     for name, expected in manifest['execution_files'].items():
         R.require(not Path(name).is_absolute() and '..' not in Path(name).parts, 'Unsafe execution source path')
         R.pinned_file(execution / name, expected)
-    R.require(set(manifest['execution_files']) == {'.github/workflows/native-candidate-20261008.yml',
-              'tools/test-install.sh', 'tools/lib/vmtest.py', 'tools/lib/container.sh',
-              'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py',
-              'tools/native-functional/compose-photo-probe.py',
-              'tools/native-functional/apps.py',
-              'tools/native-functional/runner.py', 'tools/native-functional/evidence.py',
-              'tools/native-functional/source-provenance.json'} | TASKBAR_FILES, 'Execution pin set differs')
+    R.require(set(manifest['execution_files']) == EXECUTION_FILES, 'Execution pin set differs')
     R.verify_iso(args.inputs)
 
 def checker_proof():

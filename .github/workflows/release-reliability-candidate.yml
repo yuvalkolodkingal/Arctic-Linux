@@ -38,7 +38,7 @@ jobs:
         run: python3 -B tools/reliability/exact-artifact.py verify --manifest tools/reliability/exact-artifact-manifest.json --github-output "$GITHUB_OUTPUT"
       - name: Require KVM and bounded host resources
         run: |
-          mkdir -p "$EVIDENCE/candidate" "$EVIDENCE/candidate-iso"
+          mkdir -p "$EVIDENCE/candidate"
           { df -h .; free -m; nproc; ls -l /dev/kvm; } > "$EVIDENCE/resources.txt" 2>&1
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
