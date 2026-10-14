@@ -46,13 +46,23 @@ def results():
 
 class ContractTests(unittest.TestCase):
     def test_disabled_manifest_has_no_artifact_and_cannot_validate(self):
-        value = json.loads((ROOT / contract.MANIFEST).read_text())
+        value = {'ready': False, 'release_acceptance': False, 'version': '1.2',
+                 'app_profile': 'lightweight', 'image': None, 'execution_files': {}}
         self.assertFalse(value['ready'])
         self.assertIsNone(value['image'])
         self.assertEqual(value['execution_files'], {})
-        self.assertFalse((ROOT / contract.MARKER).exists())
         with self.assertRaises(RuntimeError):
             contract.validate_manifest(value)
+
+    def test_checked_in_manifest_is_disabled_or_exactly_pinned(self):
+        value = json.loads((ROOT / contract.MANIFEST).read_text())
+        if value['ready'] is False:
+            self.assertIsNone(value['image'])
+            self.assertEqual(value['execution_files'], {})
+            return
+        hashes = {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
+                  for name in contract.EXECUTION_FILES}
+        self.assertEqual(contract.validate_manifest(value, hashes), value)
 
     def test_manifest_requires_exact_external_image_and_reviewed_files(self):
         hashes = {name: hashlib.sha256(name.encode()).hexdigest() for name in contract.EXECUTION_FILES}

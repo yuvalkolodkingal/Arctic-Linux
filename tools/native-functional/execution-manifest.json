@@ -20,7 +20,18 @@
     "tools/native-functional/virtual-pointer.c": "f00fc6e10250f62e2b0f531cc3becf433cc6e65b002b95432ca30b3800947bd4",
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
   },
-  "image": null,
-  "ready": false,
+  "image": {
+    "run_id": 38536710765,
+    "artifact_id": 11883891542,
+    "archive_bytes": 1936466960,
+    "archive_sha256": "83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c",
+    "source_sha": "a13d91118fb90b99dbbf1899fadc3e184ea213ca",
+    "name": "Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso",
+    "bytes": 1936279552,
+    "sha256": "b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23"
+  },
+  "ready": true,
   "release_acceptance": false
 }
