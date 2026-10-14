@@ -1,78 +1,354 @@
 {
-  "status": "PASSED_SOURCE_ONLY",
-  "base_commit": "c8b1c980ac9c73ad6059eda03d160a296686da84",
-  "base_tree": "ec1f958237d0710a226ad63b4fd1d193287b045a",
-  "canonical_wiki_pages_audited": 33,
-  "current_wiki_pages": 33,
-  "markdown_files_checked": 35,
-  "links_checked": 377,
-  "broken_links": [],
-  "whitespace_errors": [],
+  "status": "PASSED_DIRECT_VOXTYPE_ALIGNED_SOURCE_ONLY",
+  "base_commit": "455327f4c7eee31d4058ba2b02e2cfe489439ac0",
+  "base_tree": "aa2b7f7870625a51ec306bb65c4f56ec71ae55ad",
+  "source_branch": "codex/final-showcase-integration-prep-20261014",
   "scene_ids": 38,
   "unique_scene_ids": 38,
-  "sentence_cues": 128,
+  "sentence_cues": 130,
+  "duration_seconds": 549.987846,
   "narration_parity": true,
   "caption_text_parity": true,
-  "mismatched_caption_scenes": [],
-  "cue_timings_intentionally_pending": true,
+  "root_revision_timing_parity": true,
+  "required_phrase_coverage": {
+    "wallpaper_hide_restore": 1.0,
+    "whats_new": 1.0
+  },
+  "voxtype_version": "1.1.0",
+  "obsolete_voxtype_0_5_1_absent": true,
+  "local_whisper_alignment": {
+    "status": "passed_twice_byte_identical",
+    "model": "base.en",
+    "verifier": "faster-whisper 1.2.1",
+    "word_error_rate": 0.039375,
+    "sequence_ratio": 0.969246,
+    "exact_token_coverage": 0.973523,
+    "minimum_cue_exact_token_coverage": 0.666667,
+    "caption_cues": 130,
+    "scenes": 38,
+    "transcript_in_ci_log": false,
+    "ephemeral_outputs_not_uploaded": [
+      "whisper-transcript.txt",
+      "whisper-words.json"
+    ]
+  },
+  "hyperframes_source_check": {
+    "version": "0.8.114",
+    "strict": true,
+    "samples": 38,
+    "status": "passed",
+    "lint_errors": 0,
+    "runtime_errors": 0,
+    "motion_errors": 0,
+    "contrast_checks_passed": 43,
+    "warnings": 0,
+    "info_findings": 18,
+    "info_note": "All 18 informational findings occur during intentional 0.6-second crossfade overlap; strict validation passed with no errors or warnings.",
+    "audio_attached": false,
+    "audio_note": "Source composition omits audio while render_ready is false pending human listening, qualified captures and release binding.",
+    "preparation": "python3 showcase/prepare-assets.py regenerated local derivatives before the strict check; generated derivatives were not added to this source-only commit.",
+    "dependency_install": "npm ci --ignore-scripts --no-audit --no-fund",
+    "package_lock": {
+      "path": "showcase/package-lock.json",
+      "bytes": 63750,
+      "sha256": "aea7f3a9d7a12d95b4a3d13f2f2d899762e6f66d1315d19c93ca368d6ecba50e",
+      "hyperframes_version": "0.8.114",
+      "hyperframes_integrity": "sha512-dIHdDQ//Wapovreuc0q2B+xLS5gbDUSles3ysXafkvxC4YXzZjc3NPvMqweEi5IZQDXefxZOJws5AgDByOiRAQ==",
+      "registry_packages_require_sha512_integrity": true
+    },
+    "gsap": {
+      "version": "3.14.2",
+      "bytes": 72777,
+      "sha256": "19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee",
+      "preparation_policy": "reuse exact committed bytes or fail closed on any downloaded size/hash mismatch"
+    },
+    "workflow_actions": "official actions in every showcase-*.yml workflow pinned to reviewed full commit SHAs with version comments",
+    "workflow_action_files": [
+      ".github/workflows/showcase-exact-capture-20261014.yml",
+      ".github/workflows/showcase-river-render.yml",
+      ".github/workflows/showcase-river-verify.yml"
+    ]
+  },
+  "exact_capture_execution_manifest": {
+    "path": "showcase/capture/exact_image/execution-manifest.json",
+    "sha256": "6df44d8d3e4182eb9296f5ae71dc83d2600ff097d23a0cf4fbb90d52a38c4738",
+    "execution_files": 11,
+    "all_hashes_recomputed": true
+  },
+  "syntax_checks": {
+    "json": true,
+    "yaml": true,
+    "python_compile": true,
+    "git_diff_check": true
+  },
+  "local_markdown_links_checked": 9,
+  "broken_local_markdown_links": [],
   "changed_files": [
-    "docs/wiki/Apps-and-Software.md",
-    "docs/wiki/Architecture.md",
-    "docs/wiki/Bar-Menus.md",
-    "docs/wiki/Building-from-Source.md",
-    "docs/wiki/Contributing.md",
-    "docs/wiki/Desktop-Tour.md",
-    "docs/wiki/Download-and-Create-a-USB.md",
-    "docs/wiki/Drives-and-Phones.md",
-    "docs/wiki/FAQ.md",
-    "docs/wiki/First-Boot.md",
-    "docs/wiki/Home.md",
-    "docs/wiki/Install-Arctic-Linux.md",
-    "docs/wiki/Keyboard-Shortcuts.md",
-    "docs/wiki/Local-Dictation.md",
-    "docs/wiki/Release-Notes.md",
-    "docs/wiki/Settings.md",
+    ".github/workflows/showcase-exact-capture-20261014.yml",
+    ".github/workflows/showcase-river-render.yml",
+    ".github/workflows/showcase-river-verify.yml",
     "docs/wiki/Showcase.md",
-    "docs/wiki/Terminal-and-Shell.md",
-    "docs/wiki/Themes-and-Customisation.md",
-    "docs/wiki/Troubleshooting.md",
-    "docs/wiki/Try-Arctic-Linux.md",
-    "docs/wiki/Updates.md",
-    "docs/wiki/Web-Apps.md",
-    "docs/wiki/_Footer.md",
-    "docs/wiki/_Sidebar.md",
+    "showcase/CLAUDE.md",
     "showcase/README.md",
+    "showcase/asset-provenance.json",
+    "showcase/asset_integrity.py",
+    "showcase/assets/dictation-recording-current.png",
+    "showcase/assets/dictation-recovery-qualification.png",
+    "showcase/build-composition.py",
+    "showcase/captions.srt",
+    "showcase/captions.vtt",
+    "showcase/capture/exact_image/README.md",
+    "showcase/capture/exact_image/__init__.py",
+    "showcase/capture/exact_image/automation.py",
+    "showcase/capture/exact_image/bundle.py",
+    "showcase/capture/exact_image/capture_probe.py",
+    "showcase/capture/exact_image/capture_vm.py",
+    "showcase/capture/exact_image/contract.py",
+    "showcase/capture/exact_image/execution-manifest.json",
+    "showcase/capture/exact_image/guest.py",
+    "showcase/capture/exact_image/host.py",
+    "showcase/capture/exact_image/test_automation.py",
+    "showcase/capture/exact_image/test_bundle.py",
+    "showcase/capture/exact_image/test_capture.py",
+    "showcase/capture/exact_image/test_probe.py",
+    "showcase/capture/exact_image/unattended.py",
+    "showcase/capture/exact_image/validate_bundle.py",
+    "showcase/capture_contracts.py",
+    "showcase/chapters.txt",
+    "showcase/index.html",
+    "showcase/narration.txt",
+    "showcase/package-lock.json",
+    "showcase/package.json",
+    "showcase/prepare-assets.py",
+    "showcase/requirements-voice.txt",
+    "showcase/revision-2026-10-12/.gitattributes",
     "showcase/revision-2026-10-12/README.md",
+    "showcase/revision-2026-10-12/align-river.py",
+    "showcase/revision-2026-10-12/alignment-provenance.json",
+    "showcase/revision-2026-10-12/assemble-river-patches.py",
+    "showcase/revision-2026-10-12/assemble-river-segments.py",
+    "showcase/revision-2026-10-12/caption-text-aligned.json",
     "showcase/revision-2026-10-12/caption-text.json",
+    "showcase/revision-2026-10-12/captions.srt",
+    "showcase/revision-2026-10-12/captions.vtt",
+    "showcase/revision-2026-10-12/chapters.txt",
+    "showcase/revision-2026-10-12/narration-river-segment-01.txt",
+    "showcase/revision-2026-10-12/narration-river-segment-02.txt",
     "showcase/revision-2026-10-12/narration.txt",
+    "showcase/revision-2026-10-12/render-provenance.json",
+    "showcase/revision-2026-10-12/render-validation.json",
+    "showcase/revision-2026-10-12/resolve-voice.py",
     "showcase/revision-2026-10-12/scene-narration.json",
     "showcase/revision-2026-10-12/storyboard.json",
+    "showcase/revision-2026-10-12/timing.json",
+    "showcase/revision-2026-10-12/validate-source.py",
     "showcase/revision-2026-10-12/validation-source.json",
-    "showcase/revision-2026-10-12/voice-timing.json"
+    "showcase/revision-2026-10-12/verifier-versions.json",
+    "showcase/revision-2026-10-12/verify-river-audio.py",
+    "showcase/revision-2026-10-12/voice-timing.json",
+    "showcase/revision-2026-10-12/whisper-verification.json",
+    "showcase/storyboard.json",
+    "showcase/test_asset_integrity.py",
+    "showcase/test_capture_contracts.py",
+    "showcase/test_supply_chain.py",
+    "showcase/test_voice_receipt.py",
+    "showcase/timing.json",
+    "showcase/voice_receipt.py"
   ],
-  "scope_only_docs_wiki_and_showcase": true,
   "generated_audio_binaries": false,
-  "hyperframes_html_changed": false,
+  "raw_audio_published": false,
+  "final_mp4_published": false,
   "render_checks_run": false,
   "iso_release_qualification": false,
+  "pending": [
+    "Run human listening review of both source segments, the join, and the full assembled master.",
+    "Capture and manually review direct-VoxType setup and recording, the two-frame GPU-failure/CPU-ready recovery pair, wallpaper management and What’s New on the qualified ISO.",
+    "Run strict render/full decode/subtitle/frame checks, bind the matching ISO, and verify public downloads before replacing the public video."
+  ],
   "validation_receipt_path": "showcase/revision-2026-10-12/validation-source.json",
   "validation_receipt_self_hash_excluded": true,
-  "validation_scope": "Relative Markdown targets/anchors, whitespace, current-product claim reconciliation, and untimed storyboard/narration/caption text",
-  "execution_environment_limit": "Source-only validation against the actual c8b1c980 base. Binary media, capture authenticity, HTML composition and render checks remain pending.",
-  "base_reconciliation": {
-    "merged_main_docs": [
-      "docs/wiki/Settings.md",
-      "docs/wiki/Themes-and-Customisation.md",
-      "docs/wiki/Updates.md"
+  "execution_environment_limit": "Source, local audio-receipt, objective audio and deterministic alignment validation only; audio remains outside Git, transcript-bearing verifier outputs are not uploaded, and no human listening, qualified captures, render or publication is claimed.",
+  "timing_status": "verified_direct_voxtype_river_alignment",
+  "render_ready": false,
+  "direct_voxtype_source": {
+    "official_version": "1.1.0",
+    "online_setup": "automatic and verified",
+    "offline_setup": "visibly not ready with retry",
+    "languages": [
+      "Hebrew",
+      "English"
     ],
-    "wallpaper_claim_pages_checked": [
-      "docs/wiki/Home.md",
-      "docs/wiki/Desktop-Tour.md",
-      "docs/wiki/Themes-and-Customisation.md",
-      "docs/wiki/Release-Notes.md",
-      "docs/wiki/Building-from-Source.md"
+    "activation": "Mango readiness helper invokes official voxtype record toggle",
+    "accuracy_evidence": {
+      "environment": "hosted Westmere-v2 CPU fixture",
+      "model": "small multilingual Whisper",
+      "english_wer_percent": 7.77,
+      "english_realtime_factor": 15.79,
+      "hebrew_wer_percent": 42.0,
+      "hebrew_realtime_factor": 11.63,
+      "realtime_claim": false
+    },
+    "capture_contracts": 5,
+    "qualified_captures_present": false,
+    "indicator": "Arctic dictation pill follows official VoxType runtime state",
+    "capture_contract_schema": {
+      "pending": "pending_qualified_direct_voxtype_iso",
+      "reviewed": "reviewed_qualified_direct_voxtype_iso",
+      "reviewed_requires": "one exact 1280x800 RGB PNG, or the recovery contract's exact two-image pair, with per-image digests, one qualified final-ISO receipt, and human approval",
+      "prepare_assets_preserves_valid_reviewed_receipts": true
+    }
+  },
+  "voice_master_contract": {
+    "status": "verified assembled master and deterministic alignment pinned; private rendering remains blocked pending human listening, qualified captures and the actual qualified-release manifest; public publication has a separate approval gate",
+    "connector_limit_characters": 5000,
+    "locked_narration_characters": 9093,
+    "minimum_generation_calls": 2,
+    "segment_characters": [
+      4451,
+      4642
     ],
-    "historical_showcase_attribution_preserved": true,
-    "stable_release_publication_claimed": false
+    "segment_text_sha256s": [
+      "27e84fb55bef8b81bccff227974c8a6f2c4bd71c42f4adfd540b762225707389",
+      "c2c53a05ee9d33f63c109fcbf1d3d0e460c778983055207e69e562f8fef4a79d"
+    ],
+    "assembly": "44.1 kHz mono decoded samples concatenate in index order with zero inserted samples or crossfade",
+    "parameterized_fields": [
+      "draft_release_tag",
+      "asset",
+      "bytes",
+      "sha256",
+      "pyav_duration_seconds",
+      "decoded_sample_rate_hz",
+      "decoded_channels",
+      "decoded_samples",
+      "segment_audio_sha256s"
+    ],
+    "workflow_download_requires_byte_size_and_sha256_match": true,
+    "segment_audio_bytes": [
+      4491422,
+      4344718
+    ],
+    "segment_audio_sha256s": [
+      "312930f1b1d759bb42271be4437b968c5053371c7c75cbe96483011a52e49fa6",
+      "d9da67e9db12cc9866a689accc7a7257137de90f9c6ccf3c026c6feee4e8231a"
+    ],
+    "segment_pyav_duration_seconds": [
+      279.568254,
+      270.419592
+    ],
+    "segment_decoded_samples": [
+      12328960,
+      11925504
+    ],
+    "assembled_master": {
+      "asset": "narration-river-direct-voxtype-final-2026-10-14.mp3",
+      "bytes": 13201492,
+      "sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
+      "pyav_duration_seconds": 549.987846,
+      "decoded_sample_rate_hz": 44100,
+      "decoded_channels": 1,
+      "decoded_samples": 24254464,
+      "inserted_join_samples": 0,
+      "published": false
+    },
+    "objective_audio_checks": {
+      "full_ffmpeg_decode_errors": 0,
+      "codec": "mp3float",
+      "sample_rate_hz": 44100,
+      "channels": 1,
+      "decoded_samples": 24254464,
+      "decoded_duration_seconds": 549.987846,
+      "integrated_loudness_lufs": -24.5,
+      "loudness_range_lu": 2.3,
+      "true_peak_dbfs": -1.9,
+      "sample_peak_dbfs": -1.919,
+      "rms_dbfs": -25.267,
+      "dc_offset": 1.599279e-06,
+      "hard_clipped_samples_ge_0_999": 0,
+      "join": {
+        "join_sample_index": 12328960,
+        "join_seconds": 279.568254,
+        "join_boundary_sample_delta": 0.000141357,
+        "join_window_max_adjacent_delta": 0.103272557,
+        "join_boundary_delta_fraction_of_window_max": 0.001369,
+        "join_pre_250ms_rms_dbfs": -73.617,
+        "join_post_250ms_rms_dbfs": -19.419,
+        "join_contiguous_below_minus_60_dbfs_seconds": 0.38229,
+        "join_contiguous_below_minus_60_dbfs_start_seconds": 279.211633,
+        "join_contiguous_below_minus_60_dbfs_end_seconds": 279.593923
+      },
+      "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval and its sample step is below the largest adjacent step in the surrounding 500 ms. Human listening remains pending."
+    },
+    "admission_contract": {
+      "private_render": "requires the verified private draft source, exact-master human listening, actual qualified-release manifest, reviewed captures and aligned render-ready timing; does not grant publication",
+      "public_video": "additionally requires qualified-release publication approval, confirmed public_video scope, and an approved exact final-render review",
+      "source_mp3_redistribution": "additionally requires public_video_and_source_audio_redistribution scope",
+      "qualification_manifest_path": "tools/qualified-release/manifest.json",
+      "qualification_required_lanes": [
+        "performance",
+        "reliability/uefi",
+        "reliability/bios",
+        "native",
+        "dictation/small-v2",
+        "dictation/turbo-q5-v3",
+        "installer",
+        "installer_active",
+        "update"
+      ],
+      "all_media_reviews_required": true,
+      "final_render_review_required": {
+        "source_binding": [
+          "source_commit",
+          "workflow_run",
+          "artifact_id",
+          "artifact_name",
+          "archive_bytes",
+          "archive_sha256"
+        ],
+        "video_binding": [
+          "name",
+          "bytes",
+          "sha256",
+          "duration_seconds"
+        ],
+        "automated_checks": [
+          "full_decode_status",
+          "subtitle_mux_status",
+          "subtitle_codec",
+          "subtitle_cues",
+          "duration_matches_master"
+        ],
+        "human_review": "eight named representative frames bound to the exact MP4 SHA-256"
+      }
+    }
+  },
+  "validation_tests": {
+    "capture_and_voice_contract_unit_tests": 27,
+    "status": "passed",
+    "supply_chain_unit_tests": 8,
+    "total_unit_tests": 35
+  },
+  "narration_characters": 9093,
+  "river_segment_characters": [
+    4451,
+    4642
+  ],
+  "river_generation_calls_pending": 0,
+  "failed_full_narration_attempt": {
+    "flow_id": "Cy4mMtnohtJes0X2nAN9",
+    "node_id": "89XLWvL8r6Kw473qr1C0",
+    "session_id": "1i3Rl0dfqyey9flZ6U8A",
+    "generation_id": "ifJ58S7jcPIhtJ62UNfy",
+    "reason": "9093_characters_exceeded_5000_character_connector_limit",
+    "renderable_audio": false
+  },
+  "generated_audio_created": true,
+  "generated_audio_binaries_note": "The two segment MP3s and assembled master are preserved outside Git; no audio binary is committed.",
+  "alignment_outputs_byte_identical_across_two_runs": true,
+  "workflow_privacy": {
+    "transcript_in_ci_log": false,
+    "transcript_outputs_uploaded": false,
+    "uploaded_alignment_evidence_transcript_free": true,
+    "resolver_runs_after_pinned_pillow_install": true
   }
 }

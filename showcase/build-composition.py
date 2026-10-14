@@ -1,8 +1,11 @@
 """Build a self-contained HyperFrames composition from the storyboard and timing."""
 import argparse
+import hashlib
 import html
 import json
 from pathlib import Path
+from capture_contracts import REVIEWED, contracts_from_provenance
+from voice_receipt import resolve as resolve_voice
 
 ROOT = Path(__file__).resolve().parent
 parser = argparse.ArgumentParser()
@@ -10,8 +13,30 @@ parser.add_argument('--static', action='store_true', help='Build end-state layou
 args=parser.parse_args()
 timing_path=ROOT/'timing.json'
 story=json.loads((ROOT/'storyboard.json').read_text())
+contracts = contracts_from_provenance(
+    json.loads((ROOT/'asset-provenance.json').read_text()), ROOT.parent
+)
+reviewed_captures = {
+    scene: contract['output']
+    for scene, contract in contracts.items()
+    if contract['status'] == REVIEWED
+}
 if timing_path.exists():
     timing=json.loads(timing_path.read_text())
+    if timing.get('render_ready'):
+        if set(reviewed_captures) != set(contracts):
+            missing = ', '.join(sorted(set(contracts) - set(reviewed_captures)))
+            raise RuntimeError(f'render blocked: reviewed qualified-ISO captures missing for {missing}')
+        voice = resolve_voice(json.loads((ROOT/'revision-2026-10-12/voice-timing.json').read_text()))
+        audio_path = ROOT/'audio/narration.mp3'
+        if not audio_path.is_file() or audio_path.is_symlink():
+            raise RuntimeError('render blocked: verified River master is missing')
+        if audio_path.stat().st_size != int(voice['master_bytes']):
+            raise RuntimeError('render blocked: River master byte size differs')
+        if hashlib.sha256(audio_path.read_bytes()).hexdigest() != voice['master_sha256']:
+            raise RuntimeError('render blocked: River master digest differs')
+        if abs(float(timing['duration']) - float(voice['master_duration'])) > 0.08:
+            raise RuntimeError('render blocked: aligned timing and River master duration differ')
     scene_meta={scene['id']:scene for scene in story}
     scenes=[{**scene_meta.get(scene['id'],scene),'start':scene['start'],'duration':scene['duration']} for scene in timing['scenes']]
 else:
@@ -77,12 +102,22 @@ for i,s in enumerate(scenes):
     logo=(ROOT/'assets'/f'arctic-mark-{mark}.svg').read_text()
     extra=''
     if s.get('shortcut'):extra+=f'<div class="shortcut entrance-key">{escape(s["shortcut"])}</div>'
-    if s.get('tag'):extra+=f'<div class="tag entrance-tag">{escape(s["tag"])}</div>'
+    tag = 'Reviewed capture from the qualified final ISO' if s['id'] in reviewed_captures else s.get('tag')
+    if tag:extra+=f'<div class="tag entrance-tag">{escape(tag)}</div>'
     if s.get('type')=='apps':
         apps=[('01 · Browse','GNOME Web','Native browsing with WebKit.'),('02 · Terminal','Foot','Fast Wayland terminal with Fish or Bash.'),('03 · Files','PCManFM','GTK3 file management with XArchiver.'),('04 · Write','FeatherPad','Lightweight everyday text editing.'),('05 · Play','Celluloid','Music and video through mpv.'),('06 · Shell','Nano','A familiar editor in the terminal.')]
         media='<div class="app-grid">'+''.join(f'<div class="app-card entrance-card"><div class="app-symbol">{escape(k)}</div><div class="app-name">{escape(n)}</div><div class="app-use">{escape(d)}</div></div>' for k,n,d in apps)+'</div>'
     elif s.get('type')=='qualification-pair':
         media='<div class="capture-pair entrance-screen"><figure><img src="assets/pcmanfm-qualification.png" alt="PCManFM and FeatherPad exact-candidate capture"><figcaption>Exact candidate · demo files</figcaption></figure><figure><img src="assets/foot-fish-current.png" alt="Foot and Fish exact-candidate capture"><figcaption>Exact candidate · signed update</figcaption></figure></div>'
+    elif s.get('type')=='evidence' and s['id'] in reviewed_captures:
+        capture = reviewed_captures[s['id']]
+        if isinstance(capture, dict):
+            media='<div class="capture-pair entrance-screen">'+''.join(
+                f'<figure><img src="assets/{escape(Path(capture[key]).name)}" alt="{escape(s["title"])} — {escape(label)}"><figcaption>{escape(label)}</figcaption></figure>'
+                for key, label in (("gpu_failure", "Vulkan failure"), ("cpu_ready", "CPU ready · Hebrew + English"))
+            )+'</div>'
+        else:
+            media=f'<img class="screen entrance-screen" src="assets/{escape(Path(capture).name)}" alt="{escape(s["title"])}">'
     elif s.get('type')=='evidence':
         evidence=s.get('evidence',[])
         media='<div class="evidence-card entrance-screen"><div class="evidence-label">QUALIFICATION EVIDENCE</div>'+''.join(f'<div class="evidence-item">{escape(item)}</div>' for item in evidence)+'</div>'
@@ -133,7 +168,9 @@ tl.to('#scene-{scenes[-1]['id']}',{{opacity:0,duration:.85,ease:'sine.inOut'}},{
 window.__timelines=window.__timelines||{{}};
 window.__timelines['arctic-showcase']=tl;
 '''
-audio='' if args.static else f'<audio id="narration" src="audio/narration.mp3" data-start="0" data-duration="{timing["duration"]}" data-track-index="3" data-volume="1"></audio>'
+# A source-only revision must not silently bind an obsolete narration file. The
+# render workflow separately requires voice-timing.json.ready_for_render=true.
+audio='' if args.static or not timing.get('render_ready', True) else f'<audio id="narration" src="audio/narration.mp3" data-start="0" data-duration="{timing["duration"]}" data-track-index="3" data-volume="1"></audio>'
 page=f'''<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><title>Arctic Linux — installer and daily-use showcase</title><script src="assets/gsap.min.js"></script><style>{css}</style></head>
 <body><div id="arctic-showcase" data-composition-id="arctic-showcase" data-width="1920" data-height="1080" data-start="0" data-duration="{timing['duration']}" data-fps="30">

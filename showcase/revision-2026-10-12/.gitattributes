@@ -1,0 +1,4 @@
+# These immutable River provider inputs include intentional trailing blank lines; voice-timing.json
+# pins their exact UTF-8 bytes and SHA-256 digests, so diff checks must not request normalization.
+narration-river-segment-01.txt whitespace=-blank-at-eof
+narration-river-segment-02.txt whitespace=-blank-at-eof
