@@ -21,7 +21,9 @@ FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-re
          'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
          'tools/dictation-qualification/contract.py', 'tools/installer-qualification/contract.py',
          'tools/installer-qualification/active-contract.py',
-         'tools/native-functional/apps.py'}
+         'tools/native-functional/apps.py',
+         '.github/workflows/release-reliability-candidate.yml',
+         'tools/reliability/exact-artifact.py'}
 BUILD_INPUTS = {'.github/workflows/iso.yml',
                 'tools/build-rpms.sh', 'tools/build-iso.sh', 'tools/build-cache.py',
                 'tools/lib/container.sh', 'tools/lib/arcticrepo.py'}
@@ -244,6 +246,79 @@ def publication_files(manifest):
     if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE:
         return FILES
     return FILES | set(performance_contract(manifest['execution_files'].get('tools/performance/contract.py')).EXECUTION_FILES)
+
+
+def reliability_contract(expected_sha):
+    path = ROOT / 'tools/reliability/exact-artifact.py'
+    require(path.is_file() and not path.is_symlink()
+            and type(expected_sha) is str and re.fullmatch('[0-9a-f]{64}', expected_sha)
+            and sha(path) == expected_sha,
+            'Exact-artifact reliability validator is absent, unsafe or differs from the reviewed source')
+    data = path.read_bytes()
+    require(hashlib.sha256(data).hexdigest() == expected_sha,
+            'Reliability validator changed before loading')
+    spec = importlib.util.spec_from_file_location('qualified_exact_artifact_reliability', path)
+    result = importlib.util.module_from_spec(spec)
+    exec(compile(data, str(path), 'exec'), result.__dict__)
+    return result
+
+
+def validate_reliability_lane(manifest):
+    pins = manifest.get('reliability')
+    required = {'run_id', 'source_sha', 'artifact_id', 'archive_bytes', 'archive_sha256'}
+    require(type(pins) is dict and set(pins) == {'uefi', 'bios'}
+            and all(type(pin) is dict and required <= set(pin) for pin in pins.values()),
+            'Both exact-artifact UEFI and BIOS reliability pins are required')
+    require(len({pin['run_id'] for pin in pins.values()}) == 1
+            and len({pin['source_sha'] for pin in pins.values()}) == 1
+            and len({pin['artifact_id'] for pin in pins.values()}) == 2
+            and len({pin['archive_sha256'] for pin in pins.values()}) == 2,
+            'Reliability firmware lanes must share one run/source and distinct artifacts')
+    artifacts = {firmware: validate_lane(pin, '.github/workflows/release-reliability-candidate.yml',
+                                         'candidate-release-reliability-' + firmware)
+                 for firmware, pin in pins.items()}
+    pin = pins['uefi']
+    run = api('/actions/runs/' + str(pin['run_id']))
+    require(run['head_branch'] == 'codex/qualification-dispatch-20261010',
+            'Reliability execution branch differs')
+    source = pin['source_sha']
+    parents = git('rev-list', '--parents', '-n', '1', source).split()
+    require(len(parents) == 2, 'Reliability activation must have exactly one parent')
+    parent = parents[1]
+    require(source_bytes(source, '.github/qualification-20261010.reliability') == (parent + '\n').encode()
+            and git('diff', '--no-renames', '--name-only', parent, source).splitlines()
+            == ['.github/qualification-20261010.reliability'],
+            'Reliability activation is not the reviewed marker-only child')
+    expected_contract = source_hash(source, 'tools/reliability/exact-artifact.py')
+    contract = reliability_contract(expected_contract)
+    source_hashes = {name: source_hash(source, name) for name in contract.EXECUTION_FILES}
+    raw = source_bytes(source, 'tools/reliability/exact-artifact-manifest.json')
+    require(len(raw) <= 256 * 1024, 'Oversized reliability execution manifest')
+    execution_manifest = contract.validate_manifest(contract.strict_json(raw.decode()), source_hashes)
+    require(execution_manifest['image'] == manifest['image'],
+            'Reliability lane used a different exact image')
+    return artifacts, contract, parent
+
+
+def reliability_proof(archives, manifest, contract, parent):
+    proofs = {}
+    for firmware in ('uefi', 'bios'):
+        evidence = archives[firmware]
+        names = {item.filename for item in evidence.infolist() if not item.is_dir()}
+        require(names == {'execution.json', 'results.json'},
+                'Reliability evidence inventory differs')
+        require(evidence.getinfo('execution.json').file_size <= 128 * 1024
+                and evidence.getinfo('results.json').file_size <= 4_000_000,
+                'Oversized reliability evidence')
+        execution = read_json(evidence, 'execution.json')
+        require(execution.get('reviewed_parent_sha') == parent,
+                'Reliability execution parent differs from marker provenance')
+        pin = manifest['reliability'][firmware]
+        replay = contract.validate_evidence(execution, evidence.read('results.json'),
+            image=manifest['image'], firmware=firmware, source_sha=pin['source_sha'], run_id=pin['run_id'])
+        proofs[firmware] = dict(pin=pin, replay=replay)
+    return dict(firmware=proofs, status='uefi_and_bios_blank_disk_install_reboot_passed',
+                release_acceptance=False)
 
 
 def validate_performance_lane(manifest, jobs, fetch):
@@ -1156,11 +1231,14 @@ def prepare(manifest, out):
             'Actual installer restoration qualification and visual review pins are required')
     require(type(manifest.get('installer_active')) is dict and type(manifest.get('installer_active_media_review')) is dict,
             'Actual in-flight installer restoration, completion, installed boot and visual review pins are required')
+    require(type(manifest.get('reliability')) is dict,
+            'Exact-artifact UEFI and BIOS install/reboot qualification pins are required')
     for ref in {manifest['image']['source_sha'], manifest['main_sha'], release_main,
                 manifest['native']['source_sha'], manifest['installer']['source_sha'],
                 manifest['installer_active']['source_sha'],
                 manifest['performance']['source_sha'],
-                *(pin['source_sha'] for pin in manifest['dictation'].values())}:
+                *(pin['source_sha'] for pin in manifest['dictation'].values()),
+                *(pin['source_sha'] for pin in manifest['reliability'].values())}:
         subprocess.run(['git', '-C', str(ROOT), 'fetch', '--filter=blob:none', 'origin', ref], check=True, timeout=120)
     subprocess.run(['git', '-C', str(ROOT), 'merge-base', '--is-ancestor', manifest['main_sha'], release_main], check=True)
     current_checks = main_checks(release_main, manifest['main_sha'])
@@ -1177,6 +1255,7 @@ def prepare(manifest, out):
     fetch.validate_boot_steps(image, jobs['jobs'])
     perf = manifest['performance']
     validate_performance_lane(manifest, jobs['jobs'], fetch)
+    _, reliability_validator, reliability_parent = validate_reliability_lane(manifest)
     validate_lane(manifest['native'], '.github/workflows/native-candidate-20261008.yml', 'native-candidate-qualification')
     for profile, pin in manifest['dictation'].items():
         validate_lane(pin, '.github/workflows/dictation-candidate-20261009.yml',
@@ -1193,6 +1272,11 @@ def prepare(manifest, out):
             performance = performance_proof(evidence, manifest, fetch)
             comparison = (read_json(evidence, 'comparison.json') if performance_mode(manifest) == LEGACY_PERFORMANCE_MODE
                           else performance['replay']['comparison'])
+        with ExitStack() as stack:
+            reliability_archives = {firmware: stack.enter_context(archive(manifest['reliability'][firmware],
+                                    temp / ('reliability-' + firmware + '.zip')))
+                                    for firmware in ('uefi', 'bios')}
+            reliability = reliability_proof(reliability_archives, manifest, reliability_validator, reliability_parent)
         with archive(manifest['native'], temp / 'native.zip') as evidence:
             native = native_proof(evidence, manifest)
         with ExitStack() as stack:
@@ -1226,7 +1310,7 @@ def prepare(manifest, out):
         (out / (name + '.torrent.sha256')).write_text(transport['torrent_sha256'] + '  ' + name + '.torrent\n')
         proof = dict(tag=manifest['tag'], main_sha=manifest['main_sha'], release_main_sha=release_main,
                      release_main_checks=current_checks, image=image,
-                     performance=performance, native=native, dictation=dictation, installer=installer, installer_active=installer_active,
+                     performance=performance, reliability=reliability, native=native, dictation=dictation, installer=installer, installer_active=installer_active,
                      update=manifest['update'], release_acceptance='qualified',
                      measured_speed_or_ram_gain_claim=False, torrent=transport)
         (out / 'qualification.json').write_text(json.dumps(proof, indent=2) + '\n')

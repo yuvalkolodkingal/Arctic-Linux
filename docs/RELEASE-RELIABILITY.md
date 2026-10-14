@@ -64,6 +64,28 @@ malformed or duplicate guest records fail acceptance. A completed diagnostic col
 not a passed boot; the harness must also report successful reboot/login. Review screenshots
 and all job outcomes, including preflight. A timeout/cancel may leave only partial evidence.
 
+## Exact-artifact pre-publication gate
+
+The tag-based workflow above remains available for existing releases and RC tags. Final publication additionally
+requires the dedicated **Exact-artifact release reliability** lane. It downloads the reviewed artifact-only ISO
+through `tools/native-functional/fetch-image.py`; it never resolves `latest`, builds a replacement image, creates a
+tag, publishes a release, or writes a repository. Its sequential UEFI and BIOS jobs each use KVM to boot the live
+system, install to a new blank sparse qcow2 disk, detach the ISO, boot the installed system, and run the lightweight
+network/application/wallpaper checks.
+
+The lane is deliberately disabled in `tools/reliability/exact-artifact-manifest.json`. After the final ISO run is
+selected, a reviewed preparation commit must set `ready: true`, copy the exact image object from the qualification
+manifest, and record SHA-256 values for every listed execution file. Activation is a separate commit on
+`codex/qualification-dispatch-20261010` that changes only `.github/qualification-20261010.reliability` to contain
+the preparation commit SHA. A retry or edited activation requires a new reviewed marker commit; run attempt 2 cannot
+qualify. Both retained artifacts, `candidate-release-reliability-uefi` and
+`candidate-release-reliability-bios`, must come from the same successful first-attempt run and distinct matrix jobs.
+
+`tools/qualified-release/manifest.json` keeps `reliability` null until those two exact artifacts are reviewed and
+pinned. The publication helper revalidates the workflow run, artifact digests, marker-only ancestry, execution source
+hashes, exact ISO identity, blank-disk/KVM receipt, and every expected automated result. Therefore the public release
+cannot omit either firmware lane or substitute evidence from a tag, another ISO, another run, or a relaxed checker.
+
 ## Reproduce locally
 
 Run from the repository root, as your normal host user. Use a new output directory: the
