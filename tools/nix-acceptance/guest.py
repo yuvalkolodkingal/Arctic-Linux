@@ -21,6 +21,7 @@ from urllib.parse import urlsplit
 
 NIX_STORE = Path('/nix/store')
 WEBKIT_WEB_PROCESS = Path('/usr/libexec/webkitgtk-6.0/WebKitWebProcess')
+CELLULOID_WRAPPER = '/usr/libexec/arctic/arctic-celluloid'
 
 
 def run(argv, **kwargs):
@@ -406,6 +407,22 @@ def app(prefix, command, pattern, timeout=300, expected_executable=None, expecte
                     child.wait()
 
 
+def native_celluloid(prefix, proc_root=Path('/proc')):
+    """Qualify the renderer wrapper without an application-service handoff.
+
+    ``gtk-launch`` may hand Celluloid's well-known application ID to an
+    already registered or D-Bus-activated service.  That process can still be
+    the expected /usr/bin/celluloid ELF while its initial environment bypasses
+    Arctic's wrapper.  Launch the product wrapper itself so the exact-process
+    and renderer-environment proofs are causally linked.  Native/reliability
+    qualification separately covers desktop and MIME launch routing.
+    """
+    return app(prefix, [CELLULOID_WRAPPER, '--no-existing-session', '--new-window'],
+               'celluloid|io.github.celluloid_player.Celluloid',
+               expected_executable='/usr/bin/celluloid',
+               expected_env={'GSK_RENDERER': 'gl'}, proc_root=proc_root)
+
+
 def nix_foot_app(prefix, profile, command=None):
     export = nix_foot_export(prefix, profile)
     return app(prefix, command or [str(profile / 'bin/foot'), '-e', 'sleep', '30'],
@@ -725,9 +742,7 @@ def main(update_method='dnf', expected_stable_source=None, expected_stable_finge
           'foot|kitty|alacritty|ghostty'))
     if configured == 'epiphany':
         check('configured-editor', lambda: app(prefix, ['/usr/bin/arctic-open', 'editor'], 'featherpad'))
-        check('native-media-player', lambda: app(prefix, ['gtk-launch','io.github.celluloid_player.Celluloid'],
-              'celluloid|io.github.celluloid_player.Celluloid', expected_executable='/usr/bin/celluloid',
-              expected_env={'GSK_RENDERER':'gl'}))
+        check('native-media-player', lambda: native_celluloid(prefix))
         check('native-archive-manager', lambda: app(prefix, ['/usr/bin/xarchiver'], 'xarchiver'))
         check('native-archive-helpers', lambda: archive_tools(prefix))
 
