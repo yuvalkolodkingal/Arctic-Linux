@@ -227,7 +227,11 @@ def run(argv, timeout=20, check=True, output_role=None):
         # gate code. Never include argv, the cursor, logs, stderr or error text.
         require(type(result.stdout) is bytes and type(result.stderr) is bytes, 'command-output-byte-types')
         code += '-journal-o' + str(len(result.stdout)) + '-e' + str(len(result.stderr))
-    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)
+    # A complete same-boot VoxType MESSAGE projection can exceed the ordinary
+    # command bound during CPU transcription. Keep it finite and private while
+    # scanning the whole interval; every other command keeps the 16 MiB bound.
+    limit = 32 * 1024 * 1024 if output_role == 'interval-journal' else 16 * 1024 * 1024
+    require(len(result.stdout) + len(result.stderr) < limit, code)
     if check:
         require(result.returncode == 0, 'command-failed')
     return result

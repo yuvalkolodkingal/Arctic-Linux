@@ -167,7 +167,7 @@ class ExternalProducerControls(unittest.TestCase):
             with self.assertRaises(RuntimeError): F.validate_external_producer_steps(self.image(), jobs)
 
     def test_failed_historical_producer_is_rejected_in_both_modes(self):
-        image = json.loads((ROOT / 'tools/native-functional/execution-manifest.json').read_text())['image']
+        image = self.image()
         run = dict(id=image['run_id'], head_sha=image['source_sha'], event='workflow_dispatch',
                    path='.github/workflows/iso.yml', run_attempt=1, status='completed', conclusion='failure')
         for mode in (F.LEGACY_MODE, F.EXTERNAL_MODE):
