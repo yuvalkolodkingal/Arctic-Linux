@@ -27,7 +27,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       FIRMWARE: ${{ matrix.firmware }}
-      EVIDENCE: ${{ runner.temp }}/arctic-reliability
+      EVIDENCE: /tmp/arctic-reliability-${{ github.run_id }}-${{ matrix.firmware }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,5 +70,5 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
           path: |
-            ${{ runner.temp }}/arctic-reliability/execution.json
-            ${{ runner.temp }}/arctic-reliability/results.json
+            ${{ env.EVIDENCE }}/execution.json
+            ${{ env.EVIDENCE }}/results.json
