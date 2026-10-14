@@ -114,7 +114,8 @@ def fixture():
         record['observer_source_sha256']=observer['source_sha256']
         record['external_execution']=dict(context=context,observer_file_sha256=observer['frozen_sha256'])
         record['measured_payload']['battery_sha256']=sources['shell/BatteryService.qml']+'  /usr/share/arctic/shell/BatteryService.qml'
-        serial='ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=2 vt=2\nARCTIC-COLLECT-BEGIN\n'
+        serial='ARCTIC-BOOT-SERIAL-PROJECTION=arctic-performance-boot-v1\n'
+        serial+='ARCTIC-PERFORMANCE-CONSOLE-RESTORED\nARCTIC-COLLECT-BEGIN\n'
         serial+='\n'.join('ARCTIC-PERFORMANCE '+json.dumps(dict(stage='installed',check=key,value=value))
             for key,value in record.items())
         serial+='\nARCTIC-INSTALLED-SMOKE-EXIT=0\nARCTIC-COLLECT-END\n'

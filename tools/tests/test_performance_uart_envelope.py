@@ -35,6 +35,10 @@ class UARTEnvelopeTest(unittest.TestCase):
         # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
         for current, previous in (
+                (b'94a0c4a8a46a16889db9568aae9b1dc2a7f3eda87f071bb47ba2f78dcc399122', b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562'),
+                (b'2ef2f36a5056193b657985b5a494e2d8586df3ab704745e3e5d71f69d4a8e9b2', b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed'),
+                (b'8477a009b0a6adf0981e47380c3d18089b8400d177d58ad017597b2907cb53b1', b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7'),
+                (b'c3fbd2a43aedb4c795b78cfb5afd3738ae7a35ad2a3cb21e4de6282770c865b3', b'd3d3ac5dcdf9066b73ac91a48c968dd7f84cd43f3c5571939d7c1041f879a0cf'),
                 (b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
                 (b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed', b'19fb089b8885a1e0ce6b2827db9b87acade30bef3a331486ca05d0a051ddea8b'),
                 (b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7', b'c16a9947baa293502791af88f60e14bcd8dea0b852286536a75598afef371d1b'),

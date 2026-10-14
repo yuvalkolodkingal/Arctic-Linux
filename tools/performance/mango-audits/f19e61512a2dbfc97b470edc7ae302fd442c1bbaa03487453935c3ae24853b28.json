@@ -1,0 +1,121 @@
+{
+  "abi": {
+    "mango_header_sha256": "0c76fd2a2f677170ad9ef27df9296444bfdf1c69cb40a05dadadd51e050d3428",
+    "mango_source_sha256": "586627878578a2545655d4accb790a73112be7eaf6b1dab9d162b4195d962eef",
+    "mango_tag": "0.17.3",
+    "offsets": {
+      "client_ext_foreign_toplevel": 1584,
+      "client_surface": 328,
+      "client_type": 0,
+      "foreign_app_id": 48,
+      "foreign_identifier": 56,
+      "foreign_owner": 80,
+      "xdg_app_id": 192,
+      "xdg_toplevel": 56,
+      "xwayland_class": 144
+    },
+    "types": {
+      "xdg": 0,
+      "xwayland": 2
+    },
+    "wlroots_header_sha256": "9253b1ac1b68011cb304c0c9b84a6678779acc820994131a31f170d26945d0f3",
+    "wlroots_nevra": "wlroots-devel-0.20.2-1.fc44.x86_64",
+    "wlroots_runtime_sha256": "a1223d6311c31c18a00e64169e869cce0a128457c0113701f68b65c0c6cb4147",
+    "wlroots_source_sha256": "5580d4b6c803fb3548bbe104f5b0bdbfd5a17b42dd173358aa526ca0e958a088"
+  },
+  "acceptance": {
+    "performance_acceptance": false,
+    "release_acceptance": false,
+    "runtime_profile_admitted": false,
+    "static_profile_admitted": true
+  },
+  "candidate": {
+    "build_id": "d8926ee6b8dfa0781ad7882ebef49c0faf0f274d",
+    "bytes": 530824,
+    "elf_class": "ELF64",
+    "machine": "x86_64",
+    "path": "/usr/bin/mango",
+    "rpm_nevra": "mangowm-0.17.3-1.preview.38489618652.1.gite556b8a.fc44.x86_64",
+    "rpmdb_file_digest_verified": true,
+    "sha256": "f19e61512a2dbfc97b470edc7ae302fd442c1bbaa03487453935c3ae24853b28"
+  },
+  "mapping_function": {
+    "bytes": 4109,
+    "exact_byte_equivalent_profiles": [
+      "2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b",
+      "98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca",
+      "315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab"
+    ],
+    "file_offset": 274704,
+    "inherited_cfg_audit_sha256": "dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c",
+    "insertion_sites": {
+      "common_post": {
+        "file_offset": 275998,
+        "instruction_bytes": "488d3d33bd0300"
+      },
+      "head": {
+        "call_bytes": "e8d8f7fbff",
+        "file_offset": 276339,
+        "successor_jump_target": 275998,
+        "target": "wl_list_insert@plt"
+      },
+      "scroller": {
+        "call_bytes": "e8a8f1fbff",
+        "file_offset": 277923,
+        "successor_jump_target": 275998,
+        "target": "wl_list_insert@plt"
+      },
+      "tail": {
+        "call_bytes": "e832f9fbff",
+        "file_offset": 275993,
+        "position": "server.clients tail predecessor",
+        "target": "wl_list_insert@plt"
+      }
+    },
+    "register_and_list_contract": {
+      "assumes_valid_compositor_lists": true,
+      "client": "RBX",
+      "client_link": "R14",
+      "client_listener": "R12",
+      "link_offset": 280,
+      "sysv_callee_saved": [
+        "RBX",
+        "R12",
+        "R14"
+      ]
+    },
+    "sha256": "3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc"
+  },
+  "original_appid_getter": {
+    "bytes": 1234,
+    "file_offset": 27392,
+    "prior_audit_sha256": "3c6e8e8582215a02b16ebc24e85c8ca807df70dd6bc1c33f57684f656fc9b692",
+    "sha256": "11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead"
+  },
+  "provenance": {
+    "artifact_id": 11862999301,
+    "iso_sha256": "97a6b905640ce6782ae303992e4b292c744ff7abedf7ea26f4b28f918568f140",
+    "producer_run_id": 38489618652,
+    "producer_source_sha": "e556b8a6f829deb6cff3c441278574c62b5f6f8b",
+    "review_execution_sha": "cd172a451c7783813be7caeddd4abad8086af21d",
+    "review_run_attempt": 1,
+    "review_run_id": 38510351441,
+    "static_artifact_bytes": 3731666,
+    "static_artifact_id": 11869024003,
+    "static_artifact_sha256": "a07f4c94afcee62dc81900793463c0f9f2d7b171764733de57b35260cd5a4047",
+    "static_execution_sha": "7d787d874db41451ec4c1875f95362bcc614788b",
+    "static_report_status": "static_evidence_complete_pending_independent_review",
+    "static_run_attempt": 1,
+    "static_run_id": 38510027685
+  },
+  "runtime_requirements": [
+    "whole executable, complete mapping function and getter hashes must match this record",
+    "the mapped Mango process must be the unique desktop-owned RPM-verified production executable",
+    "each probe offset must map through exactly one executable PT_LOAD segment",
+    "actual kernel event formats, PID and client-type filters, identity ownership and zero-loss receipts must pass",
+    "all six fresh paired boots must pass unchanged precision, enclosure and regression limits"
+  ],
+  "schema": "arctic-mango-native-profile-audit-v1",
+  "scope": "Exact final-image Mango whole-ELF, managed-list insertion CFG, original app-ID getter and ABI profile only",
+  "status": "candidate-specific-static-profile-admitted-pending-runtime"
+}

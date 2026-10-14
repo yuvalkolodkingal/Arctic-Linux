@@ -106,6 +106,76 @@ class PerformanceEvidencePrescreenTest(unittest.TestCase):
             runner.publish_install_serial_projection(link, self.out)
         self.assertEqual(outside.read_bytes(), b'ARCTIC-INSTALL-EXIT=0\n')
 
+    def boot_uart(self, record=None):
+        record = record or json.dumps(dict(stage='installed', check='done', value=True),
+                                      separators=(',', ':'))
+        return (b'https://ambient.invalid/?private=query\n'
+            b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=2 vt=2\n'
+            b'private.person@example.invalid\nARCTIC-COLLECT-BEGIN\n'
+            + b'ARCTIC-PERFORMANCE ' + record.encode() + b'\n'
+            + b'mystery@unknown.service\nARCTIC-INSTALLED-SMOKE-EXIT=0\n'
+            b'ARCTIC-COLLECT-END\nprivate tail\n')
+
+    def test_private_boot_uart_is_replaced_by_complete_replay_projection(self):
+        projection = runner.public_boot_serial_projection(self.boot_uart())
+        self.assertEqual(projection,
+            b'ARCTIC-BOOT-SERIAL-PROJECTION=arctic-performance-boot-v1\n'
+            b'ARCTIC-BOOT-SERIAL-OMITTED=1\n'
+            b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED\n'
+            b'ARCTIC-BOOT-SERIAL-OMITTED=1\nARCTIC-COLLECT-BEGIN\n'
+            b'ARCTIC-PERFORMANCE {"stage":"installed","check":"done","value":true}\n'
+            b'ARCTIC-BOOT-SERIAL-OMITTED=1\nARCTIC-INSTALLED-SMOKE-EXIT=0\n'
+            b'ARCTIC-COLLECT-END\nARCTIC-BOOT-SERIAL-OMITTED=1\n')
+        for private in (b'ambient.invalid', b'private.person', b'unknown.service', b'private tail'):
+            self.assertNotIn(private, projection)
+        member = self.member('runs/candidate/1/serial-boot.log', projection)
+        runner.pre_screen_evidence_members(self.out, [member], screen)
+
+    def test_boot_projection_rejects_protocol_and_json_mutations(self):
+        base = self.boot_uart()
+        record = '{"stage":"installed","check":"done","value":true}'
+        faults = (
+            base.replace(b'ARCTIC-COLLECT-BEGIN\n', b'', 1),
+            base.replace(b'ARCTIC-COLLECT-END\n', b'ARCTIC-COLLECT-END\nARCTIC-COLLECT-END\n', 1),
+            base.replace(b'ARCTIC-INSTALLED-SMOKE-EXIT=0', b'ARCTIC-INSTALLED-SMOKE-EXIT=1', 1),
+            base.replace(b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=2 vt=2',
+                         b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=0 vt=2', 1),
+            base.replace(b'ARCTIC-PERFORMANCE '+record.encode()+b'\n', b'', 1),
+            self.boot_uart('{"stage":"installed","check":"done","check":"done","value":true}'),
+            self.boot_uart('{"stage":"installed","check":"done","value":NaN}'),
+            self.boot_uart('{"stage":"live","check":"done","value":true}'),
+            base.replace(b'ARCTIC-PERFORMANCE '+record.encode()+b'\n', b'', 1)
+                + b'ARCTIC-PERFORMANCE '+record.encode()+b'\n',
+        )
+        for content in faults:
+            with self.subTest(content=content[-100:]), self.assertRaises(RuntimeError):
+                runner.public_boot_serial_projection(content)
+
+    def test_sensitive_observer_value_is_retained_then_rejected_by_scanner(self):
+        private = 'https://private.invalid/?token=never-publish'
+        record = json.dumps(dict(stage='installed', check='done', value=private), separators=(',', ':'))
+        projection = runner.public_boot_serial_projection(self.boot_uart(record))
+        self.assertIn(private.encode(), projection)
+        error, output = self.rejected('runs/candidate/2/serial-boot.log', projection)
+        self.assertEqual((error.category, error.screening_failure),
+                         ('performance-candidate-boot-2-serial', 'sensitive_text'))
+        self.assertNotIn(private, output)
+
+    def test_boot_uart_projection_refuses_symlink_and_replaces_owned_file(self):
+        serial = self.out/'runs/candidate/1/serial-boot.log'
+        serial.parent.mkdir(parents=True)
+        serial.write_bytes(self.boot_uart())
+        projection = runner.publish_boot_serial_projection(serial, self.out)
+        self.assertEqual(serial.read_bytes(), projection)
+        outside = Path(self.temp.name)/'outside-boot.log'
+        outside.write_bytes(self.boot_uart())
+        link = self.out/'runs/candidate/2/serial-boot.log'
+        link.parent.mkdir(parents=True)
+        link.symlink_to(outside)
+        with self.assertRaises(RuntimeError):
+            runner.publish_boot_serial_projection(link, self.out)
+        self.assertEqual(outside.read_bytes(), self.boot_uart())
+
     def test_unknown_private_filename_is_never_emitted(self):
         relative = 'runs/baseline/2/private-person@example.invalid.log'
         error, output = self.rejected(relative, b'another@unknown.invalid\n')

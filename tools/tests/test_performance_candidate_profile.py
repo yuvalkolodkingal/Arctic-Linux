@@ -22,20 +22,24 @@ EXECUTABLE_SHA256 = '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01b
 
 class CandidateMangoProfileControls(unittest.TestCase):
     def test_profile_append_preserves_historical_source_and_pins_current_observer(self):
-        marker = b'\n# candidate-profile-315bc-begin\n'
-        ending = b'# candidate-profile-315bc-end\n'
+        additions = (
+            (b'\n# candidate-profile-315bc-begin\n', b'# candidate-profile-315bc-end\n'),
+            (b'\n# candidate-profile-f19e-begin\n', b'# candidate-profile-f19e-end\n'),
+        )
         old_hashes = {
             'causal.py': '3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9',
             'compare.py': '4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9',
         }
         for name, expected in old_hashes.items():
-            current = (ROOT / 'tools/performance' / name).read_bytes()
-            self.assertEqual(current.count(marker), 1)
-            before, addition = current.split(marker)
-            self.assertEqual(addition.count(ending), 1)
-            profile, after = addition.split(ending)
-            self.assertTrue(profile.startswith(b'MAPPING_PROFILES += (\n'))
-            self.assertEqual(hashlib.sha256(before + after).hexdigest(), expected)
+            historical = (ROOT / 'tools/performance' / name).read_bytes()
+            for marker, ending in additions:
+                self.assertEqual(historical.count(marker), 1)
+                before, addition = historical.split(marker)
+                self.assertEqual(addition.count(ending), 1)
+                profile, after = addition.split(ending)
+                self.assertTrue(profile.startswith(b'MAPPING_PROFILES += (\n'))
+                historical = before + after
+            self.assertEqual(hashlib.sha256(historical).hexdigest(), expected)
         observer = contract.observer_hashes(ROOT)
         runner = (ROOT / 'tools/performance/run-paired.py').read_bytes()
         self.assertEqual(runner.count(hashlib.sha256(

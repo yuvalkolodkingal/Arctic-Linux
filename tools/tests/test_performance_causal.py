@@ -212,6 +212,8 @@ class CausalControls(unittest.TestCase):
             '98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
             '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab':
+                (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
+            'f19e61512a2dbfc97b470edc7ae302fd442c1bbaa03487453935c3ae24853b28':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc')}
         self.assertEqual(C.MAPPING_PROFILES,R.comparison.MAPPING_PROFILES)
         admitted={profile['executable_sha256']:profile for profile in C.MAPPING_PROFILES}
@@ -224,7 +226,9 @@ class CausalControls(unittest.TestCase):
                 '98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca':
                     'eef982194692b3a10412de30a47afcb3bdc675dec00d29f7840bdaf01d54d80c',
                 '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab':
-                    '45b14e12747b81f2133d812339267e7460a222d5c9a4e7cb6cc3dd5019c2bba7'}
+                    '45b14e12747b81f2133d812339267e7460a222d5c9a4e7cb6cc3dd5019c2bba7',
+                'f19e61512a2dbfc97b470edc7ae302fd442c1bbaa03487453935c3ae24853b28':
+                    'ac2f38f3095efcfeac1bf859d45fe1f8717c37566c55df1f75fbefd4c301059b'}
             self.assertEqual(profile['native_audit_sha256'], audits.get(digest,
                 'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c'))
             bound=R.causal_bound(.09975,.1,profile_index=C.MAPPING_PROFILES.index(profile))
@@ -234,7 +238,8 @@ class CausalControls(unittest.TestCase):
             proof['upper_instruction_address']=address
             proof['matched_upper_events'][0]['instruction_address']=address
             self.assertTrue(R.comparison.causal_precision(bound,('foot',)))
-            for fault in ('whole','same_code_new_build','function','stable_function','getter','upper','audit','missing_audit'):
+            for fault in ('whole','same_code_new_build','function','stable_function','getter','upper',
+                          'tail','head','scroller','abi','audit','missing_audit'):
                 changed=copy.deepcopy(bound);p=changed['causal_lower_bound']
                 if fault=='whole':p['mango_sha256']='f'*64
                 elif fault=='same_code_new_build':p['mango_sha256']=p['upper_mapping_profile']['executable_sha256']='f'*64
@@ -242,6 +247,9 @@ class CausalControls(unittest.TestCase):
                 elif fault=='stable_function':p['upper_mapping_profile']['function_sha256']=C.MAPPING_PROFILES[0]['function_sha256']
                 elif fault=='getter':p['upper_mapping_profile']['ipc_function_sha256']='0'*64
                 elif fault=='upper':p['upper_mapping_profile']['instruction_file_offset']+=1
+                elif fault in ('tail','head','scroller'):
+                    p['upper_mapping_profile']['lower_instruction_file_offsets'][fault]+=1
+                elif fault=='abi':p['upper_mapping_profile']['client_ext_offset']+=8
                 elif fault=='audit':p['upper_mapping_profile']['native_audit_sha256']='0'*64
                 else:p['upper_mapping_profile'].pop('native_audit_sha256')
                 with self.subTest(executable=digest,fault=fault):
