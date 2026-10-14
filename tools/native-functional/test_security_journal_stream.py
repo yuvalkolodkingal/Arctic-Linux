@@ -1,4 +1,6 @@
 """Bounded journal streaming controls; no journal, guest, or network is used."""
+import hashlib
+import io
 import importlib.util
 import json
 import os
@@ -106,9 +108,46 @@ class JournalStreamControls(unittest.TestCase):
                     RuntimeError, '^journal stream validation failed$'):
                 s.journal_avc_count(cursor, timeout=1)
         clean = {'selinux': 'Enforcing', 'audit': {'enabled': 1, 'lost': 0}}
+        audit = {'bytes': 0, 'records': 0, 'sha256': hashlib.sha256(b'').hexdigest(), 'avcs': 0}
         for projection in (True, -1, PRIVATE, None):
             with self.subTest(projection=projection), self.assertRaises(RuntimeError):
-                s.verify_security(clean, clean, projection)
+                s.verify_security(clean, clean, projection, audit)
+
+    def test_audit_file_stream_scans_more_than_old_bound_and_returns_fixed_summary(self):
+        raw = (b'benign audit record\n' * 230000) + b'final unterminated record'
+        self.assertGreater(len(raw), s.LIMIT)
+        result = s.scan_audit_interval(io.BytesIO(raw), len(raw))
+        self.assertEqual(result, {
+            'bytes': len(raw), 'records': 230001,
+            'sha256': hashlib.sha256(raw).hexdigest(), 'avcs': 0})
+        public = s.verify_security(
+            {'selinux': 'Enforcing', 'audit': {'enabled': 1, 'lost': 0}},
+            {'selinux': 'Enforcing', 'audit': {'enabled': 1, 'lost': 0}}, 0, result)
+        self.assertEqual(public['audit_interval'], {
+            'bytes': len(raw), 'records': 230001, 'sha256': hashlib.sha256(raw).hexdigest()})
+        self.assertNotIn('avcs', public['audit_interval'])
+
+    def test_audit_file_stream_detects_first_middle_last_avcs(self):
+        raw = b'avc: denied first\nbenign\ntype=USER_AVC middle\nbenign\ntype=AVC last'
+        result = s.scan_audit_interval(io.BytesIO(raw), len(raw))
+        self.assertEqual(result['avcs'], 3)
+        self.assertEqual(result['records'], 5)
+        clean = {'selinux': 'Enforcing', 'audit': {'enabled': 1, 'lost': 0}}
+        with self.assertRaisesRegex(RuntimeError, 'new AVC'):
+            s.verify_security(clean, clean, 0, result)
+
+    def test_audit_file_stream_line_record_total_and_exact_length_fail_closed(self):
+        with patch.object(s, 'AUDIT_LINE_LIMIT', 3):
+            with self.assertRaisesRegex(RuntimeError, 'line bound'):
+                s.scan_audit_interval(io.BytesIO(b'abcd\n'), 5)
+        with patch.object(s, 'AUDIT_RECORD_LIMIT', 2):
+            with self.assertRaisesRegex(RuntimeError, 'record count'):
+                s.scan_audit_interval(io.BytesIO(b'a\nb\nc\n'), 6)
+        with patch.object(s, 'AUDIT_TOTAL_LIMIT', 3):
+            with self.assertRaisesRegex(RuntimeError, 'total byte'):
+                s.scan_audit_interval(io.BytesIO(b'abcd'), 4)
+        with self.assertRaisesRegex(RuntimeError, 'declared byte count'):
+            s.scan_audit_interval(io.BytesIO(b'abc'), 4)
 
 
 if __name__ == '__main__':

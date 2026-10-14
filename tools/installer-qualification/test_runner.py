@@ -31,15 +31,15 @@ class Controls(unittest.TestCase):
         self.assertTrue(set(R.C.REQUIRED_IMAGES)<=set(R.C.ARCHIVE_FILES))
         self.assertNotIn('data.iso',R.C.ARCHIVE_FILES)
 
-    def test_preserve_full_bounded_uart_and_prefix_port_for_independent_replay(self):
+    def test_preserve_keeps_private_uart_out_and_prefixes_only_other_streams(self):
         with tempfile.TemporaryDirectory() as root:
             vm=Path(root)/'vm';vm.mkdir();target=Path(root)/'host'
-            serial=b'actual complete console record\n'+b'x'*70000
+            serial=b'private.person@example.test\n'+b'x'*70000
             (vm/'serial.log').write_bytes(serial);(vm/'installer-port.log').write_bytes(b'y'*70000)
             records=R.preserve_host(vm,target)
-            self.assertEqual((target/'serial.log').read_bytes(),serial)
+            self.assertFalse((target/'serial.log').exists())
+            self.assertNotIn('serial.log',records)
             self.assertEqual((target/'installer-port.log.bounded-prefix.bin').stat().st_size,65536)
-            self.assertEqual(records['serial.log']['sha256'],R.C.digest(serial))
             self.assertTrue(all('host/'+path.name in R.C.ARCHIVE_FILES for path in target.iterdir()))
 
     def test_container_cleanup_never_removes_existing_name_without_matching_new_receipt(self):

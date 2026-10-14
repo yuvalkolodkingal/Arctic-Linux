@@ -29,6 +29,146 @@ STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
 FRESH_PLAYER_RESTART_NATIVE_SHA = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
 PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
+TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
+
+
+def restore_moving_player_retirement(source):
+    """Reverse only the sequential moving/static player lifecycle correction."""
+    substitutions=(('def rename_noreplace(source_directory,source_name,target_directory,target_name):\n    """Atomically quarantine one directory entry without replacing another."""\n    import ctypes\n    import errno\n    require(all(type(value) is int and value>=0 for value in (source_directory,target_directory))\n            and all(isinstance(name,str) and name and \'/\' not in name and name not in (\'.\',\'..\')\n                    for name in (source_name,target_name)),\n            \'invalid atomic quarantine request\')\n    libc=ctypes.CDLL(None,use_errno=True)\n    operation=libc.renameat2\n    operation.argtypes=(ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint)\n    operation.restype=ctypes.c_int\n    if operation(source_directory,os.fsencode(source_name),target_directory,\n                 os.fsencode(target_name),1)==0:  # RENAME_NOREPLACE\n        return\n    code=ctypes.get_errno()\n    if code==errno.ENOENT: raise FileNotFoundError(code,os.strerror(code))\n    if code==errno.EEXIST: raise FileExistsError(code,os.strerror(code))\n    raise OSError(code,os.strerror(code))\n\n\n',''),('    def retire_moving_player(self,player,ipc):\n        """Retire the proved moving player before creating the static oracle player."""\n        require(isinstance(ipc,Path) and ipc==self.root/\'celluloid-ipc.sock\'\n                and sum(item is player for item in self.owned)==1,\n                \'moving player retirement target differs\')\n        # A pathname-bound Unix socket normally survives its listener. Pin the\n        # live endpoint before signalling, then atomically quarantine it in a\n        # root-owned directory. The desktop UID cannot replace the quarantined\n        # entry between its held-fd identity check and unlink.\n        fields=(\'st_dev\',\'st_ino\',\'st_mode\',\'st_uid\',\'st_gid\',\'st_nlink\')\n        directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\n        try:\n            root_info=os.fstat(directory)\n            require(root_info.st_uid==self.uid and stat.S_ISDIR(root_info.st_mode)\n                    and not root_info.st_mode&0o077,\n                    \'moving player IPC directory is not private\')\n            root_identity=(root_info.st_dev,root_info.st_ino)\n            held=os.open(ipc.name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=directory)\n            try:\n                before=os.fstat(held)\n                require(stat.S_ISSOCK(before.st_mode) and before.st_uid==self.uid and before.st_nlink==1,\n                        \'moving player IPC owner/type differs\')\n                ipc_identity=tuple(getattr(before,key) for key in fields)\n                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:\n                    peer.settimeout(2);peer.connect(str(ipc))\n                    pid,uid,_=struct.unpack(\'3i\',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))\n                    require((pid,uid)==(player[\'pid\'],self.uid),\'moving player IPC peer differs\')\n                after=os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)\n                require(tuple(getattr(after,key) for key in fields)==ipc_identity,\n                        \'moving player IPC identity changed during proof\')\n                retire_renderer_player(player,self.uid)\n                quarantine=Path(tempfile.mkdtemp(prefix=\'.celluloid-ipc-retired-\',dir=self.root))\n                quarantine_info=quarantine.lstat()\n                require(stat.S_ISDIR(quarantine_info.st_mode)\n                        and quarantine_info.st_uid==os.geteuid() and not quarantine_info.st_mode&0o077,\n                        \'moving player IPC quarantine is not private\')\n                quarantine_directory=os.open(quarantine,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)\n                try:\n                    retired_name=\'endpoint.sock\'\n                    try: rename_noreplace(directory,ipc.name,quarantine_directory,retired_name)\n                    except FileNotFoundError: pass\n                    else:\n                        retired=os.open(retired_name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,\n                                        dir_fd=quarantine_directory)\n                        try:\n                            retired_info=os.fstat(retired)\n                            if tuple(getattr(retired_info,key) for key in fields)!=ipc_identity:\n                                try: rename_noreplace(quarantine_directory,retired_name,directory,ipc.name)\n                                except (FileNotFoundError,FileExistsError,OSError): pass\n                                raise RuntimeError(\'moving player IPC identity changed before quarantine\')\n                            os.unlink(retired_name,dir_fd=quarantine_directory)\n                        finally: os.close(retired)\n                finally: os.close(quarantine_directory)\n            finally: os.close(held)\n            def fully_retired():\n                path_info=self.root.lstat()\n                require(stat.S_ISDIR(path_info.st_mode) and path_info.st_uid==self.uid\n                        and not path_info.st_mode&0o077\n                        and (path_info.st_dev,path_info.st_ino)==root_identity,\n                        \'moving player IPC directory identity changed after quarantine\')\n                try: os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)\n                except FileNotFoundError: socket_absent=True\n                else:\n                    require(False,\'moving player IPC path was recreated after quarantine\')\n                    socket_absent=False\n                return socket_absent and self.clients().get(player[\'client_id\']) is None\n            self.wait(fully_retired,5,\'moving player process/socket/compositor retirement\')\n            return dict(process_identity_retired=True,owned_ipc_absent=True,\n                        compositor_client_absent=True,release_acceptance=False)\n        finally: os.close(directory)\n\n',''),("""        moving_proof['retirement_before_static_oracle']=None
+        (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+            self.finish_native_protocol()
+            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
+            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+""","""        (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+            self.finish_native_protocol()
+"""),("""                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')
+""","""                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review')
+"""),("""                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+""","""                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+"""))
+    for index,(new,old) in enumerate(substitutions):
+        if source.count(new)!=1:raise AssertionError(f'Moving retirement inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    return source
+
+
+
+
+def restore_runtime_failure_fix(source):
+    """Reverse only the post-VM ownership and inherited-descriptor fixes."""
+    fixed_gio="""        # The launched app inherits the helper's descriptors. Use the existing
+        # regular-file GUI launch path so waiting for the helper cannot wait for
+        # the long-lived Celluloid process to close a captured PIPE.
+        self.launch(['/usr/bin/python3','-c',code,action])
+        helper=self.launches[-1]
+        try:
+            returncode=helper.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            helper.terminate()
+            try: helper.wait(timeout=2)
+            except subprocess.TimeoutExpired: helper.kill();helper.wait(timeout=2)
+            raise RuntimeError('Gio DesktopAppInfo action helper timed out') from None
+        self.steps[-1].update(status='launch-helper-completed',returncode=returncode)
+        require(returncode==0,'Gio DesktopAppInfo action launch failed')
+"""
+    old_gio="""        result=self.cmd(['/usr/bin/python3','-c',code,action],timeout=15)
+        require(result[0]==0,'Gio DesktopAppInfo action launch failed')
+"""
+    owned_directory="""    def owned_media_directory(self):
+        path=self.root/'media file opener'
+        self.user_mkdir(path)
+        info=path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid==self.uid
+                and not info.st_mode&0o022 and path.resolve()==path,
+                'file-manager media fixture directory owner/type differs')
+        return path
+
+"""
+    replacements=((fixed_gio,old_gio),(owned_directory,''),
+                  ("        media_dir=self.owned_media_directory()\n",
+                   "        media_dir=self.root/'media file opener';media_dir.mkdir()\n"))
+    for index,(new,old) in enumerate(replacements):
+        if source.count(new)!=1:raise AssertionError(f'Runtime failure inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    return source
+
+
+def restore_single_player_native(source):
+    """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_moving_player_retirement(source)
+    source=restore_runtime_failure_fix(source)
+    substitutions=(
+        ("            require(1<=len(players)<=2,'controls trial primary player inventory differs')\n            for player in players: retire_renderer_player(player,self.uid)\n","            require(1<=len(players)<=3,'controls trial primary player inventory differs')\n            retired=[row['player'] for row in primary.get('player_attempts',[])\n                     if row.get('owned_player_cleanup_completed') is True]\n            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==\n                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),\n                    'controls trial prior retired player identity differs')\n            retired_keys={(p['pid'],p['start_ticks']) for p in retired}\n            for player in players:\n                if (player['pid'],player['start_ticks']) not in retired_keys:\n                    retire_renderer_player(player,self.uid)\n"),
+        ('    def visual_media(self):\n        fixture,expected,source_sha=self.visual_fixture()\n        # This release gate admits exactly one fresh product-wrapper player.\n        # A failed or unmatched capture cannot create another acceptance path.\n        player_attempt=1\n        player_attempt_limit=1\n',"    def visual_media(self, restart=None):\n        player_attempt_limit=2\n        if restart is None:\n            fixture,expected,source_sha=self.visual_fixture()\n            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])\n        else:\n            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}\n                    and type(restart['player_attempts']) is list\n                    and len(restart['player_attempts'])==1,\n                    'visual player restart state differs')\n            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']\n            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']\n                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']\n                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],\n                    'visual player restart fixture identity differs')\n        player_attempt=len(restart['player_attempts'])+1\n        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')\n"),
+        ("        ipc=self.root/'visual-reference-ipc.sock'\n","        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')\n"),
+        ("        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None\n        self.wait(lambda:ipc.is_socket())\n        def ready_reference():\n","        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None\n        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])\n                        or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),\n                'visual restart did not create a fresh owned player')\n        self.wait(lambda:ipc.is_socket())\n        def ready_reference():\n"),
+        ("        image=self.root/'celluloid-reference.png'\n","        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')\n"),
+        ('        attempt_limit=1\n','        attempt_limit=6\n'),
+        ("        player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',\n            'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',\n            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}\n        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)\n        info['player_attempts']=[player_receipt]\n        info['accepted_player_attempt']=1 if oracle.get('status')=='matched' else None\n        (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))\n        self.trace('visual-oracle',proof=info)\n        if getattr(self,'gui_v6',False):\n            self.native_protocol_diagnostic(player,state,screenshot,client)\n            self.player_fullscreen(player,False)\n        require(info['oracle']['status']=='matched',\n                'actual static visual fixture content unmatched; rendered-content gate remains open')\n        return info\n","        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit\n                          and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))\n        player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',\n            'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',\n            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}\n        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)\n        restart['player_attempts'].append(player_receipt)\n        info['player_attempts']=restart['player_attempts']\n        info['accepted_player_attempt']=player_attempt if oracle.get('status')=='matched' else None\n        (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))\n        self.trace('visual-oracle',proof=info)\n        if getattr(self,'gui_v6',False) and not restart_eligible:\n            self.native_protocol_diagnostic(player,state,screenshot,client)\n        if getattr(self,'gui_v6',False):\n            self.player_fullscreen(player,False)\n        if restart_eligible:\n            if getattr(self,'gui_v6',False): self.finish_native_protocol()\n            try:\n                player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)\n                player_receipt['owned_player_cleanup_completed']=True\n            finally:\n                (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))\n            return self.visual_media(restart)\n        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':\n            self.controlled_controls_trials(fixture,expected,source_sha,info)\n        require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')\n        return info\n"),
+        ('\n\nclass RendererTrialSmoke','\n\ndef retire_reference_player(proof,uid,ipc,root,attempt):\n    """Retire exactly one failed primary player before its sole fresh restart."""\n    require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()\n            and isinstance(ipc,Path) and ipc.parent==root and ipc.name==\'visual-reference-ipc-1.sock\',\n            \'visual restart cleanup target differs\')\n    retire_renderer_player(proof,uid)\n    removed=False\n    try:\n        info=ipc.lstat()\n        require(stat.S_ISSOCK(info.st_mode) and info.st_uid==uid,\n                \'visual restart IPC owner/type differs\')\n        ipc.unlink()\n        removed=True\n    except FileNotFoundError:\n        pass\n    require(not ipc.exists() and not ipc.is_symlink(),\'visual restart IPC cleanup incomplete\')\n    return dict(process_identity_retired=True,owned_ipc_absent=True,\n                owned_ipc_removed=removed,release_acceptance=False)\n\n\nclass RendererTrialSmoke'),
+    )
+    for index,(new,old) in enumerate(substitutions):
+        if source.count(new)!=1:raise AssertionError(f'Single-player inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=TWO_PLAYER_CURRENT_SHA:
+        raise AssertionError('Pre-single-player Native source differs')
+    return source
+
+
+def restore_audit_file_stream_native(source):
+    source=restore_single_player_native(source)
+    def replace_marked(text, start, end, replacement):
+        if text.count(start) != 1 or text.count(end) != 1:
+            raise AssertionError('Streaming audit file inverse marker differs')
+        first = text.index(start)
+        last = text.index(end, first) + len(end)
+        return text[:first] + replacement + text[last:]
+
+    source = replace_marked(source, '# BEGIN STREAMING_AUDIT_FILE_INTERVAL\n',
+        '# END STREAMING_AUDIT_FILE_INTERVAL\n', '')
+    old_verify = """def verify_security(before, after, journal_avcs, audit_messages=''):
+    require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
+    require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
+    require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
+    require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
+    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
+    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
+    return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
+                audit_enabled=after['audit']['enabled'] in (1,2),
+                scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
+"""
+    source = replace_marked(source, '# BEGIN STREAMING_AUDIT_FILE_VERIFICATION\n',
+        '# END STREAMING_AUDIT_FILE_VERIFICATION\n', old_verify)
+    source = replace_marked(source, '\n\n# BEGIN STREAMING_AUDIT_FILE_SCANNER\n',
+        '# END STREAMING_AUDIT_FILE_SCANNER\n\n\n', '\n\n')
+    old_finish = """    def finish(self):
+        after = self.state()
+        journal = journal_avc_count(self.cursor, timeout=60)
+        audit_messages = ''
+        if self.audit_offset:
+            info = self.audit_file.stat()
+            dev, ino, offset = self.audit_offset
+            require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,
+                    'audit log rotated/truncated; interval must be reviewed separately')
+            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
+            with self.audit_file.open('rb') as stream:
+                stream.seek(offset)
+                audit_messages = stream.read(LIMIT).decode(errors='replace')
+        elif self.audit_file.exists():
+            # The new file may include records not forwarded to the journal.
+            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
+            audit_messages = self.audit_file.read_text(errors='replace')
+        return verify_security(self.before, after, journal['avcs'], audit_messages)
+"""
+    source = replace_marked(source, '    # BEGIN STREAMING_AUDIT_FILE_FINISH\n',
+        '    # END STREAMING_AUDIT_FILE_FINISH\n', old_finish)
+    if hashlib.sha256(source.encode()).hexdigest() != FRESH_PLAYER_RESTART_NATIVE_SHA:
+        raise AssertionError('Pre-streaming-audit-file Native source differs')
+    return source
 
 
 def restore_product_launch_native(source):
@@ -118,6 +258,7 @@ def restore_product_launch_native(source):
 
 
 def restore_fresh_player_restart_native(source):
+    source=restore_audit_file_stream_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=FRESH_PLAYER_RESTART_NATIVE_SHA:
         raise AssertionError('Fresh player restart Native source differs')
     source=restore_product_launch_native(source)
@@ -270,6 +411,20 @@ def restore_controls_native(source):
 
 
 def restore_controls_guest(source):
+    failure_headroom="""                    # A failed gate adds one owned failure screenshot after the
+                    # normal navigation diagnostics.  Keep the strict 16 MiB
+                    # transport ceiling and prioritize that failure frame plus
+                    # the primary role/media/oracle artifacts needed to diagnose
+                    # it.  Passing runs retain their original byte-for-byte
+                    # inventory, and private profile paths remain excluded above.
+                    if (type(report) is dict and report.get('status') == 'failed'
+                            and relative.startswith('gui-') and relative.endswith('.png')
+                            and '-failure-' not in relative):
+                        continue
+"""
+    if source.count(failure_headroom)!=1:
+        raise AssertionError('Failure evidence headroom inverse occurrence differs')
+    source=source.replace(failure_headroom,'',1)
     native=(HERE/'native_smoke.py').read_text()
     boundary='\n\n# BEGIN NATIVE_BULK_TRANSPORT\n'
     original=restore_controls_native(native)
@@ -282,8 +437,6 @@ def restore_controls_guest(source):
         ('for index in range(15)  # Seven one-use gate failures plus eight GUI diagnostics.',
          'for index in range(13)  # Seven one-use gate failures plus six GUI diagnostics.'),
         ("        'media-fixture-before-location', 'media-fixture-navigation-confirmed',\n",''),
-        ("'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb'",
-         "'celluloid-reference.png', 'visual-reference-frame.rgb'"),
         ('0-controls-state-trials.json','0-controlled-renderer-trials.json'),
         ('controls-trial-transition/reference.png','renderer-trial-default/reference.png'),
         ('controls-trial-hidden/reference.png','renderer-trial-gl/reference.png'),
@@ -302,6 +455,49 @@ class ControlsStateTrials(unittest.TestCase):
         return Mock(root=root,user=pwd.getpwuid(os.getuid()),uid=os.getuid(),stage='live',
                     prefix=['synthetic-owned-prefix','XDG_CONFIG_HOME='+str(config)],
                     original_prefix=['synthetic-owned-prefix'])
+
+    def test_media_fixture_directory_is_created_by_and_guarded_for_desktop_uid(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary);smoke.uid=os.getuid()
+            smoke.cmd=Mock(side_effect=lambda argv:Path(argv[-1]).mkdir(mode=0o700))
+            path=smoke.owned_media_directory()
+            self.assertEqual(path,smoke.root/'media file opener')
+            self.assertEqual(path.stat().st_uid,smoke.uid)
+            smoke.cmd.assert_called_once_with(['mkdir','-p',str(path)])
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary);smoke.uid=os.getuid()
+            def writable(argv):
+                Path(argv[-1]).mkdir();Path(argv[-1]).chmod(0o777)
+            smoke.cmd=Mock(side_effect=writable)
+            with self.assertRaisesRegex(RuntimeError,'directory owner/type differs'):
+                smoke.owned_media_directory()
+
+    def test_gio_action_helper_uses_regular_file_descriptors_and_launches_once(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary)
+            smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
+            helper=Mock();helper.wait.return_value=0
+            with patch.object(N.subprocess,'Popen',return_value=helper) as popen:
+                smoke.gio_desktop_action('new-window')
+            popen.assert_called_once()
+            argv=popen.call_args.args[0]
+            self.assertEqual(argv.count('/usr/bin/python3'),1)
+            self.assertEqual(argv[-1],'new-window')
+            self.assertIs(popen.call_args.kwargs['stdout'],popen.call_args.kwargs['stderr'])
+            self.assertIsNot(popen.call_args.kwargs['stdout'],subprocess.PIPE)
+            helper.wait.assert_called_once_with(timeout=15)
+            self.assertEqual(smoke.steps,[dict(argv=argv[len(smoke.prefix):],
+                status='launch-helper-completed',log=str(smoke.root/'gui-launch-0.log'),returncode=0)])
+
+    def test_gio_action_helper_timeout_fails_without_second_launch(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(temporary)
+            smoke.prefix=['runuser','-u','fixture','--','env'];smoke.launches=[];smoke.steps=[]
+            helper=Mock();helper.wait.side_effect=[subprocess.TimeoutExpired('helper',15),0]
+            with patch.object(N.subprocess,'Popen',return_value=helper) as popen, \
+                    self.assertRaisesRegex(RuntimeError,'action helper timed out'):
+                smoke.gio_desktop_action('enqueue')
+            popen.assert_called_once();helper.terminate.assert_called_once();helper.kill.assert_not_called()
 
     def test_whole_source_guest_and_unchanged_capture_oracle_rollback(self):
         new=(HERE/'native_smoke.py').read_text();old=restore_controls_native(new)
@@ -481,32 +677,31 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual([r['status'] for r in value['trials']],['observed','observed'])
             self.assertEqual(set(p.name for p in Path(temporary).glob('0-*.json')),{'0-controls-state-trials.json'})
 
-    def test_failure_diagnostics_skip_exact_already_retired_restart_player(self):
+    def test_optional_failure_diagnostics_retire_the_single_primary_player(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);fixture=root/'same-fixture';fixture.write_bytes(b'fixed')
             expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.stage='live';smoke.launches=[]
-            players=[dict(executable='/usr/bin/celluloid',pid=11+i,start_ticks=21+i) for i in range(3)]
+            players=[dict(executable='/usr/bin/celluloid',pid=11+i,start_ticks=21+i) for i in range(2)]
             smoke.owned=players;smoke.finish_native_protocol=Mock()
             primary=dict(oracle=dict(status='unmatched'),screenshot=dict(sha256='a'*64),
                 capture_precondition=dict(before_visible=False,after_visible=False),fixture_sha256=N.digest(fixture),
-                expected_rgb_sha256=N.digest(expected),player_attempts=[dict(player=players[1],owned_player_cleanup_completed=True),
-                dict(player=players[2],owned_player_cleanup_completed=False)])
+                expected_rgb_sha256=N.digest(expected),player_attempts=[dict(player=players[1],owned_player_cleanup_completed=False)])
             trials=[Mock(owned=[],launches=[],observe=Mock(return_value=dict(player=dict(pid=30+i,start_ticks=40+i),
                     status='observed'))) for i in range(2)]
             retired=[]
             with patch.object(N,'ControlsTrialSmoke',side_effect=trials),patch.object(N,'retire_renderer_player',side_effect=lambda p,u:retired.append(p)):
                 smoke.controlled_controls_trials(fixture,expected,'b'*64,primary)
-            self.assertEqual(retired,[players[0],players[2]])
+            self.assertEqual(retired,players)
 
-    def test_actual_primary_capture_still_fails_after_successful_controls_diagnostics(self):
+    def test_actual_primary_capture_hard_fails_without_acceptance_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=Path(temporary);fixture=root/'fixture';fixture.write_bytes(b'source-fixed-synthetic-media')
             expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.gui_v6=True;smoke.owned=[]
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'c'*64));smoke.trace=Mock()
-            players=[dict(pid=71+i,start_ticks=3+i,client_id=str(10+i),executable='/usr/bin/celluloid',
-                          executable_sha256=chr(97+i)*64) for i in range(2)]
+            players=[dict(pid=71,start_ticks=3,client_id='10',executable='/usr/bin/celluloid',
+                          executable_sha256='a'*64)]
             def client(player):return dict(id=int(player['client_id']),pid=player['pid'],x=0,y=0,width=160,height=120,
                         monitor='synthetic-monitor',is_focused=True,is_visible=True,is_fullscreen=True)
             monitors=dict(monitors=[dict(name='synthetic-monitor',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)])
@@ -527,25 +722,26 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_calls={71:0,72:0}
+            time_calls={71:0}
             def prop(path,key,pid,uid):
                 if key!='time-pos':return media[key]
                 time_calls[pid]+=1
                 return 0 if time_calls[pid]==1 else .2
-            endpoints=[socket.socket(socket.AF_UNIX) for _ in range(2)]
-            for index,endpoint in enumerate(endpoints,1):endpoint.bind(str(root/f'visual-reference-ipc-{index}.sock'))
+            endpoints=[socket.socket(socket.AF_UNIX)]
+            endpoints[0].bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'retire_reference_player',return_value=dict(process_identity_retired=True,
-                        owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
-                     patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
-                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
-                smoke.controlled_controls_trials.assert_called_once()
+                self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+                smoke.controlled_controls_trials.assert_not_called()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
-                self.assertEqual(smoke.controlled_controls_trials.call_args.args[3]['oracle'],actual['oracle'])
+                self.assertEqual((actual['player_attempt_limit'],actual['capture_attempt_limit']),(1,1))
+                self.assertEqual(len(actual['player_attempts']),1)
+                smoke.native_protocol_diagnostic.assert_called_once()
+                self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(smoke.owned[0],False))
             finally:
                 for endpoint in endpoints:endpoint.close()
 
@@ -592,15 +788,14 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(path.read_bytes(),before)
             with self.assertRaises(RuntimeError):N.write_controls_receipt(root,os.getuid(),{'test':'x'*(512*1024)})
 
-    def test_finite_public_inventory_swaps_controls_and_adds_bounded_restart_screenshot(self):
+    def test_finite_public_inventory_swaps_controls_without_retry_screenshot(self):
         spec=importlib.util.spec_from_file_location('controls_inventory_guest',HERE/'guest-check-native-v6.py')
         guest=importlib.util.module_from_spec(spec);spec.loader.exec_module(guest)
         new=guest.NATIVE_PUBLIC_EVIDENCE_FILES
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
         removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png',
-               'celluloid-reference-player-2.png'}
+        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
         current_labels={'failure-fresh-defaults-and-isolation','failure-archive-content-roundtrips',
             'failure-actual-role-file-manager-terminal-editor','failure-open-codec-content-and-player-state',
             'failure-portal-and-accessibility-reachability','failure-owned-process-cleanup-config-preservation',

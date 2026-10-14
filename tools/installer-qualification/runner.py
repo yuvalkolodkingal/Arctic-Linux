@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import hashlib
+import io
 import json
 import os
 from pathlib import Path
@@ -261,6 +262,48 @@ def execute(argv, log, seconds, cwd, env):
             raise
 
 
+SUCCESS_LOG_RECEIPTS = {
+    'provision': b'ARCTIC-INSTALLER-LOG=provision-succeeded-output-withheld\n',
+    'capture-build': b'ARCTIC-INSTALLER-LOG=capture-build-succeeded-output-withheld\n',
+    'installer-harness': b'ARCTIC-INSTALLER-LOG=installer-harness-succeeded-output-withheld\n',
+}
+
+
+def seal_success_log(path, stage):
+    """Replace successful free-form command output with a fixed public receipt.
+
+    The command's exit status and structured provenance are the evidence used by
+    the contract.  Package-manager output can contain transient queried URLs,
+    so it is not part of the public evidence surface after a successful stage.
+    """
+    C.require(type(stage) is str and stage in SUCCESS_LOG_RECEIPTS,
+              'Unknown successful installer log stage')
+    path = Path(path)
+    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(fd)
+        C.require(stat.S_ISREG(before.st_mode) and before.st_uid == os.geteuid() and
+                  before.st_nlink == 1 and not (before.st_mode & 0o022) and
+                  0 <= before.st_size <= 128 * 1024 * 1024,
+                  'Successful installer log ownership differs')
+        receipt = SUCCESS_LOG_RECEIPTS[stage]
+        os.ftruncate(fd, 0)
+        view = memoryview(receipt)
+        while view:
+            written = os.write(fd, view)
+            C.require(written > 0, 'Successful installer log receipt write failed')
+            view = view[written:]
+        os.fsync(fd)
+        after = os.fstat(fd)
+        C.require((after.st_dev, after.st_ino, after.st_uid, after.st_nlink) ==
+                  (before.st_dev, before.st_ino, before.st_uid, before.st_nlink) and
+                  stat.S_ISREG(after.st_mode) and not (after.st_mode & 0o022) and
+                  after.st_size == len(receipt),
+                  'Successful installer log receipt identity differs')
+    finally:
+        os.close(fd)
+
+
 def verify(args, execution):
     active_profile = getattr(args, 'active_profile', False)
     contract = E.active_contract() if active_profile else C
@@ -290,6 +333,62 @@ def verify(args, execution):
     return manifest, iso
 
 
+def preserve_identity_failure(vm, target):
+    """Retain only the exact bounded, guarded failure-only physical inventory."""
+    names = _driver.IDENTITY_CHALLENGE_IMAGES
+    metadata_name = _driver.IDENTITY_CHALLENGE_METADATA
+    found = {path.name for path in vm.iterdir() if path.name.startswith('installed-identity-challenge')}
+    if not found:
+        return
+    C.require(metadata_name in found, 'Installed identity diagnostic metadata absent')
+    raw, metadata_generation = _driver.identity_diagnostic_read(vm / metadata_name, 8192)
+    value = E.strict_json(raw)
+    C.require(type(value) is dict and set(value) == {'schema', 'status', 'authentication', 'release_acceptance', 'captures'} and
+              type(value['schema']) is str and value['schema'] == 'arctic-installed-identity-challenge-failure-v1' and
+              type(value['status']) is str and value['status'] == 'failure-observation-only' and
+              value['authentication'] is False and value['release_acceptance'] is False and
+              type(value['captures']) is list and 1 <= len(value['captures']) <= 3,
+              'Installed identity diagnostic public fields differ')
+    expected = {metadata_name, *names[:len(value['captures'])]}
+    C.require(found == expected and not os.path.lexists(vm / 'installed-boot.json'),
+              'Installed identity diagnostic failure inventory differs')
+    images = []
+    for index, record in enumerate(value['captures']):
+        C.require(type(record) is dict and set(record) == {'path', 'bytes', 'sha256', 'size',
+                    'post_command', 'pre_sudo', 'private_input_guard_passed'} and
+                  type(record['path']) is str and record['path'] == names[index] and
+                  type(record['bytes']) is int and 0 < record['bytes'] <= 8 * 1024 * 1024 and
+                  type(record['sha256']) is str and re.fullmatch('[0-9a-f]{64}', record['sha256']) and
+                  type(record['size']) is list and len(record['size']) == 2 and
+                  all(type(number) is int for number in record['size']) and record['size'] == [1280, 720] and
+                  record['post_command'] is True and record['pre_sudo'] is True and
+                  record['private_input_guard_passed'] is True,
+                  'Installed identity diagnostic capture fields differ')
+        pixels, generation = _driver.identity_diagnostic_read(vm / names[index], 8 * 1024 * 1024)
+        C.require(generation[3] == metadata_generation[3] and len(pixels) == record['bytes'] and
+                  hashlib.sha256(pixels).hexdigest() == record['sha256'],
+                  'Installed identity diagnostic original pixels differ')
+        from PIL import Image
+        with Image.open(io.BytesIO(pixels)) as image:
+            C.require(image.format == 'PNG' and image.size == (1280, 720),
+                      'Installed identity diagnostic physical dimensions differ')
+            image.verify()
+        images.append((names[index], pixels, generation))
+    # Validate the complete inventory before retaining any member. The existing
+    # workflow must screen all original bytes before any artifact is uploaded.
+    C.require({path.name for path in vm.iterdir() if path.name.startswith('installed-identity-challenge')} == found,
+              'Installed identity diagnostic inventory changed')
+    _driver.identity_diagnostic_read(vm / metadata_name, 8192, metadata_generation)
+    for name, pixels, generation in images:
+        current, _ = _driver.identity_diagnostic_read(vm / name, 8 * 1024 * 1024, generation)
+        C.require(current == pixels, 'Installed identity diagnostic original pixels changed')
+    for name, pixels, _ in images:
+        with (target / name).open('xb') as stream:
+            stream.write(pixels)
+    with (target / metadata_name).open('xb') as stream:
+        stream.write(raw)
+
+
 def preserve_host(vm, target, active=False):
     target.mkdir()
     for name in ('host-execution.json', 'installer-host-transitions.json',
@@ -297,9 +396,17 @@ def preserve_host(vm, target, active=False):
         path = vm / name
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= 4 * 1024 * 1024, 'Oversized host receipt/capture')
-            shutil.copyfile(path, target / name)
+            if active and name == 'host-execution.json':
+                value = json.loads(path.read_text())
+                installed = value.get('installed_boot') if type(value) is dict else None
+                if type(installed) is dict and 'serial' in installed:
+                    installed['serial'] = {'status': 'withheld_pending_private_uart_validation'}
+                write(target / name, value)
+            else:
+                shutil.copyfile(path, target / name)
     if active:
-        for name in ('installed-boot.json', 'serial-installed.log', 'installed-getty-password.png', 'installed-sudo-password.png'):
+        preserve_identity_failure(vm, target)
+        for name in ('installed-boot.json', 'installed-getty-password.png', 'installed-sudo-password.png'):
             path = vm / name
             if path.is_file() and not path.is_symlink():
                 C.require(path.stat().st_size <= 8*1024*1024, 'Oversized installed boot proof')
@@ -309,8 +416,8 @@ def preserve_host(vm, target, active=False):
             C.require(path.stat().st_size <= 4*1024*1024, 'Oversized installed QEMU diagnostic')
             with path.open('rb') as stream:
                 (target / 'qemu-installer-installed.log.bounded-prefix.bin').write_bytes(stream.read(64*1024))
-    # UART and transport contain bounded framed data. Keep diagnostic prefixes
-    # rather than uploading duplicate base64 payloads; record complete hashes.
+    # Raw UART remains private.  It is validated later and only its canonical
+    # public projection is retained.  Other streams keep bounded prefixes.
     records = {}
     streams = [('serial.log', 8 * 1024 * 1024), ('installer-port.log', 64 * 1024 * 1024), ('qemu-installer-live.log', 4 * 1024 * 1024)]
     if active:
@@ -319,10 +426,8 @@ def preserve_host(vm, target, active=False):
         path = vm / name
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= bound, 'Oversized installer diagnostic stream')
-            records[name] = dict(bytes=path.stat().st_size, sha256=sha(path))
-            if name in ('serial.log', 'serial-installed.log'):
-                shutil.copyfile(path, target / name)
-            else:
+            if name not in ('serial.log', 'serial-installed.log'):
+                records[name] = dict(bytes=path.stat().st_size, sha256=sha(path))
                 with path.open('rb') as stream:
                     (target / (name + '.bounded-prefix.bin')).write_bytes(stream.read(64 * 1024))
     return records
@@ -379,7 +484,9 @@ def main():
                 payload.mkdir(); env['ARCTIC_FEDORA_IMAGE'] = prepared
                 argv = ['bash', str(execution / script), str(execution), str(payload)]
             else: argv = ['bash', str(execution / script), str(argument)]
-            execute(argv, args.evidence / (name + '.log'), seconds, execution, env)
+            log = args.evidence / (name + '.log')
+            execute(argv, log, seconds, execution, env)
+            seal_success_log(log, name)
             receipt = (args.evidence / 'vm-prepared-image-id.txt' if argument is not None else payload / 'taskbar-vm-prepared-image-id.txt')
             prepared = receipt.read_text().strip()
             C.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable owned prepared image missing')
@@ -412,11 +519,14 @@ def main():
                    ARCTIC_FEDORA_IMAGE=prepared)
         diagnostic_token = uuid.uuid4().hex
         env['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN'] = diagnostic_token
+        harness_succeeded = False
         try:
             diagnostic_stage = 'run-live'
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
                      str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log',
                     (80 if args.active_profile else 35) * 60, execution, env)
+            seal_success_log(args.evidence / 'installer-harness.log', 'installer-harness')
+            harness_succeeded = True
         except BaseException as error:
             diagnose(diagnostic_stage, error)
             relay_inner(args.evidence / 'installer-harness.log', diagnostic_token)
@@ -433,15 +543,39 @@ def main():
             contract.validate_catalog_selection(report, (args.source / 'modules/catalog.toml').read_bytes())
         C.require(state['host']['host_transitions'] == json.loads((args.evidence / 'host/installer-host-transitions.json').read_text())['receipts'] and
                   [row['request'] for row in state['host']['host_transitions']] == result['requests'], 'Host and guest actual transitions differ')
+        live_serial = (vm / 'serial.log').read_bytes()
+        live_public, live_receipt = E.public_uart_receipt(live_serial)
+        C.require(live_receipt == state['guest']['serial'], 'live public UART projection receipt differs')
+        state['diagnostic_streams']['serial.log'] = live_receipt
+        installed_public = installed_private = None
         state['transport'] = dict(status='passed', report_path='installer/installer-report.json',
                                   report_sha256=sha(args.evidence / 'installer/installer-report.json'),
-                                  port_sha256=sha(vm / 'installer-port.log'), serial_sha256=sha(vm / 'serial.log'))
-        state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
-        state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
-                           if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
-        diagnostic_stage = 'execution-validation'
-        contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
-                             lambda name: (args.evidence / name).read_bytes())
+                                  port_sha256=sha(vm / 'installer-port.log'), serial_sha256=live_receipt['sha256'])
+        if harness_succeeded:
+            if args.active_profile:
+                installed_boot = state['host'].get('installed_boot')
+                C.require(type(installed_boot) is dict and type(installed_boot.get('status')) is str and
+                          installed_boot['status'] == 'passed',
+                          'Successful installer harness has no passed installed boot proof')
+                installed_private = (vm / 'serial-installed.log').read_bytes()
+                installed_public, installed_receipt = E.public_uart_receipt(installed_private, installed=True)
+                state['diagnostic_streams']['serial-installed.log'] = installed_receipt
+                installed_boot['serial'] = installed_receipt
+            state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
+            state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
+                               if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
+            diagnostic_stage = 'execution-validation'
+            def validation_media(name):
+                if name == 'host/serial-installed.log' and installed_private is not None:
+                    return installed_private
+                return (args.evidence / name).read_bytes()
+            contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], live_serial,
+                                 validation_media)
+        (args.evidence / 'host/serial.log').write_bytes(live_public)
+        if installed_public is not None:
+            (args.evidence / 'host/serial-installed.log').write_bytes(installed_public)
+        write(args.evidence / 'host/host-execution.json', state['host'])
+        write(args.evidence / 'installer/installer-state.json', state['guest'])
     except BaseException as error:
         diagnose(diagnostic_stage, error, contract)
         if report is not None:

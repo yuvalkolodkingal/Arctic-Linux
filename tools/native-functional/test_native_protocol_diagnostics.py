@@ -347,8 +347,8 @@ class DrainAndExportControls(unittest.TestCase):
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True;smoke.uid=os.getuid();smoke.stage='live';smoke.owned=[]
             fixture=smoke.root/'visual-reference.mkv';fixture.write_bytes(b'host-only')
             expected=smoke.root/'visual-reference-frame.rgb';expected.write_bytes(N.visual_reference_frame())
-            proofs=[dict(pid=100+i,start_ticks=10+i,client_id=str(7+i),executable='/usr/bin/celluloid',
-                         executable_sha256=chr(97+i)*64) for i in range(2)]
+            proofs=[dict(pid=100,start_ticks=10,client_id='7',executable='/usr/bin/celluloid',
+                         executable_sha256='a'*64)]
             def client(proof):return dict(id=int(proof['client_id']),pid=proof['pid'],x=0,y=0,width=160,height=120,
                 is_focused=True,is_visible=True,is_fullscreen=True,monitor='fixture')
             monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
@@ -369,22 +369,23 @@ class DrainAndExportControls(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
-            time_calls={100:0,101:0}
+            time_calls={100:0}
             def prop(path,key,pid,uid):
                 if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
                     'pause':False,'current-vo':'libmpv'}[key]
                 time_calls[pid]+=1
                 return 0 if time_calls[pid]==1 else .2
-            with patch.object(N,'retire_reference_player',return_value=dict(process_identity_retired=True,
-                    owned_ipc_absent=True,owned_ipc_removed=True,release_acceptance=False)),\
-                 patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
-                with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
-                    smoke.visual_media()
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
+            with socket.socket(socket.AF_UNIX) as endpoint:
+                endpoint.bind(str(smoke.root/'visual-reference-ipc.sock'))
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                    with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
+                        smoke.visual_media()
+            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True))
-            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[1],False))
+            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False))
             oracle=json.loads((smoke.root/'visual-oracle.json').read_bytes());self.assertEqual(oracle['oracle']['status'],'unmatched')
+            self.assertEqual((oracle['player_attempt_limit'],oracle['capture_attempt_limit']),(1,1))
             diagnostic=json.loads((smoke.root/'0-native-protocol-viewport.json').read_bytes())
             self.assertEqual(diagnostic['primary_screenshot_sha256'],oracle['screenshot']['sha256'])
             self.assertFalse(diagnostic['release_acceptance']);self.assertEqual(diagnostic['protocol']['status'],'unknown')

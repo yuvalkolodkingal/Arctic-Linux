@@ -176,7 +176,10 @@ class CompletionControls(unittest.TestCase):
         value.capture_count = 4
         value.password = PRIVATE
         value.gui_fd = None
-        value.native = SimpleNamespace(SecurityInterval=lambda: SimpleNamespace(finish=lambda: {'selinux': 'Enforcing'}))
+        value.native = SimpleNamespace(SecurityInterval=lambda: SimpleNamespace(finish=lambda: {
+            'selinux': 'Enforcing', 'audit': {'enabled': 1, 'lost': 0},
+            'observed_new_avcs': 0, 'audit_enabled': True,
+            'scope': 'journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit'}))
         value.prepare = lambda: value.baseline
         value.vt_cycle = lambda cycle: {'kind': 'vt', 'cycle': cycle, 'status': 'passed'}
         value.output_cycle = lambda cycle: {'kind': 'output', 'cycle': cycle, 'status': 'passed'}

@@ -1,5 +1,6 @@
 """Synthetic host-stage controls only; no Docker, guests, ISO or private export."""
 import contextlib
+import importlib.util
 import io
 import json
 from pathlib import Path
@@ -13,6 +14,11 @@ from unittest.mock import Mock, patch
 sys.path.insert(0, str(Path(__file__).parent))
 import runner as R
 
+screen_spec = importlib.util.spec_from_file_location(
+    'installer_success_log_screen', Path(__file__).parents[1] / 'native-functional/screen-evidence.py')
+S = importlib.util.module_from_spec(screen_spec)
+screen_spec.loader.exec_module(S)
+
 
 class PrivateError(RuntimeError):
     def __str__(self):
@@ -23,6 +29,29 @@ class PrivateError(RuntimeError):
 
 
 class Controls(unittest.TestCase):
+    def test_success_logs_are_fixed_receipts_before_original_byte_screening(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for stage, receipt in R.SUCCESS_LOG_RECEIPTS.items():
+                with self.subTest(stage=stage):
+                    path = root / (stage + '.log')
+                    path.write_bytes(b'https://example.invalid/repository?token=private-control\n')
+                    with self.assertRaisesRegex(RuntimeError, '^Sensitive text in external evidence$'):
+                        S.external_text(path.read_bytes())
+                    R.seal_success_log(path, stage)
+                    self.assertEqual(path.read_bytes(), receipt)
+                    self.assertEqual(S.external_text(path.read_bytes()), receipt)
+            target = root / 'target.log'
+            target.write_bytes(b'private')
+            link = root / 'link.log'; link.symlink_to(target)
+            with self.assertRaises(OSError):
+                R.seal_success_log(link, 'provision')
+            hardlink = root / 'hardlink.log'; hardlink.hardlink_to(target)
+            with self.assertRaisesRegex(RuntimeError, '^Successful installer log ownership differs$'):
+                R.seal_success_log(target, 'provision')
+            with self.assertRaisesRegex(RuntimeError, '^Unknown successful installer log stage$'):
+                R.seal_success_log(target, 'unknown')
+
     def test_fixed_codes_cover_classes_and_stage_specific_literals_without_formatting(self):
         for stage in R.DIAGNOSTIC_STAGES:
             for error_class, label in R.DIAGNOSTIC_ERROR_TYPES:
@@ -124,15 +153,19 @@ class Controls(unittest.TestCase):
                     (payload / 'build-provenance.json').write_text(json.dumps(build))
                 else:
                     vm = Path(argv[-1]); vm.mkdir()
-                    (vm / 'serial.log').write_bytes(b'synthetic serial')
+                    (vm / 'serial.log').write_bytes(b'synthetic private serial')
                     (vm / 'installer-port.log').write_bytes(b'synthetic port')
+                    if active:
+                        (vm / 'serial-installed.log').write_bytes(b'synthetic private installed serial')
                     if inner_log is not None:
                         Path(log).write_bytes(inner_log(_[-1]['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN']))
                     fault(stage)
 
             def preserve(_vm, target, _active):
                 target.mkdir()
-                (target / 'host-execution.json').write_text(json.dumps({'host_transitions': []}))
+                host = {'host_transitions': []}
+                if active: host['installed_boot'] = {'status': 'passed', 'serial': {'status': 'withheld_pending_private_uart_validation'}}
+                (target / 'host-execution.json').write_text(json.dumps(host))
                 (target / 'installer-host-transitions.json').write_text(json.dumps({'receipts': []}))
                 return {}
 
@@ -141,7 +174,10 @@ class Controls(unittest.TestCase):
                 target.mkdir()
                 (target / 'installer-report.json').write_text('{}')
                 return {'report': {} if report_value is None else report_value,
-                        'state': {'status': 'passed'}, 'files': {}, 'requests': []}
+                        'state': {'status': 'passed', 'serial': {'bytes': 7, 'sha256': '1' * 64}}, 'files': {}, 'requests': []}
+
+            def public_uart(_data, installed=False):
+                return b'public\n', {'bytes': 7, 'sha256': '1' * 64}
 
             contract = SimpleNamespace(require=R.C.require, REQUIRED_IMAGES=(),
                 cleanup_images=cleanup_images,
@@ -157,7 +193,9 @@ class Controls(unittest.TestCase):
                 argv.append('--active-profile')
             with contextlib.ExitStack() as stack:
                 for object_, name, replacement in [(R, 'C', contract), (R, 'verify', verify), (R, 'sha', digest),
-                        (R, 'execute', execute), (R, 'preserve_host', preserve), (R.E, 'extract', extract),
+                        (R, 'execute', execute), (R, 'seal_success_log', lambda *_: None),
+                        (R, 'preserve_host', preserve), (R.E, 'extract', extract),
+                        (R.E, 'public_uart_receipt', public_uart),
                         (R.E, 'active_contract', lambda: contract), (R.subprocess, 'check_output', info),
                         (R.subprocess, 'run', host_command), (R.signal, 'signal', lambda *_: None),
                         (R.H, 'cleanup_signals', lambda: contextlib.nullcontext([]))]:

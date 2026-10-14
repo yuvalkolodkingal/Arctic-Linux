@@ -41,6 +41,13 @@ JOURNAL_LINE_LIMIT = 1024 * 1024
 JOURNAL_RECORD_LIMIT = 250000
 JOURNAL_STDERR_LIMIT = 64 * 1024
 JOURNAL_READ_SIZE = 64 * 1024
+# BEGIN STREAMING_AUDIT_FILE_INTERVAL
+AUDIT_LINE_LIMIT = 1024 * 1024
+AUDIT_RECORD_LIMIT = 500000
+AUDIT_TOTAL_LIMIT = 128 * 1024 * 1024
+AUDIT_READ_SIZE = 64 * 1024
+AUDIT_AVC = re.compile(br'avc:\s*denied|type=(?:USER_)?AVC\b', re.I)
+# END STREAMING_AUDIT_FILE_INTERVAL
 
 
 def require(value, message):
@@ -289,16 +296,59 @@ def journal_avc_count(cursor, timeout=60):
                 raise RuntimeError('journal stream validation failed')
 
 
-def verify_security(before, after, journal_avcs, audit_messages=''):
+# BEGIN STREAMING_AUDIT_FILE_VERIFICATION
+def verify_security(before, after, journal_avcs, audit_summary):
     require(before['selinux'] == after['selinux'] == 'Enforcing', 'SELinux must remain Enforcing')
     require(after['audit']['enabled'] == before['audit']['enabled'], 'kernel audit mode changed during checks')
     require(after['audit']['lost'] == before['audit']['lost'], 'audit records were lost during checks')
     require(type(journal_avcs) is int and journal_avcs >= 0, 'invalid journal AVC projection')
-    audit_avcs = sum(1 for line in audit_messages.splitlines() if AVC.search(line))
-    require(journal_avcs + audit_avcs == 0, 'new AVC requires investigation')
+    require(type(audit_summary) is dict and set(audit_summary) == {'bytes','records','sha256','avcs'}
+            and all(type(audit_summary[key]) is int and audit_summary[key] >= 0
+                    for key in ('bytes','records','avcs'))
+            and re.fullmatch('[0-9a-f]{64}', audit_summary['sha256']), 'invalid audit interval summary')
+    require(journal_avcs + audit_summary['avcs'] == 0, 'new AVC requires investigation')
     return dict(selinux=after['selinux'], audit=after['audit'], observed_new_avcs=0,
+                audit_interval={key:audit_summary[key] for key in ('bytes','records','sha256')},
                 audit_enabled=after['audit']['enabled'] in (1,2),
                 scope='journal cursor and available audit-file interval; disabled kernel audit is a recorded telemetry limit')
+# END STREAMING_AUDIT_FILE_VERIFICATION
+
+
+# BEGIN STREAMING_AUDIT_FILE_SCANNER
+def scan_audit_interval(stream, byte_count):
+    """Scan an exact bounded file interval without retaining its record text."""
+    require(type(byte_count) is int and 0 <= byte_count <= AUDIT_TOTAL_LIMIT,
+            'audit interval total byte bound exceeded')
+    digestor = hashlib.sha256()
+    pending = bytearray()
+    scanned = records = avcs = 0
+
+    def record(line):
+        nonlocal records, avcs
+        require(len(line) <= AUDIT_LINE_LIMIT, 'audit record exceeded line bound')
+        records += 1
+        require(records <= AUDIT_RECORD_LIMIT, 'audit record count exceeded bound')
+        if AUDIT_AVC.search(line):
+            avcs += 1
+
+    while scanned < byte_count:
+        chunk = stream.read(min(AUDIT_READ_SIZE, byte_count - scanned))
+        require(type(chunk) is bytes and chunk, 'audit interval ended before declared byte count')
+        require(len(chunk) <= byte_count - scanned, 'audit interval reader exceeded declared byte count')
+        scanned += len(chunk)
+        digestor.update(chunk)
+        pending.extend(chunk)
+        while True:
+            newline = pending.find(b'\n')
+            if newline < 0:
+                break
+            record(bytes(pending[:newline]))
+            del pending[:newline + 1]
+        require(len(pending) <= AUDIT_LINE_LIMIT, 'audit record exceeded line bound')
+    if pending:
+        record(bytes(pending))
+    return dict(bytes=scanned, records=records, sha256=digestor.hexdigest(), avcs=avcs)
+# END STREAMING_AUDIT_FILE_SCANNER
 
 
 class SecurityInterval:
@@ -319,24 +369,33 @@ class SecurityInterval:
         return dict(selinux=execute(['getenforce'])[1],
                     audit=parse_audit_status(execute(['auditctl', '-s'])[1]))
 
+    # BEGIN STREAMING_AUDIT_FILE_FINISH
     def finish(self):
         after = self.state()
         journal = journal_avc_count(self.cursor, timeout=60)
-        audit_messages = ''
+        audit_summary = dict(bytes=0, records=0, sha256=hashlib.sha256(b'').hexdigest(), avcs=0)
         if self.audit_offset:
             info = self.audit_file.stat()
             dev, ino, offset = self.audit_offset
             require((info.st_dev, info.st_ino) == (dev, ino) and info.st_size >= offset,
                     'audit log rotated/truncated; interval must be reviewed separately')
-            require(info.st_size - offset <= LIMIT, 'audit interval exceeded evidence bound')
             with self.audit_file.open('rb') as stream:
+                opened = os.fstat(stream.fileno())
+                require((opened.st_dev, opened.st_ino) == (dev, ino) and opened.st_size >= info.st_size,
+                        'audit log rotated/truncated; interval must be reviewed separately')
                 stream.seek(offset)
-                audit_messages = stream.read(LIMIT).decode(errors='replace')
+                audit_summary = scan_audit_interval(stream, info.st_size - offset)
         elif self.audit_file.exists():
             # The new file may include records not forwarded to the journal.
-            require(self.audit_file.stat().st_size <= LIMIT, 'new audit log exceeded evidence bound')
-            audit_messages = self.audit_file.read_text(errors='replace')
-        return verify_security(self.before, after, journal['avcs'], audit_messages)
+            info = self.audit_file.stat()
+            with self.audit_file.open('rb') as stream:
+                opened = os.fstat(stream.fileno())
+                require((opened.st_dev, opened.st_ino) == (info.st_dev, info.st_ino)
+                        and opened.st_size >= info.st_size,
+                        'audit log rotated/truncated; interval must be reviewed separately')
+                audit_summary = scan_audit_interval(stream, info.st_size)
+        return verify_security(self.before, after, journal['avcs'], audit_summary)
+    # END STREAMING_AUDIT_FILE_FINISH
 
 def discover_desktop():
     """Actual login environment, including post-exec Mango IPC and Xwayland DISPLAY."""
@@ -870,6 +929,27 @@ class NativeProtocolDrain:
 # END NATIVE_PROTOCOL_DIAGNOSTICS
 
 
+def rename_noreplace(source_directory,source_name,target_directory,target_name):
+    """Atomically quarantine one directory entry without replacing another."""
+    import ctypes
+    import errno
+    require(all(type(value) is int and value>=0 for value in (source_directory,target_directory))
+            and all(isinstance(name,str) and name and '/' not in name and name not in ('.','..')
+                    for name in (source_name,target_name)),
+            'invalid atomic quarantine request')
+    libc=ctypes.CDLL(None,use_errno=True)
+    operation=libc.renameat2
+    operation.argtypes=(ctypes.c_int,ctypes.c_char_p,ctypes.c_int,ctypes.c_char_p,ctypes.c_uint)
+    operation.restype=ctypes.c_int
+    if operation(source_directory,os.fsencode(source_name),target_directory,
+                 os.fsencode(target_name),1)==0:  # RENAME_NOREPLACE
+        return
+    code=ctypes.get_errno()
+    if code==errno.ENOENT: raise FileNotFoundError(code,os.strerror(code))
+    if code==errno.EEXIST: raise FileExistsError(code,os.strerror(code))
+    raise OSError(code,os.strerror(code))
+
+
 class Smoke:
     def __init__(self, prefix, stage):
         require(prefix[:2] == ['runuser', '-u'] and prefix[3:5] == ['--', 'env'], 'invalid desktop prefix')
@@ -977,8 +1057,20 @@ class Smoke:
               'assert a.get_string("Exec")=="/usr/libexec/arctic/arctic-celluloid %U"; '
               'assert a.get_string("TryExec")=="/usr/bin/celluloid"; '
               'a.launch_action(sys.argv[1],Gio.AppLaunchContext())')
-        result=self.cmd(['/usr/bin/python3','-c',code,action],timeout=15)
-        require(result[0]==0,'Gio DesktopAppInfo action launch failed')
+        # The launched app inherits the helper's descriptors. Use the existing
+        # regular-file GUI launch path so waiting for the helper cannot wait for
+        # the long-lived Celluloid process to close a captured PIPE.
+        self.launch(['/usr/bin/python3','-c',code,action])
+        helper=self.launches[-1]
+        try:
+            returncode=helper.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            helper.terminate()
+            try: helper.wait(timeout=2)
+            except subprocess.TimeoutExpired: helper.kill();helper.wait(timeout=2)
+            raise RuntimeError('Gio DesktopAppInfo action helper timed out') from None
+        self.steps[-1].update(status='launch-helper-completed',returncode=returncode)
+        require(returncode==0,'Gio DesktopAppInfo action launch failed')
 
     def product_renderer_contract(self, player):
         launcher=Path('/usr/libexec/arctic/arctic-celluloid')
@@ -1136,16 +1228,8 @@ class Smoke:
                     'controls trial fixture identity changed')
             self.finish_native_protocol()
             players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
-            require(1<=len(players)<=3,'controls trial primary player inventory differs')
-            retired=[row['player'] for row in primary.get('player_attempts',[])
-                     if row.get('owned_player_cleanup_completed') is True]
-            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==
-                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),
-                    'controls trial prior retired player identity differs')
-            retired_keys={(p['pid'],p['start_ticks']) for p in retired}
-            for player in players:
-                if (player['pid'],player['start_ticks']) not in retired_keys:
-                    retire_renderer_player(player,self.uid)
+            require(1<=len(players)<=2,'controls trial primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
             seen=set()
             for index,state in enumerate(states):
                 trial=None
@@ -1228,6 +1312,15 @@ class Smoke:
 
     def user_mkdir(self, path):
         self.cmd(['mkdir','-p',str(path)])
+
+    def owned_media_directory(self):
+        path=self.root/'media file opener'
+        self.user_mkdir(path)
+        info=path.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid==self.uid
+                and not info.st_mode&0o022 and path.resolve()==path,
+                'file-manager media fixture directory owner/type differs')
+        return path
 
     def trace(self, event, **values):
         item = dict(event=event, monotonic_ns=time.monotonic_ns(), gate=self.active_gate)
@@ -1539,7 +1632,7 @@ class Smoke:
         archiver = self.fresh_window(lambda:self.keys(files,'-k','Home','-k','Return'),
                                      'xarchiver',r'xarchiver',native=False)
         self.wait(lambda:archive.name in self.alive(archiver).get('title',''))
-        media_dir=self.root/'media file opener';media_dir.mkdir()
+        media_dir=self.owned_media_directory()
         source=self.write('file-manager-media-input.raw',visual_reference_frame()*10)
         media_file=media_dir/'file-manager-reference.mkv'
         self.cmd(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-f','rawvideo',
@@ -1558,6 +1651,77 @@ class Smoke:
                     terminal_execution=proof,gui_saved=dict(path=str(fixture),sha256=digest(fixture),bytes=len(wanted)),
                     screenshots=[editor_shot,self.screenshot('files-opened-zip')],
                     scope='actual role launch + PCManFM text/ZIP/media openers/F4 + GUI Unicode edit/save; mount/network/a11y remain separate')
+
+    def retire_moving_player(self,player,ipc):
+        """Retire the proved moving player before creating the static oracle player."""
+        require(isinstance(ipc,Path) and ipc==self.root/'celluloid-ipc.sock'
+                and sum(item is player for item in self.owned)==1,
+                'moving player retirement target differs')
+        # A pathname-bound Unix socket normally survives its listener. Pin the
+        # live endpoint before signalling, then atomically quarantine it in a
+        # root-owned directory. The desktop UID cannot replace the quarantined
+        # entry between its held-fd identity check and unlink.
+        fields=('st_dev','st_ino','st_mode','st_uid','st_gid','st_nlink')
+        directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:
+            root_info=os.fstat(directory)
+            require(root_info.st_uid==self.uid and stat.S_ISDIR(root_info.st_mode)
+                    and not root_info.st_mode&0o077,
+                    'moving player IPC directory is not private')
+            root_identity=(root_info.st_dev,root_info.st_ino)
+            held=os.open(ipc.name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=directory)
+            try:
+                before=os.fstat(held)
+                require(stat.S_ISSOCK(before.st_mode) and before.st_uid==self.uid and before.st_nlink==1,
+                        'moving player IPC owner/type differs')
+                ipc_identity=tuple(getattr(before,key) for key in fields)
+                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+                    peer.settimeout(2);peer.connect(str(ipc))
+                    pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+                    require((pid,uid)==(player['pid'],self.uid),'moving player IPC peer differs')
+                after=os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)
+                require(tuple(getattr(after,key) for key in fields)==ipc_identity,
+                        'moving player IPC identity changed during proof')
+                retire_renderer_player(player,self.uid)
+                quarantine=Path(tempfile.mkdtemp(prefix='.celluloid-ipc-retired-',dir=self.root))
+                quarantine_info=quarantine.lstat()
+                require(stat.S_ISDIR(quarantine_info.st_mode)
+                        and quarantine_info.st_uid==os.geteuid() and not quarantine_info.st_mode&0o077,
+                        'moving player IPC quarantine is not private')
+                quarantine_directory=os.open(quarantine,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+                try:
+                    retired_name='endpoint.sock'
+                    try: rename_noreplace(directory,ipc.name,quarantine_directory,retired_name)
+                    except FileNotFoundError: pass
+                    else:
+                        retired=os.open(retired_name,os.O_PATH|os.O_NOFOLLOW|os.O_CLOEXEC,
+                                        dir_fd=quarantine_directory)
+                        try:
+                            retired_info=os.fstat(retired)
+                            if tuple(getattr(retired_info,key) for key in fields)!=ipc_identity:
+                                try: rename_noreplace(quarantine_directory,retired_name,directory,ipc.name)
+                                except (FileNotFoundError,FileExistsError,OSError): pass
+                                raise RuntimeError('moving player IPC identity changed before quarantine')
+                            os.unlink(retired_name,dir_fd=quarantine_directory)
+                        finally: os.close(retired)
+                finally: os.close(quarantine_directory)
+            finally: os.close(held)
+            def fully_retired():
+                path_info=self.root.lstat()
+                require(stat.S_ISDIR(path_info.st_mode) and path_info.st_uid==self.uid
+                        and not path_info.st_mode&0o077
+                        and (path_info.st_dev,path_info.st_ino)==root_identity,
+                        'moving player IPC directory identity changed after quarantine')
+                try: os.stat(ipc.name,dir_fd=directory,follow_symlinks=False)
+                except FileNotFoundError: socket_absent=True
+                else:
+                    require(False,'moving player IPC path was recreated after quarantine')
+                    socket_absent=False
+                return socket_absent and self.clients().get(player['client_id']) is None
+            self.wait(fully_retired,5,'moving player process/socket/compositor retirement')
+            return dict(process_identity_retired=True,owned_ipc_absent=True,
+                        compositor_client_absent=True,release_acceptance=False)
+        finally: os.close(directory)
 
     def media(self):
         fixture,decoder = self.media_fixture()
@@ -1621,15 +1785,18 @@ class Smoke:
             self.fullscreen_capture_pair(player,moving_before,self.alive(player),moving_shot)
         moving_proof=dict(decoder=decoder,player=player,player_samples=samples,screenshot=moving_shot,
                           product_renderer=renderer,
-                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review')
+                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')
+        moving_proof['retirement_before_static_oracle']=None
         (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
             self.finish_native_protocol()
+            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
+            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         visual=self.visual_media()
         return dict(moving_proof, visual_reference=visual,desktop_action_launches=action_routes,
                     enqueue_semantics=enqueue_semantics,
-                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
         source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
@@ -1711,33 +1878,19 @@ class Smoke:
         self.trace('reference-controls-hidden',receipt=value)
         return value
 
-    def visual_media(self, restart=None):
-        player_attempt_limit=2
-        if restart is None:
-            fixture,expected,source_sha=self.visual_fixture()
-            restart=dict(fixture=fixture,expected=expected,source_sha=source_sha,player_attempts=[])
-        else:
-            require(type(restart) is dict and set(restart)=={'fixture','expected','source_sha','player_attempts'}
-                    and type(restart['player_attempts']) is list
-                    and len(restart['player_attempts'])==1,
-                    'visual player restart state differs')
-            fixture=restart['fixture']; expected=restart['expected']; source_sha=restart['source_sha']
-            require(digest(fixture)==restart['player_attempts'][0]['fixture_sha256']
-                    and digest(expected)==restart['player_attempts'][0]['expected_rgb_sha256']
-                    and source_sha==restart['player_attempts'][0]['input_rgb_sha256'],
-                    'visual player restart fixture identity differs')
-        player_attempt=len(restart['player_attempts'])+1
-        require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')
+    def visual_media(self):
+        fixture,expected,source_sha=self.visual_fixture()
+        # This release gate admits exactly one fresh product-wrapper player.
+        # A failed or unmatched capture cannot create another acceptance path.
+        player_attempt=1
+        player_attempt_limit=1
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
-        ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')
+        ipc=self.root/'visual-reference-ipc.sock'
         player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
             self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
         renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None
-        require(not any((player['pid'],player['start_ticks'])==(row['player']['pid'],row['player']['start_ticks'])
-                        or player['client_id']==row['player']['client_id'] for row in restart['player_attempts']),
-                'visual restart did not create a fresh owned player')
         self.wait(lambda:ipc.is_socket())
         def ready_reference():
             try:
@@ -1779,9 +1932,9 @@ class Smoke:
                 'visual capture client identity differs from owned proof')
         monitor,geometry,crop=visual_capture_geometry(client,monitors)
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
-        image=self.root/('celluloid-reference.png' if player_attempt==1 else 'celluloid-reference-player-2.png')
+        image=self.root/'celluloid-reference.png'
         rgb=self.root/'visual-owned-window.rgb'
-        attempt_limit=6
+        attempt_limit=1
         capture_command_timeout_seconds=3
         retry_settle_seconds=.5
         capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
@@ -1857,32 +2010,19 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
-        restart_eligible=(player_attempt<player_attempt_limit and len(attempts)==attempt_limit
-                          and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
             'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}
-        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
-        restart['player_attempts'].append(player_receipt)
-        info['player_attempts']=restart['player_attempts']
-        info['accepted_player_attempt']=player_attempt if oracle.get('status')=='matched' else None
+        player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
+        info['player_attempts']=[player_receipt]
+        info['accepted_player_attempt']=1 if oracle.get('status')=='matched' else None
         (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
         self.trace('visual-oracle',proof=info)
-        if getattr(self,'gui_v6',False) and not restart_eligible:
-            self.native_protocol_diagnostic(player,state,screenshot,client)
         if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
             self.player_fullscreen(player,False)
-        if restart_eligible:
-            if getattr(self,'gui_v6',False): self.finish_native_protocol()
-            try:
-                player_receipt['cleanup']=retire_reference_player(player,self.uid,ipc,self.root,player_attempt)
-                player_receipt['owned_player_cleanup_completed']=True
-            finally:
-                (self.root/'visual-oracle.json').write_text(json.dumps(info,indent=2))
-            return self.visual_media(restart)
-        if getattr(self,'gui_v6',False) and info['oracle']['status']=='unmatched':
-            self.controlled_controls_trials(fixture,expected,source_sha,info)
-        require(info['oracle']['status']=='matched','actual static visual fixture content unmatched; rendered-content gate remains open')
+        require(info['oracle']['status']=='matched',
+                'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
 
     def media_fixture(self):
@@ -2014,26 +2154,6 @@ def retire_renderer_player(proof,uid):
         except (FileNotFoundError,ProcessLookupError,RuntimeError): return
         time.sleep(.1)
     raise RuntimeError('controlled cleanup player survived bounded retirement')
-
-
-def retire_reference_player(proof,uid,ipc,root,attempt):
-    """Retire exactly one failed primary player before its sole fresh restart."""
-    require(type(attempt) is int and attempt==1 and isinstance(root,Path) and root.is_absolute()
-            and isinstance(ipc,Path) and ipc.parent==root and ipc.name=='visual-reference-ipc-1.sock',
-            'visual restart cleanup target differs')
-    retire_renderer_player(proof,uid)
-    removed=False
-    try:
-        info=ipc.lstat()
-        require(stat.S_ISSOCK(info.st_mode) and info.st_uid==uid,
-                'visual restart IPC owner/type differs')
-        ipc.unlink()
-        removed=True
-    except FileNotFoundError:
-        pass
-    require(not ipc.exists() and not ipc.is_symlink(),'visual restart IPC cleanup incomplete')
-    return dict(process_identity_retired=True,owned_ipc_absent=True,
-                owned_ipc_removed=removed,release_acceptance=False)
 
 
 class RendererTrialSmoke(Smoke):
@@ -2505,7 +2625,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
-    'celluloid-reference.png', 'celluloid-reference-player-2.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
+    'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
     'files with spaces/editor fixture.txt',
 )) | frozenset(
@@ -2549,7 +2669,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
+    native_source_sha = 'a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []
@@ -2622,6 +2742,16 @@ def main():
                         continue
                     relative = path.relative_to(root).as_posix()
                     if not native_public_evidence_member(relative):
+                        continue
+                    # A failed gate adds one owned failure screenshot after the
+                    # normal navigation diagnostics.  Keep the strict 16 MiB
+                    # transport ceiling and prioritize that failure frame plus
+                    # the primary role/media/oracle artifacts needed to diagnose
+                    # it.  Passing runs retain their original byte-for-byte
+                    # inventory, and private profile paths remain excluded above.
+                    if (type(report) is dict and report.get('status') == 'failed'
+                            and relative.startswith('gui-') and relative.endswith('.png')
+                            and '-failure-' not in relative):
                         continue
                     require(len(entries) < 128 and path.stat().st_size <= 4*1024*1024,
                             'native evidence file count/size exceeded bound')

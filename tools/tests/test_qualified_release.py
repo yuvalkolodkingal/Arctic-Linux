@@ -21,6 +21,17 @@ spec.loader.exec_module(prepare)
 
 
 class PublicationGuardTest(unittest.TestCase):
+    def test_dictation_timing_scope_names_the_official_voxtype_path(self):
+        sources = [
+            (ROOT / 'tools/qualified-release/prepare.py').read_text(),
+            (ROOT / 'tools/qualified-release/README.md').read_text(),
+        ]
+        for source in sources:
+            words = ' '.join(source.split())
+            self.assertNotIn('controller insertion completion', words)
+            self.assertIn('official VoxType transcription', words)
+            self.assertIn('`wtype` text-insertion completion', words)
+
     def test_unknown_runtime_roots_and_build_inputs_require_rebuild(self):
         names = ['go.sum', 'vendor/example/file.go', 'new-runtime/data.bin', 'shell/ScreenFrame.qml',
                  'tools/build-iso.sh', 'tools/build-cache.py', '.github/workflows/iso.yml',
@@ -212,7 +223,7 @@ class PublicationGuardTest(unittest.TestCase):
                     for name,item in state['files'].items() if Path(name).suffix == '.png'})
             execution = dict(taskbar_context=context, taskbar=state, taskbar_build=dict(
                 schema='arctic-taskbar-tools-v1', release_acceptance=False,
-                sources={name:'a'*64 for name in ('shell/dev/virtual-pointer.c',
+                sources={name:'a'*64 for name in ('tools/native-functional/virtual-pointer.c',
                     'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml')},
                 binaries={'virtual-pointer':'8'*64, 'raw-screencopy':'9'*64}))
             port_bytes = port.encode()

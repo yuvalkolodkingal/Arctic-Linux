@@ -42,9 +42,11 @@ Guest transport is a bounded named virtio port, bound to the UART completion and
 nine host requests with the exact binding ID, source, ISO, execution, boot, UID and session
 identities. The extractor rejects malformed framing, duplicate JSON fields,
 invalid paths, mismatched hashes, oversized chunks and decompression expansion.
-Valid failed evidence is retained with a failed state. Protected complete UART is
-retained for independent live-account authentication and transition replay; the
-large port stream is retained only as a bounded diagnostic prefix plus full hash.
+Valid failed evidence is retained with a failed state. The runner validates the
+complete private UART, then retains only a canonical public projection of the
+account response, requests and completion marker. Fixed omission counts preserve
+protocol ordering without copying or hashing unrelated console text. The large
+port stream is retained only as a bounded diagnostic prefix plus full hash.
 SELinux must remain Enforcing and the complete mutation/cleanup interval must show
 no new AVCs. Cleanup attempts VT and output restoration, stops only the owned GUI
 and VM/private bus, and preserves the actual root engine until VM shutdown.
