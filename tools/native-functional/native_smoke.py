@@ -1559,6 +1559,23 @@ class Smoke:
                 'reference settings config is not exact private owned directory')
         return config
 
+    # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED
+    def seed_primary_reference_controls(self):
+        """Make each private primary capture exercise a real visible-to-hidden redraw."""
+        self.reference_settings_config()
+        require(not any(x.startswith('GSETTINGS_BACKEND=') for x in self.prefix),
+                'primary reference settings backend already selected')
+        command=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','/usr/bin/gsettings']
+        schema=['io.github.celluloid-player.Celluloid.window-state','show-controls']
+        written=self.cmd(command+['set']+schema+['true'],timeout=5,allow_failure=True)
+        require(written[0]==0, 'primary reference controls visible seed write failed')
+        observed=self.cmd(command+['get']+schema,timeout=5,allow_failure=True)
+        require(observed[0]==0 and observed[1]=='true',
+                'primary reference controls visible seed readback differs')
+        return dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+                    seed_readback_matched=True,release_acceptance=False)
+    # END PRIMARY_REFERENCE_CONTROLS_SEED
+
     def hide_reference_controls(self, player, ipc):
         require(player['executable']=='/usr/bin/celluloid' and player['is_xwayland'] is False,
                 'reference controls require owned native Celluloid')
@@ -1615,6 +1632,10 @@ class Smoke:
         require(1<=player_attempt<=player_attempt_limit,'visual player restart limit exceeded')
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
         ipc=self.root/('visual-reference-ipc-'+str(player_attempt)+'.sock')
+        # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION
+        controls_seed=(self.seed_primary_reference_controls()
+                       if getattr(self,'gui_v6',False) else None)
+        # END PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION
         player=self.fresh_window(lambda:self.launch_reference_player(['/usr/bin/celluloid','--no-existing-session',
             '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
             self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
@@ -1642,6 +1663,10 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
+            require(controls_seed.get('initial_visible') is True
+                    and controls_seed.get('seed_readback_matched') is True
+                    and controls.get('before_visible') is True and controls.get('after_visible') is False,
+                    'primary reference controls visible-to-hidden transition differs')
         initial_time=state['time-pos']
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
@@ -1735,6 +1760,7 @@ class Smoke:
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
+                  primary_controls_seed=controls_seed,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
                   scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
@@ -1744,7 +1770,7 @@ class Smoke:
                           and all(row.get('oracle',{}).get('status')=='unmatched' for row in attempts))
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','primary_controls_seed')}
         player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=restart_eligible,release_acceptance=False)
         restart['player_attempts'].append(player_receipt)
         info['player_attempts']=restart['player_attempts']

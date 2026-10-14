@@ -28,9 +28,40 @@ BOUNDED_RETRY_NATIVE_SHA = 'e71dd245cb3a3f4a4a722b1f3dc6c42658eaa51475b243de2401
 STREAM_NATIVE_SHA = '0171db2b876ad498ef474277325d91e44f5114ebf2f06d44fd9acc2ff92e0a6f'
 PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb8511c88dc06f'
 FRESH_PLAYER_RESTART_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
+PRIMARY_CONTROLS_SEED_NATIVE_SHA = '3be50ebd772b6e2f775b1eaca052c896b9e238ef5e617f3c3e6268bcfbbe556b'
+
+
+def restore_primary_controls_seed_native(source):
+    if hashlib.sha256(source.encode()).hexdigest()!=PRIMARY_CONTROLS_SEED_NATIVE_SHA:
+        raise AssertionError('Primary controls seed Native source differs')
+    for start,end in (
+        ('    # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED\n',
+         '    # END PRIMARY_REFERENCE_CONTROLS_SEED\n\n'),
+        ('        # BEGIN PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION\n',
+         '        # END PRIMARY_REFERENCE_CONTROLS_SEED_INVOCATION\n'),
+    ):
+        if source.count(start)!=1 or source.count(end)!=1:
+            raise AssertionError('Primary controls seed inverse marker differs')
+        a=source.index(start);z=source.index(end,a)+len(end);source=source[:a]+source[z:]
+    transition="""            require(controls_seed.get('initial_visible') is True
+                    and controls_seed.get('seed_readback_matched') is True
+                    and controls.get('before_visible') is True and controls.get('after_visible') is False,
+                    'primary reference controls visible-to-hidden transition differs')
+"""
+    seed_receipt='                  primary_controls_seed=controls_seed,\n'
+    receipt_fields=("            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot',"
+                    "'primary_controls_seed')}\n")
+    original_fields="            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot')}\n"
+    if source.count(transition)!=1 or source.count(seed_receipt)!=1 or source.count(receipt_fields)!=1:
+        raise AssertionError('Primary controls seed inverse additions differ')
+    source=source.replace(transition,'',1).replace(seed_receipt,'',1).replace(receipt_fields,original_fields,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=FRESH_PLAYER_RESTART_NATIVE_SHA:
+        raise AssertionError('Pre-primary-controls-seed Native source differs')
+    return source
 
 
 def restore_fresh_player_restart_native(source):
+    source=restore_primary_controls_seed_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=FRESH_PLAYER_RESTART_NATIVE_SHA:
         raise AssertionError('Fresh player restart Native source differs')
     substitutions=(("""    def visual_media(self, restart=None):
@@ -421,6 +452,9 @@ class ControlsStateTrials(unittest.TestCase):
             monitors=dict(monitors=[dict(name='synthetic-monitor',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)])
             smoke.fresh_window=Mock(side_effect=lambda *args:(smoke.owned.append(players.pop(0)) or smoke.owned[-1]));smoke.alive=Mock(side_effect=lambda player:client(player))
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
+            seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+                      seed_readback_matched=True,release_acceptance=False)
+            smoke.seed_primary_reference_controls=Mock(return_value=seed)
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False))
             smoke.controlled_controls_trials=Mock(return_value=dict(oracle=dict(status='matched'),release_acceptance=False))
             smoke.controlled_renderer_trials=Mock()
@@ -449,10 +483,12 @@ class ControlsStateTrials(unittest.TestCase):
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
+                self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
                 smoke.controlled_controls_trials.assert_called_once()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
                 self.assertEqual(actual['oracle']['status'],'unmatched')
+                self.assertEqual([row['primary_controls_seed'] for row in actual['player_attempts']],[seed,seed])
                 self.assertEqual(smoke.controlled_controls_trials.call_args.args[3]['oracle'],actual['oracle'])
             finally:
                 for endpoint in endpoints:endpoint.close()

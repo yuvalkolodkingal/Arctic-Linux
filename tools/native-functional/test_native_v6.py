@@ -163,7 +163,11 @@ class NewControls(unittest.TestCase):
             smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[];smoke.owned=[];smoke.gui_v6=True;smoke.stage='live'
             smoke.trace=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
             smoke.controlled_controls_trials=Mock();smoke.finish_native_protocol=Mock();smoke.player_fullscreen=Mock()
-            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            seed=dict(initial_visible=True,settings_backend='keyfile',private_config_verified=True,
+                      seed_readback_matched=True,release_acceptance=False)
+            smoke.seed_primary_reference_controls=Mock(return_value=seed)
+            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
+                                                                  release_acceptance=False))
             proofs=[dict(client_id=str(i),pid=122+i,start_ticks=i,executable='/usr/bin/celluloid',
                          executable_sha256=str(i)*64,is_xwayland=False) for i in (1,2)]
             launched=[];active=[0]
@@ -232,12 +236,14 @@ class NewControls(unittest.TestCase):
                 self.assertEqual(smoke.fresh_window.call_count,1);retired.assert_called_once()
             else:
                 self.assertEqual(smoke.fresh_window.call_count,2);retired.assert_called_once()
+            self.assertEqual(smoke.seed_primary_reference_controls.call_count,smoke.fresh_window.call_count)
             if case in ('restart-match','all-black'):
                 receipt=json.loads((root/'visual-oracle.json').read_text())
                 self.assertEqual(len(receipt['player_attempts']),2)
                 self.assertEqual([len(x['capture_attempts']) for x in receipt['player_attempts']],[6,1 if case=='restart-match' else 6])
                 self.assertEqual([x['oracle']['status'] for x in receipt['player_attempts']],
                                  ['unmatched','matched' if case=='restart-match' else 'unmatched'])
+                self.assertEqual([x['primary_controls_seed'] for x in receipt['player_attempts']],[seed,seed])
                 self.assertTrue(receipt['player_attempts'][0]['owned_player_cleanup_completed'])
                 self.assertEqual(receipt['accepted_player_attempt'],2 if case=='restart-match' else None)
                 paths=[Path(x['screenshot']['path']) for x in receipt['player_attempts']]

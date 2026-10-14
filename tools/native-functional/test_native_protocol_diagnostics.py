@@ -275,7 +275,10 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.fresh_window=Mock(side_effect=lambda start,*args:(start() or smoke.owned.append(proofs.pop(0)) or smoke.owned[-1]))
             smoke.alive=Mock(side_effect=lambda proof:client(proof));smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock();smoke.diagnostic=Mock(return_value=None)
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock()
-            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            smoke.seed_primary_reference_controls=Mock(return_value=dict(initial_visible=True,
+                seed_readback_matched=True,release_acceptance=False))
+            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
+                release_acceptance=False))
             smoke.reference_settings_config=Mock()
             commands=[];captures=[];closed=[];original_close=os.close;original_pipe=os.pipe;original_drain=N.NativeProtocolDrain
             def command(argv,**kwargs):
@@ -305,6 +308,7 @@ class DrainAndExportControls(unittest.TestCase):
                  patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                 self.assertIsNone(smoke.gate('open-codec-content-and-player-state',smoke.visual_media))
             self.assertEqual(factory.call_count,2);self.assertEqual(popen.call_count,2)
+            self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
             for call in popen.call_args_list:self.assertNotIn('WAYLAND_DEBUG=client',call.args[0])
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
             self.assertIn('actual static visual fixture content unmatched',smoke.gates[-1]['detail'])
@@ -389,7 +393,10 @@ class DrainAndExportControls(unittest.TestCase):
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock(side_effect=fresh)
             smoke.alive=Mock(side_effect=lambda proof:client(proof));smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock()
             smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
-            smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
+            smoke.seed_primary_reference_controls=Mock(return_value=dict(initial_visible=True,
+                seed_readback_matched=True,release_acceptance=False))
+            smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False,
+                release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
             commands=[]
             def command(argv,**kwargs):
@@ -411,6 +418,7 @@ class DrainAndExportControls(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                     smoke.visual_media()
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)]*12)
+            self.assertEqual(smoke.seed_primary_reference_controls.call_count,2)
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True))
             self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[1],False))
