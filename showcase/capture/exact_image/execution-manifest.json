@@ -24,7 +24,7 @@
     "schema": "arctic-showcase-unattended-controller-v1"
   },
   "execution_files": {
-    ".github/workflows/showcase-exact-capture-20261014.yml": "b5b9c0cd0b37fa7aacc16802c12a4f2e057b0c12ac25fc947d2123284520a2ef",
+    ".github/workflows/showcase-exact-capture-20261014.yml": "c6d9307adaa5d9a5a86a5692fe656f2c9885cd124857ced3a37eeb8840c6271c",
     "showcase/capture/exact_image/automation.py": "799bddf5f7e10603b98bfe3bf6f906b96d1eb6447d548fb8d2050315587e98f1",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",

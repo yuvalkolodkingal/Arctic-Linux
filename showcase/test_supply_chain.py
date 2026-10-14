@@ -89,6 +89,11 @@ class SupplyChainTest(unittest.TestCase):
         render = workflows["showcase-river-render.yml"]
         self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", render)
         self.assertIn("cache-dependency-path: showcase/package-lock.json", render)
+        exact = workflows["showcase-exact-capture-20261014.yml"]
+        self.assertIn("id: reviewed", exact)
+        self.assertIn("candidate_name=image['name']", exact)
+        self.assertIn("steps.reviewed.outputs.candidate_name", exact)
+        self.assertNotIn("candidate-38536710765-1-x86_64.iso", exact)
 
 
 if __name__ == "__main__":

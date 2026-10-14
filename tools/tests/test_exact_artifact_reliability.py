@@ -183,6 +183,16 @@ class ContractTests(unittest.TestCase):
             with self.subTest(raw=raw), self.assertRaises((RuntimeError, ValueError)):
                 contract.strict_json(raw)
 
+        with tempfile.TemporaryDirectory() as temp:
+            output = Path(temp) / 'github-output'
+            contract.write_github_output(output, {'image': image()})
+            self.assertEqual(output.read_text(),
+                             'candidate_name=Arctic-Linux-1.2-candidate-123-1-x86_64.iso\n')
+            unsafe = image()
+            unsafe['name'] = '../Arctic-Linux-1.2-candidate-123-1-x86_64.iso'
+            with self.assertRaises(RuntimeError):
+                contract.write_github_output(output, {'image': unsafe})
+
 
 class WorkflowControls(unittest.TestCase):
     @classmethod
@@ -198,6 +208,9 @@ class WorkflowControls(unittest.TestCase):
         self.assertIn('matrix:\n        firmware: [uefi, bios]', text)
         self.assertIn('max-parallel: 1', text)
         self.assertIn('tools/native-functional/fetch-image.py --manifest', text)
+        self.assertIn('--github-output "$GITHUB_OUTPUT"', text)
+        self.assertIn('steps.reviewed.outputs.candidate_name', text)
+        self.assertNotIn('candidate-iso/iso/*.iso', text)
         self.assertIn('--reliability-app-profile lightweight', text)
         self.assertIn('--install-timeout 2400', text)
         self.assertIn('candidate-release-reliability-${{ matrix.firmware }}', text)
