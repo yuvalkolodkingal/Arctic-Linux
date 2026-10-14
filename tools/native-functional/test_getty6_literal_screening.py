@@ -21,6 +21,49 @@ BACKEND_OBSERVER_ADDITIONS = (
     b"            if code == 'installer-inner-driver-collect-guard-collection-034':\n                try:\n                    observed = write_observation_codes(error, controller_source)\n                except Exception:\n                    observed = ()\n                for observation in observed:\n                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)\n",
 )
 
+INSTALLED_IDENTITY_START = b'def installed_user_command(nonce):\n'
+INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
+INSTALLED_IDENTITY_BYTES = 4312
+INSTALLED_IDENTITY_SHA256 = 'd22d8bf36fd1a1ee926305dd54949e9fb1186aa95614ff58bafc936b5b0dfc81'
+INSTALLED_PROOF_REPLACEMENTS = (
+    (b"    'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),\n"
+     b"        ('fresh installed proof did not complete', 'proof-incomplete'),\n"
+     b"        ('fresh installed console was not visible', 'console-absent'),\n"
+     b"        ('exact console prompt was not observed; secret input refused', 'password-prompt-absent'),\n"
+     b"        ('installed user login did not reach its identity challenge', 'identity-login-failed'),\n"
+     b"        ('installed user identity response differs', 'identity-response-differs'),\n"
+     b"        ('installed user identity deadline exceeded', 'identity-deadline'),\n"
+     b"        ('exact installed user identity was not observed; sudo input refused', 'identity-response-absent'),\n"
+     b"        ('installed guest proof failed', 'helper-failed'),\n"
+     b"        ('fresh installed authentication/receipt is ambiguous', 'helper-ambiguous'),\n"
+     b"        ('fresh installed helper context/authentication differs', 'helper-binding')),\n",
+     b"    'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),\n"
+     b"        ('fresh installed proof did not complete', 'proof-incomplete')),\n"),
+    (b"    nonce = uuid.uuid4().hex\n"
+     b"    shell = console_user_identity(vm,startup,out,nonce,password)\n",
+     b"    shell = console_prompt(vm,startup,out,'installed-login-shell','arcticqual@arctic-qual ~ >',password,archive=False)\n"
+     b"    nonce = uuid.uuid4().hex\n"),
+    (b"                login_shell=shell,\n",
+     b"                login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},\n"),
+)
+
+
+def restore_installed_proof(driver):
+    """Remove only the exact installed-proof additions before older inverses."""
+    if driver.count(INSTALLED_IDENTITY_START) != 1 or driver.count(INSTALLED_IDENTITY_END) != 1:
+        raise AssertionError('Expected one exact installed identity block')
+    start = driver.index(INSTALLED_IDENTITY_START)
+    end = driver.index(INSTALLED_IDENTITY_END, start)
+    block = driver[start:end]
+    if len(block) != INSTALLED_IDENTITY_BYTES or hashlib.sha256(block).hexdigest() != INSTALLED_IDENTITY_SHA256:
+        raise AssertionError('Installed identity block bytes differ')
+    driver = driver[:start] + driver[end:]
+    for current, original in INSTALLED_PROOF_REPLACEMENTS:
+        if driver.count(current) != 1:
+            raise AssertionError('Expected one exact installed proof replacement')
+        driver = driver.replace(current, original, 1)
+    return driver
+
 def restore_backend_write_observer(driver):
     """Remove only three exact source additions; preserve historical bytes."""
     for addition in BACKEND_OBSERVER_ADDITIONS:
@@ -30,6 +73,7 @@ def restore_backend_write_observer(driver):
 
 def restore_bounded_collection_observer(driver):
     """Strict test-only inverse; retain the entire historical fixture hash."""
+    driver=restore_installed_proof(driver)
     driver=restore_backend_write_observer(driver)
     for current,original in (
         (b"            # The outer runner independently validates the complete private\n"
@@ -91,6 +135,25 @@ class GettySixControls(unittest.TestCase):
                     restored=restore_bounded_collection_observer(mutant)
                     self.assertEqual(hashlib.sha256(restored).hexdigest(),expected)
         self.assertIn("for key in ('ctrl', 'alt', 'f6')",restore_bounded_collection_observer(driver).decode())
+
+    def test_installed_proof_inverse_rejects_mutated_duplicate_or_missing_additions(self):
+        driver=(ROOT/'installer-qualification/driver.py').read_bytes()
+        expected=json.loads(FIXTURE.read_bytes())['fixture_source']['source_sha256']
+        self.assertEqual(hashlib.sha256(restore_bounded_collection_observer(driver)).hexdigest(),expected)
+        start=driver.index(INSTALLED_IDENTITY_START);end=driver.index(INSTALLED_IDENTITY_END,start)
+        block=driver[start:end]
+        mutants=(
+            driver[:start]+block.replace(b'1280,720',b'1280,721',1)+driver[end:],
+            driver[:start]+driver[end:],
+            driver+block,
+        )
+        for current,_original in INSTALLED_PROOF_REPLACEMENTS:
+            mutants += (driver.replace(current,current+b'# changed known addition\n',1),
+                        driver.replace(current,b'',1),driver+current)
+        for mutant in mutants:
+            with self.subTest(bytes=len(mutant)),self.assertRaises(AssertionError):
+                restored=restore_bounded_collection_observer(mutant)
+                self.assertEqual(hashlib.sha256(restored).hexdigest(),expected)
 
     def test_exact_all_three_lifecycle_contexts_preserve_original_bytes_without_output(self):
         for prefix in ('[ 1.234] systemd[1]: ','[  OK  ] ','         '):
