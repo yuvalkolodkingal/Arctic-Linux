@@ -23,9 +23,19 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
     nonce = '1234567890abcdef1234567890abcdef'
     secret = 'f' * 32
 
+    def response(self, nonce=None, *, user='arcticqual', uid=1000, id_un='arcticqual',
+                 corrupt=()):
+        nonce = nonce or self.nonce
+        record = D.IDENTITY_MARKER + D.installed_user_token(nonce, user, uid, id_un)
+        records = [record, record, record]
+        for index in corrupt:
+            records[index] = records[index][:-1] + ('0' if records[index][-1] != '0' else '1')
+        return ('\n'.join(records) + '\n').encode()
+
     def exercise(self, outputs, *, size=(1280, 720), console=True):
         clock = [0.0]
         calls = []
+        self.ocr_arguments = []
         rows = iter(outputs)
         previous = [b'']
         with tempfile.TemporaryDirectory(prefix='installed-identity-') as temporary:
@@ -36,7 +46,8 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
                 Image.new('RGB', size).save(probe)
                 return probe
 
-            def ocr(*_args, **_kwargs):
+            def ocr(*args, **kwargs):
+                self.ocr_arguments.append((args, kwargs))
                 previous[0] = next(rows, previous[0])
                 return types.SimpleNamespace(stdout=previous[0])
 
@@ -60,32 +71,40 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
 
     def test_command_cannot_contain_its_exact_response(self):
         command = D.installed_user_command(self.nonce)
-        expected = D.installed_user_line(self.nonce)
+        expected = D.installed_user_record(self.nonce)
         self.assertNotIn(expected, command)
-        self.assertNotIn('ARCTIC-USER ', command)
+        self.assertNotIn(D.IDENTITY_MARKER, command)
         result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, check=True, timeout=5)
         self.assertEqual(result.stderr, b'')
-        actual = result.stdout.decode().strip()
-        self.assertEqual(actual, 'ARCTIC-USER ' + self.nonce + ' uid=' + str(os.getuid()) +
-                         ' user=' + subprocess.check_output(['id', '-un'], text=True).strip())
+        rendered = result.stdout.decode()
+        self.assertTrue(rendered.startswith('\x1b[2J\x1b[H'))
+        records = [line.replace(' ', '') for line in rendered[len('\x1b[2J\x1b[H'):].splitlines()]
+        actual = D.IDENTITY_MARKER + D.installed_user_token(
+            self.nonce, os.environ['USER'], os.getuid(),
+            subprocess.check_output(['id', '-un'], text=True).strip())
+        self.assertEqual(records, [actual] * D.IDENTITY_RECORDS)
+        self.assertNotIn(self.nonce, rendered)
 
     def test_both_fixed_fish_prompt_renders_require_a_fresh_exact_response(self):
-        expected = (D.installed_user_line(self.nonce) + '\n').encode()
+        expected = self.response()
         for prompt in (b'arcticqual@arctic-qual ~ >\n', b'arcticqual@arctic-qual ~>\n'):
             with self.subTest(prompt=prompt):
                 proof, calls, present = self.exercise([prompt, expected])
                 self.assertIs(type(proof), dict)
-                self.assertEqual(proof['prompt_kind'], 'installed-user-nonce-identity')
+                self.assertEqual(proof['prompt_kind'], 'installed-user-sha256-decimal-identity')
                 self.assertEqual(proof['nonce'], self.nonce)
                 self.assertEqual(proof['username'], 'arcticqual')
                 self.assertEqual(proof['uid'], 1000)
-                self.assertEqual(proof['observed_line_sha256'], hashlib.sha256(expected.rstrip()).hexdigest())
+                self.assertEqual(proof['observed_line_sha256'],
+                                 hashlib.sha256(D.installed_user_record(self.nonce).encode()).hexdigest())
                 self.assertEqual(len([call for call in calls if call[0] == 'text']), 1)
+                self.assertNotIn('tessedit_char_whitelist=0123456789', self.ocr_arguments[0][0][0])
+                self.assertIn('tessedit_char_whitelist=0123456789', self.ocr_arguments[1][0][0])
                 self.assertFalse(present)
                 self.assertNotIn(self.secret, repr(proof))
 
     def test_fish_greeting_gets_one_nonsecret_return_before_readiness(self):
-        expected = (D.installed_user_line(self.nonce) + '\n').encode()
+        expected = self.response()
         proof, calls, _ = self.exercise([
             b'Welcome to fish, the friendly interactive shell\n',
             b'arcticqual@arctic-qual ~>\n', expected])
@@ -95,7 +114,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertNotIn(self.secret, repr(calls))
 
     def test_unrecognized_cosmetic_prompt_uses_one_nonsecret_readiness_fallback(self):
-        expected = (D.installed_user_line(self.nonce) + '\n').encode()
+        expected = self.response()
         proof, calls, _ = self.exercise([
             b'Welcome to fish, the friendly interactive shell\n',
             b'arcticqual at arctic-qual home prompt\n', expected])
@@ -104,30 +123,33 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertEqual(calls[0], ('keys', ('ret',)))
         self.assertNotIn(self.secret, repr(calls))
 
-    def test_partial_identity_frame_is_polled_until_later_exact_singleton(self):
-        expected = D.installed_user_line(self.nonce)
-        partial = ('ARCTIC-USER ' + self.nonce + ' uid=1000\n').encode()
+    def test_one_corrupt_redundant_record_is_accepted_but_one_exact_is_not(self):
+        response = self.response(corrupt=(2,))
         proof, calls, _ = self.exercise([
-            b'arcticqual@arctic-qual ~>\n', partial, (expected + '\n').encode()])
+            b'arcticqual@arctic-qual ~>\n', response])
         self.assertIs(type(proof), dict)
-        self.assertEqual(proof['observed_line_sha256'], hashlib.sha256(expected.encode()).hexdigest())
+        self.assertEqual(proof['observed_line_sha256'],
+                         hashlib.sha256(D.installed_user_record(self.nonce).encode()).hexdigest())
         self.assertEqual([call[0] for call in calls], ['text', 'keys'])
         self.assertNotIn(self.secret, repr(proof))
 
+        error, calls, _ = self.exercise([
+            b'arcticqual@arctic-qual ~>\n', self.response(corrupt=(1, 2))])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+
     def test_repeated_mismatch_waits_to_deadline_and_exports_only_closed_facts(self):
-        replay = ('ARCTIC-USER ' + ('0' * 32) + ' uid=0 user=root\n').encode()
+        replay = self.response('0' * 32, user='root', uid=0, id_un='root')
         error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', replay])
         self.assertIs(type(error), RuntimeError)
         self.assertEqual(error.args, ('installed user identity response differs',))
         self.assertEqual([call[0] for call in calls], ['text', 'keys'])
         self.assertEqual(D.identity_observation_codes(error), (
-            'installer-inner-driver-installed-proof-identity-record-count-one',
-            'installer-inner-driver-installed-proof-identity-token-count-four',
-            'installer-inner-driver-installed-proof-identity-expected-length-shorter',
-            'installer-inner-driver-installed-proof-identity-prefix-exact-true',
-            'installer-inner-driver-installed-proof-identity-nonce-exact-false',
-            'installer-inner-driver-installed-proof-identity-uid-exact-false',
-            'installer-inner-driver-installed-proof-identity-user-exact-false'))
+            'installer-inner-driver-installed-proof-identity-record-count-three',
+            'installer-inner-driver-installed-proof-identity-marker-count-three',
+            'installer-inner-driver-installed-proof-identity-exact-count-zero',
+            'installer-inner-driver-installed-proof-identity-challenge-issued-true'))
         stream = io.StringIO()
         token = 'a' * 32
         with patch.dict(os.environ, {'ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN': token}), \
@@ -142,7 +164,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertNotIn(self.nonce, repr(error.__dict__))
         self.assertNotIn(replay.decode().strip(), repr(error.__dict__))
         self.assertNotIn(hashlib.sha256(replay).hexdigest(), repr(error.__dict__))
-        self.assertEqual(len(diagnostic.splitlines()), 8)
+        self.assertEqual(len(diagnostic.splitlines()), 5)
 
     def test_absent_response_reports_fixed_challenge_basis_without_private_text(self):
         cases = (
@@ -165,9 +187,9 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
 
     def test_wrong_or_replayed_response_never_authorizes_sudo(self):
         wrong = (
-            (D.installed_user_line(self.nonce) + '\n').encode(),
-            ('ARCTIC-USER ' + self.nonce + ' uid=0 user=root\n').encode(),
-            (D.installed_user_line('0' * 32) + '\n').encode(),
+            self.response(),
+            self.response(user='root', uid=0, id_un='root'),
+            self.response('0' * 32),
         )
         error, calls, _ = self.exercise([wrong[0]])
         self.assertIs(type(error), RuntimeError)
@@ -180,7 +202,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             self.assertEqual(len([call for call in calls if call[0] == 'text']), 1)
 
     def test_mismatch_never_returns_authorization_before_exact_response(self):
-        response = ('ARCTIC-USER ' + self.nonce + ' uid=1000 user=arcticqua\n').encode()
+        response = self.response(user='arcticqua')
         error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', response])
         self.assertIs(type(error), RuntimeError)
         self.assertEqual(error.args, ('installed user identity response differs',))
@@ -192,7 +214,7 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             ([b'Login incorrect\n'], True, (1280, 720)),
             ([(self.secret + '\n').encode()], True, (1280, 720)),
             ([b'arcticqual@arctic-qual ~>\n'], False, (1280, 720)),
-            ([b'arcticqual@arctic-qual ~>\n', (D.installed_user_line(self.nonce) + '\n').encode()], True, (1280, 721)),
+            ([b'arcticqual@arctic-qual ~>\n', self.response()], True, (1280, 721)),
         )
         for outputs, console, size in cases:
             with self.subTest(outputs=outputs, console=console, size=size):
@@ -224,10 +246,10 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         error = RuntimeError('installed user identity response differs')
         private = 'private-ocr-value-' + self.nonce
         forged = (
-            (object(), 'one', 'four', 'equal', 'true', 'true', 'true', 'true'),
-            (D._IDENTITY_OBSERVATION_TOKEN, Hostile('one'), 'four', 'equal', 'true', 'true', 'true', 'true'),
-            (D._IDENTITY_OBSERVATION_TOKEN, 'one', private, 'equal', 'true', 'true', 'true', 'true'),
-            (D._IDENTITY_OBSERVATION_TOKEN, 'one', 'four', 'equal', 'true', 'true', 'true'),
+            (object(), 'three', 'three', 'zero', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, Hostile('three'), 'three', 'zero', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, 'three', private, 'zero', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, 'three', 'three', 'zero'),
         )
         for observation in forged:
             error._arctic_installer_identity_observation = observation

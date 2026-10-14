@@ -21,20 +21,17 @@ BACKEND_OBSERVER_ADDITIONS = (
     b"            if code == 'installer-inner-driver-collect-guard-collection-034':\n                try:\n                    observed = write_observation_codes(error, controller_source)\n                except Exception:\n                    observed = ()\n                for observation in observed:\n                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)\n",
 )
 
-INSTALLED_IDENTITY_START = b'def installed_user_command(nonce):\n'
+INSTALLED_IDENTITY_START = b"IDENTITY_MARKER = '731904'\n"
 INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
-INSTALLED_IDENTITY_BYTES = 6485
-INSTALLED_IDENTITY_SHA256 = '3388566f940b0733a1eff0da5da2b13fd8aaf64de9a29a0d36b91bf0abdbdd70'
+INSTALLED_IDENTITY_BYTES = 8303
+INSTALLED_IDENTITY_SHA256 = '5424c85308e628a3c4661e463b4fd199317e490d645fd95de6d10c40a93f1750'
 IDENTITY_OBSERVER_ADDITIONS = (
     b'''_IDENTITY_OBSERVATION_TOKEN = object()
 IDENTITY_OBSERVATION_LABELS = (
-    ('record-count', ('one', 'multiple')),
-    ('token-count', ('zero', 'one', 'two', 'three', 'four', 'five-or-more')),
-    ('expected-length', ('shorter', 'equal', 'longer')),
-    ('prefix-exact', ('true', 'false')),
-    ('nonce-exact', ('true', 'false')),
-    ('uid-exact', ('true', 'false')),
-    ('user-exact', ('true', 'false')),
+    ('record-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('marker-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('exact-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('challenge-issued', ('true', 'false')),
 )
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-installed-proof-identity-' + field + '-' + label

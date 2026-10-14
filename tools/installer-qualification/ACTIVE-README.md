@@ -48,8 +48,14 @@ test-CD data. Secret input is permitted only after host OCR observes the actual
 last getty or sudo password prompt. The Fish home prompt was checked against the
 officially signed Fedora 4.6.0 package bytes; that static inspection is not proof of a
 future candidate's runtime prompt. After one nonsecret Return, an unrecognized
-cosmetic prompt may receive only the nonsecret challenge. Sudo input remains
-forbidden until the fresh exact UID/name response is physically observed.
+cosmetic prompt may receive only the nonsecret challenge. That command computes
+SHA-256 over the fresh nonce, `$USER`, `id -u` and `id -un` using installed
+coreutils, clears its echoed command, and renders three short decimal records.
+The expected record is absent from the typed command. A digits-only OCR pass must
+observe at least two exact records on the physical 1280×720 console within the
+original 45-second bound; one corrupted record is tolerated, while a replay,
+wrong identity or two damaged records fails closed. Sudo input remains forbidden
+until that response is observed. Getty and sudo password OCR remain unchanged.
 
 The four live guest captures, actual VT-away host capture and two pre-input console
 prompt captures form a mandatory seven-image manual review inventory. The OCR

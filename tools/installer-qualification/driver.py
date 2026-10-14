@@ -77,13 +77,10 @@ DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     for field, labels in WRITE_OBSERVATION_LABELS for label in labels)
 _IDENTITY_OBSERVATION_TOKEN = object()
 IDENTITY_OBSERVATION_LABELS = (
-    ('record-count', ('one', 'multiple')),
-    ('token-count', ('zero', 'one', 'two', 'three', 'four', 'five-or-more')),
-    ('expected-length', ('shorter', 'equal', 'longer')),
-    ('prefix-exact', ('true', 'false')),
-    ('nonce-exact', ('true', 'false')),
-    ('uid-exact', ('true', 'false')),
-    ('user-exact', ('true', 'false')),
+    ('record-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('marker-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('exact-count', ('zero', 'one', 'two', 'three', 'four-or-more')),
+    ('challenge-issued', ('true', 'false')),
 )
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-installed-proof-identity-' + field + '-' + label
@@ -401,18 +398,43 @@ def ocr_provenance():
                 version=subprocess.check_output(['tesseract','--version'],text=True,stderr=subprocess.DEVNULL,timeout=10).splitlines()[0])
 
 
+IDENTITY_MARKER = '731904'
+IDENTITY_TOKEN_DIGITS = 19
+IDENTITY_RECORDS = 3
+
+
+def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual'):
+    """Derive the OCR token from the nonce and all three installed identities."""
+    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
+            'installed user identity nonce differs')
+    require(type(user) is str and type(uid) is int and type(id_un) is str,
+            'installed user identity inputs differ')
+    fields = (nonce, user, str(uid), id_un)
+    require(all('\x00' not in value for value in fields), 'installed user identity inputs differ')
+    prefix = hashlib.sha256(('\x00'.join(fields) + '\x00').encode()).hexdigest()[:15]
+    return format(int(prefix, 16), '0' + str(IDENTITY_TOKEN_DIGITS) + 'd')
+
+
+def installed_user_record(nonce):
+    return IDENTITY_MARKER + installed_user_token(nonce)
+
+
 def installed_user_command(nonce):
-    """Return a nonsecret challenge whose command cannot contain its response."""
+    """Return a nonsecret SHA-256 challenge whose numeric response is computed in-guest."""
     require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
             'installed user identity nonce differs')
-    return ('sh -c \'printf "\\nARCTIC-%s %s uid=%s user=%s\\n" '
-            'USER "$1" "$(id -u)" "$(id -un)"\' sh ' + nonce)
-
-
-def installed_user_line(nonce):
-    require(type(nonce) is str and re.fullmatch('[0-9a-f]{32}', nonce),
-            'installed user identity nonce differs')
-    return 'ARCTIC-USER ' + nonce + ' uid=1000 user=arcticqual'
+    # coreutils is in the installed `core` pattern and is independently needed
+    # by the shipped image.  Fifteen SHA-256 hex digits retain 60 response bits;
+    # decimal rendering avoids letter confusions and three records tolerate one
+    # damaged OCR line.  The marker is octal-encoded, so no expected record is
+    # present in the command text.  Clearing occurs only after all identities and
+    # the digest have been computed successfully.
+    return ("sh -c 'u=$(id -u)||exit;n=$(id -un)||exit;"
+            "h=$(printf \"%s\\0%s\\0%s\\0%s\\0\" \"$1\" \"$USER\" \"$u\" \"$n\"|sha256sum|cut -c1-15);"
+            "d=$(printf %019u 0x$h)||exit;"
+            "printf \"\\033[2J\\033[H\\067\\063\\061\\071\\060\\064 %s\\n"
+            "\\067\\063\\061\\071\\060\\064 %s\\n"
+            "\\067\\063\\061\\071\\060\\064 %s\\n\" \"$d\" \"$d\" \"$d\"' sh " + nonce)
 
 
 def installed_shell_ready(observed_line):
@@ -423,16 +445,23 @@ def installed_shell_ready(observed_line):
         'arcticqual@arctic-qual ~ >', 'arcticqual@arctic-qual ~>')
 
 
-def _identity_mismatch(records, expected, nonce):
-    """Return bounded enums only; never retain OCR text, hashes or nonce."""
-    record_count = 'one' if len(records) == 1 else 'multiple'
-    record = records[0] if len(records) == 1 else ''
-    tokens = record.split()
-    token_count = ('zero', 'one', 'two', 'three', 'four')[len(tokens)] if len(tokens) < 5 else 'five-or-more'
-    length = 'shorter' if len(record) < len(expected) else 'equal' if len(record) == len(expected) else 'longer'
-    exact = tuple('true' if len(tokens) > index and tokens[index] == value else 'false'
-                  for index, value in enumerate(('ARCTIC-USER', nonce, 'uid=1000', 'user=arcticqual')))
-    return (record_count, token_count, length, *exact)
+def _identity_count(value):
+    return ('zero', 'one', 'two', 'three')[value] if value < 4 else 'four-or-more'
+
+
+def _identity_ocr_observation(stdout, expected, sent):
+    """Parse only fixed-width decimal records and return counts, never OCR text."""
+    require(type(stdout) is bytes and len(stdout) <= 65536, 'prompt OCR exceeds bound')
+    text = stdout.decode()
+    lines = [re.sub(r'\s', '', line) for line in text.splitlines()]
+    numeric = [line for line in lines if re.fullmatch('[0-9]{' + str(len(expected)) + '}', line)]
+    marked = [line for line in numeric if line.startswith(IDENTITY_MARKER)]
+    exact = [line for line in marked if line == expected]
+    observation = (_identity_count(len(numeric)), _identity_count(len(marked)),
+                   _identity_count(len(exact)), 'true' if sent else 'false')
+    accepted = sent and 2 <= len(exact) <= IDENTITY_RECORDS and \
+        len(numeric) <= IDENTITY_RECORDS and len(marked) <= IDENTITY_RECORDS
+    return accepted, observation
 
 
 def _identity_mismatch_error(observation):
@@ -442,9 +471,9 @@ def _identity_mismatch_error(observation):
 
 
 def console_user_identity(vm, startup, out, nonce, private_password):
-    """Require a fresh exact UID/name response before permitting sudo input."""
+    """Require a fresh redundant SHA-256 identity response before permitting sudo."""
     deadline = time.monotonic() + 45
-    expected = installed_user_line(nonce)
+    expected = installed_user_record(nonce)
     command = installed_user_command(nonce)
     require(expected not in command, 'installed user command can mimic its response')
     sent = False
@@ -454,30 +483,35 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
-        result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
-                                capture_output=True, timeout=10, check=True)
+        arguments = ['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6']
+        if sent:
+            arguments += ['-c', 'tessedit_char_whitelist=0123456789']
+        result = subprocess.run(arguments, capture_output=True, timeout=10, check=True)
         require(len(result.stdout) <= 65536, 'prompt OCR exceeds bound')
-        text = result.stdout.decode()
-        require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
-        observed_line = lines[-1].rstrip('_| ') if lines else None
-        require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
-                'installed user login did not reach its identity challenge')
-        records = [line for line in lines if line.startswith('ARCTIC-USER ')]
-        if records:
+        accepted, observation = _identity_ocr_observation(result.stdout, expected, sent)
+        if observation[:3] != ('zero', 'zero', 'zero'):
             if not sent:
-                raise RuntimeError('installed user identity response differs')
-            if records == [expected]:
-                from PIL import Image
-                with Image.open(path) as image:
-                    require(image.size == (1280,720), 'installed prompt physical dimensions differ')
-                require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
-                Path(path).unlink()
-                return dict(prompt_kind='installed-user-nonce-identity', nonce=nonce,
-                            username='arcticqual', uid=1000,
-                            observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
-                            observed_ns=time.monotonic_ns())
-            mismatch_observation = _identity_mismatch(records, expected, nonce)
+                raise _identity_mismatch_error(observation)
+            mismatch_observation = observation
+        if accepted:
+            from PIL import Image
+            with Image.open(path) as image:
+                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
+            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+            Path(path).unlink()
+            return dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=nonce,
+                        username='arcticqual', uid=1000,
+                        observed_line_sha256=hashlib.sha256(expected.encode('ascii')).hexdigest(),
+                        observed_ns=time.monotonic_ns())
+        if not sent:
+            text = result.stdout.decode()
+            require(private_password not in text.lower(), 'private input unexpectedly appeared in console; image withheld')
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            observed_line = lines[-1].rstrip('_| ') if lines else None
+            require(observed_line not in ('Login incorrect', 'arctic-qual login:', 'arctic-qual login: arcticqual'),
+                    'installed user login did not reach its identity challenge')
+        else:
+            observed_line = None
         if not sent and observed_line is not None and observed_line != 'Password:':
             if not installed_shell_ready(observed_line):
                 # Fish can render its greeting before the first prompt and

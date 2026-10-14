@@ -53,6 +53,11 @@ def exact(value, keys, message):
     require(type(value) is dict and set(value) == set(keys), message)
 
 
+def installed_identity_record(nonce):
+    data = (nonce + '\x00arcticqual\x001000\x00arcticqual\x00').encode()
+    return '731904' + format(int(digest(data)[:15], 16), '019d')
+
+
 def packaged_source_hashes(tree):
     result = C.packaged_source_hashes(tree)
     for installed, source in PACKAGED_SOURCES.items():
@@ -516,11 +521,11 @@ def password_prompts_check(value, build, required_images, image_loader, authenti
             authentication['status'] == 'exact_installed_uid_response' and authentication.get('username') == 'arcticqual' and
             type(authentication.get('uid')) is int and authentication['uid'] == 1000 and
             type(authentication.get('nonce')) is str and re.fullmatch('[0-9a-f]{32}', authentication['nonce']) and
-            shell['prompt_kind'] == 'installed-user-nonce-identity' and
+            shell['prompt_kind'] == 'installed-user-sha256-decimal-identity' and
             shell['nonce'] == authentication['nonce'] and shell['username'] == 'arcticqual' and
             type(shell['uid']) is int and shell['uid'] == 1000 and
-            shell['observed_line_sha256'] == digest(('ARCTIC-USER ' + authentication['nonce'] +
-                ' uid=1000 user=arcticqual').encode('utf-8')) and
+            shell['observed_line_sha256'] == digest(
+                installed_identity_record(authentication['nonce']).encode('ascii')) and
             type(shell['observed_ns']) is int and shell['observed_ns'] > 0,
             'active authenticated shell observed-line proof differs')
     require(value['schema'] == 'arctic-active-password-prompts-v1' and
