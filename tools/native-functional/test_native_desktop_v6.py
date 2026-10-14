@@ -34,6 +34,9 @@ def product_renderer(player):
    owner=dict(pid=player['pid'],start_ticks=player['start_ticks'],executable_sha256=player['executable_sha256']),
    realized_renderer=dict(status='reported-realized',renderer='gl',owned_stderr_binding_verified=True,
     environment_request_is_not_attestation=True,release_acceptance=False)))
+def moving_retirement():
+ return dict(process_identity_retired=True,owned_ipc_absent=True,
+  compositor_client_absent=True,release_acceptance=False)
 def fullscreen_fixture(value,visual,moving_shot):
  """Data-only synthetic positive proof; never claims real GUI or activation."""
  turns=[];caps=[];owned=[];root=value['evidence_root'];monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
@@ -59,7 +62,7 @@ def fullscreen_fixture(value,visual,moving_shot):
  value['proven_new_processes']=owned
  value['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
  trace=[dict(event='owned-player-fullscreen',receipt=x) for x in turns]+[dict(event='owned-fullscreen-capture',receipt=x) for x in caps]
- return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot,product_renderer=product_renderer(owned[0]))).encode()}
+ return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot,product_renderer=product_renderer(owned[0]),retirement_before_static_oracle=moving_retirement())).encode()}
 class EditorControls(unittest.TestCase):
  def fixture(self,d):
   clock=Clock();vm=VM(Path(d));c=C.EditorSaveController(vm,d,'live','2'*64,clock=clock,sleep=clock.sleep);return c,vm,clock
@@ -237,7 +240,8 @@ class FullscreenControls(unittest.TestCase):
       oracle=matched,product_renderer=accepted['product_renderer'],player_attempts=[accepted],**hashes)
    report=dict(evidence_root=root,proven_new_processes=players,
       diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
-   moving=dict(player=players[0],screenshot=shots[0],product_renderer=product_renderer(players[0]))
+   moving=dict(player=players[0],screenshot=shots[0],product_renderer=product_renderer(players[0]),
+      retirement_before_static_oracle=moving_retirement())
    (d/'moving-player-proof.json').write_text(json.dumps(moving));(d/'visual-oracle.json').write_text(json.dumps(visual))
    (d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace));(d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
    result=N.check_fullscreen(d,report,1000)
@@ -256,6 +260,11 @@ class FullscreenControls(unittest.TestCase):
    rejected(lambda v:v['player_attempts'][0].update(actual_rgb_sha256='9'*64))
    rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0].update(private_value='forbidden'))
    rejected(lambda v:v['product_renderer'].update(realized_renderer='vulkan'))
+   moving_path=d/'moving-player-proof.json';original_moving=moving_path.read_text()
+   changed=json.loads(original_moving);changed['retirement_before_static_oracle']['owned_ipc_absent']=False
+   moving_path.write_text(json.dumps(changed))
+   with self.assertRaises(RuntimeError):N.check_fullscreen(d,report,1000)
+   moving_path.write_text(original_moving)
    (d/'fullscreen-player-captures.json').write_text(json.dumps(json.loads(original_captures)[:-1]))
    with self.assertRaises(RuntimeError):N.check_fullscreen(d,report,1000)
 

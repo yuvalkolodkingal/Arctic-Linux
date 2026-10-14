@@ -31,6 +31,57 @@ def image(reference, scale=1, width=420, height=340, x=37, y=61):
 
 
 class NewControls(unittest.TestCase):
+    def test_moving_player_retirement_requires_exact_owned_process_socket_and_unmap(self):
+        with tempfile.TemporaryDirectory() as t:
+            root=Path(t);ipc=root/'celluloid-ipc.sock'
+            player=dict(client_id='11',pid=71,start_ticks=7,executable='/usr/bin/celluloid',
+                        executable_sha256='a'*64,is_xwayland=False)
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            smoke.clients=Mock(return_value={})
+            smoke.wait=Mock(side_effect=lambda fn,*args:fn() or (_ for _ in ()).throw(RuntimeError('not retired')))
+            with patch.object(N,'retire_renderer_player') as retire:
+                value=smoke.retire_moving_player(player,ipc)
+            retire.assert_called_once_with(player,os.getuid())
+            self.assertEqual(value,dict(process_identity_retired=True,owned_ipc_absent=True,
+                compositor_client_absent=True,release_acceptance=False))
+            with patch.object(N,'retire_renderer_player') as retire:
+                with self.assertRaisesRegex(RuntimeError,'target differs'):
+                    smoke.retire_moving_player(dict(player),ipc)
+                with self.assertRaisesRegex(RuntimeError,'target differs'):
+                    smoke.retire_moving_player(player,root/'other.sock')
+                retire.assert_not_called()
+
+    def test_moving_player_retirement_fails_closed_while_socket_or_client_remains(self):
+        for retained in ('socket','client'):
+          with self.subTest(retained=retained),tempfile.TemporaryDirectory() as t:
+            root=Path(t);ipc=root/'celluloid-ipc.sock'
+            player=dict(client_id='11',pid=71,start_ticks=7,executable='/usr/bin/celluloid',
+                        executable_sha256='a'*64,is_xwayland=False)
+            endpoint=None
+            if retained=='socket':
+                endpoint=socket.socket(socket.AF_UNIX);endpoint.bind(str(ipc))
+            smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.owned=[player]
+            smoke.clients=Mock(return_value={'11':dict(pid=71)} if retained=='client' else {})
+            smoke.wait=Mock(side_effect=lambda fn,*args:fn() or (_ for _ in ()).throw(RuntimeError('not retired')))
+            try:
+                with patch.object(N,'retire_renderer_player'):
+                    with self.assertRaisesRegex(RuntimeError,'not retired'):
+                        smoke.retire_moving_player(player,ipc)
+            finally:
+                if endpoint is not None:endpoint.close()
+
+    def test_media_preserves_moving_proof_then_retires_before_static_player(self):
+        source=(HERE/'native_smoke.py').read_text();tree=ast.parse(source)
+        klass=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Smoke')
+        method=ast.get_source_segment(source,next(node for node in klass.body
+            if isinstance(node,ast.FunctionDef) and node.name=='media'))
+        capture=method.index("self.screenshot('celluloid-playing')")
+        finish=method.index('self.finish_native_protocol()',capture)
+        retire=method.index('self.retire_moving_player(player,ipc)',finish)
+        static=method.index('self.visual_media()',retire)
+        self.assertLess(capture,finish);self.assertLess(finish,retire);self.assertLess(retire,static)
+        self.assertEqual(method.count('self.retire_moving_player(player,ipc)'),1)
+
     def test_known_static_pattern_and_scaled_offset_match(self):
         ref=N.visual_reference_frame()
         for scale in (1,2):

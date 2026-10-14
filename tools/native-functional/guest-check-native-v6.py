@@ -1631,6 +1631,25 @@ class Smoke:
                     screenshots=[editor_shot,self.screenshot('files-opened-zip')],
                     scope='actual role launch + PCManFM text/ZIP/media openers/F4 + GUI Unicode edit/save; mount/network/a11y remain separate')
 
+    def retire_moving_player(self,player,ipc):
+        """Retire the proved moving player before creating the static oracle player."""
+        require(isinstance(ipc,Path) and ipc==self.root/'celluloid-ipc.sock'
+                and sum(item is player for item in self.owned)==1,
+                'moving player retirement target differs')
+        retire_renderer_player(player,self.uid)
+        def fully_retired():
+            try:
+                info=ipc.lstat()
+                require(stat.S_ISSOCK(info.st_mode) and info.st_uid==self.uid,
+                        'moving player IPC owner/type differs')
+                socket_absent=False
+            except FileNotFoundError:
+                socket_absent=True
+            return socket_absent and self.clients().get(player['client_id']) is None
+        self.wait(fully_retired,5,'moving player process/socket/compositor retirement')
+        return dict(process_identity_retired=True,owned_ipc_absent=True,
+                    compositor_client_absent=True,release_acceptance=False)
+
     def media(self):
         fixture,decoder = self.media_fixture()
         self.gates.append(dict(check='open-codec-lossless-command-decode',status='passed',value=decoder))
@@ -1693,15 +1712,18 @@ class Smoke:
             self.fullscreen_capture_pair(player,moving_before,self.alive(player),moving_shot)
         moving_proof=dict(decoder=decoder,player=player,player_samples=samples,screenshot=moving_shot,
                           product_renderer=renderer,
-                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review')
+                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')
+        moving_proof['retirement_before_static_oracle']=None
         (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
             self.finish_native_protocol()
+            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
+            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         visual=self.visual_media()
         return dict(moving_proof, visual_reference=visual,desktop_action_launches=action_routes,
                     enqueue_semantics=enqueue_semantics,
-                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
         source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
@@ -2574,7 +2596,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '351eb90719c98bea1ac5b49d9a87a4581a03f3b5804d749b0d45ce598b2bbcc6'
+    native_source_sha = 'c4934cbed1d3c0919fb90065c714ad1944dea2f45cd68a2cc1c439970eb2ba98'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

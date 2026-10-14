@@ -32,6 +32,49 @@ PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95
 TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
 
 
+def restore_moving_player_retirement(source):
+    """Reverse only the sequential moving/static player lifecycle correction."""
+    substitutions=(("""    def retire_moving_player(self,player,ipc):
+        \"\"\"Retire the proved moving player before creating the static oracle player.\"\"\"
+        require(isinstance(ipc,Path) and ipc==self.root/'celluloid-ipc.sock'
+                and sum(item is player for item in self.owned)==1,
+                'moving player retirement target differs')
+        retire_renderer_player(player,self.uid)
+        def fully_retired():
+            try:
+                info=ipc.lstat()
+                require(stat.S_ISSOCK(info.st_mode) and info.st_uid==self.uid,
+                        'moving player IPC owner/type differs')
+                socket_absent=False
+            except FileNotFoundError:
+                socket_absent=True
+            return socket_absent and self.clients().get(player['client_id']) is None
+        self.wait(fully_retired,5,'moving player process/socket/compositor retirement')
+        return dict(process_identity_retired=True,owned_ipc_absent=True,
+                    compositor_client_absent=True,release_acceptance=False)
+
+""",''),("""        moving_proof['retirement_before_static_oracle']=None
+        (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+            self.finish_native_protocol()
+            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
+            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+""","""        (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+            self.finish_native_protocol()
+"""),("""                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')
+""","""                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review')
+"""),("""                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+""","""                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+"""))
+    for index,(new,old) in enumerate(substitutions):
+        if source.count(new)!=1:raise AssertionError(f'Moving retirement inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    return source
+
+
 def restore_runtime_failure_fix(source):
     """Reverse only the post-VM ownership and inherited-descriptor fixes."""
     fixed_gio="""        # The launched app inherits the helper's descriptors. Use the existing
@@ -73,6 +116,7 @@ def restore_runtime_failure_fix(source):
 
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_moving_player_retirement(source)
     source=restore_runtime_failure_fix(source)
     substitutions=(
         ("            require(1<=len(players)<=2,'controls trial primary player inventory differs')\n            for player in players: retire_renderer_player(player,self.uid)\n","            require(1<=len(players)<=3,'controls trial primary player inventory differs')\n            retired=[row['player'] for row in primary.get('player_attempts',[])\n                     if row.get('owned_player_cleanup_completed') is True]\n            require(len(retired)<=1 and all(sum((p.get('pid'),p.get('start_ticks'))==\n                    (old.get('pid'),old.get('start_ticks')) for p in players)==1 for old in retired),\n                    'controls trial prior retired player identity differs')\n            retired_keys={(p['pid'],p['start_ticks']) for p in retired}\n            for player in players:\n                if (player['pid'],player['start_ticks']) not in retired_keys:\n                    retire_renderer_player(player,self.uid)\n"),

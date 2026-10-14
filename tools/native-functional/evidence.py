@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '351eb90719c98bea1ac5b49d9a87a4581a03f3b5804d749b0d45ce598b2bbcc6'
+NATIVE_SOURCE_SHA = 'c4934cbed1d3c0919fb90065c714ad1944dea2f45cd68a2cc1c439970eb2ba98'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '827118bb36f954b765b64c14ecbf9d5ad6123b1ac83c9b831157982fe5619118')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'c7c81d58daabef5b300ca80f6f7812335015bddb25cf482e7cb94c9366725206')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -424,6 +424,13 @@ def check_fullscreen(target,report,uid):
                   and Path(row['screenshot']['path']).name=='celluloid-reference.png',
                   'Fullscreen accepted visual player proof differs')
     check_product_renderer(moving.get('product_renderer'),moving['player'])
+    retirement=moving.get('retirement_before_static_oracle')
+    R.require(type(retirement) is dict
+              and set(retirement)=={'process_identity_retired','owned_ipc_absent',
+                                    'compositor_client_absent','release_acceptance'}
+              and retirement==dict(process_identity_retired=True,owned_ipc_absent=True,
+                                   compositor_client_absent=True,release_acceptance=False),
+              'Moving player was not fully retired before the static oracle player')
     R.require(visual.get('product_renderer')==attempts[-1].get('product_renderer'),
               'Accepted visual oracle/product renderer proof differs')
     expected=[moving['player'],*[row['player'] for row in attempts]]
