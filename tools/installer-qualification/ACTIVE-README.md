@@ -57,8 +57,9 @@ Public prompt receipts contain a fixed prompt kind and the SHA-256 of the actual
 observed canonical last line after its exact match, together with its observation
 time. Prompt text is not repeated in public JSON. The authenticated shell proof
 must fall between the getty and sudo observations; the shell probe is not uploaded.
-Transport, original UART, every host request, candidate/source identities, write
-counters, installed boot receipt and image hashes are independently replayed.
+Transport, canonical public UART protocol projections, every host request,
+candidate/source identities, write counters, installed boot receipt and image
+hashes are independently replayed after complete private UART validation.
 The random 32-hex `binding_id` binds both UARTs, payload chunks, collector completion
 and all host requests to one execution. Legacy field names and extra fields fail
 the producer/consumer inventories rather than receiving a scanner exemption.

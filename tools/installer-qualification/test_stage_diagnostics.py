@@ -124,15 +124,19 @@ class Controls(unittest.TestCase):
                     (payload / 'build-provenance.json').write_text(json.dumps(build))
                 else:
                     vm = Path(argv[-1]); vm.mkdir()
-                    (vm / 'serial.log').write_bytes(b'synthetic serial')
+                    (vm / 'serial.log').write_bytes(b'synthetic private serial')
                     (vm / 'installer-port.log').write_bytes(b'synthetic port')
+                    if active:
+                        (vm / 'serial-installed.log').write_bytes(b'synthetic private installed serial')
                     if inner_log is not None:
                         Path(log).write_bytes(inner_log(_[-1]['ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN']))
                     fault(stage)
 
             def preserve(_vm, target, _active):
                 target.mkdir()
-                (target / 'host-execution.json').write_text(json.dumps({'host_transitions': []}))
+                host = {'host_transitions': []}
+                if active: host['installed_boot'] = {'serial': {'status': 'withheld_pending_private_uart_validation'}}
+                (target / 'host-execution.json').write_text(json.dumps(host))
                 (target / 'installer-host-transitions.json').write_text(json.dumps({'receipts': []}))
                 return {}
 
@@ -141,7 +145,10 @@ class Controls(unittest.TestCase):
                 target.mkdir()
                 (target / 'installer-report.json').write_text('{}')
                 return {'report': {} if report_value is None else report_value,
-                        'state': {'status': 'passed'}, 'files': {}, 'requests': []}
+                        'state': {'status': 'passed', 'serial': {'bytes': 7, 'sha256': '1' * 64}}, 'files': {}, 'requests': []}
+
+            def public_uart(_data, installed=False):
+                return b'public\n', {'bytes': 7, 'sha256': '1' * 64}
 
             contract = SimpleNamespace(require=R.C.require, REQUIRED_IMAGES=(),
                 cleanup_images=cleanup_images,
@@ -158,6 +165,7 @@ class Controls(unittest.TestCase):
             with contextlib.ExitStack() as stack:
                 for object_, name, replacement in [(R, 'C', contract), (R, 'verify', verify), (R, 'sha', digest),
                         (R, 'execute', execute), (R, 'preserve_host', preserve), (R.E, 'extract', extract),
+                        (R.E, 'public_uart_receipt', public_uart),
                         (R.E, 'active_contract', lambda: contract), (R.subprocess, 'check_output', info),
                         (R.subprocess, 'run', host_command), (R.signal, 'signal', lambda *_: None),
                         (R.H, 'cleanup_signals', lambda: contextlib.nullcontext([]))]:

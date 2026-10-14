@@ -402,7 +402,11 @@ def boot_installed(vm, startup, vmtest, out, context):
             prompts = dict(schema='arctic-active-password-prompts-v1',engine=ocr_provenance(),getty=getty,sudo=sudo,
                 login_shell={key: shell[key] for key in ('prompt_kind','observed_line_sha256','observed_ns')},
                 private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
-            return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts
+            # The outer runner independently validates the complete private
+            # UART, then replaces this marker with a receipt for its bounded
+            # public protocol projection.  Never retain a digest of private
+            # console text as a dictionary oracle.
+            return report, dict(status='private_uart_validated_pending_public_projection'), prompts
         time.sleep(.5)
     raise RuntimeError('fresh installed proof did not complete')
 

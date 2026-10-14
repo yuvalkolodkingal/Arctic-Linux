@@ -17,6 +17,7 @@ def load(name,path):
 C=load('installer_acceptance_contract',HERE/'contract.py')
 G=load('installer_guest_fixtures',HERE/'test_guest.py')
 D=load('installer_driver_fixture',HERE/'driver.py')
+E=load('installer_public_uart_fixture',HERE/'evidence.py')
 
 
 def fixture():
@@ -90,7 +91,8 @@ def fixture():
                 applied=[dict(head=n,width=1280 if n in heads else 0,height=720 if n in heads else 0,xoff=n*1280,yoff=0) for n in (0,1)])
         receipts.append(receipt)
     serial=b'ARCTIC-CONSOLE-READY='+b'f'*32+b' user=liveuser uid=1000\n'
-    guest=dict(status='passed',context=context,report=report,requests=requests,collector=dict(boot_id=boot,desktop_uid=uid,active_desktop_session='1'),serial=dict(bytes=len(serial),sha256=C.digest(serial)))
+    public_serial, serial_receipt = E.public_uart_receipt(serial)
+    guest=dict(status='passed',context=context,report=report,requests=requests,collector=dict(boot_id=boot,desktop_uid=uid,active_desktop_session='1'),serial=serial_receipt)
     with tempfile.TemporaryDirectory() as root:
         # Preserve the real argv builder while avoiding external firmware input.
         from unittest.mock import patch
@@ -107,7 +109,8 @@ def fixture():
                image=image,execution=dict(source_sha=context['execution_sha']),context=context,source_inputs=inputs,guest=guest,host=host,
                required_images={name:C.digest(data) for name,data in media.items()},build=dict(schema='arctic-taskbar-tools-v1',release_acceptance=False,
                 binaries={'raw-screencopy':context['capture_sha256']},sources={name:inputs[name] for name in ('tools/native-functional/taskbar-screencopy.c','shell/dev/virtual-pointer.c','shell/dev/wlr-screencopy-unstable-v1.xml')}),
-               transport=dict(status='passed',report_path='installer/installer-report.json',report_sha256=C.digest((json.dumps(report,sort_keys=True)+'\n').encode()),serial_sha256=C.digest(serial)))
+               diagnostic_streams={'serial.log':serial_receipt},
+               transport=dict(status='passed',report_path='installer/installer-report.json',report_sha256=C.digest((json.dumps(report,sort_keys=True)+'\n').encode()),serial_sha256=serial_receipt['sha256']))
     return report,state,files,media,serial
 
 

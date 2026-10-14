@@ -440,8 +440,9 @@ def installed_boot_check(value, context, live_report, live_pid, serial_bytes):
     require(is_hash(auth['nonce'], 32) and auth['username'] == 'arcticqual' and type(auth['uid']) is int and auth['uid'] == 1000 and
             auth['status'] == 'exact_installed_uid_response', 'actual installed account console response differs')
     exact(value['serial'], {'bytes', 'sha256'}, 'active installed serial identity fields differ')
-    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and type(value['serial']['bytes']) is int and
-            len(serial_bytes) == value['serial']['bytes'] and digest(serial_bytes) == value['serial']['sha256'], 'active installed original serial bytes differ')
+    public_serial, public_receipt = C.public_uart_receipt(serial_bytes, installed=True)
+    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and
+            public_receipt == value['serial'], 'active installed public serial projection differs')
     rows = serial_bytes.decode('utf-8').splitlines()
     ready = 'ARCTIC-ACTIVE-INSTALLED-READY=' + auth['nonce'] + ' user=arcticqual uid=1000'
     require([line for line in rows if line.startswith('ARCTIC-ACTIVE-INSTALLED-READY=')] == [ready] and
@@ -765,8 +766,11 @@ def validate_execution(state, expected_image, execution_source, serial_bytes=Non
     require(host['firmware'] == report['baseline']['engine']['hello']['firmware'] == 'uefi', 'active live firmware differs')
     auth = host['console_authentication']
     require(auth['status'] == 'exact_liveuser_uid_response' and is_hash(auth['nonce'], 32), 'active actual console authentication differs')
-    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and digest(serial_bytes) == guest['serial']['sha256'] == state['transport']['serial_sha256'] and
-            len(serial_bytes) == guest['serial']['bytes'], 'active protected actual serial identity differs')
+    public_serial, public_receipt = C.public_uart_receipt(serial_bytes)
+    require(type(serial_bytes) is bytes and 0 < len(serial_bytes) <= 8 * 1024 * 1024 and
+            public_receipt == guest['serial'] == state['diagnostic_streams']['serial.log'] and
+            public_receipt['sha256'] == state['transport']['serial_sha256'],
+            'active protected public serial projection identity differs')
     require([line for line in serial_bytes.decode('utf-8').splitlines() if line.startswith('ARCTIC-CONSOLE-READY=')] ==
             ['ARCTIC-CONSOLE-READY=' + auth['nonce'] + ' user=liveuser uid=' + str(report['desktop_uid'])], 'active actual live UID response differs')
     require(image_loader is not None, 'active physical images and installed serial replay required')

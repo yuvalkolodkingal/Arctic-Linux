@@ -297,9 +297,16 @@ def preserve_host(vm, target, active=False):
         path = vm / name
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= 4 * 1024 * 1024, 'Oversized host receipt/capture')
-            shutil.copyfile(path, target / name)
+            if active and name == 'host-execution.json':
+                value = json.loads(path.read_text())
+                installed = value.get('installed_boot') if type(value) is dict else None
+                if type(installed) is dict and 'serial' in installed:
+                    installed['serial'] = {'status': 'withheld_pending_private_uart_validation'}
+                write(target / name, value)
+            else:
+                shutil.copyfile(path, target / name)
     if active:
-        for name in ('installed-boot.json', 'serial-installed.log', 'installed-getty-password.png', 'installed-sudo-password.png'):
+        for name in ('installed-boot.json', 'installed-getty-password.png', 'installed-sudo-password.png'):
             path = vm / name
             if path.is_file() and not path.is_symlink():
                 C.require(path.stat().st_size <= 8*1024*1024, 'Oversized installed boot proof')
@@ -309,8 +316,8 @@ def preserve_host(vm, target, active=False):
             C.require(path.stat().st_size <= 4*1024*1024, 'Oversized installed QEMU diagnostic')
             with path.open('rb') as stream:
                 (target / 'qemu-installer-installed.log.bounded-prefix.bin').write_bytes(stream.read(64*1024))
-    # UART and transport contain bounded framed data. Keep diagnostic prefixes
-    # rather than uploading duplicate base64 payloads; record complete hashes.
+    # Raw UART remains private.  It is validated later and only its canonical
+    # public projection is retained.  Other streams keep bounded prefixes.
     records = {}
     streams = [('serial.log', 8 * 1024 * 1024), ('installer-port.log', 64 * 1024 * 1024), ('qemu-installer-live.log', 4 * 1024 * 1024)]
     if active:
@@ -319,10 +326,8 @@ def preserve_host(vm, target, active=False):
         path = vm / name
         if path.is_file() and not path.is_symlink():
             C.require(path.stat().st_size <= bound, 'Oversized installer diagnostic stream')
-            records[name] = dict(bytes=path.stat().st_size, sha256=sha(path))
-            if name in ('serial.log', 'serial-installed.log'):
-                shutil.copyfile(path, target / name)
-            else:
+            if name not in ('serial.log', 'serial-installed.log'):
+                records[name] = dict(bytes=path.stat().st_size, sha256=sha(path))
                 with path.open('rb') as stream:
                     (target / (name + '.bounded-prefix.bin')).write_bytes(stream.read(64 * 1024))
     return records
@@ -433,15 +438,34 @@ def main():
             contract.validate_catalog_selection(report, (args.source / 'modules/catalog.toml').read_bytes())
         C.require(state['host']['host_transitions'] == json.loads((args.evidence / 'host/installer-host-transitions.json').read_text())['receipts'] and
                   [row['request'] for row in state['host']['host_transitions']] == result['requests'], 'Host and guest actual transitions differ')
+        live_serial = (vm / 'serial.log').read_bytes()
+        live_public, live_receipt = E.public_uart_receipt(live_serial)
+        C.require(live_receipt == state['guest']['serial'], 'live public UART projection receipt differs')
+        state['diagnostic_streams']['serial.log'] = live_receipt
+        installed_public = installed_private = None
+        if args.active_profile:
+            installed_private = (vm / 'serial-installed.log').read_bytes()
+            installed_public, installed_receipt = E.public_uart_receipt(installed_private, installed=True)
+            state['diagnostic_streams']['serial-installed.log'] = installed_receipt
+            state['host']['installed_boot']['serial'] = installed_receipt
         state['transport'] = dict(status='passed', report_path='installer/installer-report.json',
                                   report_sha256=sha(args.evidence / 'installer/installer-report.json'),
-                                  port_sha256=sha(vm / 'installer-port.log'), serial_sha256=sha(vm / 'serial.log'))
+                                  port_sha256=sha(vm / 'installer-port.log'), serial_sha256=live_receipt['sha256'])
         state['required_images'] = {name: sha(args.evidence / name) for name in contract.REQUIRED_IMAGES}
         state['status'] = ('live_installer_active_restoration_completed_and_installed_boot_passed_pending_manual_visual_review'
                            if args.active_profile else 'live_installer_restoration_passed_pending_manual_visual_review')
         diagnostic_stage = 'execution-validation'
-        contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], (vm / 'serial.log').read_bytes(),
-                             lambda name: (args.evidence / name).read_bytes())
+        def validation_media(name):
+            if name == 'host/serial-installed.log' and installed_private is not None:
+                return installed_private
+            return (args.evidence / name).read_bytes()
+        contract.validate_execution(state, manifest['image'], os.environ['GITHUB_SHA'], live_serial,
+                             validation_media)
+        (args.evidence / 'host/serial.log').write_bytes(live_public)
+        if installed_public is not None:
+            (args.evidence / 'host/serial-installed.log').write_bytes(installed_public)
+        write(args.evidence / 'host/host-execution.json', state['host'])
+        write(args.evidence / 'installer/installer-state.json', state['guest'])
     except BaseException as error:
         diagnose(diagnostic_stage, error, contract)
         if report is not None:

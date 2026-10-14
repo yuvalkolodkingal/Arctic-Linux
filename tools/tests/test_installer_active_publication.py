@@ -78,12 +78,13 @@ def reseal_guest_report(members, state):
     if decoded[2] != report:
         raise AssertionError('Resealed protected report alias differs')
     guest['port'] = dict(bytes=len(port), sha256=F.A.digest(port))
-    guest['serial'] = dict(bytes=len(serial), sha256=F.A.digest(serial))
+    public_serial, public_receipt = F.T.e.public_uart_receipt(serial)
+    guest['serial'] = public_receipt
     guest['files']['installer-report.json'] = dict(bytes=len(wire.files['installer-report.json']), sha256=F.A.digest(wire.files['installer-report.json']))
     state['diagnostic_streams'].update({'serial.log': guest['serial'], 'installer-port.log': guest['port']})
     state['transport'].update(report_sha256=guest['files']['installer-report.json']['sha256'],
                               port_sha256=guest['port']['sha256'], serial_sha256=guest['serial']['sha256'])
-    members.update({'host/serial.log': serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
+    members.update({'host/serial.log': public_serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
                     'installer/installer-report.json': wire.files['installer-report.json'],
                     'installer/serial-installer-report.json': wire.files['installer-report.json'],
                     'installer/transport-manifest.json': (json.dumps(rows[-2][1], sort_keys=True) + '\n').encode(),
@@ -170,7 +171,7 @@ class Controls(unittest.TestCase):
             data = members['host/serial-installed.log']
             screening['files']['host/serial-installed.log'] = dict(original_sha256=F.A.digest(data), uploaded_sha256=F.A.digest(data), bytes=len(data), redactions=0)
             members['upload-screening.json'] = json.dumps(screening).encode()
-            with self.assertRaisesRegex(RuntimeError, 'original serial bytes differ'):
+            with self.assertRaisesRegex(RuntimeError, 'public serial projection differs'):
                 self.replay(folder, members, state, manifest)
 
     def test_publisher_rejects_private_wrappers_after_aliases_and_screening_are_resealed(self):

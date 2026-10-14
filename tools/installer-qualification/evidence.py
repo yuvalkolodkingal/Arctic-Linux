@@ -26,6 +26,7 @@ MAX_FILE, MAX_TOTAL, MAX_FILES, CHUNK = guest.MAX_FILE, guest.MAX_TOTAL, guest.M
 MAX_PORT = 64 * 1024 * 1024
 MAX_UART = 16 * 1024 * 1024
 PREFIX = 'ARCTIC-INSTALLER-'
+PUBLIC_OMISSION = 'ARCTIC-UART-OMITTED='
 IDENTITY = {'boot_id', 'desktop_uid', 'active_desktop_session'}
 SHA = re.compile('[0-9a-f]{64}')
 UUID = re.compile('[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}')
@@ -75,6 +76,73 @@ def record(line, allowed, limit):
     kind, text = line[len(PREFIX):].rstrip('\r\n').split(' ', 1)
     require(kind in allowed, 'unknown installer record')
     return kind, strict_json(text)
+
+
+def public_uart_projection(data, installed=False):
+    """Return only canonical protocol records plus bounded omission counts.
+
+    The caller validates the complete private UART.  This projection is the
+    replayable public artifact: unrelated console text is represented only by
+    a count, so boot diagnostics, account-like strings and secrets cannot be
+    copied or hashed into retained evidence.  Omission markers preserve whether
+    two protocol records were adjacent.
+    """
+    require(type(data) is bytes and 0 < len(data) <= MAX_UART,
+            'installer UART projection input exceeds bound')
+    text = data.decode('utf-8')
+    output, omitted = [], 0
+
+    def flush_omitted():
+        nonlocal omitted
+        if omitted:
+            output.append(PUBLIC_OMISSION + str(omitted) + '\n')
+            omitted = 0
+
+    for line in text.splitlines(keepends=True):
+        canonical_line = None
+        if line.startswith(PUBLIC_OMISSION):
+            require(line.endswith('\n') and re.fullmatch(r'ARCTIC-UART-OMITTED=[1-9][0-9]{0,7}\r?\n', line),
+                    'malformed public UART omission record')
+            canonical_line = line.rstrip('\r\n') + '\n'
+        elif installed:
+            if line.startswith('ARCTIC-ACTIVE-INSTALLED-READY='):
+                require(line.endswith('\n') and re.fullmatch(
+                    r'ARCTIC-ACTIVE-INSTALLED-READY=[0-9a-f]{32} user=arcticqual uid=1000\r?\n', line),
+                    'malformed installed UART ready record')
+                canonical_line = line.rstrip('\r\n') + '\n'
+            elif line.startswith('ARCTIC-ACTIVE-INSTALLED '):
+                require(line.endswith('\n') and len(line) <= MAX_FILE + 512,
+                        'malformed installed UART report record')
+                value = strict_json(line[len('ARCTIC-ACTIVE-INSTALLED '):].rstrip('\r\n'))
+                canonical_line = 'ARCTIC-ACTIVE-INSTALLED ' + canonical(value).decode('ascii') + '\n'
+            elif line.rstrip('\r\n') == 'ARCTIC-ACTIVE-INSTALLED-FAILED':
+                require(line.endswith('\n'), 'incomplete installed UART failure record')
+                canonical_line = 'ARCTIC-ACTIVE-INSTALLED-FAILED\n'
+            elif line.startswith('ARCTIC-ACTIVE-INSTALLED'):
+                require(False, 'unknown installed UART protocol record')
+        else:
+            if line.startswith('ARCTIC-CONSOLE-READY='):
+                require(line.endswith('\n') and re.fullmatch(
+                    r'ARCTIC-CONSOLE-READY=[0-9a-f]{32} user=liveuser uid=[0-9]{1,10}\r?\n', line),
+                    'malformed live UART ready record')
+                canonical_line = line.rstrip('\r\n') + '\n'
+            elif line.startswith(PREFIX):
+                kind, value = record(line, {'REQUEST', 'PORT-END'}, 16448)
+                canonical_line = PREFIX + kind + ' ' + canonical(value).decode('ascii') + '\n'
+        if canonical_line is None:
+            omitted += 1
+        else:
+            flush_omitted()
+            output.append(canonical_line)
+    flush_omitted()
+    projection = ''.join(output).encode('ascii')
+    require(0 < len(projection) <= 1024 * 1024, 'installer public UART projection exceeds bound')
+    return projection
+
+
+def public_uart_receipt(data, installed=False):
+    projection = public_uart_projection(data, installed)
+    return projection, dict(bytes=len(projection), sha256=digest(projection))
 
 
 def block(port_data, serial_data, context):
@@ -367,7 +435,7 @@ def extract(port_path, serial_path, destination, context):
                  received_pngs=sum(name.endswith('.png') for name in decoded),
                  received_requests=len(requests), errors=[],
                  port=dict(bytes=len(port_data), sha256=digest(port_data)),
-                 serial=dict(bytes=len(serial_data), sha256=digest(serial_data)),
+                 serial=public_uart_receipt(serial_data)[1],
                  scope='transport identity, guest completeness and PNG arithmetic; independent behavior/security and manual review required')
     try:
         validate_pass(report, begin, end, requests, decoded)

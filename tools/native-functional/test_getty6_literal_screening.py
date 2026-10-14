@@ -32,6 +32,12 @@ def restore_bounded_collection_observer(driver):
     """Strict test-only inverse; retain the entire historical fixture hash."""
     driver=restore_backend_write_observer(driver)
     for current,original in (
+        (b"            # The outer runner independently validates the complete private\n"
+         b"            # UART, then replaces this marker with a receipt for its bounded\n"
+         b"            # public protocol projection.  Never retain a digest of private\n"
+         b"            # console text as a dictionary oracle.\n"
+         b"            return report, dict(status='private_uart_validated_pending_public_projection'), prompts\n",
+         b"            return report, dict(bytes=len(data), sha256=hashlib.sha256(data).hexdigest()), prompts\n"),
         (b'MAX_COLLECTION_DIAGNOSTIC_FRAMES = 64\n',b''),
         (b'        for _ in range(MAX_COLLECTION_DIAGNOSTIC_FRAMES):\n            if traceback is None:\n                break\n',b'        while traceback is not None:\n'),
         (b'        if traceback is not None:\n            return None  # Never present a truncated prefix as the deepest phase.\n',b''),

@@ -146,11 +146,12 @@ def fixture():
         authentication=dict(nonce='d' * 32, username='arcticqual', uid=1000, status='exact_installed_uid_response'), release_acceptance=False)
     installed_serial = ('ARCTIC-ACTIVE-INSTALLED-READY=' + 'd' * 32 + ' user=arcticqual uid=1000\nARCTIC-ACTIVE-INSTALLED ' +
                         json.dumps(installed_report, sort_keys=True) + '\n').encode()
+    installed_public, installed_receipt = T.e.public_uart_receipt(installed_serial, installed=True)
     installed = dict(status='passed', live_qemu_pid=200, installed_qemu_pid=300, qemu_argv=installed_argv,
         target=dict(path='target.qcow2', virtual_bytes=context['disk_bytes'], serial=context['disk_serial'], backing_file=False),
         boot_id=installed_report['boot_id'], parent_live_boot_id=report['boot_id'], selinux=installed_report['selinux'],
         root=installed_report['root'], keyboard=installed_report['keyboard'], authentication=installed_report['authentication'],
-        serial=dict(bytes=len(installed_serial), sha256=A.digest(installed_serial)),
+        serial=installed_receipt,
         receipt_sha256=A.digest(json.dumps(installed_report, sort_keys=True).encode()))
     media['host/serial-installed.log'] = installed_serial
     media['host/installed-boot.json'] = json.dumps(installed_report, sort_keys=True).encode()
@@ -224,12 +225,15 @@ def fixture():
         for path in (folder / 'installer').iterdir():
             media['installer/' + path.name] = path.read_bytes()
     state['guest'], report, files = result['state'], result['report'], result['files']
-    state['transport'].update(serial_sha256=A.digest(serial), port_sha256=A.digest(port))
+    live_public, live_receipt = T.e.public_uart_receipt(serial)
+    state['guest']['serial'] = live_receipt
+    state['transport'].update(serial_sha256=live_receipt['sha256'], port_sha256=A.digest(port))
     state['diagnostic_streams'] = {
-        'serial.log': state['guest']['serial'], 'installer-port.log': state['guest']['port'],
+        'serial.log': live_receipt, 'installer-port.log': state['guest']['port'],
         'qemu-installer-live.log': dict(bytes=0, sha256=A.digest(b'')),
-        'serial-installed.log': installed['serial'], 'qemu-installer-installed.log': dict(bytes=0, sha256=A.digest(b''))}
-    media.update({'host/serial.log': serial, 'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
+        'serial-installed.log': installed_receipt, 'qemu-installer-installed.log': dict(bytes=0, sha256=A.digest(b''))}
+    media.update({'host/serial.log': live_public, 'host/serial-installed.log': installed_serial,
+                  'host/installer-port.log.bounded-prefix.bin': port[:64 * 1024],
                   'host/qemu-installer-live.log.bounded-prefix.bin': b'', 'host/qemu-installer-installed.log.bounded-prefix.bin': b''})
     return report, state, files, media, serial
 
