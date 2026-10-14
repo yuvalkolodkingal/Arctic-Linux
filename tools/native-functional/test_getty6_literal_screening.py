@@ -23,8 +23,48 @@ BACKEND_OBSERVER_ADDITIONS = (
 
 INSTALLED_IDENTITY_START = b'def installed_user_command(nonce):\n'
 INSTALLED_IDENTITY_END = b'def boot_installed(vm, startup, vmtest, out, context):\n'
-INSTALLED_IDENTITY_BYTES = 5221
-INSTALLED_IDENTITY_SHA256 = '42d2aab4497e7d5d61c6954740b671697965b6e5b51a3955f5657c663892874e'
+INSTALLED_IDENTITY_BYTES = 6485
+INSTALLED_IDENTITY_SHA256 = '3388566f940b0733a1eff0da5da2b13fd8aaf64de9a29a0d36b91bf0abdbdd70'
+IDENTITY_OBSERVER_ADDITIONS = (
+    b'''_IDENTITY_OBSERVATION_TOKEN = object()
+IDENTITY_OBSERVATION_LABELS = (
+    ('record-count', ('one', 'multiple')),
+    ('token-count', ('zero', 'one', 'two', 'three', 'four', 'five-or-more')),
+    ('expected-length', ('shorter', 'equal', 'longer')),
+    ('prefix-exact', ('true', 'false')),
+    ('nonce-exact', ('true', 'false')),
+    ('uid-exact', ('true', 'false')),
+    ('user-exact', ('true', 'false')),
+)
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-installed-proof-identity-' + field + '-' + label
+    for field, labels in IDENTITY_OBSERVATION_LABELS for label in labels)
+''',
+    b'def identity_observation_codes(error):\n'
+    b'    """Project only source-minted closed facts about a rejected OCR record."""\n'
+    b'    if type(error) is not RuntimeError or type(error.args) is not tuple or len(error.args) != 1 or \\\n'
+    b"            type(error.args[0]) is not str or error.args[0] != 'installed user identity response differs':\n"
+    b'        return ()\n'
+    b"    observation = error.__dict__.get('_arctic_installer_identity_observation')\n"
+    b'    if type(observation) is not tuple or len(observation) != 1 + len(IDENTITY_OBSERVATION_LABELS) or \\\n'
+    b'            observation[0] is not _IDENTITY_OBSERVATION_TOKEN:\n'
+    b'        return ()\n'
+    b'    if not all(type(value) is str and value in labels\n'
+    b'            for value, (_, labels) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS)):\n'
+    b'        return ()\n'
+    b"    return tuple('installer-inner-driver-installed-proof-identity-' + field + '-' + value\n"
+    b'                 for value, (field, _) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS))\n'
+    b'\n'
+    b'\n',
+    b'''            if code == 'installer-inner-driver-installed-proof-identity-response-differs':
+                try:
+                    observed = identity_observation_codes(error)
+                except Exception:
+                    observed = ()
+                for observation in observed:
+                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
+''',
+)
 INSTALLED_PROOF_REPLACEMENTS = (
     (b"    'driver-installed-proof': (('fresh installed login display did not appear', 'login-absent'),\n"
      b"        ('fresh installed proof did not complete', 'proof-incomplete'),\n"
@@ -50,8 +90,18 @@ INSTALLED_PROOF_REPLACEMENTS = (
 )
 
 
+def restore_identity_observer(driver):
+    """Remove each complete closed observer addition and reject near matches."""
+    for addition in IDENTITY_OBSERVER_ADDITIONS:
+        if driver.count(addition) != 1:
+            raise AssertionError('Expected one exact installed identity observer addition')
+        driver = driver.replace(addition, b'', 1)
+    return driver
+
+
 def restore_installed_proof(driver):
     """Remove only the exact installed-proof additions before older inverses."""
+    driver = restore_identity_observer(driver)
     if driver.count(INSTALLED_IDENTITY_START) != 1 or driver.count(INSTALLED_IDENTITY_END) != 1:
         raise AssertionError('Expected one exact installed identity block')
     start = driver.index(INSTALLED_IDENTITY_START)
@@ -156,6 +206,18 @@ class GettySixControls(unittest.TestCase):
             with self.subTest(bytes=len(mutant)),self.assertRaises(AssertionError):
                 restored=restore_bounded_collection_observer(mutant)
                 self.assertEqual(hashlib.sha256(restored).hexdigest(),expected)
+
+    def test_identity_observer_inverse_rejects_mutated_duplicate_or_missing_additions(self):
+        driver=(ROOT/'installer-qualification/driver.py').read_bytes()
+        expected=json.loads(FIXTURE.read_bytes())['fixture_source']['source_sha256']
+        self.assertEqual(hashlib.sha256(restore_bounded_collection_observer(driver)).hexdigest(),expected)
+        for addition in IDENTITY_OBSERVER_ADDITIONS:
+            mutants=(driver.replace(addition,addition+b'# changed known identity observer addition\n',1),
+                     driver.replace(addition,b'',1),driver+addition)
+            for mutant in mutants:
+                with self.subTest(addition=addition[:48],bytes=len(mutant)),self.assertRaises(AssertionError):
+                    restored=restore_bounded_collection_observer(mutant)
+                    self.assertEqual(hashlib.sha256(restored).hexdigest(),expected)
 
     def test_exact_all_three_lifecycle_contexts_preserve_original_bytes_without_output(self):
         for prefix in ('[ 1.234] systemd[1]: ','[  OK  ] ','         '):

@@ -75,6 +75,19 @@ WRITE_OBSERVATION_LABELS = (
 DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
     'installer-inner-driver-collect-write-' + field + '-' + label
     for field, labels in WRITE_OBSERVATION_LABELS for label in labels)
+_IDENTITY_OBSERVATION_TOKEN = object()
+IDENTITY_OBSERVATION_LABELS = (
+    ('record-count', ('one', 'multiple')),
+    ('token-count', ('zero', 'one', 'two', 'three', 'four', 'five-or-more')),
+    ('expected-length', ('shorter', 'equal', 'longer')),
+    ('prefix-exact', ('true', 'false')),
+    ('nonce-exact', ('true', 'false')),
+    ('uid-exact', ('true', 'false')),
+    ('user-exact', ('true', 'false')),
+)
+DIAGNOSTIC_CODES = DIAGNOSTIC_CODES | frozenset(
+    'installer-inner-driver-installed-proof-identity-' + field + '-' + label
+    for field, labels in IDENTITY_OBSERVATION_LABELS for label in labels)
 COLLECTION_PHASE_LABELS = ('request-json', 'request-json-fields', 'request-json-constant',
     'output-head', 'request-poll', 'console-capture', 'output-transition',
     'target-write-progress', 'target-write-sample')
@@ -131,6 +144,22 @@ def write_observation_codes(error, controller_source):
                  for value, (field, _) in zip(observation[1:], WRITE_OBSERVATION_LABELS))
 
 
+def identity_observation_codes(error):
+    """Project only source-minted closed facts about a rejected OCR record."""
+    if type(error) is not RuntimeError or type(error.args) is not tuple or len(error.args) != 1 or \
+            type(error.args[0]) is not str or error.args[0] != 'installed user identity response differs':
+        return ()
+    observation = error.__dict__.get('_arctic_installer_identity_observation')
+    if type(observation) is not tuple or len(observation) != 1 + len(IDENTITY_OBSERVATION_LABELS) or \
+            observation[0] is not _IDENTITY_OBSERVATION_TOKEN:
+        return ()
+    if not all(type(value) is str and value in labels
+            for value, (_, labels) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS)):
+        return ()
+    return tuple('installer-inner-driver-installed-proof-identity-' + field + '-' + value
+                 for value, (field, _) in zip(observation[1:], IDENTITY_OBSERVATION_LABELS))
+
+
 def diagnostic_code(stage, error, controller_source=None):
     require(type(stage) is str and stage in DIAGNOSTIC_STAGES, 'Unknown installer inner stage')
     if stage == 'driver-collect':
@@ -160,6 +189,13 @@ def diagnose(stage, error, controller_source=None):
             if code == 'installer-inner-driver-collect-guard-collection-034':
                 try:
                     observed = write_observation_codes(error, controller_source)
+                except Exception:
+                    observed = ()
+                for observation in observed:
+                    print('ARCTIC-INSTALLER-INNER ' + token + ' ' + observation, flush=True)
+            if code == 'installer-inner-driver-installed-proof-identity-response-differs':
+                try:
+                    observed = identity_observation_codes(error)
                 except Exception:
                     observed = ()
                 for observation in observed:
@@ -387,6 +423,24 @@ def installed_shell_ready(observed_line):
         'arcticqual@arctic-qual ~ >', 'arcticqual@arctic-qual ~>')
 
 
+def _identity_mismatch(records, expected, nonce):
+    """Return bounded enums only; never retain OCR text, hashes or nonce."""
+    record_count = 'one' if len(records) == 1 else 'multiple'
+    record = records[0] if len(records) == 1 else ''
+    tokens = record.split()
+    token_count = ('zero', 'one', 'two', 'three', 'four')[len(tokens)] if len(tokens) < 5 else 'five-or-more'
+    length = 'shorter' if len(record) < len(expected) else 'equal' if len(record) == len(expected) else 'longer'
+    exact = tuple('true' if len(tokens) > index and tokens[index] == value else 'false'
+                  for index, value in enumerate(('ARCTIC-USER', nonce, 'uid=1000', 'user=arcticqual')))
+    return (record_count, token_count, length, *exact)
+
+
+def _identity_mismatch_error(observation):
+    error = RuntimeError('installed user identity response differs')
+    error._arctic_installer_identity_observation = (_IDENTITY_OBSERVATION_TOKEN, *observation)
+    return error
+
+
 def console_user_identity(vm, startup, out, nonce, private_password):
     """Require a fresh exact UID/name response before permitting sudo input."""
     deadline = time.monotonic() + 45
@@ -396,6 +450,7 @@ def console_user_identity(vm, startup, out, nonce, private_password):
     sent = False
     sent_after_exact_prompt = False
     greeting_exit_sent = False
+    mismatch_observation = None
     while vm.alive() and time.monotonic() < deadline:
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
@@ -410,16 +465,19 @@ def console_user_identity(vm, startup, out, nonce, private_password):
                 'installed user login did not reach its identity challenge')
         records = [line for line in lines if line.startswith('ARCTIC-USER ')]
         if records:
-            require(sent and records == [expected], 'installed user identity response differs')
-            from PIL import Image
-            with Image.open(path) as image:
-                require(image.size == (1280,720), 'installed prompt physical dimensions differ')
-            require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
-            Path(path).unlink()
-            return dict(prompt_kind='installed-user-nonce-identity', nonce=nonce,
-                        username='arcticqual', uid=1000,
-                        observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
-                        observed_ns=time.monotonic_ns())
+            if not sent:
+                raise RuntimeError('installed user identity response differs')
+            if records == [expected]:
+                from PIL import Image
+                with Image.open(path) as image:
+                    require(image.size == (1280,720), 'installed prompt physical dimensions differ')
+                require(time.monotonic() < deadline, 'installed user identity deadline exceeded')
+                Path(path).unlink()
+                return dict(prompt_kind='installed-user-nonce-identity', nonce=nonce,
+                            username='arcticqual', uid=1000,
+                            observed_line_sha256=hashlib.sha256(expected.encode('utf-8')).hexdigest(),
+                            observed_ns=time.monotonic_ns())
+            mismatch_observation = _identity_mismatch(records, expected, nonce)
         if not sent and observed_line is not None and observed_line != 'Password:':
             if not installed_shell_ready(observed_line):
                 # Fish can render its greeting before the first prompt and
@@ -447,6 +505,8 @@ def console_user_identity(vm, startup, out, nonce, private_password):
                 sent = True
                 sent_after_exact_prompt = True
         time.sleep(.5)
+    if mismatch_observation is not None:
+        raise _identity_mismatch_error(mismatch_observation)
     if not sent:
         raise RuntimeError('installed user identity challenge was not issued; sudo input refused')
     if sent_after_exact_prompt:

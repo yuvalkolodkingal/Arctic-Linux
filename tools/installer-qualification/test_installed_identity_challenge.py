@@ -1,6 +1,8 @@
 """Installed Fish readiness and fresh UID challenge controls; no VM qualification."""
+import contextlib
 import hashlib
 import importlib.util
+import io
 import os
 from pathlib import Path
 import subprocess
@@ -102,6 +104,46 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertEqual(calls[0], ('keys', ('ret',)))
         self.assertNotIn(self.secret, repr(calls))
 
+    def test_partial_identity_frame_is_polled_until_later_exact_singleton(self):
+        expected = D.installed_user_line(self.nonce)
+        partial = ('ARCTIC-USER ' + self.nonce + ' uid=1000\n').encode()
+        proof, calls, _ = self.exercise([
+            b'arcticqual@arctic-qual ~>\n', partial, (expected + '\n').encode()])
+        self.assertIs(type(proof), dict)
+        self.assertEqual(proof['observed_line_sha256'], hashlib.sha256(expected.encode()).hexdigest())
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+        self.assertNotIn(self.secret, repr(proof))
+
+    def test_repeated_mismatch_waits_to_deadline_and_exports_only_closed_facts(self):
+        replay = ('ARCTIC-USER ' + ('0' * 32) + ' uid=0 user=root\n').encode()
+        error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', replay])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+        self.assertEqual(D.identity_observation_codes(error), (
+            'installer-inner-driver-installed-proof-identity-record-count-one',
+            'installer-inner-driver-installed-proof-identity-token-count-four',
+            'installer-inner-driver-installed-proof-identity-expected-length-shorter',
+            'installer-inner-driver-installed-proof-identity-prefix-exact-true',
+            'installer-inner-driver-installed-proof-identity-nonce-exact-false',
+            'installer-inner-driver-installed-proof-identity-uid-exact-false',
+            'installer-inner-driver-installed-proof-identity-user-exact-false'))
+        stream = io.StringIO()
+        token = 'a' * 32
+        with patch.dict(os.environ, {'ARCTIC_INSTALLER_DIAGNOSTIC_TOKEN': token}), \
+                contextlib.redirect_stdout(stream):
+            D.diagnose('driver-installed-proof', error)
+        diagnostic = stream.getvalue()
+        self.assertNotIn(self.nonce, diagnostic)
+        self.assertNotIn(self.secret, diagnostic)
+        self.assertNotIn(replay.decode().strip(), diagnostic)
+        self.assertNotIn(hashlib.sha256(replay).hexdigest(), diagnostic)
+        self.assertNotIn(self.nonce, repr(error))
+        self.assertNotIn(self.nonce, repr(error.__dict__))
+        self.assertNotIn(replay.decode().strip(), repr(error.__dict__))
+        self.assertNotIn(hashlib.sha256(replay).hexdigest(), repr(error.__dict__))
+        self.assertEqual(len(diagnostic.splitlines()), 8)
+
     def test_absent_response_reports_fixed_challenge_basis_without_private_text(self):
         cases = (
             ([b''], 'installed user identity challenge was not issued; sudo input refused', []),
@@ -129,11 +171,21 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         )
         error, calls, _ = self.exercise([wrong[0]])
         self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
         self.assertEqual(calls, [])
         for response in wrong[1:]:
             error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', response])
             self.assertIs(type(error), RuntimeError)
+            self.assertEqual(error.args, ('installed user identity response differs',))
             self.assertEqual(len([call for call in calls if call[0] == 'text']), 1)
+
+    def test_mismatch_never_returns_authorization_before_exact_response(self):
+        response = ('ARCTIC-USER ' + self.nonce + ' uid=1000 user=arcticqua\n').encode()
+        error, calls, _ = self.exercise([b'arcticqual@arctic-qual ~>\n', response])
+        self.assertIs(type(error), RuntimeError)
+        self.assertEqual(error.args, ('installed user identity response differs',))
+        self.assertEqual([call[0] for call in calls], ['text', 'keys'])
+        self.assertTrue(all(self.secret not in repr(call) for call in calls))
 
     def test_login_failure_private_echo_console_and_dimensions_fail_closed(self):
         cases = (
@@ -163,6 +215,25 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
             self.assertEqual(code, 'installer-inner-driver-installed-proof-' + label)
             self.assertNotIn(message, code)
             self.assertIn(code, D.DIAGNOSTIC_CODES)
+
+    def test_identity_observation_rejects_forged_or_value_bearing_shapes(self):
+        class Hostile(str):
+            def __eq__(self, _other):
+                raise AssertionError('must not compare hostile private text')
+
+        error = RuntimeError('installed user identity response differs')
+        private = 'private-ocr-value-' + self.nonce
+        forged = (
+            (object(), 'one', 'four', 'equal', 'true', 'true', 'true', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, Hostile('one'), 'four', 'equal', 'true', 'true', 'true', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, 'one', private, 'equal', 'true', 'true', 'true', 'true'),
+            (D._IDENTITY_OBSERVATION_TOKEN, 'one', 'four', 'equal', 'true', 'true', 'true'),
+        )
+        for observation in forged:
+            error._arctic_installer_identity_observation = observation
+            self.assertEqual(D.identity_observation_codes(error), ())
+        for code in D.DIAGNOSTIC_CODES:
+            self.assertNotIn(private, code)
 
 
 if __name__ == '__main__':
