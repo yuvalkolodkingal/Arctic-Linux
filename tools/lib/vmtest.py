@@ -6,6 +6,7 @@ socket; screenshots are PNG files written by QMP screendump; keys go in with QMP
 """
 import json
 import os
+import re
 import socket
 import subprocess
 import time
@@ -76,13 +77,21 @@ class VM:
         except (OSError, ValueError) as e:
             raise QMPError(str(e))
 
-    def shot(self, name):
+    def shot(self, name, *, device=None, head=None):
         """Screendump to <out>/<name>.png; returns the path or None."""
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid screendump head selector")
         path = f"{OUT}/{name}.png"
         if not self.alive():
             return None
         try:
-            r = self.cmd("screendump", filename=path, format="png")
+            arguments = {"filename": path, "format": "png"}
+            if selected:
+                arguments.update(device=device, head=head)
+            r = self.cmd("screendump", **arguments)
         except QMPError as e:
             log(f"screendump failed: {e}")
             return None
@@ -91,28 +100,114 @@ class VM:
             return None
         return path
 
-    def press(self, chord):
+    @staticmethod
+    def _input_selector(device, head):
+        selected = device is not None or head is not None
+        if selected and (not isinstance(device, str)
+                         or re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", device) is None
+                         or type(head) is not int or not 0 <= head <= 15):
+            raise ValueError("invalid input head selector")
+        return selected
+
+    def press(self, chord, *, device=None, head=None):
         """Press and release a chord (["shift", "a"]) in one input-send-event batch. With
         send-key, QEMU releases the keys on a timer, and a guest lagging under TCG can see
         the key held past its repeat delay ("suuuuudo"); here the release events arrive
         together with the presses."""
+        selected = self._input_selector(device, head)
         down = [{"type": "key", "data": {"down": True, "key": {"type": "qcode", "data": c}}} for c in chord]
         up = [{"type": "key", "data": {"down": False, "key": {"type": "qcode", "data": c}}} for c in reversed(chord)]
-        r = self.cmd("input-send-event", events=down + up)
+        arguments = {"events": down + up}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
         if "error" in r:
+            if selected:
+                raise QMPError("selected input event failed")
             # Older QEMU or no device for input-send-event: fall back to send-key.
             self.cmd("send-key", keys=[{"type": "qcode", "data": c} for c in chord], **{"hold-time": 30})
 
-    def keys(self, *names, gap=0.3):
+    def keys(self, *names, gap=0.3, device=None, head=None):
         """Press keys one after the other; "ctrl-x" style names press a chord."""
+        self._input_selector(device, head)
         for k in names:
-            self.press(k.split("-") if len(k) > 1 and "-" in k else [k])
+            self.press(k.split("-") if len(k) > 1 and "-" in k else [k],
+                       device=device, head=head)
             time.sleep(gap)
 
-    def type_text(self, text, gap=0.15):
+    def type_text(self, text, gap=0.15, *, device=None, head=None):
+        self._input_selector(device, head)
         for ch in text:
-            self.press(chord_for(ch))
+            self.press(chord_for(ch), device=device, head=head)
             time.sleep(gap)
+
+    @staticmethod
+    def _absolute_pointer_events(x, y, width, height):
+        if (type(x) is not int or type(y) is not int
+                or type(width) is not int or type(height) is not int
+                or not 2 <= width <= 16384 or not 2 <= height <= 16384
+                or not 0 <= x < width or not 0 <= y < height):
+            raise ValueError("invalid input pointer coordinates")
+        return [
+            {"type": "abs", "data": {"axis": "x", "value": x * 0x7FFF // (width - 1)}},
+            {"type": "abs", "data": {"axis": "y", "value": y * 0x7FFF // (height - 1)}},
+        ]
+
+    def pointer(self, x, y, width, height, *, device=None, head=None):
+        """Move the QEMU absolute pointer on one exact display head."""
+        selected = self._input_selector(device, head)
+        arguments = {"events": self._absolute_pointer_events(x, y, width, height)}
+        if selected:
+            arguments.update(device=device, head=head)
+        r = self.cmd("input-send-event", **arguments)
+        if "error" in r:
+            raise QMPError("selected pointer event failed" if selected else "pointer event failed")
+
+    def click(self, x, y, width, height, *, device=None, head=None):
+        """Move and click on one exact display head without an unselected fallback."""
+        selected = self._input_selector(device, head)
+        self.pointer(x, y, width, height, device=device, head=head)
+        # QMP synchronizes once after each input-send-event command. Keep the
+        # press and release in separate commands so the USB HID guest observes
+        # both button states, and give the compositor bounded time to process
+        # the absolute move before activation.
+        time.sleep(0.4)
+        arguments = {"events": [
+            {"type": "btn", "data": {"down": True, "button": "left"}},
+        ]}
+        if selected:
+            arguments.update(device=device, head=head)
+        primary = None
+        try:
+            try:
+                r = self.cmd("input-send-event", **arguments)
+            except QMPError:
+                raise QMPError("selected pointer button event failed"
+                               if selected else "pointer button event failed") from None
+            if "error" in r:
+                raise QMPError("selected pointer button event failed"
+                               if selected else "pointer button event failed")
+            time.sleep(0.15)
+        except BaseException as error:
+            primary = error
+            raise
+        finally:
+            release = {"events": [
+                {"type": "btn", "data": {"down": False, "button": "left"}},
+            ]}
+            if selected:
+                release.update(device=device, head=head)
+            try:
+                r = self.cmd("input-send-event", **release)
+                if "error" in r:
+                    raise QMPError("selected pointer release failed"
+                                   if selected else "pointer release failed")
+            except BaseException as error:
+                if primary is None:
+                    if isinstance(error, QMPError):
+                        raise QMPError("selected pointer release failed"
+                                       if selected else "pointer release failed") from None
+                    raise
 
     def quit(self):
         if self.alive():
@@ -211,19 +306,13 @@ def amber_runs(path, scale=2):
     return runs, scale
 
 
-def _login_controls(im):
-    """Find the SDDM submit button beside both edges of its password field.
-
-    Wallpaper colours can produce much longer amber runs than the controls. Match
-    their local geometry instead of letting unrelated rows hide the login card.
-    The card is horizontally centred; its exact vertical position depends on the
-    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
-    """
+def _login_geometry(im):
+    """Return the password-field and submit-button boxes for the SDDM card."""
     w, h = im.size
     if w < 320 or h < 200:
-        return False
-    region = im.crop((max(0, w // 2 - 400), h // 4,
-                      min(w, w // 2 + 400), h))
+        return None
+    rx0, ry0 = max(0, w // 2 - 400), h // 4
+    region = im.crop((rx0, ry0, min(w, w // 2 + 400), h))
     rw, rh = region.size
     mask = bytearray(_is_amber(p) for p in region.getdata())
     components = []
@@ -259,15 +348,86 @@ def _login_controls(im):
                     and 0 < bx0 - x1 <= bw):
                 edges.append((x0, y0, x1, y1))
         for tx0, ty0, tx1, ty1 in edges:
-            if not (abs(ty0 - by0) <= 0.2 * bh):
+            if abs(ty0 - by0) > 0.2 * bh:
                 continue
             for lx0, ly0, lx1, ly1 in edges:
                 if (abs(ly1 - by1) <= 0.2 * bh
                         and ly0 - ty1 >= 0.7 * bh
                         and abs(tx0 - lx0) <= 0.2 * bw
                         and abs(tx1 - lx1) <= 0.2 * bw):
-                    return True
-    return False
+                    field = (tx0 + rx0, ty0 + ry0, tx1 + rx0, ly1 + ry0)
+                    button = (bx0 + rx0, by0 + ry0, bx1 + rx0, by1 + ry0)
+                    return field, button
+    return None
+
+
+def _login_controls(im):
+    """Find the SDDM submit button beside both edges of its password field.
+
+    Wallpaper colours can produce much longer amber runs than the controls. Match
+    their local geometry instead of letting unrelated rows hide the login card.
+    The card is horizontally centred; its exact vertical position depends on the
+    screen height, clock and number of user rows (branding/sddm/arctic/Main.qml).
+    """
+    return _login_geometry(im) is not None
+
+
+def _login_password_roi_change(before_path, after_path):
+    try:
+        before = Image.open(before_path).convert("L")
+        after = Image.open(after_path).convert("L")
+    except OSError:
+        return None
+    if before.size != after.size:
+        return None
+    before_geometry = _login_geometry(Image.open(before_path).convert("RGB"))
+    after_geometry = _login_geometry(Image.open(after_path).convert("RGB"))
+    if before_geometry is None or after_geometry is None:
+        return None
+    before_field, _ = before_geometry
+    after_field, _ = after_geometry
+    if any(abs(a - b) > 2 for a, b in zip(before_field, after_field)):
+        return None
+    x0, y0, x1, y1 = before_field
+    height = y1 - y0
+    # Exclude the amber border/caret, the leading lock icon and trailing padding.
+    roi = (x0 + height, y0 + max(3, height // 6),
+           x1 - max(3, height // 6), y1 - max(3, height // 6))
+    if roi[2] <= roi[0] or roi[3] <= roi[1]:
+        return None
+    a = before.crop(roi)
+    b = after.crop(roi)
+    return sum(abs(x - y) > 24 for x, y in zip(a.getdata(), b.getdata()))
+
+
+def login_password_changed(before_path, after_path):
+    """Whether bounded pixels inside the detected password text ROI changed.
+
+    This checks that physical input reached the editable field without reading,
+    recognizing or retaining the password. Changes to wallpaper, clock, focus
+    border, lock icon or submit button are excluded.
+    """
+    changed = _login_password_roi_change(before_path, after_path)
+    return changed is not None and changed >= 24
+
+
+def login_password_cleared(before_path, after_path):
+    """Whether a probed password ROI returned to its observed empty state."""
+    changed = _login_password_roi_change(before_path, after_path)
+    return changed is not None and changed < 24
+
+
+def login_password_target(path):
+    """Return the observed password-field centre and local head dimensions."""
+    try:
+        image = Image.open(path).convert("RGB")
+    except OSError:
+        return None
+    geometry = _login_geometry(image)
+    if geometry is None:
+        return None
+    (x0, y0, x1, y1), _ = geometry
+    return ((x0 + x1) // 2, (y0 + y1) // 2, image.width, image.height)
 
 
 def classify(path):

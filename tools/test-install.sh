@@ -262,6 +262,12 @@ if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
     [[ -f "$NATIVE_TASKBAR_BUNDLE/$name" && ! -L "$NATIVE_TASKBAR_BUNDLE/$name" ]] || arctic_die "missing taskbar fixture file"
     cp -a "$NATIVE_TASKBAR_BUNDLE/$name" "$DATA/$name"
   done
+  # Do not let the workflow runner's umask become Rock Ridge policy.  The
+  # installed desktop can also automount this CD before the root collector,
+  # so the boot stub stages these normalized bytes into a protected read-only
+  # root-owned bind mount below.
+  chmod 0644 "$DATA/taskbar.py" "$DATA/taskbar-runtime.py" "$DATA/native_smoke.py" "$DATA/taskbar-context.json"
+  chmod 0755 "$DATA/virtual-pointer" "$DATA/raw-screencopy"
   [[ -f "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" && ! -L "$NATIVE_TASKBAR_DISPLAY_CONTROLLER" ]] ||
     arctic_die "taskbar fixture requires its pinned host display controller"
   taskbar_host_args=(-v "$NATIVE_TASKBAR_DISPLAY_CONTROLLER:/arctic-taskbar-display.py:ro")
@@ -494,6 +500,50 @@ chmod 0755 "$DATA/run.sh" "$DATA/collect.sh"
 # unused), so the command typed into the VM is only `sudo sh /dev/sr0`: under TCG a busy guest
 # can lose keys (QEMU's PS/2 queue holds 16 bytes), and the shorter the command the better.
 # bash stops at the exec, before the NUL padding and the file system behind it.
+if [[ -n "$NATIVE_TASKBAR_BUNDLE" ]]; then
+cat > "$OUT/sysarea.sh" <<'EOF'
+#!/bin/bash
+# tools/test-install.sh: protected taskbar fixture bootstrap.  The desktop may
+# already have mounted the optical media with per-user ownership, so never run
+# the reviewed bundle directly from that shared superblock view.
+[ "$(id -u)" = 0 ] || exit 1
+umask 022
+media=/dev/disk/by-label/ARCTICTEST
+source=/run/arctic-test-source
+stage=/run/arctic-test-stage
+target=/run/t
+[ ! -e "$source" ] && [ ! -L "$source" ] || exit 1
+[ ! -e "$stage" ] && [ ! -L "$stage" ] || exit 1
+[ ! -e "$target" ] && [ ! -L "$target" ] || exit 1
+mkdir -m 0700 "$source" "$stage" || exit 1
+mkdir -m 0755 "$target" || exit 1
+mountpoint -q "$source" && exit 1
+mountpoint -q "$target" && exit 1
+mount -t iso9660 -o ro,nodev,nosuid "$media" "$source" || exit 1
+expected="$(readlink -f "$media")" || exit 1
+actual="$(findmnt -nro SOURCE -T "$source")" || exit 1
+[ -n "$expected" ] && [ "$(readlink -f "$actual")" = "$expected" ] || exit 1
+[ "$(findmnt -nro FSTYPE -T "$source")" = iso9660 ] || exit 1
+case ",$(findmnt -nro OPTIONS -T "$source")," in *,ro,*) ;; *) exit 1 ;; esac
+[ -z "$(find "$source" -xdev ! -type d ! -type f -print -quit)" ] || exit 1
+cp -R --no-preserve=ownership "$source"/. "$stage"/ || exit 1
+chown -R 0:0 "$stage" || exit 1
+chmod -R go-w "$stage" || exit 1
+chmod -R a-s "$stage" || exit 1
+chmod 0755 "$stage" || exit 1
+[ -z "$(find "$stage" -xdev ! -type d ! -type f -print -quit)" ] || exit 1
+[ -z "$(find "$stage" -xdev \( ! -uid 0 -o ! -gid 0 -o -perm /6022 \) -print -quit)" ] || exit 1
+mount --bind "$stage" "$target" || exit 1
+mount -o remount,bind,ro,nodev,nosuid "$target" || exit 1
+target_options=",$(findmnt -nro OPTIONS -T "$target"),"
+case "$target_options" in *,ro,*) ;; *) exit 1 ;; esac
+case "$target_options" in *,nodev,*) ;; *) exit 1 ;; esac
+case "$target_options" in *,nosuid,*) ;; *) exit 1 ;; esac
+if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py; fi
+if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
+exit 1
+EOF
+else
 cat > "$OUT/sysarea.sh" <<'EOF'
 #!/bin/bash
 # tools/test-install.sh: first bytes of the test data CD, run as `sudo sh /dev/sr0 [PID]`.
@@ -503,6 +553,7 @@ if [ -f /run/t/native-launcher.py ]; then exec python3 /run/t/native-launcher.py
 if [ -e /run/rootfsbase ]; then exec bash /run/t/run.sh; else exec bash /run/t/collect.sh "$@"; fi
 exit 1
 EOF
+fi
 
 if [[ -n "$NATIVE_PHYSICAL_CONTROLLER" ]]; then
   [[ "$NATIVE_AUDIO_FIXTURE" == 1 && -n "$GUEST_CHECK" && -n "${ARCTIC_NATIVE_LAUNCHER:-}" && "$COLLECT_VIA" == terminal ]] || arctic_die "physical fixture requires native launcher/checker/audio"
@@ -765,7 +816,16 @@ def physical_poll(vm,name):
     # Only a complete newline-framed prefix is eligible for transient polling.
     # Raw serial is unchanged and the final host reader remains strict over ALL bytes.
     complete,separator,pending=data.rpartition(b"\n")
-    if len(pending)>65536:raise RuntimeError("physical unfinished line bound exceeded")
+    if len(pending)>65536:
+        # The original functional report is a single complete JSON record and
+        # can legitimately grow beyond the controller request-line bound.
+        # Only that exact prefix gets a separate finite in-progress allowance;
+        # final parsing still requires valid JSON, one newline and the END receipt.
+        if pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL "):
+            if len(pending)>4*1024*1024:
+                raise RuntimeError("physical functional report pending bound exceeded")
+            return True
+        raise RuntimeError("physical unfinished line bound exceeded")
     raw=(complete+b"\n" if separator else b"").decode("utf-8",errors="strict")
     if "ARCTIC-NATIVE-RUNNER-BEGIN " not in raw:return True
     if name not in physical_controllers:
@@ -1135,6 +1195,355 @@ def wait_for(vm, prefix, want, limit, every=5):
         time.sleep(every)
     return None
 
+def discard_private_shot(path):
+    """Remove a transient screenshot that may reveal typed-length or session data."""
+    discard_private_shots((path,))
+
+
+def discard_private_shots(paths):
+    """Attempt every private-frame removal before reporting a path-free failure."""
+    failed = False
+    interrupted = None
+    for path in paths:
+        if not path:
+            continue
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except (KeyboardInterrupt, SystemExit) as error:
+            if interrupted is None:
+                interrupted = error
+        except Exception:
+            failed = True
+    if interrupted is not None:
+        raise interrupted
+    if failed:
+        raise RuntimeError("private screenshot cleanup failed") from None
+
+
+def discard_private_shots_preserving(paths, primary):
+    """Clean every private frame without replacing an exception already in flight."""
+    try:
+        discard_private_shots(paths)
+    except BaseException:
+        if primary is None:
+            raise
+
+
+def installed_login_heads(vm, display):
+    """Return exact QMP head selectors from the already verified display proof."""
+    if display is None:
+        return ((None, None),)
+    proof = getattr(display, "proof", None)
+    process = getattr(vm, "proc", None)
+    if (type(proof) is not dict
+            or proof.get("schema") != "arctic-qemu-taskbar-display-v1"
+            or proof.get("status") != "uiinfo_applied_pending_guest_two_output_evidence"
+            or type(proof.get("qemu_uid")) is not int or proof["qemu_uid"] != 0
+            or type(getattr(process, "pid", None)) is not int
+            or type(proof.get("qemu_pid")) is not int or proof["qemu_pid"] != process.pid
+            or proof.get("gpu_id") != "arctic_taskbar_gpu"
+            or proof.get("display_backend") != "dbus"
+            or proof.get("guest_monitor_verification_required") is not True
+            or type(proof.get("heads")) is not list or len(proof["heads"]) != 2):
+        raise RuntimeError("installed login display proof differs")
+    rows = proof["heads"]
+    if (any(type(row) is not dict or type(row.get("head")) is not int
+            or type(row.get("console_id")) is not int or row["console_id"] < 0
+            or type(row.get("device_address")) is not str
+            or type(row.get("width_mm")) is not int or row["width_mm"] != 340
+            or type(row.get("height_mm")) is not int or row["height_mm"] != 190
+            or type(row.get("xoff")) is not int or row["xoff"] != row["head"] * 1280
+            or type(row.get("yoff")) is not int or row["yoff"] != 0
+            or type(row.get("width")) is not int or row["width"] != 1280
+            or type(row.get("height")) is not int or row["height"] != 720 for row in rows)
+            or {row["head"] for row in rows} != {0, 1}
+            or len({row["console_id"] for row in rows}) != 2
+            or len({row["device_address"] for row in rows}) != 1):
+        raise RuntimeError("installed login display heads differ")
+    return tuple((proof["gpu_id"], row["head"])
+                 for row in sorted(rows, key=lambda row: row["head"]))
+
+
+INSTALLED_LOGIN_STAGE_CODES = frozenset({
+    "no-login-head", "head-capture-invalid", "target-missing",
+    "focused-empty-rejected", "public-probe-rejected", "clear-rejected",
+    "secret-roi-rejected",
+})
+
+
+def installed_login_stage(code):
+    """Emit one closed, path-free diagnostic without pixels or typed values."""
+    if type(code) is not str or code not in INSTALLED_LOGIN_STAGE_CODES:
+        raise RuntimeError("installed login stage code differs") from None
+    log("installed login stage: " + code)
+
+
+def installed_login_pointer_layout(display, selectors):
+    """Bind the single absolute tablet to the exact global two-head layout."""
+    if display is None:
+        return None
+    proof = display.proof
+    rows = sorted(proof["heads"], key=lambda row: row["head"])
+    left = min(row["xoff"] for row in rows)
+    top = min(row["yoff"] for row in rows)
+    right = max(row["xoff"] + row["width"] for row in rows)
+    bottom = max(row["yoff"] + row["height"] for row in rows)
+    area = sum(row["width"] * row["height"] for row in rows)
+    if (left != 0 or top != 0 or right != 2560 or bottom != 720
+            or area != (right - left) * (bottom - top)
+            or tuple((proof["gpu_id"], row["head"]) for row in rows) != selectors):
+        raise RuntimeError("installed login display layout differs")
+    return {(proof["gpu_id"], row["head"]):
+            (row["xoff"], row["yoff"], row["width"], row["height"], right, bottom)
+            for row in rows}
+
+
+def installed_login_pointer_coordinates(layout, selector, target):
+    """Translate one head-local target into the unbound USB tablet's global space."""
+    if (type(target) is not tuple or len(target) != 4
+            or any(type(value) is not int for value in target)):
+        raise RuntimeError("installed login pointer geometry differs")
+    x, y, width, height = target
+    if (not 2 <= width <= 16384 or not 2 <= height <= 16384
+            or not 0 <= x < width or not 0 <= y < height):
+        raise RuntimeError("installed login pointer geometry differs")
+    if layout is None:
+        return (x, y, width, height), (0, 0, width, height)
+    if selector not in layout:
+        raise RuntimeError("installed login pointer selector differs")
+    xoff, yoff, expected_width, expected_height, desktop_width, desktop_height = layout[selector]
+    if width != expected_width or height != expected_height:
+        raise RuntimeError("installed login pointer geometry differs")
+    return ((xoff + x, yoff + y, desktop_width, desktop_height),
+            (xoff, yoff, desktop_width, desktop_height))
+
+
+def installed_login(vm, display=None):
+    """Focus and enter the installed password on one observed QMP login head."""
+    selectors = installed_login_heads(vm, display)
+    pointer_layout = installed_login_pointer_layout(display, selectors)
+    for attempt in (1, 2, 3):
+        accepted_selector = None
+        last_stage = "no-login-head"
+        for target_index, (target_device, target_head) in enumerate(selectors):
+            before = []
+            focused = []
+            probe = []
+            cleared = []
+            typed = []
+            private = []
+            primary = None
+            target = None
+            accepted = False
+            route = "" if target_device is None else f"-target{target_head}"
+            try:
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-before-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    before.append(path)
+                before_kinds = [vmtest.classify(path) if path else "none" for path in before]
+                if any(kind == "none" for kind in before_kinds):
+                    installed_login_stage("head-capture-invalid")
+                    log("installed login controls are not visible")
+                    return False
+                if before_kinds[target_index] != "login":
+                    continue
+
+                # Selecting a QMP console routes input to a scanout, but it does not
+                # prove that the guest compositor activated that surface. Click only
+                # the password field found on this exact login head, then require a
+                # public probe to change the same bounded ROI before sending a secret.
+                target = vmtest.login_password_target(before[target_index])
+                if target is None:
+                    installed_login_stage("target-missing")
+                    log("installed login controls are not visible")
+                    return False
+                # The VM has one unbound USB tablet, whose absolute axes cover
+                # the whole guest output layout. QMP's selected console still
+                # binds capture and keyboard identity, but does not make these
+                # tablet coordinates head-local.
+                focus_pointer, park_pointer = installed_login_pointer_coordinates(
+                    pointer_layout, (target_device, target_head), target)
+                vm.click(*focus_pointer, device=target_device, head=target_head)
+                vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
+                time.sleep(1)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-focused-empty-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    focused.append(path)
+                focused_kinds = [vmtest.classify(path) if path else "none" for path in focused]
+                focused_empty = (all(kind != "none" for kind in focused_kinds)
+                                 and before_kinds[target_index] == focused_kinds[target_index] == "login"
+                                 and vmtest.login_password_cleared(
+                                     before[target_index], focused[target_index]))
+                if not focused_empty:
+                    last_stage = "focused-empty-rejected"
+                    continue
+                vm.type_text("probe", gap=0.3, device=target_device, head=target_head)
+                time.sleep(1)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-public-probe-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    probe.append(path)
+                probe_kinds = [vmtest.classify(path) if path else "none" for path in probe]
+                probe_accepted = (all(kind != "none" for kind in probe_kinds)
+                                  and focused_kinds[target_index] == probe_kinds[target_index] == "login"
+                                  and vmtest.login_password_changed(
+                                      focused[target_index], probe[target_index]))
+                vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
+                time.sleep(1)
+                if not probe_accepted:
+                    last_stage = "public-probe-rejected"
+                    continue
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-cleared-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    cleared.append(path)
+                cleared_kinds = [vmtest.classify(path) if path else "none" for path in cleared]
+                cleared_accepted = (all(kind != "none" for kind in cleared_kinds)
+                                    and focused_kinds[target_index] == cleared_kinds[target_index] == "login"
+                                    and vmtest.login_password_cleared(
+                                        focused[target_index], cleared[target_index]))
+                if not cleared_accepted:
+                    last_stage = "clear-rejected"
+                    continue
+                vm.type_text(password, gap=0.3, device=target_device, head=target_head)
+                time.sleep(1)
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-42-password-typed-{attempt}{route}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    typed.append(path)
+                typed_kinds = [vmtest.classify(path) if path else "none" for path in typed]
+                accepted = (all(kind != "none" for kind in typed_kinds)
+                            and before_kinds[target_index] == typed_kinds[target_index] == "login"
+                            and vmtest.login_password_changed(
+                                cleared[target_index], typed[target_index]))
+                if not accepted:
+                    last_stage = "secret-roi-rejected"
+            except BaseException as error:
+                primary = error
+                raise
+            finally:
+                discard_private_shots_preserving(private, primary)
+            if accepted:
+                accepted_selector = (target_device, target_head)
+                break
+            vm.keys("ctrl-a", "backspace", device=target_device, head=target_head)
+            if target is not None:
+                vm.pointer(*park_pointer, device=target_device, head=target_head)
+            time.sleep(1)
+        if accepted_selector is None:
+            installed_login_stage(last_stage)
+            log("installed password field did not accept physical input")
+            return False
+        accepted_device, accepted_head = accepted_selector
+        vm.keys("ret", device=accepted_device, head=accepted_head)
+        t = time.time()
+        probe_index = 0
+        while time.time() - t < 150 and vm.alive():
+            time.sleep(10)
+            probe_index += 1
+            probes = []
+            private = []
+            primary = None
+            try:
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-43-probe-{probe_index}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    probes.append(path)
+                kinds = [vmtest.classify(path) if path else "none" for path in probes]
+            except BaseException as error:
+                primary = error
+                raise
+            finally:
+                discard_private_shots_preserving(private, primary)
+            if any(kind == "none" for kind in kinds):
+                log("installed login transition head capture is invalid")
+                return False
+            if all(kind != "login" for kind in kinds):
+                return True
+        # A hung greeter may leave bullets behind. Clear it before any retry or
+        # failure, and retain only the textual state transition diagnostic.
+        vm.keys("ctrl-a", "backspace", device=accepted_device, head=accepted_head)
+        time.sleep(1)
+        log(f"installed login did not transition (attempt {attempt})")
+    return False
+
+
+def installed_session_settled(vm, display=None):
+    """Require a stable installed desktop and reject any return to SDDM."""
+    selectors = installed_login_heads(vm, display)
+    previous = []
+    primary = None
+    try:
+        t = time.time()
+        stable = 0
+        index = 0
+        while time.time() - t < 900 and vm.alive():
+            time.sleep(20)
+            index += 1
+            current = []
+            private = []
+            try:
+                for device, head in selectors:
+                    suffix = "" if device is None else f"-head{head}"
+                    name = f"boot-50-session-{index:02d}{suffix}"
+                    private.append(f"{out}/{name}.png")
+                    path = vm.shot(name) if device is None else vm.shot(name, device=device, head=head)
+                    current.append(path)
+                kinds = [vmtest.classify(path) if path else "none" for path in current]
+            except BaseException as error:
+                discard_private_shots_preserving(private, error)
+                raise
+            if any(kind == "none" for kind in kinds):
+                discard_private_shots(private)
+                log("installed session head capture is invalid")
+                return False
+            if any(kind == "login" for kind in kinds):
+                discard_private_shots(private)
+                log("installed session returned to the login screen")
+                return False
+            if previous:
+                try:
+                    stable = stable + 1 if all(vmtest.changed_fraction(old, new) < 0.02
+                                               for old, new in zip(previous, current)) else 0
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+                try:
+                    discard_private_shots(previous)
+                except BaseException as error:
+                    discard_private_shots_preserving(private, error)
+                    raise
+            previous = current
+            if stable >= 2 and time.time() - t > 90:
+                log(f"session settled after {time.time() - t:.0f}s")
+                return True
+        log("installed session did not settle within 900s")
+        return False
+    except BaseException as error:
+        primary = error
+        raise
+    finally:
+        discard_private_shots_preserving(previous, primary)
+
+
 def stage_boot():
     vm = None
     display = None
@@ -1201,43 +1610,14 @@ def stage_boot():
             log("no login screen detected; typing the password anyway")
             ok = False
         dictation_host_stage("boot-login")
-        for attempt in (1, 2, 3):
-            vm.type_text(password, gap=0.3)
-            time.sleep(1)
-            vm.shot(f"boot-42-password-typed-{attempt}")
-            vm.keys("ret")
-            # SDDM clears the field and says so when the password was wrong; the card stays.
-            t = time.time()
-            gone = False
-            while time.time() - t < 150 and vm.alive():
-                time.sleep(10)
-                q = vm.shot("boot-43-probe")
-                if q and vmtest.classify(q) != "login":
-                    gone = True
-                    break
-            if gone:
-                break
-            log(f"still on the login screen after the password (attempt {attempt}): typing it again")
-            vm.shot(f"boot-43-login-again-{attempt}")
-        # The desktop: the login card is gone and the screen settles.
+        if not installed_login(vm, display):
+            log("installed login failed; private greeter capture suppressed")
+            return 1
+        # The desktop must stay off the login card and settle before collection.
         dictation_host_stage("boot-settle")
-        t = time.time()
-        prev = None
-        stable = 0
-        i = 0
-        while time.time() - t < 900 and vm.alive():
-            time.sleep(20)
-            i += 1
-            p = vm.shot(f"boot-50-session-{i:02d}")
-            if not p:
-                continue
-            kind = vmtest.classify(p)
-            if prev and kind != "login":
-                stable = stable + 1 if vmtest.changed_fraction(prev, p) < 0.02 else 0
-            prev = p
-            if stable >= 2 and time.time() - t > 90:
-                break
-        log(f"session settled after {time.time() - t:.0f}s")
+        if not installed_session_settled(vm, display):
+            log("installed session did not settle; private session capture suppressed")
+            return 1
         time.sleep(30)
         vm.shot("boot-51-desktop")
         collected = False

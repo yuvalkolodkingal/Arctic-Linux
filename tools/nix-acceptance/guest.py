@@ -83,7 +83,7 @@ def no_new_nix_avc(before):
     return 'no matching new Nix/Foot AVC'
 
 
-def verified_rpm_signatures(files):
+def verified_rpm_signatures(files, expected_fingerprint=None):
     """Require a successful cryptographic signature for every downloaded RPM.
 
     RPM 6 prints lowercase ``signature``. A digest-only unsigned RPM can also
@@ -91,6 +91,8 @@ def verified_rpm_signatures(files):
     """
     if not files:
         raise RuntimeError('No RPM files to verify')
+    if expected_fingerprint is not None and not re.fullmatch('[0-9A-F]{40}', expected_fingerprint):
+        raise RuntimeError('Expected RPM signing fingerprint must be a full uppercase fingerprint')
     output = run(['rpmkeys', '--checksig', '--verbose', *files], timeout=180)
     blocks = {}
     current = None
@@ -105,6 +107,11 @@ def verified_rpm_signatures(files):
         signatures = [line for line in lines if re.search(r'\bsignature\b', line, re.I)]
         if not signatures or any(not line.endswith(': OK') for line in signatures):
             raise RuntimeError(f'No valid signature for {filename}: {lines!r}')
+        if expected_fingerprint is not None:
+            fingerprints = [match.group(1).upper() for line in signatures
+                            if (match := re.search(r'key fingerprint:\s*([0-9a-f]{40})\b', line, re.I))]
+            if not fingerprints or any(value != expected_fingerprint for value in fingerprints):
+                raise RuntimeError(f'Unexpected signing key for {filename}: {signatures!r}')
     return output
 
 
@@ -203,7 +210,7 @@ def desktop():
                     f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
                     'XDG_SESSION_TYPE=wayland',
                     *[f'{key}={env[key]}' for key in ('PATH', 'XDG_DATA_DIRS', 'XDG_DATA_HOME',
-                        'XDG_CONFIG_HOME', 'XDG_CACHE_HOME') if key in env],
+                        'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'GSK_RENDERER') if key in env],
                     *([f'MANGO_SOCKET={env["MANGO_SOCKET"]}'] if 'MANGO_SOCKET' in env else [])]
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -333,7 +340,8 @@ def nix_window_identity(client, before_processes, expected_executable, uid, proc
     return value
 
 
-def app(prefix, command, pattern, timeout=300, expected_executable=None, proc_root=Path('/proc')):
+def app(prefix, command, pattern, timeout=300, expected_executable=None, expected_env=None,
+        proc_root=Path('/proc')):
     before = set(clients(prefix))
     uid = pwd.getpwnam(prefix[2]).pw_uid if expected_executable else None
     before_processes = process_snapshot(proc_root, uid) if expected_executable else set()
@@ -352,6 +360,24 @@ def app(prefix, command, pattern, timeout=300, expected_executable=None, proc_ro
                     key = sorted(new)[0]
                     if expected_executable:
                         proof = nix_window_identity(current[key], before_processes, expected_executable, uid, proc_root)
+                    if expected_env:
+                        if proof is None:
+                            raise RuntimeError('environment proof requires an exact executable identity')
+                        before_env = nix_window_identity(current[key], before_processes,
+                                                         expected_executable, uid, proc_root)
+                        with (proc_root/str(proof['pid'])/'environ').open('rb') as stream:
+                            raw=stream.read(65537)
+                        if len(raw)>65536:
+                            raise RuntimeError('application environment exceeded bound')
+                        after_env = nix_window_identity(current[key], before_processes,
+                                                        expected_executable, uid, proc_root)
+                        if before_env != proof or after_env != proof:
+                            raise RuntimeError('application identity changed while reading environment')
+                        values=raw.split(b'\0')
+                        for name,value in expected_env.items():
+                            prefix_bytes=(name+'=').encode()
+                            if [v for v in values if v.startswith(prefix_bytes)] != [(name+'='+value).encode()]:
+                                raise RuntimeError(f'application environment differs for {name}')
                     time.sleep(5)
                     later = clients(prefix)
                     if key in later:
@@ -649,11 +675,15 @@ def browser(prefix):
                 visual_review='retained45s; startup/sandbox smoke, not full media/a11y/site qualification')
 
 
-def main(update_method='dnf', expected_stable_source=None):
+def main(update_method='dnf', expected_stable_source=None, expected_stable_fingerprint=None):
     if update_method not in ('dnf', 'arctic-offline'):
         raise ValueError('Unknown update acceptance method')
     if expected_stable_source is not None and not re.fullmatch('[0-9a-f]{40}', expected_stable_source):
         raise ValueError('Expected stable source must be a full Git SHA')
+    if expected_stable_fingerprint is not None and not re.fullmatch('[0-9A-F]{40}', expected_stable_fingerprint):
+        raise ValueError('Expected stable fingerprint must be a full uppercase fingerprint')
+    if bool(expected_stable_source) != bool(expected_stable_fingerprint):
+        raise ValueError('Expected stable source and signing fingerprint must be pinned together')
     stage = sys.argv[1]
     if (Path(__file__).parent != Path('/run/t') or os.geteuid() != 0
             or run(['systemd-detect-virt']) not in ('qemu', 'kvm')):
@@ -695,7 +725,9 @@ def main(update_method='dnf', expected_stable_source=None):
           'foot|kitty|alacritty|ghostty'))
     if configured == 'epiphany':
         check('configured-editor', lambda: app(prefix, ['/usr/bin/arctic-open', 'editor'], 'featherpad'))
-        check('native-media-player', lambda: app(prefix, ['/usr/bin/celluloid'], 'celluloid|io.github.celluloid_player.Celluloid'))
+        check('native-media-player', lambda: app(prefix, ['gtk-launch','io.github.celluloid_player.Celluloid'],
+              'celluloid|io.github.celluloid_player.Celluloid', expected_executable='/usr/bin/celluloid',
+              expected_env={'GSK_RENDERER':'gl'}))
         check('native-archive-manager', lambda: app(prefix, ['/usr/bin/xarchiver'], 'xarchiver'))
         check('native-archive-helpers', lambda: archive_tools(prefix))
 
@@ -901,7 +933,7 @@ ShellRoot {
                 files = [str(path) for path in Path('/var/lib/dnf/offline/packages').rglob('*.rpm')
                          if path.name.startswith(('arctic-', 'sddm-wayland-mango-'))]
                 must(bool(files), 'signed Arctic packages were actually downloaded')
-                signatures = verified_rpm_signatures(files)
+                signatures = verified_rpm_signatures(files, expected_stable_fingerprint)
                 expected = {line.split()[0] for line in run(['rpm', '-qa', '--qf', '%{NAME} %{RELEASE}\n']).splitlines()
                             if '.preview.' in line and line.startswith(('arctic-', 'sddm-wayland-mango '))}
                 downloaded = set(run(['rpm', '-qp', '--qf', '%{NAME}\n', *files], timeout=180).splitlines())
@@ -923,7 +955,8 @@ ShellRoot {
         if not failed:
             state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(),
                                   profile=str(profile.resolve()), update_method=update_method, arctic_rpms=before_arctic,
-                                  expected_stable_source=expected_stable_source)))
+                                  expected_stable_source=expected_stable_source,
+                                  expected_stable_fingerprint=expected_stable_fingerprint)))
     for log in ('/tmp/arctic-release-app.log', '/tmp/arctic-nix-desktop-probe.log'):
         if Path(log).exists():
             print(Path(log).read_text(errors='replace')[-8000:], flush=True)
