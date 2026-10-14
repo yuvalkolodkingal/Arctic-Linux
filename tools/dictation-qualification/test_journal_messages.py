@@ -6,9 +6,24 @@ from test_collector_diagnostics import restore_collector_diagnostics
 SPEC=importlib.util.spec_from_file_location('journal_messages_guest',Path(__file__).with_name('guest_check.py'))
 guest=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(guest)
 CFCC_SHA256='9eb689b71483dd31c71bb4419648737eff8b64a32600325947b24770f589fdcc'
+INTERVAL_BOUND_BLOCK="""    # The complete same-boot MESSAGE projection can exceed the ordinary
+    # command bound during CPU transcription. Keep it finite and private, but
+    # scan the whole interval instead of treating valid evidence as an app
+    # failure. All other command output retains the original 16 MiB bound.
+    limit = 32 * 1024 * 1024 if output_role == 'interval-journal' else 16 * 1024 * 1024
+    require(len(result.stdout) + len(result.stderr) < limit, code)
+"""
+ORIGINAL_BOUND="    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)\n"
+
+def restore_interval_journal_bound(text):
+    if INTERVAL_BOUND_BLOCK not in text:
+        assert ORIGINAL_BOUND in text
+        return text
+    assert text.count(INTERVAL_BOUND_BLOCK)==1
+    return text.replace(INTERVAL_BOUND_BLOCK,ORIGINAL_BOUND)
 
 def restore_journal_projection(text):
-    text=restore_collector_diagnostics(text)
+    text=restore_collector_diagnostics(restore_interval_journal_bound(text))
     node=next(n for n in ast.parse(text).body if isinstance(n,ast.FunctionDef) and n.name=='journal_messages')
     lines=text.splitlines(keepends=True);end=node.end_lineno
     assert lines[end]=='\n';del lines[node.lineno-1:end+1]
@@ -62,7 +77,7 @@ class JournalMessageSemantics(unittest.TestCase):
     def test_full_same_boot_after_cursor_commands_deadlines_roles_and_whole_rollback(self):
         text=Path(guest.__file__).read_text();restored=restore_journal_projection(text)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),CFCC_SHA256)
-        before,after=ast.parse(restored),ast.parse(restore_collector_diagnostics(text))
+        before,after=ast.parse(restored),ast.parse(restore_interval_journal_bound(restore_collector_diagnostics(text)))
         old={n.name:n for n in ast.walk(before) if isinstance(n,ast.FunctionDef)};new={n.name:n for n in ast.walk(after) if isinstance(n,ast.FunctionDef)}
         for name,node in old.items():
             if name not in ('leakage','avcs'):self.assertEqual(ast.dump(node),ast.dump(new[name]))
@@ -72,13 +87,16 @@ class JournalMessageSemantics(unittest.TestCase):
             self.assertEqual([ast.literal_eval(x) for i,x in enumerate(argv) if i!=4],['journalctl','-b','--no-pager','--after-cursor','-o','json','--output-fields=MESSAGE','--all'])
             self.assertIsInstance(argv[4],ast.Attribute);self.assertEqual(argv[4].attr,'cursor');self.assertEqual(ast.literal_eval(call.args[1]),60)
             self.assertEqual({k.arg:ast.literal_eval(k.value) for k in call.keywords},{'output_role':'interval-journal'})
-    def test_command_bound_remains_strict_at_sixteen_MiB_including_stderr(self):
-        limit=16*1024*1024
+    def test_interval_bound_is_finite_and_separate_from_ordinary_commands(self):
+        limit=32*1024*1024
         for out,err,passed in ((b' '*(limit-1),b'',True),(b' '*limit,b'',False),(b' '*(limit-1),b'e',False)):
             with mock.patch.object(guest.subprocess,'run',return_value=subprocess.CompletedProcess([],0,stdout=out,stderr=err)):
                 if passed:self.assertEqual(len(guest.run(['private'],60,output_role='interval-journal').stdout),limit-1)
                 else:
                     with self.assertRaisesRegex(guest.Invalid,r'^command-output-bound-journal-o[0-9]+-e[0-9]+$'):guest.run(['private'],60,output_role='interval-journal')
+        ordinary=16*1024*1024
+        with mock.patch.object(guest.subprocess,'run',return_value=subprocess.CompletedProcess([],0,stdout=b' '*ordinary,stderr=b'')):
+            with self.assertRaisesRegex(guest.Invalid,'^command-output-bound$'):guest.run(['private'],60)
     def test_real_journalctl_supports_projection_flags_without_journal_write(self):
         import shutil,tempfile
         if not shutil.which('journalctl'):self.skipTest('journalctl unavailable')

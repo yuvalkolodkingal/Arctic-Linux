@@ -1,4 +1,4 @@
-"""Closed byte diagnostics; original scan coverage and acceptance limits stay exact."""
+"""Closed byte diagnostics; full scan coverage and finite role bounds stay exact."""
 import ast
 import hashlib
 import importlib.util
@@ -35,15 +35,18 @@ class OutputBounds(unittest.TestCase):
         self.assertEqual(called.call_args.args[0],argv);self.assertEqual(called.call_args.kwargs,{'stdout':subprocess.PIPE,'stderr':subprocess.PIPE,'timeout':60})
         return result
 
-    def test_exact_total_limit_and_existing_check_semantics(self):
-        limit=16*1024*1024
+    def test_exact_role_limit_observed_volume_and_existing_check_semantics(self):
+        limit=32*1024*1024
+        observed=17611286
+        self.assertEqual(len(self.invoke(b'x'*observed).stdout),observed)
         self.assertEqual(len(self.invoke(b'x'*(limit-1)).stdout),limit-1)
         for out,err in ((b'x'*limit,b''),(b'x'*(limit-1),b'e'),(b'',b'e'*limit)):
             with self.assertRaises(c.Invalid) as caught:self.invoke(out,err)
             self.assertEqual(caught.exception.args,('command-output-bound-journal-o'+str(len(out))+'-e'+str(len(err)),))
         self.assertEqual(self.invoke(code=1,check=False).returncode,1)
         with self.assertRaisesRegex(c.Invalid,'^command-failed$'):self.invoke(code=1)
-        with self.assertRaisesRegex(c.Invalid,'^command-output-bound$'):self.invoke(b'x'*limit,role=None)
+        ordinary=16*1024*1024
+        with self.assertRaisesRegex(c.Invalid,'^command-output-bound$'):self.invoke(b'x'*ordinary,role=None)
 
     def test_unknown_role_fails_without_launch_or_private_formatting(self):
         class Secret:
@@ -66,7 +69,7 @@ class OutputBounds(unittest.TestCase):
 
     def test_failed_gate_exports_only_closed_role_and_builtin_byte_counts(self):
         checker=guest.Checker.__new__(guest.Checker);checker.gates={'transcript-log-notification-leak-scan'};checker.report={'gates':[]}
-        response=subprocess.CompletedProcess([],0,stdout=b'private transcript audio password '*600000,stderr=b'private-error')
+        response=subprocess.CompletedProcess([],0,stdout=b'private transcript audio password '*1100000,stderr=b'private-error')
         with mock.patch.object(guest.subprocess,'run',return_value=response):
             checker.gate('transcript-log-notification-leak-scan',lambda:guest.run(['private argv'],output_role='interval-journal'),'interval-log-scan')
         result=checker.report['gates'][0];code=result['code']

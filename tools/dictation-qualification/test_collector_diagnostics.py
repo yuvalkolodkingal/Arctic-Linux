@@ -11,9 +11,21 @@ spec = importlib.util.spec_from_file_location(
 guest = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(guest)
 
+INTERVAL_BOUND_BLOCK = """    # The complete same-boot MESSAGE projection can exceed the ordinary
+    # command bound during CPU transcription. Keep it finite and private, but
+    # scan the whole interval instead of treating valid evidence as an app
+    # failure. All other command output retains the original 16 MiB bound.
+    limit = 32 * 1024 * 1024 if output_role == 'interval-journal' else 16 * 1024 * 1024
+    require(len(result.stdout) + len(result.stderr) < limit, code)
+"""
+ORIGINAL_BOUND = "    require(len(result.stdout) + len(result.stderr) < 16 * 1024 * 1024, code)\n"
+
 
 def restore_collector_diagnostics(text):
     """Remove only this diagnostic layer and recover its exact reviewed parent bytes."""
+    if INTERVAL_BOUND_BLOCK in text:
+        assert text.count(INTERVAL_BOUND_BLOCK) == 1
+        text = text.replace(INTERVAL_BOUND_BLOCK, ORIGINAL_BOUND)
     marker = 'COLLECTOR_SETUP_STAGES = '
     if marker not in text:
         return text
