@@ -3,6 +3,8 @@ import tempfile
 import unittest
 import json
 import os
+import shlex
+import subprocess
 import types
 from pathlib import Path
 from unittest import mock
@@ -13,6 +15,7 @@ import sys
 HERE = Path(__file__).parent
 sys.path.insert(0, str(HERE))
 import automation
+import capture_vm
 import contract as c
 import unattended
 from test_capture import controller_trace
@@ -152,6 +155,7 @@ class GuestAutomation(unittest.TestCase):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
         fills = []
+        channel_rows = []
 
         def ipc(_account, _environment, _pid, method, payload=None):
             if method == "state":
@@ -166,8 +170,8 @@ class GuestAutomation(unittest.TestCase):
             return "ok"
 
         class Channel:
-            def __init__(self, *args, **kwargs): self.rows = []
-            def write(self, value): self.rows.append(value)
+            def __init__(self, *args, **kwargs): pass
+            def write(self, value): channel_rows.append(value)
             def read(self): return c.INSTALL_ACK
             def close(self): pass
 
@@ -175,6 +179,7 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
              mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_process_start_ticks", return_value=456), \
              mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
              mock.patch.object(unattended, "_run"), \
              mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
@@ -182,25 +187,262 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended.c, "install_seal"), \
              mock.patch.object(unattended, "Channel", Channel):
             unattended.live_install(600)
-        return fills
+        return fills, channel_rows
+
+    @staticmethod
+    def _ready_state(**changed):
+        value = {"page": "welcome", "current": "welcome", "ready": True,
+                 "connected": True, "busy": False, "failure": "", "valid": True}
+        value.update(changed)
+        return json.dumps(value)
+
+    def test_unique_installer_ipc_rejects_ambiguous_targets(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+
+        def run(argv, **_kwargs):
+            self.assertEqual(argv[:5], ["/usr/bin/pgrep", "-u", "1000", "-x", "quickshell"])
+            return types.SimpleNamespace(returncode=0, stdout=b"101\n202\n")
+
+        with mock.patch.object(unattended, "_run", side_effect=run), \
+             mock.patch.object(unattended, "_as_user",
+                               return_value=types.SimpleNamespace(returncode=0, stdout=b"{}")):
+            with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
+                unattended._find_ipc(account, {}, "installer", "state")
+
+    def test_installer_reacquires_a_replacement_before_first_input(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        calls = []
+
+        def call(_account, _environment, pid, method, payload=None):
+            calls.append((pid, method, payload))
+            if method == "state":
+                return self._ready_state(ready=pid == "303")
+            return "ok"
+
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               side_effect=[("101", 10), ("202", 20), ("303", 30)]), \
+             mock.patch.object(unattended, "_process_start_ticks",
+                               side_effect=lambda _account, pid: {"202": 20, "303": 30}[pid]), \
+             mock.patch.object(unattended.time, "sleep"), \
+             mock.patch.object(unattended, "_installer_call", side_effect=call):
+            early = unattended._installer_endpoint(account, {})
+            endpoint, result = unattended._installer_input(
+                account, {}, None, "welcome", "next", require_valid=True)
+        self.assertEqual(early, ("101", 10))
+        self.assertEqual(endpoint, ("303", 30))
+        self.assertEqual(result, "ok")
+        self.assertEqual(calls, [("202", "state", None), ("303", "state", None),
+                                 ("303", "next", None)])
+
+    def test_installer_rejects_pid_or_start_time_swap_after_input(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        for replacement in (("202", 20), ("101", 20)):
+            with self.subTest(replacement=replacement), \
+                 mock.patch.object(unattended, "_installer_endpoint",
+                                   return_value=replacement), \
+                 mock.patch.object(unattended, "_installer_call") as call:
+                with self.assertRaisesRegex(unattended.InstallerIdentityChanged,
+                                            "changed after input"):
+                    unattended._installer_input(
+                        account, {}, ("101", 10), "welcome", "next",
+                        require_valid=True)
+                call.assert_not_called()
+
+    def test_installer_input_rechecks_every_existing_page_gate(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        def once(function, _seconds, message):
+            value = function()
+            if value:
+                return value
+            raise c.Invalid(message)
+        invalid = (
+            {"page": "keyboard"}, {"current": "keyboard"}, {"ready": False},
+            {"connected": False}, {"busy": True}, {"failure": "failed"},
+            {"valid": False},
+        )
+        for changed in invalid:
+            calls = []
+            def call(_account, _environment, pid, method, payload=None):
+                calls.append((pid, method, payload))
+                return self._ready_state(**changed) if method == "state" else "ok"
+            with self.subTest(changed=changed), \
+                 mock.patch.object(unattended, "_installer_endpoint",
+                                   return_value=("101", 10)), \
+                 mock.patch.object(unattended, "_process_start_ticks", return_value=10), \
+                 mock.patch.object(unattended, "_wait", side_effect=once), \
+                 mock.patch.object(unattended, "_installer_call", side_effect=call):
+                with self.assertRaisesRegex(c.Invalid, "changed before input"):
+                    unattended._installer_input(
+                        account, {}, ("101", 10), "welcome", "next",
+                        require_valid=True)
+            self.assertEqual(calls, [("101", "state", None)])
 
     def test_live_installer_uses_fixed_online_real_gui_choices(self):
         pages = list(("welcome", "keyboard", "network", "timezone", "disk", "encryption",
                       "account", "apps", "summary", "done"))
-        choices = dict(self._run_installer(pages))
+        fills, rows = self._run_installer(pages)
+        choices = dict(fills)
         self.assertEqual(choices["network"], {"offline": False})
         self.assertEqual(choices["disk"], {"disk": "/dev/vda", "mode": "erase"})
         self.assertEqual(choices["encryption"], {"enabled": False})
         self.assertTrue(choices["account"]["autologin"])
         self.assertEqual(choices["account"]["username"], c.CONTROLLER["account"]["username"])
         self.assertEqual(choices["account"]["password"], unattended.PASSWORD)
+        progress = [c.strict_json(row[len(c.INSTALL_PROGRESS_PREFIX):]) for row in rows[:-1]]
+        for value in progress:
+            c.install_progress(value)
+        self.assertEqual([value["sequence"] for value in progress], list(range(len(progress))))
+        self.assertEqual(progress[-1], {
+            "schema": "arctic-showcase-install-progress-v1",
+            "sequence": len(progress) - 1, "stage": "host-handoff", "status": "started",
+            "release_acceptance": False,
+        })
+        self.assertTrue(rows[-1].startswith(c.INSTALL_PREFIX))
+        self.assertNotIn(unattended.PASSWORD, repr(progress))
 
     def test_live_installer_accepts_the_real_wired_online_network_auto_skip(self):
         pages = list(("welcome", "keyboard", "timezone", "disk", "encryption",
                       "account", "apps", "summary", "done"))
-        fills = dict(self._run_installer(pages))
+        fills, rows = self._run_installer(pages)
+        fills = dict(fills)
         self.assertNotIn("network", fills)
         self.assertEqual(fills["disk"], {"disk": "/dev/vda", "mode": "erase"})
+        stages = [c.strict_json(row[len(c.INSTALL_PROGRESS_PREFIX):])["stage"]
+                  for row in rows[:-1]]
+        self.assertNotIn("page-network", stages)
+
+    def test_host_consumes_strict_progress_and_rejects_guest_failure_early(self):
+        def row(sequence, stage, status):
+            value = {"schema": "arctic-showcase-install-progress-v1",
+                     "sequence": sequence, "stage": stage, "status": status,
+                     "release_acceptance": False}
+            return c.INSTALL_PROGRESS_PREFIX + json.dumps(value, separators=(",", ":"))
+
+        class Lines:
+            def __init__(self, rows): self.rows = iter(rows)
+            def read(self, _timeout=None): return next(self.rows)
+
+        progress = []
+        with self.assertRaisesRegex(c.Invalid, "bounded failure"):
+            capture_vm._install_seal(Lines([
+                row(0, "live-helper", "started"),
+                row(1, "live-helper", "failed"),
+            ]), progress)
+        self.assertEqual(progress[-1]["status"], "failed")
+        forged = []
+        with self.assertRaisesRegex(c.Invalid, "stage order"):
+            capture_vm._install_seal(Lines([
+                row(0, "live-helper", "started"),
+                row(1, "live-helper", "passed"),
+                row(2, "page-summary", "started"),
+            ]), forged)
+
+    def test_host_accepts_complete_ordered_progress_with_optional_network_skip(self):
+        stages = ["live-helper", "graphical-session", "installer-ipc", "page-welcome",
+                  "page-keyboard", "online-route", "page-timezone", "page-disk",
+                  "page-encryption", "page-account", "page-apps", "page-summary",
+                  "installation", "target-mount", "install-seal"]
+        rows = []
+        for stage in stages:
+            for status in ("started", "passed"):
+                value = {"schema": "arctic-showcase-install-progress-v1",
+                         "sequence": len(rows), "stage": stage, "status": status,
+                         "release_acceptance": False}
+                rows.append(c.INSTALL_PROGRESS_PREFIX
+                            + json.dumps(value, separators=(",", ":")))
+        handoff = {"schema": "arctic-showcase-install-progress-v1",
+                   "sequence": len(rows), "stage": "host-handoff", "status": "started",
+                   "release_acceptance": False}
+        rows.extend([c.INSTALL_PROGRESS_PREFIX + json.dumps(handoff, separators=(",", ":")),
+                     c.INSTALL_PREFIX + "{}"])
+
+        class Lines:
+            def __init__(self): self.rows = iter(rows)
+            def read(self, _timeout=None): return next(self.rows)
+
+        progress = []
+        self.assertEqual(capture_vm._install_seal(Lines(), progress), c.INSTALL_PREFIX + "{}")
+        self.assertEqual(len(progress), len(rows) - 1)
+        self.assertEqual(progress[-1], handoff)
+
+    def test_unexpected_guest_exception_emits_terminal_failure_and_host_stops(self):
+        rows = []
+
+        class Channel:
+            def __init__(self, *args, **kwargs): pass
+            def write(self, value): rows.append(value)
+            def close(self): pass
+
+        with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+             mock.patch.object(unattended, "Channel", Channel), \
+             mock.patch.object(unattended, "_graphical_environment",
+                               side_effect=AttributeError("unexpected private detail")):
+            with self.assertRaises(AttributeError):
+                unattended.live_install(600)
+        progress = [c.strict_json(row[len(c.INSTALL_PROGRESS_PREFIX):]) for row in rows]
+        self.assertEqual([(value["stage"], value["status"]) for value in progress], [
+            ("live-helper", "started"), ("live-helper", "passed"),
+            ("graphical-session", "started"), ("graphical-session", "failed"),
+        ])
+        self.assertNotIn("unexpected private detail", repr(rows))
+
+        class Lines:
+            def __init__(self): self.rows = iter(rows)
+            def read(self, _timeout=None): return next(self.rows)
+
+        consumed = []
+        with self.assertRaisesRegex(c.Invalid, "bounded failure"):
+            capture_vm._install_seal(Lines(), consumed)
+        self.assertEqual(consumed[-1]["status"], "failed")
+
+    def test_pre_python_bootstrap_has_fixed_failure_projection(self):
+        self.assertEqual(automation.BOOTSTRAP_FAILURE, {
+            "schema": "arctic-showcase-install-progress-v1", "sequence": 0,
+            "stage": "live-helper", "status": "failed", "release_acceptance": False,
+        })
+        self.assertIn("trap fail EXIT", automation.Controller.LIVE_COMMAND)
+        self.assertIn(automation.BOOTSTRAP_FAILURE_WORD, automation.Controller.LIVE_COMMAND)
+
+        timeouts = []
+        class Lines:
+            def read(self, timeout=None):
+                timeouts.append(timeout)
+                return automation.BOOTSTRAP_FAILURE_LINE
+
+        consumed = []
+        with self.assertRaisesRegex(c.Invalid, "bounded failure"):
+            capture_vm._install_seal(Lines(), consumed)
+        self.assertEqual(consumed, [automation.BOOTSTRAP_FAILURE])
+        self.assertEqual(timeouts, [300])
+
+        with tempfile.TemporaryDirectory() as temp:
+            port = Path(temp) / "channel"
+            port.write_text("invalid tooling line\n")
+            tooling = Path(temp) / "tooling"
+            inner = shlex.split(automation.Controller.LIVE_COMMAND)[3]
+            inner = inner.replace("/dev/virtio-ports/org.arctic.showcase.capture", str(port))
+            inner = inner.replace("/run/arctic-showcase-tooling", str(tooling))
+            result = subprocess.run(["/bin/sh", "-c", inner], stdin=subprocess.DEVNULL,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    timeout=10, check=False)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(port.read_text(), automation.BOOTSTRAP_FAILURE_LINE + "\n")
+
+    def test_failure_projection_is_bounded_and_contains_no_guest_content(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "failure.json"
+            progress = [{"schema": "arctic-showcase-install-progress-v1", "sequence": 0,
+                         "stage": "live-helper", "status": "started",
+                         "release_acceptance": False}]
+            capture_vm._write_failure_report(
+                path, "live-install", progress,
+                c.Invalid("private capture channel timed out"), None)
+            self.assertLessEqual(path.stat().st_size, 32768)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            value = c.strict_json(path.read_bytes())
+            c.capture_failure(value)
+            self.assertEqual(value["failure_code"], "private-channel-timeout")
+            self.assertNotIn("private capture channel timed out", path.read_text())
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
         account = types.SimpleNamespace(pw_uid=os.geteuid(), pw_name="liveuser",

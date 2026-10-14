@@ -5,6 +5,7 @@ from __future__ import annotations
 import csv
 import hashlib
 import io
+import json
 import os
 import re
 import subprocess
@@ -33,6 +34,19 @@ SHIFTED = {"_": "minus", ":": "semicolon", "+": "equal", '"': "apostrophe",
            "(": "9", ")": "0", "$": "4", "~": "grave_accent", "!": "1",
            "@": "2", "#": "3", "%": "5", "^": "6", "{": "bracket_left",
            "}": "bracket_right", "?": "slash"}
+
+BOOTSTRAP_FAILURE = {"schema": "arctic-showcase-install-progress-v1", "sequence": 0,
+                     "stage": "live-helper", "status": "failed",
+                     "release_acceptance": False}
+c.install_progress(BOOTSTRAP_FAILURE)
+BOOTSTRAP_FAILURE_LINE = (c.INSTALL_PROGRESS_PREFIX
+                          + json.dumps(BOOTSTRAP_FAILURE, sort_keys=True,
+                                       separators=(",", ":")))
+# One unquoted shell word: the only space and JSON quotes are escaped. The
+# fixed value contains none of the expansion characters accepted by the shell.
+BOOTSTRAP_FAILURE_WORD = BOOTSTRAP_FAILURE_LINE.replace(" ", "\\ ").replace('"', '\\"')
+c.require(not re.search(r"[`$';&|<>()[\]*?]", BOOTSTRAP_FAILURE_WORD),
+          "bootstrap failure shell projection differs")
 
 
 def chord_for(character: str):
@@ -96,7 +110,9 @@ class Controller:
     """Finite host state machine. Guest JSON and messages never choose actions."""
 
     LIVE_COMMAND = (
-        "sudo sh -c 'set -eu; d=/run/arctic-showcase-tooling; install -d -m 0700 $d; "
+        "sudo sh -c 'set -eu; fail(){ echo " + BOOTSTRAP_FAILURE_WORD
+        + " >/dev/virtio-ports/org.arctic.showcase.capture || :; }; trap fail EXIT; "
+        "d=/run/arctic-showcase-tooling; install -d -m 0700 $d; "
         "IFS= read -r line </dev/virtio-ports/org.arctic.showcase.capture; "
         "case \"$line\" in \"ARCTIC-SHOWCASE-TOOLING-V1 \"*) ;; *) exit 1;; esac; "
         "printf %s \"${line#ARCTIC-SHOWCASE-TOOLING-V1 }\" | base64 -d | gzip -d | tar -x -C $d; "
