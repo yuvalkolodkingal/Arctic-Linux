@@ -108,29 +108,54 @@ jobs:
                   selected_execution = {key: execution.get(key) for key in (
                       'status', 'error', 'candidate_iso_source', 'iso_bytes', 'iso_sha256',
                       'source_image_run', 'vm_base_tool_image_id', 'vm_tool_image_id',
-                      'harness_evidence', 'native_stages', 'taskbar_displays',
+                      'taskbar_displays',
                   ) if key in execution}
                   print('ARCTIC-EXECUTION ' + json.dumps(selected_execution, sort_keys=True))
-                  for name in (
-                      'native-stages.json',
-                      'harness/native-stop-install.json', 'harness/native-stop-boot.json',
-                      'taskbar/taskbar-state.json', 'taskbar/taskbar-report.json',
-                      'taskbar/serial-taskbar-report.json', 'taskbar/serial-taskbar-provenance.json',
-                  ):
+
+                  stages = strict_json('native-stages.json')
+                  assert type(stages) is dict
+                  stage_summary = {'errors': stages.get('errors'), 'release_acceptance': stages.get('release_acceptance')}
+                  for stage, result in stages.get('results', {}).items():
+                      assert stage in ('live', 'installed') and type(result) is dict
+                      stage_summary[stage] = {
+                          'status': result.get('status'), 'stage': result.get('stage'),
+                          'release_acceptance': result.get('release_acceptance'),
+                          'file_count': len(result.get('files', {})),
+                          'cmdline': result.get('provenance', {}).get('cmdline'),
+                          'boot_id': result.get('provenance', {}).get('boot_id'),
+                      }
+                  print('ARCTIC-NATIVE-STAGES ' + json.dumps(stage_summary, sort_keys=True))
+
+                  for name in ('harness/native-stop-install.json', 'harness/native-stop-boot.json'):
                       value = strict_json(name)
                       if value is not None:
-                          encoded = json.dumps(value, sort_keys=True)
-                          assert len(encoded.encode()) <= 512 * 1024
-                          print('ARCTIC-SELECTED-JSON-BEGIN ' + name)
-                          print(encoded)
-                          print('ARCTIC-SELECTED-JSON-END ' + name)
+                          print('ARCTIC-STOP ' + name + ' ' + json.dumps(value, sort_keys=True))
 
-                  prefixes = (
-                      'ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
-                      'ARCTIC-NATIVE-RUNNER-END ', 'ARCTIC-NATIVE-ERROR ',
-                      'ARCTIC-TASKBAR-', 'Traceback ', 'RuntimeError:',
-                  )
-                  contains = ('ERROR:', 'FAILED', ' failed', 'Failure', 'No such file', 'Permission denied')
+                  state = strict_json('taskbar/taskbar-state.json')
+                  report = strict_json('taskbar/taskbar-report.json')
+                  serial_report = strict_json('taskbar/serial-taskbar-report.json')
+                  serial_proof = strict_json('taskbar/serial-taskbar-provenance.json')
+                  assert all(type(value) is dict for value in (state, report, serial_report, serial_proof))
+                  taskbar = {
+                      'state': {key: state.get(key) for key in ('schema', 'stage', 'status', 'collector', 'release_acceptance')},
+                      'report': {key: report.get(key) for key in (
+                          'schema', 'stage', 'status', 'error', 'cleanup_error', 'security_error',
+                          'cleanup', 'security', 'release_acceptance',
+                      )},
+                      'result_count': len(report.get('results', [])),
+                      'serial_report_status': serial_report.get('status'),
+                      'serial_report_error': serial_report.get('error'),
+                      'serial_proof_stage': serial_proof.get('stage'),
+                  }
+                  encoded = json.dumps(taskbar, sort_keys=True)
+                  assert len(encoded.encode()) <= 64 * 1024
+                  print('ARCTIC-TASKBAR-SUMMARY ' + encoded)
+
+                  prefixes = ('ARCTIC-INSTALLED-SMOKE-EXIT', 'ARCTIC-LIVE-SMOKE-EXIT',
+                              'ARCTIC-NATIVE-RUNNER-END ', 'ARCTIC-NATIVE-ERROR ',
+                              'ARCTIC-TASKBAR-PORT-END ', 'ARCTIC-TASKBAR-COLLECTOR-ERROR ')
+                  contains = ('ERROR:', 'FAILED', ' failed', 'Failure', 'No such file',
+                              'Permission denied', 'native-functional check failed')
                   for name in ('native-harness.log', 'harness/test.log', 'harness/test-install-stage.log',
                                'harness/serial-boot.log', 'harness/taskbar-boot.log.bounded-prefix.bin'):
                       raw = verified.get(name)
@@ -138,12 +163,21 @@ jobs:
                           continue
                       assert len(raw) <= 128 * 1024 * 1024
                       text = raw.decode('utf-8', errors='strict')
+                      lines = re.split('[\r\n]+', text)
                       selected = []
-                      for line in re.split('[\r\n]+', text):
+                      marker_counts = Counter()
+                      for line in lines:
+                          for prefix in prefixes:
+                              if line.startswith(prefix):
+                                  marker_counts[prefix] += 1
                           if line.startswith(prefixes) or any(token in line for token in contains):
                               assert len(line.encode()) <= 256 * 1024
                               selected.append(line[:16384])
                       selected = selected[-300:]
+                      print('ARCTIC-TEXT-COUNTS ' + name + ' ' + json.dumps({
+                          'bytes': len(raw), 'lines': len(lines), 'selected': len(selected),
+                          'markers': dict(marker_counts),
+                      }, sort_keys=True))
                       print('ARCTIC-SELECTED-TEXT-BEGIN ' + name + ' ' + str(len(selected)))
                       print('\n'.join(selected))
                       print('ARCTIC-SELECTED-TEXT-END ' + name)
