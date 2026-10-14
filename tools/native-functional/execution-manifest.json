@@ -1,7 +1,6 @@
 {
   "execution_files": {
     ".github/workflows/native-candidate-20261008.yml": "a3bf68e561cd44a2d583ad7715085b4d0116e2269901db479afcf1933617d8ac",
-    "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
@@ -9,15 +8,16 @@
     "tools/native-functional/compose-photo-probe.py": "1c0a196f6dcc41f0de6806a0d636f42d652e8118c0d81fee9406f878feafeb76",
     "tools/native-functional/evidence.py": "a25e24c5bc9e7c57c23373c7a95221fcd73ab4771a23f19a0ea05476e09fbb4f",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/prepare-taskbar-tools.sh": "5f80f1334054b27e99129a0e3dac887369b3c5a62419c2e1b00ea70f813e5178",
-    "tools/native-functional/runner.py": "1b203bea39e94a8befb344cf0e9cc6c20619fe69af848e95f2c160bfa2117932",
+    "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
+    "tools/native-functional/runner.py": "2435bb72d59d944940d8ff135f35b1c61de7a459593c085b89bea60c833747f1",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/native-functional/source-provenance.json": "d355ba75b4b8714d86d4472acb9c76560412be570b5c90306900ace4343510d6",
+    "tools/native-functional/source-provenance.json": "3d342df8b1677d846584484241b0f93fb0fe5aac18712875ca0cafd134706766",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "285c67aa190535ea68e9c7451ac8cccd245f511e36d33960ead2956fc6a5eafb",
     "tools/native-functional/taskbar-runtime.py": "297ee48eac1cea021713830f625f47453e84da0abf2bdcd1856c7b4e8082bbb4",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
-    "tools/native-functional/taskbar.py": "458a9ec5f8ebc0b7c612163c29fa5c372cd3c03010d146217b1aa7215ff7a1df",
+    "tools/native-functional/taskbar.py": "73ef3be784387b21432c688e134d2c1e128845e962afa497d44038afaac751fd",
+    "tools/native-functional/virtual-pointer.c": "f00fc6e10250f62e2b0f531cc3becf433cc6e65b002b95432ca30b3800947bd4",
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
   },
   "image": {

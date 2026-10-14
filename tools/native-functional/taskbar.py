@@ -165,9 +165,31 @@ class Taskbar(Smoke):
         if edge == 'bottom': y = m['height']-1
         if edge == 'left': x = 0
         if edge == 'right': x = m['width']-1
-        self.pointer.stdin.write(f'move {int(m["x"]+x-origin_x)} {int(m["y"]+y-origin_y)} {math.ceil(width)} {math.ceil(height)}\n')
+        target_x, target_y = int(m['x'] + x), int(m['y'] + y)
+        self.pointer.stdin.write(f'move {target_x-origin_x} {target_y-origin_y} {math.ceil(width)} {math.ceil(height)}\n')
         self.pointer.stdin.flush()
-        require(self.pointer_reply() == 'OK', 'virtual pointer reply failed')
+        require(self.pointer_reply() == 'OK', 'virtual pointer absolute reply failed')
+        # Mixed-scale output layouts can map protocol-absolute extents through
+        # physical pixels while Mango reports logical coordinates. Bind every
+        # acceptance observation to the requested logical cursor point, then
+        # correct only the measured delta with relative protocol motion.
+        for correction in range(5):
+            cursor = self.query('cursorpos')
+            require(type(cursor) is dict and type(cursor.get('x')) in (int, float)
+                    and type(cursor.get('y')) in (int, float)
+                    and math.isfinite(cursor['x']) and math.isfinite(cursor['y']),
+                    'invalid authoritative cursor position')
+            dx, dy = round(target_x - cursor['x']), round(target_y - cursor['y'])
+            if abs(target_x - cursor['x']) <= 1 and abs(target_y - cursor['y']) <= 1:
+                return
+            if correction == 4:
+                break
+            require(abs(dx) <= 32767 and abs(dy) <= 32767,
+                    'virtual pointer correction exceeds reviewed bound')
+            self.pointer.stdin.write(f'relative {dx} {dy}\n')
+            self.pointer.stdin.flush()
+            require(self.pointer_reply() == 'OK', 'virtual pointer relative reply failed')
+        raise RuntimeError('virtual pointer did not reach requested logical position')
 
     def pointer_reply(self):
         deadline = time.monotonic() + 3

@@ -299,5 +299,18 @@
     "guest_staging": "exact read-only ARCTICTEST device and ISO9660 mount are verified; regular files and directories only are copied to a root-owned non-writable staging tree and exposed at /run/t through a read-only nodev nosuid bind mount",
     "taskbar_hash_schema_port_geometry_and_acceptance_unchanged": true,
     "release_acceptance": false
+  },
+  "taskbar_mixed_scale_pointer_feedback": {
+    "failure_run": 38496263633,
+    "failure_artifact": 11864772858,
+    "failure_artifact_sha256": "9dc5172d04af296770c70c97c2a95be052ff2898fc0778d616be317d2b31682f",
+    "screened_inspection_run": 38500236947,
+    "diagnosis": "both Native functional stages passed, but the scale-2 top bar remained held open after an absolute virtual-pointer request whose resulting logical position was never checked; the unchanged hidden-pixel oracle then observed 59 non-background pixels in its 169-pixel center probe",
+    "observed_case": "Virtual-2 scale 2 top auto covered-rest after all eight scale-1 and scale-1.5 cases passed",
+    "feedback": "each move is checked against Mango's authoritative logical cursor position; at most four bounded relative protocol corrections must reach the requested point within one logical pixel",
+    "failure_policy": "invalid cursor feedback, an oversized correction, helper rejection, or non-convergence fails before any visibility observation",
+    "visibility_geometry_layer_cleanup_security_and_deadline_gates_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
   }
 }

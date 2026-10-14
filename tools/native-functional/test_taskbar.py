@@ -1,6 +1,7 @@
 """Host negative controls for the additional installed-image taskbar gate."""
 import copy
 import importlib.util
+import io
 from pathlib import Path
 import subprocess
 import sys
@@ -96,6 +97,54 @@ class Controls(unittest.TestCase):
                                              image.height-inset-1), fill=t.FOOT_COLOR)
             for edge in t.EDGES:
                 self.assertEqual(t.pixel_visibility(image, edge, scale)['non_foot_fraction'], 0)
+
+    def test_mixed_scale_pointer_is_corrected_to_authoritative_logical_position(self):
+        task = t.Taskbar.__new__(t.Taskbar)
+        task.names = ['Virtual-1', 'Virtual-2']
+        monitors = {
+            'Virtual-1': dict(name='Virtual-1', x=0, y=0, width=1280, height=720),
+            'Virtual-2': dict(name='Virtual-2', x=1280, y=0, width=640, height=360),
+        }
+        task.monitor = lambda name: monitors[name]
+        observed = iter((dict(x=1600, y=22), dict(x=1600, y=180)))
+        task.query = lambda name: next(observed) if name == 'cursorpos' else None
+        task.pointer = type('Pointer', (), {'stdin': io.StringIO()})()
+        task.pointer_reply = lambda: 'OK'
+        task.move_pointer('Virtual-2')
+        self.assertEqual(task.pointer.stdin.getvalue().splitlines(), [
+            'move 1600 180 1920 720', 'relative 0 158'])
+
+    def test_pointer_correction_fails_closed_when_feedback_never_converges(self):
+        task = t.Taskbar.__new__(t.Taskbar)
+        task.names = ['Virtual-1', 'Virtual-2']
+        monitors = {
+            'Virtual-1': dict(name='Virtual-1', x=0, y=0, width=1280, height=720),
+            'Virtual-2': dict(name='Virtual-2', x=1280, y=0, width=640, height=360),
+        }
+        task.monitor = lambda name: monitors[name]
+        task.query = lambda name: dict(x=1600, y=22)
+        task.pointer = type('Pointer', (), {'stdin': io.StringIO()})()
+        task.pointer_reply = lambda: 'OK'
+        with self.assertRaisesRegex(RuntimeError, 'did not reach requested logical position'):
+            task.move_pointer('Virtual-2')
+        self.assertEqual(task.pointer.stdin.getvalue().splitlines(), [
+            'move 1600 180 1920 720', *['relative 0 158'] * 4])
+
+    def test_fourth_bounded_pointer_correction_can_converge(self):
+        task = t.Taskbar.__new__(t.Taskbar)
+        task.names = ['Virtual-1', 'Virtual-2']
+        monitors = {
+            'Virtual-1': dict(name='Virtual-1', x=0, y=0, width=1280, height=720),
+            'Virtual-2': dict(name='Virtual-2', x=1280, y=0, width=640, height=360),
+        }
+        task.monitor = lambda name: monitors[name]
+        observed = iter([dict(x=1600, y=22)] * 4 + [dict(x=1600, y=180)])
+        task.query = lambda name: next(observed) if name == 'cursorpos' else None
+        task.pointer = type('Pointer', (), {'stdin': io.StringIO()})()
+        task.pointer_reply = lambda: 'OK'
+        task.move_pointer('Virtual-2')
+        self.assertEqual(task.pointer.stdin.getvalue().splitlines(), [
+            'move 1600 180 1920 720', *['relative 0 158'] * 4])
 
     def test_cli_refuses_host_before_desktop_discovery_or_mutation(self):
         result = subprocess.run([sys.executable, str(HERE/'taskbar.py'),

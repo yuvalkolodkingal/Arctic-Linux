@@ -3,7 +3,15 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$HERE/../lib/container.sh"
-[[ $# == 2 && -d "$1" && -d "$2" ]] || arctic_die 'usage: prepare-taskbar-tools.sh EXECUTION_TREE PAYLOAD'
+pointer_source='shell/dev/virtual-pointer.c'
+if [[ $# == 4 && "$3" == '--pointer-source' ]]; then
+  pointer_source="$4"
+elif [[ $# != 2 ]]; then
+  arctic_die 'usage: prepare-taskbar-tools.sh EXECUTION_TREE PAYLOAD [--pointer-source SOURCE]'
+fi
+[[ "$pointer_source" == 'shell/dev/virtual-pointer.c' ||
+   "$pointer_source" == 'tools/native-functional/virtual-pointer.c' ]] || arctic_die 'invalid virtual-pointer source'
+[[ -d "$1" && -d "$2" ]] || arctic_die 'execution tree or payload is not a directory'
 source_tree="$(cd "$1" && pwd)"
 payload="$(cd "$2" && pwd)"
 engine="$(arctic_engine)"
@@ -18,6 +26,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 "$engine" run --name "$container" "${ARCTIC_CONTAINER_ARGS[@]}" \
   -e "ARCTIC_INSTALLER_ACTIVE=${ARCTIC_INSTALLER_ACTIVE:-0}" \
+  -e "ARCTIC_TASKBAR_POINTER_SOURCE=$pointer_source" \
   -v "$source_tree:/source:ro" -v "$payload:/payload" "$image" bash -c "$ARCTIC_CONTAINER_PROLOGUE"'
 dnf -y --setopt=timeout=30 --setopt=retries=2 --setopt=install_weak_deps=False install \
   gcc wayland-devel dbus-daemon glib2 qemu-ui-dbus qemu-ui-opengl
@@ -34,15 +43,17 @@ printf "%s\n" "$display_help" > /payload/taskbar-display-capabilities.txt
 mkdir /payload/generated
 wayland-scanner client-header /source/shell/dev/wlr-screencopy-unstable-v1.xml /payload/generated/screencopy-client.h
 wayland-scanner private-code /source/shell/dev/wlr-screencopy-unstable-v1.xml /payload/generated/screencopy-client.c
-gcc /source/shell/dev/virtual-pointer.c -lwayland-client -o /payload/virtual-pointer
+gcc "/source/$ARCTIC_TASKBAR_POINTER_SOURCE" -lwayland-client -o /payload/virtual-pointer
 gcc -std=c11 -Wall -Wextra -Wno-unused-parameter -Werror /source/tools/native-functional/taskbar-screencopy.c \
   /payload/generated/screencopy-client.c -I /payload/generated -lwayland-client -o /payload/raw-screencopy
 python3 - <<"PY"
 import hashlib,json,os,subprocess
 from pathlib import Path
 def sha(path): return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+pointer_source=os.environ["ARCTIC_TASKBAR_POINTER_SOURCE"]
+assert pointer_source in ("shell/dev/virtual-pointer.c", "tools/native-functional/virtual-pointer.c")
 result = dict(schema="arctic-taskbar-tools-v1", release_acceptance=False,
-    sources={name:sha("/source/"+name) for name in ("shell/dev/virtual-pointer.c", "tools/native-functional/taskbar-screencopy.c", "shell/dev/wlr-screencopy-unstable-v1.xml")},
+    sources={name:sha("/source/"+name) for name in (pointer_source, "tools/native-functional/taskbar-screencopy.c", "shell/dev/wlr-screencopy-unstable-v1.xml")},
     binaries={name:sha("/payload/"+name) for name in ("virtual-pointer", "raw-screencopy")},
     compiler=subprocess.check_output(["gcc","--version"],text=True).splitlines()[0],
     packages=subprocess.check_output(["rpm","-q","gcc","wayland-devel","libwayland-client","libwayland-server","libwayland-egl"],text=True).splitlines(),

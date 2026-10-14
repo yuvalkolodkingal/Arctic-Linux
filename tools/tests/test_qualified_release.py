@@ -132,7 +132,7 @@ class PublicationGuardTest(unittest.TestCase):
                     for name,item in state['files'].items() if Path(name).suffix == '.png'})
             execution = dict(taskbar_context=context, taskbar=state, taskbar_build=dict(
                 schema='arctic-taskbar-tools-v1', release_acceptance=False,
-                sources={name:'a'*64 for name in ('shell/dev/virtual-pointer.c',
+                sources={name:'a'*64 for name in ('tools/native-functional/virtual-pointer.c',
                     'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml')},
                 binaries={'virtual-pointer':'8'*64, 'raw-screencopy':'9'*64}))
             port_bytes = port.encode()

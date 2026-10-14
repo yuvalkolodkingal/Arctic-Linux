@@ -699,7 +699,7 @@ def taskbar_proof(archive, manifest):
                 'Taskbar executed checker bytes differ: ' + name)
     build = execution['taskbar_build']
     require(build['schema'] == 'arctic-taskbar-tools-v1' and build['release_acceptance'] is False
-            and set(build['sources']) == {'shell/dev/virtual-pointer.c',
+            and set(build['sources']) == {'tools/native-functional/virtual-pointer.c',
                  'tools/native-functional/taskbar-screencopy.c', 'shell/dev/wlr-screencopy-unstable-v1.xml'}
             and set(build['binaries']) == {'virtual-pointer', 'raw-screencopy'}, 'Taskbar tool build inventory differs')
     for name, sha in build['sources'].items():
