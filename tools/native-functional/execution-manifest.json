@@ -21,16 +21,16 @@
     "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
   },
   "image": {
-    "archive_bytes": 1934828445,
-    "archive_sha256": "2d87f333d089e4ffe31ca3464bdf6c54dfee38e3ebcfd8ba6bd0f0a22f03beaf",
-    "artifact_id": 11786640630,
-    "bytes": 1934641152,
-    "name": "Arctic-Linux-1.2-candidate-38334358585-1-x86_64.iso",
+    "archive_bytes": 1934984091,
+    "archive_sha256": "3a661042cc5533100105feaa3ef3562a3962f06d8098ffa30aedf0cc94a29319",
+    "artifact_id": 11862999301,
+    "bytes": 1934796800,
+    "name": "Arctic-Linux-1.2-candidate-38489618652-1-x86_64.iso",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "1bedcb7a5c34f5ddc057973751b0887398786dea70ef60680f2ab7b0f87fb761",
-    "run_id": 38334358585,
-    "sha256": "296c2f1ca0b2613a67fbd40898873c4ce4d28de37a6df8f8c36be7a41f498982",
-    "source_sha": "1d13ff86cf0ce6e1b071b2688d587c312ff59a44"
+    "producer_receipt_sha256": "2ae9731e5cb5693a915eacd6656de5313e995ff75ecf70a0927c177b96052412",
+    "run_id": 38489618652,
+    "sha256": "97a6b905640ce6782ae303992e4b292c744ff7abedf7ea26f4b28f918568f140",
+    "source_sha": "e556b8a6f829deb6cff3c441278574c62b5f6f8b"
   },
   "ready": true,
   "release_acceptance": false
