@@ -77,6 +77,7 @@ class NixFootIdentityTest(unittest.TestCase):
         (folder / 'stat').write_text(f'{pid} (foot (terminal)) ' + ' '.join(fields))
         (folder / 'exe').unlink(missing_ok=True)
         (folder / 'exe').symlink_to(executable or self.binary)
+        (folder / 'environ').write_bytes(b'GSK_RENDERER=gl\0')
         return folder
 
     def client(self, pid=42, **changes):
@@ -198,6 +199,31 @@ class NixFootIdentityTest(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'changed PID/start'):
                 guest.app(self.prefix, ['foot'], 'foot', expected_executable=self.binary, proc_root=self.proc)
         kill.assert_not_called()
+
+    def test_expected_environment_is_bounded_and_rechecks_process_identity(self):
+        child = Mock()
+        child.poll.return_value = 0
+        def oversized_launch(*args, **kwargs):
+            process = self.process()
+            (process / 'environ').write_bytes(b'x' * 65537)
+            return child
+        with patch.object(guest.subprocess, 'Popen', side_effect=oversized_launch), \
+                patch.object(guest, 'clients', side_effect=[{}, {'7': self.client()}]), \
+                patch.object(guest.os, 'kill'):
+            with self.assertRaisesRegex(RuntimeError, 'environment exceeded bound'):
+                guest.app(self.prefix, ['foot'], 'foot', expected_executable=self.binary,
+                          expected_env={'GSK_RENDERER': 'gl'}, proc_root=self.proc)
+
+        self.process()
+        proof = dict(pid=42, start_ticks=100, executable=str(self.binary))
+        recycled = dict(proof, start_ticks=101)
+        with patch.object(guest.subprocess, 'Popen', return_value=child), \
+                patch.object(guest, 'clients', side_effect=[{}, {'7': self.client()}]), \
+                patch.object(guest, 'nix_window_identity', side_effect=[proof, proof, recycled]), \
+                patch.object(guest.os, 'kill'):
+            with self.assertRaisesRegex(RuntimeError, 'changed while reading environment'):
+                guest.app(self.prefix, ['foot'], 'foot', expected_executable=self.binary,
+                          expected_env={'GSK_RENDERER': 'gl'}, proc_root=self.proc)
 
     def test_native_window_cannot_pass_desktop_launcher_even_with_old_nix_process_alive(self):
         self.process(pid=41)

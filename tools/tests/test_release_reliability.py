@@ -228,6 +228,28 @@ class AppTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'no persistent new window'):
             self.probe([{}, {'1': {'appid': 'zen'}}, {'1': {'appid': 'kitty'}}])
 
+    def test_celluloid_identity_requires_fresh_native_exact_process_and_bounded_env(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);proc=root/'123';proc.mkdir()
+            (proc/'stat').write_text('123 (Celluloid media) '+' '.join(['S']+['0']*18+['77']))
+            (proc/'exe').symlink_to('/usr/bin/celluloid')
+            (proc/'environ').write_bytes(b'GSK_RENDERER=gl\0')
+            client=dict(pid=123,is_xwayland=False,is_visible=True,width=640,height=480)
+            proof=guest.celluloid_identity(client,set(),os.getuid(),root)
+            self.assertEqual(proof,dict(pid=123,start_ticks=77,executable='/usr/bin/celluloid'))
+            with self.assertRaisesRegex(RuntimeError,'stale'):
+                guest.celluloid_identity(client,{(123,77)},os.getuid(),root)
+            client['is_xwayland']=True
+            with self.assertRaisesRegex(RuntimeError,'native Wayland'):
+                guest.celluloid_identity(client,set(),os.getuid(),root)
+            client['is_xwayland']=False;(proc/'environ').write_bytes(b'x'*65537)
+            with self.assertRaisesRegex(RuntimeError,'exceeded bound'):
+                guest.celluloid_identity(client,set(),os.getuid(),root)
+            (proc/'environ').write_bytes(b'GSK_RENDERER=gl\0')
+            (proc/'stat').write_text('123 (Celluloid media) '+' '.join(['Z']+['0']*18+['77']))
+            with self.assertRaisesRegex(RuntimeError,'not live'):
+                guest.celluloid_identity(client,set(),os.getuid(),root)
+
     def test_profiles_pin_distinct_apps_and_live_editor(self):
         self.assertNotIn('editor', guest.expected_apps('legacy', 'live'))
         self.assertIn('editor', guest.expected_apps('lightweight', 'live'))

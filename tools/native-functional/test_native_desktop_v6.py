@@ -25,6 +25,15 @@ def editor_request():
 def serial(r):
  l=dict(stage='live',boot_id=r['boot_id'],launcher_sha256='e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c',owned_launcher_gone=True,foot={'uid':1000},shell={'uid':1000},probe={'uid':0})
  return '\n'.join(['ARCTIC-NATIVE-LAUNCHER-GONE '+json.dumps(l),'ARCTIC-NATIVE-RUNNER-BEGIN '+json.dumps(dict(stage='live',checker_sha256='2'*64,release_acceptance=False)),C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)])+'\n'
+def product_renderer(player):
+ return dict(schema='arctic-celluloid-product-renderer-v1',launcher='/usr/libexec/arctic/arctic-celluloid',
+  desktop_file='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop',requested_renderer='gl',
+  realized_renderer='gl',upstream_executable='/usr/bin/celluloid',native_wayland=True,
+  user_override_policy='an explicitly set GSK_RENDERER is preserved by the launcher',release_acceptance=True,
+  protocol=dict(ownership_verified=True,drain_failed=False,partial_line=False,time_cap_reached=False,
+   owner=dict(pid=player['pid'],start_ticks=player['start_ticks'],executable_sha256=player['executable_sha256']),
+   realized_renderer=dict(status='reported-realized',renderer='gl',owned_stderr_binding_verified=True,
+    environment_request_is_not_attestation=True,release_acceptance=False)))
 def fullscreen_fixture(value,visual,moving_shot):
  """Data-only synthetic positive proof; never claims real GUI or activation."""
  turns=[];caps=[];owned=[];root=value['evidence_root'];monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
@@ -42,15 +51,15 @@ def fullscreen_fixture(value,visual,moving_shot):
  accepted=dict(player_attempt=1,player=owned[1],player_state={},fixture_sha256=visual['fixture_sha256'],
   input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
   playback_clock={},capture_attempts=[capture],capture_attempt_limit=6,capture_deadline_seconds=42,
-  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],owned_player_cleanup_completed=False,
+  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],product_renderer=product_renderer(owned[1]),owned_player_cleanup_completed=False,
   restart_eligible=False,release_acceptance=False)
  visual['player_attempts']=[accepted]
  visual.update({key:accepted[key] for key in ('player','player_state','actual_rgb_sha256','playback_clock','capture_attempts',
-  'accepted_capture_attempt','oracle','screenshot')})
+  'accepted_capture_attempt','oracle','screenshot','product_renderer')})
  value['proven_new_processes']=owned
  value['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
  trace=[dict(event='owned-player-fullscreen',receipt=x) for x in turns]+[dict(event='owned-fullscreen-capture',receipt=x) for x in caps]
- return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot)).encode()}
+ return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot,product_renderer=product_renderer(owned[0]))).encode()}
 class EditorControls(unittest.TestCase):
  def fixture(self,d):
   clock=Clock();vm=VM(Path(d));c=C.EditorSaveController(vm,d,'live','2'*64,clock=clock,sleep=clock.sleep);return c,vm,clock
@@ -107,7 +116,7 @@ class EditorControls(unittest.TestCase):
   N=load('desktop_editor_raw','evidence.py');F=load('desktop_pc_fixture','test_native_physical_v6.py')
   with tempfile.TemporaryDirectory() as d:
    d=Path(d);out=d/'host';out.mkdir();target=d/'guest';target.mkdir();c,vm,_=self.fixture(out);r=editor_request();c.poll(serial(r))
-   pc=[F.request(i) for i in range(5)];raw=F.serial(pc[:3])+C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)+'\n'+''.join(C.PREFIX+json.dumps(x,sort_keys=True)+'\n' for x in pc[3:])
+   pc=[F.request(i) for i in range(7)];raw=F.serial(pc[:3])+C.EDITOR_PREFIX+json.dumps(r,sort_keys=True)+'\n'+''.join(C.PREFIX+json.dumps(x,sort_keys=True)+'\n' for x in pc[3:])
    report=dict(evidence_root=r['evidence_root'],proven_new_processes=[dict(r['process'])]);proof=dict(boot_id=r['boot_id'],desktop_uid=1000)
    (target/'serial-native-report.json').write_text(json.dumps(report));(target/'serial-native-provenance.json').write_text(json.dumps(proof))
    (target/'gui-trace.log').write_text(json.dumps(dict(event='editor-physical-request',request=r))+'\n');(target/'gui-trace-summary.json').write_text('{"omitted_records":0}')
@@ -223,29 +232,29 @@ class FullscreenControls(unittest.TestCase):
       oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)]
    failed=dict(player_attempt=1,player=players[1],player_state={},**hashes,actual_rgb_sha256='7'*64,
       playback_clock={},capture_attempts=failed_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
-      accepted_capture_attempt=None,oracle=unmatched,screenshot=shots[1],owned_player_cleanup_completed=True,
+      accepted_capture_attempt=None,oracle=unmatched,screenshot=shots[1],product_renderer=product_renderer(players[1]),owned_player_cleanup_completed=True,
       restart_eligible=True,release_acceptance=False,cleanup=dict(process_identity_retired=True,owned_ipc_absent=True,
       owned_ipc_removed=True,release_acceptance=False))
    accepted=dict(player_attempt=2,player=players[2],player_state={},**hashes,actual_rgb_sha256='8'*64,
       playback_clock={},capture_attempts=accepted_captures,capture_attempt_limit=6,capture_deadline_seconds=42,
-      accepted_capture_attempt=1,oracle=matched,screenshot=shots[2],owned_player_cleanup_completed=False,
+      accepted_capture_attempt=1,oracle=matched,screenshot=shots[2],product_renderer=product_renderer(players[2]),owned_player_cleanup_completed=False,
       restart_eligible=False,release_acceptance=False)
    visual=dict(player=players[2],player_attempt=2,player_attempt_limit=2,accepted_player_attempt=2,capture_attempt_limit=6,
       capture_deadline_seconds=42,screenshot=shots[2],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
       playback_clock=accepted['playback_clock'],capture_attempts=accepted_captures,accepted_capture_attempt=1,
-      oracle=matched,player_attempts=[failed,accepted],**hashes)
+      oracle=matched,product_renderer=accepted['product_renderer'],player_attempts=[failed,accepted],**hashes)
    report=dict(evidence_root=root,proven_new_processes=players,
       diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
-   (d/'moving-player-proof.json').write_text(json.dumps(dict(player=players[0],screenshot=shots[0])))
+   (d/'moving-player-proof.json').write_text(json.dumps(dict(player=players[0],screenshot=shots[0],product_renderer=product_renderer(players[0]))))
    (d/'visual-oracle.json').write_text(json.dumps(visual));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
    (d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
    result=N.check_fullscreen(d,report,1000)
    self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(3,6,3,2))
    self.assertEqual(len({x['path'] for x in shots}),3)
    self.assertIn('celluloid-reference-player-2.png',load('restart_public_inventory','guest-check-native-v6.py').NATIVE_PUBLIC_EVIDENCE_FILES)
-   original_turns=(d/'fullscreen-player-receipts.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text();original_visual=(d/'visual-oracle.json').read_text()
+   original_turns=(d/'fullscreen-player-receipts.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text();original_visual=(d/'visual-oracle.json').read_text();original_moving=(d/'moving-player-proof.json').read_text()
    def rejected(change):
-    (d/'fullscreen-player-receipts.json').write_text(original_turns);(d/'fullscreen-player-captures.json').write_text(original_captures);(d/'visual-oracle.json').write_text(original_visual)
+    (d/'fullscreen-player-receipts.json').write_text(original_turns);(d/'fullscreen-player-captures.json').write_text(original_captures);(d/'visual-oracle.json').write_text(original_visual);(d/'moving-player-proof.json').write_text(original_moving)
     change()
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,report,1000)
    rejected(lambda:(lambda x:(x[0]['cleanup'].update(owned_ipc_absent=False),(d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
@@ -273,15 +282,46 @@ class FullscreenControls(unittest.TestCase):
       (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
    rejected(lambda:(lambda x:(x[1]['player'].update(client_id=x[0]['player']['client_id']),
       (d/'visual-oracle.json').write_text(json.dumps(dict(visual,player=copy.deepcopy(x[1]['player']),player_attempts=x)))))(copy.deepcopy(visual['player_attempts'])))
+   def wrong_accepted_renderer():
+    value=json.loads(original_visual);value['player_attempts'][-1]['product_renderer']['realized_renderer']='vulkan'
+    value['product_renderer']=value['player_attempts'][-1]['product_renderer'];(d/'visual-oracle.json').write_text(json.dumps(value))
+   rejected(wrong_accepted_renderer)
+   def wrong_moving_renderer():
+    value=json.loads(original_moving);value['product_renderer']['protocol']['realized_renderer']['renderer']='cairo'
+    (d/'moving-player-proof.json').write_text(json.dumps(value))
+   rejected(wrong_moving_renderer)
+   def extra_renderer_field():
+    value=json.loads(original_visual);value['product_renderer']['private_value']='forbidden'
+    (d/'visual-oracle.json').write_text(json.dumps(value))
+   rejected(extra_renderer_field)
 
 class HarnessControls(unittest.TestCase):
- def test_original_five_controller_and_default_false_guest_remain_exact(self):
+ def test_product_routes_bind_four_exact_distinct_fresh_processes(self):
+  N=load('desktop_product_routes','evidence.py');proven=[];routes=[]
+  for index,route in enumerate(('file-manager-mime','gio-new-window','gio-enqueue','enqueue-target'),1):
+   process=dict(pid=100+index,start_ticks=1000+index,executable='/usr/bin/celluloid',
+    executable_sha256=str(index)*64,client_id=str(index),is_xwayland=False)
+   proven.append(copy.deepcopy(process))
+   value=dict(schema='arctic-celluloid-product-launch-v1',route=route,
+    launcher='/usr/libexec/arctic/arctic-celluloid',
+    desktop_file='/usr/share/arctic/applications/io.github.celluloid_player.Celluloid.desktop',
+    requested_renderer='gl',upstream_executable='/usr/bin/celluloid',native_wayland=True,
+    process=copy.deepcopy(process),release_acceptance=True)
+   routes.append((value,copy.deepcopy(process) if index==1 else None,route))
+  self.assertEqual(len(N.check_product_launches(routes,proven)),4)
+  bad=copy.deepcopy(routes);bad[1][0]['process']['start_ticks']+=1
+  with self.assertRaises(RuntimeError):N.check_product_launches(bad,proven)
+  bad=copy.deepcopy(routes);bad[3][0]['process']=copy.deepcopy(bad[2][0]['process'])
+  with self.assertRaises(RuntimeError):N.check_product_launches(bad,proven)
+  with self.assertRaises(RuntimeError):N.check_product_launches(routes,proven+[copy.deepcopy(proven[0])])
+
+ def test_seven_controller_and_default_false_guest_remain_exact(self):
   prior=HERE/'predecessor-native-v5.txt';new=(HERE/'native_smoke.py').read_text();tree=ast.parse(new)
   call=next(n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='run_checks')
   self.assertFalse(any(k.arg=='gui_v6' for k in call.keywords))
   fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run_checks')
   self.assertIs(fn.args.kw_defaults[-1].value,False)
-  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'5a8cc6436335a8ea49feca8bcd8dd40746f9f2811f6976d3f3ebbd200f1eec6c')
+  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
  def test_actual_generated_poll_default_off_and_selected_editor_path(self):
   import os
   F=load('desktop_poll_fixture','test_native_physical_v6.py')

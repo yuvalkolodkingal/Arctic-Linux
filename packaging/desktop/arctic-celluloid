@@ -1,0 +1,8 @@
+#!/bin/sh
+# Keep an explicit administrator or user renderer choice. Arctic defaults only
+# Celluloid's GTK renderer; libmpv and the Wayland backend retain normal choices.
+if [ "${GSK_RENDERER+x}" != x ]; then
+    GSK_RENDERER=gl
+    export GSK_RENDERER
+fi
+exec /usr/bin/celluloid "$@"

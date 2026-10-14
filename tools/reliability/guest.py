@@ -10,6 +10,7 @@ import os
 from pathlib import Path
 import pwd
 import re
+import signal
 import subprocess
 import sys
 import time
@@ -30,7 +31,7 @@ PROFILES = {
         'files': (['arctic-open', 'files'], r'pcmanfm'),
         'browser': (['arctic-open', 'browser'], r'org\.gnome\.Epiphany'),
         'editor': (['arctic-open', 'editor'], r'(?:org\.qt-project\.)?featherpad'),
-        'media': (['celluloid'], r'io\.github\.celluloid_player\.Celluloid'),
+        'media': (['gtk-launch', 'io.github.celluloid_player.Celluloid'], r'io\.github\.celluloid_player\.Celluloid'),
     },
 }
 
@@ -112,6 +113,8 @@ def desktop():
                     f'WAYLAND_DISPLAY={sockets[0].name}',
                     f'DBUS_SESSION_BUS_ADDRESS=unix:path={runtime}/bus',
                     'XDG_SESSION_TYPE=wayland',
+                    *[f'{key}={env[key]}' for key in ('PATH', 'XDG_DATA_DIRS', 'XDG_DATA_HOME',
+                        'XDG_CONFIG_HOME', 'XDG_CACHE_HOME', 'GSK_RENDERER') if key in env],
                     *([f'MANGO_SOCKET={env["MANGO_SOCKET"]}'] if 'MANGO_SOCKET' in env else [])]
         except (FileNotFoundError, ProcessLookupError):
             continue
@@ -122,12 +125,62 @@ def clients(prefix):
     return {str(c['id']): c for c in json.loads(run(prefix + ['mmsg', 'get', 'all-clients']))['clients']}
 
 
-def app(prefix, command, pattern, match_title=False):
+def process_identity(proc, uid):
+    info = proc.stat()
+    if info.st_uid != uid:
+        raise RuntimeError('application process UID differs')
+    # comm is parenthesized and may contain spaces, so split only after its
+    # closing delimiter.  starttime is field 22, index 19 in this suffix.
+    fields = (proc / 'stat').read_text().rsplit(')', 1)[1].split()
+    if fields[0] in ('Z', 'X'):
+        raise RuntimeError('application process is not live')
+    return dict(pid=int(proc.name), start_ticks=int(fields[19]),
+                executable=os.path.realpath(os.readlink(proc / 'exe')))
+
+
+def process_snapshot(uid, proc_root=Path('/proc')):
+    seen = set()
+    for proc in proc_root.glob('[0-9]*'):
+        try:
+            value = process_identity(proc, uid)
+            seen.add((value['pid'], value['start_ticks']))
+        except (OSError, ValueError, IndexError, RuntimeError):
+            continue
+    return seen
+
+
+def celluloid_identity(client, before_processes, uid, proc_root=Path('/proc')):
+    pid = client.get('pid')
+    if (type(pid) is not int or pid <= 1 or client.get('is_xwayland') is not False
+            or client.get('is_visible') is not True
+            or client.get('width', 0) <= 0 or client.get('height', 0) <= 0):
+        raise RuntimeError('Celluloid client lacks a visible native Wayland PID')
+    proof = process_identity(proc_root / str(pid), uid)
+    if (proof['pid'], proof['start_ticks']) in before_processes:
+        raise RuntimeError('Celluloid window belongs to a stale/pre-existing process')
+    if proof['executable'] != '/usr/bin/celluloid':
+        raise RuntimeError('Celluloid product launcher did not exec the upstream binary')
+    with (proc_root / str(pid) / 'environ').open('rb') as stream:
+        raw = stream.read(65537)
+    if len(raw) > 65536:
+        raise RuntimeError('Celluloid environment exceeded bound')
+    if process_identity(proc_root / str(pid), uid) != proof:
+        raise RuntimeError('Celluloid PID changed while reading its environment')
+    values = raw.split(b'\0')
+    if [v for v in values if v.startswith(b'GSK_RENDERER=')] != [b'GSK_RENDERER=gl']:
+        raise RuntimeError('Celluloid product renderer request differs')
+    return proof
+
+
+def app(prefix, command, pattern, match_title=False, product_celluloid=False):
     def matches(client):
         value = client.get('title', '') if match_title else client.get('appid', client.get('app_id', ''))
         return re.fullmatch(pattern, str(value), re.I)
 
     before = set(clients(prefix))
+    proof = None
+    uid = pwd.getpwnam(prefix[2]).pw_uid if product_celluloid else None
+    before_processes = process_snapshot(uid) if product_celluloid else set()
     # arctic-open may detach. Its exit status alone is not evidence of a window.
     with open('/tmp/arctic-release-app.log', 'a') as log:
         child = subprocess.Popen(prefix + command, stdout=log, stderr=log)
@@ -138,13 +191,30 @@ def app(prefix, command, pattern, match_title=False):
                 new = {key for key, value in current.items() if key not in before
                        and matches(value)}
                 if new:
+                    if len(new) != 1:
+                        raise RuntimeError('ambiguous newly mapped application windows')
+                    key = next(iter(new))
+                    renderer = ''
+                    if product_celluloid:
+                        proof = celluloid_identity(current[key], before_processes, uid)
+                        renderer = '; fresh native Wayland /usr/bin/celluloid with GSK_RENDERER=gl'
                     time.sleep(5)
                     after = clients(prefix)
-                    if any(key in after and matches(after[key]) for key in new):
-                        return f'{command}: new mapped clients {sorted(new)} persisted 5s'
+                    if key in after and matches(after[key]):
+                        if product_celluloid:
+                            persisted = celluloid_identity(after[key], before_processes, uid)
+                            if persisted != proof:
+                                raise RuntimeError('Celluloid PID/start identity changed during persistence check')
+                        return f'{command}: new mapped client {key} persisted 5s{renderer}'
                 time.sleep(2)
             raise RuntimeError(f'{command}: no persistent new window; see /tmp/arctic-release-app.log')
         finally:
+            if proof:
+                try:
+                    if process_identity(Path('/proc') / str(proof['pid']), uid) == proof:
+                        os.kill(proof['pid'], signal.SIGTERM)
+                except (OSError, ValueError, IndexError, RuntimeError):
+                    pass
             if child.poll() is None:
                 child.terminate()
                 try:
@@ -249,7 +319,7 @@ def main():
                 Path(__file__).with_name('expected-wallpapers.json').read_text())))
         for role, (command, pattern) in applications.items():
             check('app-' + role, lambda command=command, pattern=pattern:
-                  app(prefix, command, pattern))
+                  app(prefix, command, pattern, product_celluloid=(role == 'media' and profile == 'lightweight')))
         if 'editor' not in applications:
             record(stage, 'app-editor', 'unrun', 'Legacy Zed is downloaded by the installer; not a live-image requirement')
         # Settings is a Quickshell window with a shared toolkit app ID.
