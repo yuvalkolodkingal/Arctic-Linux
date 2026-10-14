@@ -305,11 +305,30 @@
     "failure_artifact": 11864772858,
     "failure_artifact_sha256": "9dc5172d04af296770c70c97c2a95be052ff2898fc0778d616be317d2b31682f",
     "screened_inspection_run": 38500236947,
-    "diagnosis": "both Native functional stages passed, but the scale-2 top bar remained held open after an absolute virtual-pointer request whose resulting logical position was never checked; the unchanged hidden-pixel oracle then observed 59 non-background pixels in its 169-pixel center probe",
+    "diagnosis": "the scale-2 top-bar failure followed an absolute virtual-pointer request whose resulting logical position was never checked; that artifact did not isolate whether the changed center pixels came from the bar or the covered client",
     "observed_case": "Virtual-2 scale 2 top auto covered-rest after all eight scale-1 and scale-1.5 cases passed",
     "feedback": "each move is checked against Mango's authoritative logical cursor position; at most four bounded relative protocol corrections must reach the requested point within one logical pixel",
     "failure_policy": "invalid cursor feedback, an oversized correction, helper rejection, or non-convergence fails before any visibility observation",
     "visibility_geometry_layer_cleanup_security_and_deadline_gates_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false
+  },
+  "taskbar_prompt_free_proof_window": {
+    "failure_run": 38502122664,
+    "failure_artifact": 11867557214,
+    "failure_artifact_sha256": "a9305ca034be139af249d5d17cb9007cae1795980ff5456227dd539bf2d72e5f",
+    "screened_inspection_run": 38506159737,
+    "corrected_diagnosis": "the scale-2 bar was concealed at the correct 3-logical-pixel trigger; the 59 changed pixels in the fixed 13x13 center probe were the owned Foot default-shell prompt rendered over its green client background",
+    "screen_geometry_evidence": "hidden full rows ended at physical y=31, matching the scale-2 client inset; the revealed capture added continuous bar frost and accent through the sampled band",
+    "cursor_in_screencopy": false,
+    "fixture_fix": "pass Foot -e before /usr/bin/sleep so the owned solid-colour acceptance client cannot start a default shell or render a prompt",
+    "visibility_thresholds": [
+      0.1,
+      0.6
+    ],
+    "visibility_wait_seconds": 8,
+    "matrix_edges_scales_outputs_modes_cases_unchanged": true,
+    "pixel_oracle_pointer_product_iso_and_cleanup_gates_unchanged": true,
     "product_or_iso_bytes_changed": false,
     "release_acceptance": false
   }
