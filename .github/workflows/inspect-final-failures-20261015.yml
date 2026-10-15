@@ -1,0 +1,382 @@
+name: Inspect final candidate failure evidence
+
+on:
+  push:
+    branches: [codex/inspect-final-failures-20261015]
+    paths: [.github/workflows/inspect-final-failures-20261015.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify and inspect bounded failure artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import stat
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH = 'codex/inspect-final-failures-20261015'
+          WORKFLOW = '.github/workflows/inspect-final-failures-20261015.yml'
+          NATIVE_HEAD = '6869df0083ac575af93c357cb72c7e7b4af50413'
+          SHOWCASE_HEAD = '7eb746ba899714614d982ded4d6f51f22935b4dc'
+          NATIVE = dict(run=38795172736, workflow_id=380362444,
+              workflow_name='Candidate native image qualification',
+              workflow_path='.github/workflows/native-candidate-20261008.yml',
+              branch='codex/qualification-dispatch-20261010', head=NATIVE_HEAD,
+              artifact=12001134820, name='native-candidate-qualification',
+              bytes=14_589_206,
+              sha256='f282b624901e382ba556455c2305d0863f71b64a1127a64e4180d45b3440d3fc')
+          SHOWCASE = dict(run=38794927671, workflow_id=383869632,
+              workflow_name='Exact-image unattended showcase capture',
+              workflow_path='.github/workflows/showcase-exact-capture-20261014.yml',
+              branch='codex/showcase-exact-capture-20261014', head=SHOWCASE_HEAD,
+              artifact=12001853421, name='exact-image-showcase-failure-projection',
+              bytes=6_659,
+              sha256='09e77d8a9a0644f4a875b139e7b7ed516af313e5aefc361b42c42cbeb450ede9')
+          URL = re.compile(r'https?://[^\s\"\'<>]+')
+          SECRET = re.compile(
+              r'gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|'
+              r'(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|'
+              r'(?i:(?:password|passwd|secret|authorization|access_token|refresh_token|api_key|client_secret)\s*[:=]\s*\S+)')
+          CONTROL = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x1b\x07\r\n]*(?:\x07|\x1b\\)')
+
+          def unique(rows):
+              value = {}
+              for key, item in rows:
+                  assert key not in value, 'Duplicate JSON field'
+                  value[key] = item
+              return value
+
+          def strict_json(raw):
+              assert b'\x00' not in raw
+              return json.loads(raw.decode('utf-8', errors='strict'), object_pairs_hook=unique,
+                  parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+
+          def api(endpoint):
+              return json.loads(subprocess.check_output(
+                  ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}'], timeout=60),
+                  object_pairs_hook=unique)
+
+          def sanitize(value):
+              if isinstance(value, dict):
+                  return {key: sanitize(item) for key, item in value.items()}
+              if isinstance(value, list):
+                  return [sanitize(item) for item in value]
+              if isinstance(value, str):
+                  for name in ('GH_TOKEN', 'GITHUB_TOKEN'):
+                      token = os.environ.get(name)
+                      if token:
+                          value = value.replace(token, '<redacted>')
+                  value = URL.sub('<public-url-redacted>', value)
+                  value = CONTROL.sub('', value)
+                  assert not SECRET.search(value), 'Sensitive diagnostic text refused'
+                  assert all(character in '\n\r\t' or ord(character) >= 32 for character in value)
+              return value
+
+          def safe_member(item, archive_bytes, file_limit):
+              name = item.filename
+              path = PurePosixPath(name)
+              mode = item.external_attr >> 16
+              kind = stat.S_IFMT(mode)
+              assert name and len(name.encode()) <= 1024
+              assert '\\' not in name and '\x00' not in name
+              assert not path.is_absolute() and all(part not in ('', '.', '..') for part in path.parts)
+              assert not item.is_dir() and not name.endswith('/')
+              assert kind in (0, stat.S_IFREG), f'Unsupported member type: {name}'
+              assert not item.flag_bits & 0x1, f'Encrypted member refused: {name}'
+              assert 0 <= item.compress_size <= archive_bytes and 0 <= item.file_size <= file_limit
+
+          def verify_source_commit():
+              assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+              assert os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH
+              assert os.environ['GITHUB_EVENT_NAME'] == 'push' and os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+              head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+              parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', 'HEAD'], text=True).split()
+              assert parents == [NATIVE_HEAD]
+              assert subprocess.check_output(
+                  ['git', 'diff', '--name-only', NATIVE_HEAD, head], text=True).splitlines() == [WORKFLOW]
+              assert subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip() == ''
+              ref = api('git/ref/heads/' + BRANCH)
+              assert ref['ref'] == 'refs/heads/' + BRANCH and ref['object']['sha'] == head
+
+          def verify_producer(expected):
+              run = api(f'actions/runs/{expected["run"]}')
+              assert run['id'] == expected['run']
+              assert run['name'] == expected['workflow_name'] and run['path'] == expected['workflow_path']
+              assert run['workflow_id'] == expected['workflow_id']
+              assert run['head_branch'] == expected['branch'] and run['head_sha'] == expected['head']
+              assert run['event'] == 'push' and run['run_attempt'] == 1
+              assert run['status'] == 'completed' and run['conclusion'] == 'failure'
+              assert run['repository']['full_name'] == REPOSITORY
+              assert run['head_repository']['full_name'] == REPOSITORY
+              artifact = api(f'actions/artifacts/{expected["artifact"]}')
+              assert artifact['id'] == expected['artifact'] and artifact['name'] == expected['name']
+              assert artifact['expired'] is False and artifact['size_in_bytes'] == expected['bytes']
+              assert artifact['digest'] == 'sha256:' + expected['sha256']
+              assert artifact['workflow_run']['id'] == expected['run']
+              assert artifact['workflow_run']['head_branch'] == expected['branch']
+              assert artifact['workflow_run']['head_sha'] == expected['head']
+
+          def download(expected, folder):
+              path = folder / (expected['name'] + '.zip')
+              with path.open('xb') as output:
+                  subprocess.run(['gh', 'api',
+                      f'repos/{REPOSITORY}/actions/artifacts/{expected["artifact"]}/zip'],
+                      stdout=output, check=True, timeout=180)
+              assert path.stat().st_size == expected['bytes']
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == expected['sha256']
+              return path
+
+          def native_report(archive_path):
+              selected_names = {
+                  'execution.json', 'native-harness.log', 'native-stages.json',
+                  'harness/native-stop-install.json', 'harness/native-evidence-install.log',
+                  'harness/serial-install.log', 'harness/serial-install.log.bounded-prefix.bin',
+                  'harness/qemu-install.log', 'harness/test.log',
+                  'harness/taskbar-display-install.json',
+                  'harness/taskbar-install.log.bounded-prefix.bin',
+                  'native-live/report.json', 'native-live/gui-trace.log',
+                  'native-live/gui-trace-summary.json', 'native-live/moving-player-proof.json',
+                  'native-live/visual-oracle.json', 'native-live/fullscreen-player-receipts.json',
+                  'native-live/0-native-protocol-viewport.json',
+                  'native-live/0-controls-state-trials.json',
+              }
+              retained = {}
+              inventory = {}
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert 1 <= len(items) <= 1001 and len({item.filename for item in items}) == len(items)
+                  assert sum(item.file_size for item in items) <= 513 * 1024 * 1024
+                  assert sum(item.compress_size for item in items) <= NATIVE['bytes']
+                  for item in items:
+                      safe_member(item, NATIVE['bytes'], 128 * 1024 * 1024)
+                  assert archive.testzip() is None, 'Native artifact ZIP CRC failure'
+                  by_name = {item.filename: item for item in items}
+                  assert 'upload-screening.json' in by_name
+                  screen_item = by_name['upload-screening.json']
+                  assert 0 < screen_item.file_size <= 2 * 1024 * 1024
+                  screen = strict_json(archive.read(screen_item))
+                  assert screen['scope'] == 'Owned synthetic QEMU VM only; no host desktop, VM disks or credentials'
+                  assert set(by_name) == set(screen['files']) | {'upload-screening.json'}
+                  for name, item in by_name.items():
+                      digest = hashlib.sha256()
+                      count = 0
+                      with archive.open(item) as source:
+                          while chunk := source.read(1024 * 1024):
+                              count += len(chunk)
+                              assert count <= item.file_size
+                              digest.update(chunk)
+                      inventory[name] = {'bytes': count, 'sha256': digest.hexdigest()}
+                      if name != 'upload-screening.json':
+                          proof = screen['files'][name]
+                          assert proof['bytes'] == count and proof['uploaded_sha256'] == digest.hexdigest()
+                          assert type(proof['redactions']) is int and proof['redactions'] >= 0
+                      if name in selected_names:
+                          assert item.file_size <= 32 * 1024 * 1024
+                          retained[name] = archive.read(item)
+
+              def json_member(name):
+                  raw = retained.get(name)
+                  if raw is None:
+                      return None
+                  assert len(raw) <= 4 * 1024 * 1024
+                  return strict_json(raw)
+
+              execution = json_member('execution.json')
+              assert execution['status'] == 'failed_or_unrun' and execution['release_acceptance'] is False
+              assert execution['source_image_run'] == 38785714856
+              stop = json_member('harness/native-stop-install.json')
+              if stop is not None:
+                  assert stop['schema'] == 'arctic-native-harness-stop-v1'
+                  assert stop['phase'] == 'install' and stop['release_acceptance'] is False
+                  assert set(stop) == {'schema', 'phase', 'qemu_returncode', 'elapsed_seconds',
+                      'deadline_seconds', 'deadline_reached', 'exit_marker_present', 'reason', 'release_acceptance'}
+
+              reports = []
+              runners = []
+              for name in ('harness/native-evidence-install.log',
+                           'harness/serial-install.log',
+                           'harness/serial-install.log.bounded-prefix.bin',
+                           'harness/taskbar-install.log.bounded-prefix.bin'):
+                  raw = retained.get(name, b'')
+                  for line in raw.decode('utf-8', errors='ignore').replace('\r', '\n').splitlines():
+                      for prefix, label in (
+                          ('ARCTIC-NATIVE-RUNNER-BEGIN ', 'begin'),
+                          ('ARCTIC-NATIVE-RUNNER-END ', 'end'),
+                          ('ARCTIC-NATIVE-FUNCTIONAL ', 'functional')):
+                          if line.startswith(prefix) and len(line) <= 4 * 1024 * 1024:
+                              try:
+                                  value = json.loads(line[len(prefix):], object_pairs_hook=unique)
+                              except (json.JSONDecodeError, ValueError):
+                                  continue
+                              if label == 'functional':
+                                  gates = value.get('gates', []) if isinstance(value, dict) else []
+                                  reports.append({'stage': value.get('stage'), 'status': value.get('status'),
+                                      'gates': [{'check': gate.get('check'), 'status': gate.get('status'),
+                                                 'detail': gate.get('detail'), 'error': gate.get('error')}
+                                                for gate in gates if isinstance(gate, dict)
+                                                and gate.get('status') != 'passed']})
+                              else:
+                                  runners.append({'kind': label, 'value': value})
+
+              diagnostic_lines = {}
+              patterns = re.compile(
+                  r'(?i)(result:\s*exit|install stage:\s*exit|boot stage:\s*exit|install finished|'
+                  r'install timed out|process exited|qemu.*(?:fatal|error|failed|terminated|killed|signal|exit)|'
+                  r'panic|segmentation|assertion|ARCTIC-(?:INSTALL-EXIT|LIVE-SMOKE-EXIT|NATIVE-RUNNER-(?:BEGIN|END)))')
+              for name in ('native-harness.log', 'harness/test.log', 'harness/qemu-install.log'):
+                  raw = retained.get(name)
+                  if raw is None:
+                      continue
+                  assert len(raw) <= 32 * 1024 * 1024
+                  lines = []
+                  for line in raw.decode('utf-8', errors='replace').replace('\r', '\n').splitlines():
+                      if patterns.search(line):
+                          clean = sanitize(line)[:2000]
+                          lines.append(clean)
+                  diagnostic_lines[name] = lines[-120:]
+
+              gui_raw = retained.get('native-live/gui-trace.log', b'')
+              gui_lines = []
+              if gui_raw:
+                  assert len(gui_raw) <= 4 * 1024 * 1024
+                  for line in gui_raw.decode('utf-8', errors='strict').splitlines()[-100:]:
+                      if line.strip():
+                          try:
+                              record = json.loads(line, object_pairs_hook=unique)
+                              screenshot = record.get('screenshot', {}) if isinstance(record, dict) else {}
+                              gui_lines.append(sanitize({key: record.get(key) for key in (
+                                  'event', 'gate', 'label', 'error', 'elapsed_seconds',
+                                  'timeout_seconds', 'polls', 'monotonic_ns')}
+                                  | ({'snapshot_sha256': record.get('snapshot_sha256')}
+                                     if record.get('snapshot_sha256') else {})
+                                  | ({'screenshot_sha256': screenshot.get('sha256')}
+                                     if isinstance(screenshot, dict) and screenshot.get('sha256') else {})))
+                          except json.JSONDecodeError:
+                              gui_lines.append(sanitize(line[:2000]))
+
+              fixed_json = {}
+              for name in selected_names:
+                  if name.endswith('.json') and name in retained:
+                      value = json_member(name)
+                      if name == 'execution.json':
+                          value = {key: value.get(key) for key in (
+                              'status', 'error', 'source_image_run', 'execution_checker_head',
+                              'native_stages', 'release_acceptance')}
+                      elif name == 'native-live/report.json':
+                          value = {'schema': value.get('schema'), 'stage': value.get('stage'),
+                              'status': value.get('status'), 'release_acceptance': value.get('release_acceptance'),
+                              'diagnostic_trace': value.get('diagnostic_trace'),
+                              'failed_gates': [{'check': gate.get('check'), 'status': gate.get('status'),
+                                  'detail': gate.get('detail'), 'error': gate.get('error')}
+                                  for gate in value.get('gates', [])
+                                  if isinstance(gate, dict) and gate.get('status') != 'passed']}
+                      elif name == 'native-live/moving-player-proof.json':
+                          samples = value.get('player_samples', [])
+                          value = {'player': value.get('player'), 'client': value.get('client'),
+                              'sample_count': len(samples),
+                              'sample_time_positions': [sample.get('time-pos') for sample in samples
+                                  if isinstance(sample, dict)],
+                              'product_renderer': {key: value.get('product_renderer', {}).get(key)
+                                  for key in ('schema', 'requested_renderer', 'realized_renderer',
+                                              'native_wayland', 'release_acceptance')},
+                              'static_oracle_reuse': {key: value.get('static_oracle_reuse', {}).get(key)
+                                  for key in ('schema', 'player', 'same_process_renderer_required',
+                                              'release_acceptance')}}
+                      elif name == 'native-live/fullscreen-player-receipts.json':
+                          value = {'container_type': type(value).__name__,
+                              'receipt_count': len(value),
+                              'statuses': [item.get('status') for item in value
+                                  if isinstance(item, dict)],
+                              'release_acceptance': [item.get('release_acceptance') for item in value
+                                  if isinstance(item, dict)]}
+                      elif name in ('native-live/0-native-protocol-viewport.json',
+                                    'native-live/0-controls-state-trials.json'):
+                          value = {'schema': value.get('schema'), 'status': value.get('status'),
+                              'release_acceptance': value.get('release_acceptance'), 'keys': sorted(value)}
+                      fixed_json[name] = sanitize(value)
+              binary_metadata = {name: inventory[name] for name in inventory
+                  if '-failure-' in name or name.lower().endswith('.bounded-prefix.bin')}
+              harness = execution.get('harness_evidence', {})
+              harness_evidence = {name: harness.get(name) for name in (
+                  'native-stop-install.json', 'serial-install.log', 'native-evidence-install.log',
+                  'qemu-install.log', 'test.log', 'taskbar-display-install.json',
+                  'taskbar-install.log.bounded-prefix.bin') if name in harness}
+              print('ARCTIC-NATIVE-DIAGNOSTIC-BEGIN')
+              print(json.dumps(sanitize({
+                  'run_id': NATIVE['run'], 'head_sha': NATIVE_HEAD,
+                  'artifact_id': NATIVE['artifact'], 'artifact_bytes': NATIVE['bytes'],
+                  'artifact_sha256': NATIVE['sha256'],
+                  'artifact_members': len(inventory),
+                  'rejected_files': screen.get('rejected_files', {}),
+                  'harness_evidence_metadata': harness_evidence,
+                  'selected_json': fixed_json,
+                  'last_runner_records': runners[-12:],
+                  'functional_failures': reports[-4:],
+                  'diagnostic_lines': diagnostic_lines,
+                  'last_100_gui_trace_records': gui_lines,
+                  'binary_metadata_only': binary_metadata,
+              }), sort_keys=True, indent=2))
+              print('ARCTIC-NATIVE-DIAGNOSTIC-END')
+
+          def showcase_report(archive_path):
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert len(items) == 1 and items[0].filename == 'failure-projection.json'
+                  safe_member(items[0], SHOWCASE['bytes'], 32 * 1024)
+                  assert archive.testzip() is None, 'Showcase artifact ZIP CRC failure'
+                  raw = archive.read(items[0])
+              assert 0 < len(raw) <= 32 * 1024
+              value = strict_json(raw)
+              assert set(value) == {'schema', 'status', 'release_acceptance', 'image', 'host_phase',
+                  'failure_code', 'guest_progress', 'private_runtime_removed', 'screens_exported',
+                  'logs_exported', 'pixels_exported', 'privacy', 'live_startup', 'installed_startup'}
+              assert value['schema'] == 'arctic-showcase-capture-failure-v1'
+              assert value['status'] == 'failed' and value['release_acceptance'] is False
+              assert value['private_runtime_removed'] is True
+              assert value['screens_exported'] is False and value['logs_exported'] is False
+              assert value['pixels_exported'] is False
+              assert value['privacy'] == {
+                  'content': 'no guest text, logs, screenshots or pixels exported',
+                  'human_review': 'not_applicable'}
+              installed = value['installed_startup']
+              assert isinstance(installed, dict)
+              gate = installed['shell_ready_gate']
+              required_observations = {'prompt-exact', 'prompt-not-final', 'proof-marker', 'account-only',
+                  'suffix-only', 'fetch-greeting', 'blank-output', 'ocr-empty', 'capture-error',
+                  'geometry-mismatch', 'login-or-password', 'other-text'}
+              assert set(gate['first_observation_seconds']) == required_observations
+              output = sanitize(value)
+              print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-SHA256', hashlib.sha256(raw).hexdigest())
+              print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-BEGIN')
+              print(json.dumps(output, sort_keys=True, indent=2))
+              print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-END')
+
+          verify_source_commit()
+          verify_producer(NATIVE)
+          verify_producer(SHOWCASE)
+          with tempfile.TemporaryDirectory(prefix='arctic-failure-inspection-') as folder:
+              root = Path(folder)
+              native_report(download(NATIVE, root))
+              showcase_report(download(SHOWCASE, root))
+          PY
