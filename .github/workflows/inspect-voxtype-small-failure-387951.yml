@@ -1,0 +1,196 @@
+name: Inspect VoxType small-v2 failure 38795169180
+
+on:
+  push:
+    branches: [codex/diagnose-voxtype-small-387951]
+    paths: [.github/workflows/inspect-voxtype-small-failure-387951.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify and project transcript-free failure evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path, PurePosixPath
+
+          repository = 'yuvalkolodkingal/Arctic-Linux'
+          branch = 'codex/diagnose-voxtype-small-387951'
+          parent = '8ec5711c3e0ff40b3514c35b98b290a532f831d1'
+          run_id = 38795169180
+          job_id = 116629530528
+          artifact_id = 12001999471
+          artifact_name = 'dictation-candidate-qualification-small-v2'
+          archive_bytes = 7121
+          archive_sha256 = 'c99021e12882964d8ded469b99f5f482432819d7e60a34813438f1acc05e4ae8'
+          assert os.environ['GITHUB_REPOSITORY'] == repository
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + branch
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == parent
+          changed = subprocess.check_output(['git', 'diff', '--name-only', parent, 'HEAD'], text=True).splitlines()
+          assert changed == ['.github/workflows/inspect-voxtype-small-failure-387951.yml'], changed
+
+          api = 'repos/' + repository + '/actions/artifacts/' + str(artifact_id)
+          metadata = json.loads(subprocess.check_output(['gh', 'api', api]))
+          assert metadata['id'] == artifact_id and metadata['name'] == artifact_name
+          assert metadata['size_in_bytes'] == archive_bytes and not metadata['expired']
+          assert metadata['digest'] == 'sha256:' + archive_sha256
+          assert metadata['workflow_run']['id'] == run_id
+          assert metadata['workflow_run']['head_sha'] == parent
+
+          secret = re.compile(
+              rb'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|'
+              rb'-----BEGIN[^\n]*PRIVATE KEY|Authorization\s*[:=]|password\s*[:=]\s*\S+', re.I)
+          forbidden_name = re.compile(r'(?:^|[-_.])(audio|transcript|hypothesis|model|serial|journal|log)(?:[-_.]|$)', re.I)
+          allowed_names = re.compile(
+              r'(?:fixtures|execution|(?:online-installed|offline-installed|recovery|recovered-offline)(?:-live)?|'
+              r'launch-preterminal-online-installed)\.json|'
+              r'(?:dictation-indicator-(?:online-installed|recovered-offline)|'
+              r'dictation-recovery-(?:online-installed|recovered-offline)-(?:gpu-failure|cpu-ready)|'
+              r'launch-preterminal-online-installed)\.png')
+
+          def strict_object(pairs):
+              result = {}
+              for key, value in pairs:
+                  assert key not in result, 'duplicate JSON key'
+                  result[key] = value
+              return result
+
+          def load_json(raw):
+              return json.loads(raw.decode('utf-8', errors='strict'), object_pairs_hook=strict_object)
+
+          with tempfile.TemporaryDirectory(prefix='arctic-voxtype-small-inspect-') as folder:
+              archive_path = Path(folder) / 'evidence.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', api + '/zip'], stdout=output, check=True)
+              raw_archive = archive_path.read_bytes()
+              assert len(raw_archive) == archive_bytes
+              assert hashlib.sha256(raw_archive).hexdigest() == archive_sha256
+              with zipfile.ZipFile(archive_path) as archive:
+                  assert archive.testzip() is None
+                  members = archive.infolist()
+                  assert 1 <= len(members) <= 16
+                  assert len({item.filename for item in members}) == len(members)
+                  assert sum(item.file_size for item in members) <= 12 * 1024 * 1024
+                  assert sum(item.compress_size for item in members) <= archive_bytes
+                  payload = {}
+                  payload_raw = {}
+                  for item in members:
+                      path = PurePosixPath(item.filename)
+                      assert len(path.parts) == 1 and not path.is_absolute() and '..' not in path.parts
+                      assert allowed_names.fullmatch(item.filename), item.filename
+                      assert not forbidden_name.search(item.filename), item.filename
+                      mode = item.external_attr >> 16
+                      assert stat.S_IFMT(mode) in (0, stat.S_IFREG)
+                      assert not item.flag_bits & 1 and item.file_size <= 4 * 1024 * 1024
+                      raw = archive.read(item)
+                      assert len(raw) == item.file_size and not secret.search(raw)
+                      if item.filename.endswith('.json'):
+                          assert item.file_size <= 2_000_000
+                          payload[item.filename] = load_json(raw)
+                          payload_raw[item.filename] = raw
+                      else:
+                          assert raw.startswith(b'\x89PNG\r\n\x1a\n')
+                      print('ARCTIC-VOXTYPE-SMALL-MEMBER', item.filename, item.file_size,
+                            hashlib.sha256(raw).hexdigest())
+
+              assert 'execution.json' in payload and 'fixtures.json' in payload
+              execution = payload['execution.json']
+              assert set(execution) == {
+                  'schema', 'hardware_profile', 'status', 'release_acceptance', 'image',
+                  'execution_checker_head', 'fixture_manifest_sha256', 'reports', 'installations',
+                  'indicators', 'recovery_screens', 'recorded_at_utc', 'vm_tool_image_id',
+                  'current_phase', 'error'}
+              assert execution['schema'] == 'arctic-voxtype-execution-v3'
+              assert execution['hardware_profile'] == 'small-v2'
+              assert execution['release_acceptance'] is False
+              assert execution['execution_checker_head'] == parent
+              assert execution['image']['run_id'] == 38785714856
+              assert execution['image']['source_sha'] == '3e16234b71ad64c27ab24871d51863b940ad2521'
+              fixtures_raw = payload_raw['fixtures.json']
+              assert hashlib.sha256(fixtures_raw).hexdigest() == execution['fixture_manifest_sha256']
+              fixtures = payload['fixtures.json']
+              assert fixtures['schema'] == 'arctic-dictation-fixtures-v1'
+              assert len(fixtures['samples']) == 10
+              assert {(row['language'], row['source_row']) for row in fixtures['samples']} == {
+                  (language, row) for language in ('en', 'he') for row in range(5)}
+              projection = {
+                  'schema': execution['schema'],
+                  'hardware_profile': execution['hardware_profile'],
+                  'status': execution['status'],
+                  'current_phase': execution['current_phase'],
+                  'error': execution['error'],
+                  'release_acceptance': execution['release_acceptance'],
+                  'image': execution['image'],
+                  'reports': execution['reports'],
+                  'indicator_phases': sorted(execution['indicators']),
+                  'recovery_screen_phases': sorted(execution['recovery_screens']),
+              }
+              print('ARCTIC-VOXTYPE-SMALL-EXECUTION', json.dumps(projection, sort_keys=True))
+
+              report_names = sorted(name for name in payload if re.fullmatch(
+                  r'(?:online-installed|offline-installed|recovery|recovered-offline)(?:-live)?\.json', name))
+              for name in report_names:
+                  report = payload[name]
+                  assert report['schema'] == 'arctic-voxtype-image-v3'
+                  assert report['release_acceptance'] is False
+                  assert report['context']['hardware_profile'] == 'small-v2'
+                  assert report['context']['source_sha'] == execution['image']['source_sha']
+                  assert report['context']['iso_sha256'] == execution['image']['sha256']
+                  safe_gates = []
+                  safe_observations = {
+                      'count', 'ready', 'pending', 'matched', 'avcs', 'locked', 'returncode',
+                      'sha256', 'snapshot_sha256', 'file_count', 'drained', 'restored',
+                      'automatic_ready', 'gpu_supported', 'explicit_cpu_selected',
+                      'failed_attempt_inserted', 'audit_lost', 'audit_enabled',
+                      'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
+                      'audit_lost_before', 'audit_enabled_before', 'command_count',
+                      'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
+                      'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes'}
+                  for gate in report['gates']:
+                      assert set(gate) == {'id', 'status', 'evidence_kind', 'code', 'observations'}
+                      assert set(gate['observations']) <= safe_observations
+                      assert re.fullmatch(r'[a-z0-9-]+', gate['id'])
+                      assert re.fullmatch(r'[a-z0-9-]+', gate['code'])
+                      safe_gates.append(gate)
+                  safe_samples = [{key: row[key] for key in (
+                      'language', 'source_row', 'purpose', 'word_edits', 'reference_words',
+                      'char_edits', 'reference_chars', 'elapsed_ns', 'backend', 'cpu_variant')}
+                      for row in report['samples']]
+                  print('ARCTIC-VOXTYPE-SMALL-REPORT', json.dumps({
+                      'name': name, 'phase': report['context']['phase'], 'status': report['status'],
+                      'hardware': report['hardware'], 'profile': report['profile'],
+                      'gates': safe_gates, 'samples': safe_samples}, sort_keys=True))
+
+              for name, record in sorted(payload.items()):
+                  if name.startswith('launch-preterminal-') and name.endswith('.json'):
+                      assert record['schema'] == 'arctic-dictation-launch-diagnostic-v1'
+                      assert record['release_acceptance'] is False
+                      print('ARCTIC-VOXTYPE-SMALL-LAUNCH', json.dumps(record, sort_keys=True))
+
+          # The private job log is never printed. Relay only the runner's fixed,
+          # transcript-free allowlisted progress/failure records.
+          log = subprocess.check_output(['gh', 'api', 'repos/' + repository + '/actions/jobs/' + str(job_id) + '/logs'])
+          records = []
+          marker = re.compile(rb'ARCTIC-DICTATION-HOST-(?:PROGRESS|FAILURE) [a-z0-9 -]+')
+          for line in log.splitlines():
+              found = marker.search(line)
+              if found:
+                  value = found.group().decode('ascii')
+                  assert len(value) <= 256
+                  records.append(value)
+          assert records and len(records) <= 200
+          print('ARCTIC-VOXTYPE-SMALL-HOST-RECORDS', json.dumps(records))
+          PY
