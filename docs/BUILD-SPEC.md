@@ -377,7 +377,8 @@ zero, intent-only, fallback, contradictory, unknown, oversized and timed-out
 proofs retain CPU. The silence transcript is discarded and the bounded private
 stderr proof is never persisted.
 
-Upgrades from VoxType 1.1.0 preserve the verified model and hardware profile,
+Upgrades from VoxType 1.1.0 preserve the verified model, hardware profile and
+strictly validated receipt user,
 then queue the new signed executable without blocking the RPM transaction. The
 RPM ships the upstream 1.1.1 manifest and detached CPU signatures for
 verification and crash recovery. It verifies the new binary and retained model,

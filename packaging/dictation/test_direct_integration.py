@@ -168,7 +168,11 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertIn('setup_user "$2" legacy-only', migration)
         setup_user = setup[setup.index("setup_user() {"):setup.index("\n}\n", setup.index("setup_user() {")) + 3]
         self.assertLess(setup_user.index("legacy_payload_usable"), setup_user.index("prepare_release_metadata"))
-        self.assertIn('selected_profile=$(legacy_profile "$host_profile")', setup_user)
+        self.assertIn('legacy_selection=$(legacy_profile "$host_profile")', setup_user)
+        self.assertIn("read -r selected_profile receipt_user", setup_user)
+        self.assertIn('valid_user "$receipt_user"', setup_user)
+        self.assertLess(setup_user.index('user=$receipt_user'),
+                        setup_user.index('home=$(getent passwd "$user"'))
         self.assertIn('quarantine_invalid_legacy_state', setup_user)
         self.assertIn('[[ $legacy_state == valid ]] && legacy_payload_usable', setup_user)
         self.assertIn('[[ $mode != legacy-only ]] || return 1', setup_user)

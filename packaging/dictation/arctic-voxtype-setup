@@ -444,7 +444,10 @@ if receipt_exists:
             raise SystemExit(1)
     else:
         raise SystemExit(1)
-    print(profile)
+    if set(receipt) in (direct_keys, direct_keys | vulkan_keys):
+        print(profile + '\t' + user)
+    else:
+        print(profile)
     raise SystemExit(0)
 
 selection, selection_exists = root_json(os.path.join(state, 'profile-selection.json'))
@@ -557,13 +560,19 @@ EOF
 }
 
 setup_user() {
-    local user=$1 mode=${2:-online} home tmp keyring host_profile selected_profile profile_status legacy_state=valid cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha packaged=0 receipt_json uid
-    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
+    local user=$1 mode=${2:-online} home tmp keyring host_profile legacy_selection selected_profile receipt_user profile_status legacy_state=valid cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha packaged=0 receipt_json uid
     durable_atomic_text "$STATE/setup.state" 0644 downloading
     tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
     host_profile=$(/usr/libexec/arctic/arctic-voxtype-host-profile)
-    if selected_profile=$(legacy_profile "$host_profile"); then
-        :
+    if legacy_selection=$(legacy_profile "$host_profile"); then
+        IFS=$'\t' read -r selected_profile receipt_user <<<"$legacy_selection"
+        if [[ -n $receipt_user ]]; then
+            # A strictly validated direct receipt owns the installed user's
+            # private config. RPM account enumeration is only a fallback when
+            # no trusted direct receipt exists.
+            valid_user "$receipt_user" || return 1
+            user=$receipt_user
+        fi
     else
         profile_status=$?
         if [[ $profile_status == 2 ]]; then
@@ -581,6 +590,7 @@ setup_user() {
         fi
         selected_profile=$host_profile
     fi
+    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
     if [[ $selected_profile == turbo-q5-v3 ]]; then
         cpu=avx2; profile=turbo-q5-v3; model_name=$TURBO_NAME; model_bytes=$TURBO_BYTES; model_sha=$TURBO_SHA; model_url=$TURBO_URL
         binary_bytes=$AVX2_BYTES; binary_sha=$AVX2_SHA
@@ -741,7 +751,7 @@ set_backend() {
             prepare_release_metadata "$tmp" "$keyring"; install_asset vulkan "$tmp" "$keyring"
             command -v vulkaninfo >/dev/null
             uid=$(id -u "$user"); home=$(getent passwd "$user" | cut -d: -f6)
-            runuser -u "$user" -- env HOME="$home" vulkaninfo --summary >/dev/null
+            runuser -u "$user" -- env HOME="$home" timeout 15 vulkaninfo --summary >/dev/null
             config="$home/.config/voxtype/config.toml"; fixture="$tmp/silence.wav"
             python3 - "$fixture" <<'PY'
 import struct, sys, wave

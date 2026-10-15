@@ -27,8 +27,8 @@ system packages add to these totals. Optional Vulkan acceleration is a separate
 **66,575,872-byte (66.6 MB)** download. Setup verifies upstream signatures,
 exact sizes and SHA-256 hashes before publishing any file as ready.
 
-When an existing Arctic system updates from VoxType 1.1.0, its verified model
-and selected profile are retained. The new 1.1.1 executable downloads through
+When an existing Arctic system updates from VoxType 1.1.0, its verified model,
+selected profile and receipt-bound user are retained. The new 1.1.1 executable downloads through
 the same retryable queue; the previous payload remains intact until the new
 binary, model and configuration verify and the direct receipt and marker are
 durable. A restart during the update resumes from that queue. Vulkan is

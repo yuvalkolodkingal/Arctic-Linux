@@ -52,15 +52,15 @@ every binary. Models come from immutable Whisper.cpp revisions and receive the
 same byte-count and SHA-256 checks. Downloads use root-owned resumable partial
 files and are published atomically only after verification.
 
-A system with VoxType 1.1.0 keeps its verified model and selected hardware
-profile. The stable RPM update queues a background download of only the new
+A system with VoxType 1.1.0 keeps its verified model, selected hardware profile
+and receipt-bound user. The stable RPM update queues a background download of only the new
 signed executable; until that succeeds, Settings accurately reports setup as
 pending. The RPM carries the 1.1.1 signed manifest and detached CPU signatures
 for verification and crash recovery. The direct-integration receipt and
 `upstream-direct-v1` marker are committed only after the new executable,
 existing model hash and per-user configuration verify. A failed download leaves
 the previous payload intact and the setup retryable. A trusted, root-owned
-legacy receipt selects the previously working profile even when both payload
+legacy receipt selects the previously working profile and account even when both payload
 sets exist or a later profile
 change was interrupted; the trusted profile-selection file is used only when
 there is no receipt. The pending queue, config, receipt and marker are published
@@ -76,8 +76,9 @@ roll the completed migration back; readiness reports the stopped service and it
 starts through the globally enabled unit at the next graphical session.
 
 Installed binaries are under `/opt/arctic/voxtype/1.1.1`; models are under
-`/opt/arctic/voxtype/models`. `/usr/bin/voxtype` selects the verified CPU or
-Vulkan binary. Public setup state is under `/var/lib/arctic/dictation`:
+`/opt/arctic/voxtype/models`. `/usr/bin/voxtype` selects the CPU binary attested
+by the receipt, still rejecting AVX2 if the current host no longer supports it,
+or the verified Vulkan binary. Public setup state is under `/var/lib/arctic/dictation`:
 
 - `pending`, `setup.state` and `setup.error` describe queued or failed setup;
 - `verified.json` binds the installed version, source, binary, model, hashes and

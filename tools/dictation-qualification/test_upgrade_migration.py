@@ -15,6 +15,7 @@ import pwd
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 
@@ -92,7 +93,9 @@ class UpgradeMigrationExecution(unittest.TestCase):
         )
         self._write_executable(
             self.bin / "runuser",
-            "#!/bin/sh\n[ \"$1\" = -u ] || exit 2\nshift 2\n[ \"$1\" = -- ] || exit 2\nshift\nexec \"$@\"\n",
+            "#!/bin/sh\n[ \"$1\" = -u ] || exit 2\n"
+            "printf 'runuser:%s\\n' \"$2\" >>\"$ARCTIC_MIGRATION_TRACE\"\n"
+            "shift 2\n[ \"$1\" = -- ] || exit 2\nshift\nexec \"$@\"\n",
         )
         for name, data, mode in ASSETS.values():
             self._write(self.payload / name, data, mode)
@@ -138,7 +141,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
         path.write_text(json.dumps(value, separators=(",", ":")) + "\n")
         path.chmod(0o644)
 
-    def _direct_receipt(self, profile, backend="cpu"):
+    def _direct_receipt(self, profile, backend="cpu", user=None):
         cpu = "baseline" if profile == "small-v2" else "avx2"
         binary_key = "cpu" if cpu == "baseline" else "avx2"
         model_key = "small" if profile == "small-v2" else "turbo"
@@ -148,7 +151,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
             "integration": "upstream-direct-v1", "version": "1.1.0",
             "source_commit": SOURCE_COMMIT,
             "release_signing_fingerprint": "9CCF7915B750CAE8B095ED1AA3FC9F33FD209279",
-            "user": self.user, "profile": profile, "binary": "voxtype-" + cpu,
+            "user": self.user if user is None else user,
+            "profile": profile, "binary": "voxtype-" + cpu,
             "binary_bytes": len(binary_data), "binary_sha256": digest(binary_data),
             "model_path": str(self.models / model_name),
             "model": model_name.removeprefix("ggml-"),
@@ -239,6 +243,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
             'if [ -S "/run/user/$uid/bus" ]; then', "if true; then"
         ).replace(
             "timeout 120", "timeout 1"
+        ).replace(
+            "timeout 15", "timeout 1"
         )
         start = text.index("prepare_packaged_release_metadata() {")
         end = text.index("\n}\n", start) + 3
@@ -333,11 +339,11 @@ class UpgradeMigrationExecution(unittest.TestCase):
             "/var/lib/arctic/dictation", str(self.state)
         ).replace(
             "/usr/libexec/arctic/arctic-voxtype-host-profile", str(self.bin / "host-profile")
-        ).replace(
-            str(CURRENT_PRODUCTION["vulkan"][0]), str(len(CURRENT_ASSETS["vulkan"][1]))
-        ).replace(
-            CURRENT_PRODUCTION["vulkan"][1], digest(CURRENT_ASSETS["vulkan"][1])
         )
+        for key in ("cpu", "avx2", "vulkan"):
+            size, sha = CURRENT_PRODUCTION[key]
+            text = text.replace(str(size), str(len(CURRENT_ASSETS[key][1])))
+            text = text.replace(sha, digest(CURRENT_ASSETS[key][1]))
         path = self.root / "launcher"
         self._write_executable(path, text)
         return path
@@ -363,7 +369,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
         )
         return json.loads(result.stdout)
 
-    def _run(self, script, check=True, verb="--migrate-legacy"):
+    def _run(self, script, check=True, verb="--migrate-legacy", user=None):
         env = dict(os.environ, PATH=str(self.bin) + ":/usr/bin:/bin",
                    ARCTIC_MIGRATION_TRACE=str(self.trace),
                    ARCTIC_CURRENT_ASSETS=str(self.current_assets), PKEXEC_UID=str(self.uid))
@@ -372,7 +378,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
         elif verb in ("--backend-cpu", "--backend-vulkan"):
             argv = [str(script), "--backend", verb.removeprefix("--backend-")]
         else:
-            argv = [str(script), verb] + ([self.user] if verb == "--migrate-legacy" else [])
+            argv = [str(script), verb] + ([self.user if user is None else user]
+                                          if verb == "--migrate-legacy" else [])
         return subprocess.run(argv, env=env,
                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                               timeout=30, check=check)
@@ -428,6 +435,46 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._run(self._fixture_setup(), verb="--backend-cpu")
         self._assert_strict_cpu_receipt()
 
+    def test_launcher_uses_attested_cpu_profile_not_current_host_probe(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._write(self.models / "ggml-large-v3-turbo-q5_0.bin", ASSETS["turbo"][1], 0o644)
+        self._write_executable(self.current_payload / "voxtype-baseline",
+                               "#!/bin/sh\nprintf '%s\\n' baseline\n")
+        self._write_executable(self.current_payload / "voxtype-avx2",
+                               "#!/bin/sh\nprintf '%s\\n' avx2\n")
+        self._write(self.state / "backend", b"cpu\n", 0o644)
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        launcher = self._fixture_launcher()
+
+        # host-profile fixture reports turbo, but a preserved small receipt
+        # must still execute only its attested baseline binary.
+        self._json("verified.json", self._current_receipt("small-v2"))
+        small = subprocess.run([str(launcher), "--version"], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               check=True, timeout=10)
+        self.assertEqual(small.stdout, "baseline\n")
+
+        self._json("verified.json", self._current_receipt("turbo-q5-v3"))
+        turbo = subprocess.run([str(launcher), "--version"], text=True,
+                               stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                               check=True, timeout=10)
+        self.assertEqual(turbo.stdout, "avx2\n")
+
+        self._write_executable(self.bin / "host-profile",
+                               "#!/bin/sh\nprintf '%s\\n' small-v2\n")
+        unsafe = subprocess.run([str(launcher), "--version"], text=True,
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(unsafe.returncode, 69)
+        self.assertEqual(unsafe.stdout, "")
+
+        malformed = self._current_receipt("small-v2")
+        malformed["binary"] = "voxtype-avx2"
+        self._json("verified.json", malformed)
+        rejected = subprocess.run([str(launcher), "--version"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(rejected.returncode, 69)
+
     def test_failed_vulkan_reenable_leaves_reusable_cpu_receipt_across_crash(self):
         self._prepare_current_vulkan()
         self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 44\n")
@@ -469,6 +516,32 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertEqual((self.state / "backend").read_text(), "cpu\n")
         self._assert_strict_cpu_receipt()
         self.assertEqual((self.state / "setup.error").read_text(), "backend-vulkan\n")
+
+    def test_wedged_vulkaninfo_is_bounded_and_retry_lock_is_available(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nsleep 2\n")
+        started = time.monotonic()
+        failed = self._run(self._fixture_setup(), check=False, verb="--backend-vulkan")
+        elapsed = time.monotonic() - started
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertLess(elapsed, 1.8)
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self._assert_strict_cpu_receipt()
+        self.assertEqual((self.state / "setup.error").read_text(), "backend-vulkan\n")
+
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
+        self._write_executable(
+            self.current_assets / "voxtype-vulkan",
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n"
+            "exit 0\n",
+        )
+        # A timed-out probe released the global lock and a normal retry can
+        # complete rather than returning the setup-busy code.
+        self._run(self._fixture_setup(), verb="--backend-vulkan")
+        self.assertEqual((self.state / "backend").read_text(), "vulkan\n")
+        self.assertEqual(json.loads((self.state / "verified.json").read_text())["backend"],
+                         "vulkan")
 
     def test_vulkan_proof_rejects_contradiction_intent_unknown_oversize_and_nonzero(self):
         self._prepare_current_vulkan()
@@ -642,6 +715,56 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
         self.assertTrue((self.current_payload / "voxtype-baseline").is_file())
         self.assertFalse((self.payload / "voxtype-baseline").exists())
+
+    def test_direct_receipt_user_overrides_passwd_first_migration_user(self):
+        first, bound = "user-a", "user-b"
+        first_home, bound_home = self.root / "home-a", self.root / "home-b"
+        first_home.mkdir(mode=0o700); bound_home.mkdir(mode=0o700)
+        self._write_executable(
+            self.bin / "getent",
+            "#!/bin/sh\n[ \"$1\" = passwd ] || exit 2\n"
+            f"case \"$2\" in\n"
+            f"  {first}) printf '%s\\n' '{first}:x:1001:1001::{first_home}:/bin/bash' ;;\n"
+            f"  {bound}) printf '%s\\n' '{bound}:x:1002:1002::{bound_home}:/bin/bash' ;;\n"
+            "  *) exit 2 ;;\nesac\n",
+        )
+        self._write_executable(
+            self.bin / "id",
+            "#!/bin/sh\n"
+            f"[ \"${{1:-}}:${{2:-}}\" != '-u:{bound}' ] || {{ printf '%s\\n' 1002; exit 0; }}\n"
+            "exec /usr/bin/id \"$@\"\n",
+        )
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("small-v2", user=bound))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+
+        result = self._run(self._fixture_setup(), check=False, user=first)
+        if result.returncode != 0:
+            self._run(self._fixture_setup(), verb="--resume")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual(receipt["user"], bound)
+        runusers = [line for line in self.trace.read_text().splitlines()
+                    if line.startswith("runuser:")]
+        self.assertIn("runuser:" + bound, runusers)
+        self.assertNotIn("runuser:" + first, runusers)
+
+    def test_direct_receipt_missing_bound_user_fails_closed(self):
+        missing = "removed-user"
+        self._write_executable(
+            self.bin / "getent",
+            "#!/bin/sh\n[ \"$1\" = passwd ] || exit 2\n"
+            f"[ \"$2\" != {self.user} ] || exec /usr/bin/getent \"$@\"\n"
+            "exit 2\n",
+        )
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("small-v2", user=missing))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        failed = self._run(self._fixture_setup(), check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual((self.state / "setup.error").read_text(), "setup\n")
+        self.assertEqual(json.loads((self.state / "verified.json").read_text())["user"], missing)
 
     def test_direct_1_1_0_vulkan_upgrade_is_reverified_on_cpu(self):
         self.models.mkdir(mode=0o755)
