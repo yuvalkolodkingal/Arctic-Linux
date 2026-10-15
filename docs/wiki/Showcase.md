@@ -13,16 +13,22 @@ fixtures; neither claims general parity, physical-microphone coverage or real-ti
 
 The old custom-controller screenshots and their River audio are superseded. Five explicit
 capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
-packaged-wallpaper hide and restore, and one for the per-update What's New summary. A new River
+packaged-wallpaper hide and restore, and one for the per-update What's New summary. The retained
+artifact-only candidate from [run 38808271154](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38808271154)
+is 1,936,328,704 bytes with SHA-256
+`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`, but no capture is admitted
+until its exact-image receipt and pixels pass the automated contract and human review. A new River
 master has deterministic local alignment and still needs human listening. The locked narration is 9,093 characters, above
 the connected generator's 5,000-character request limit. The failed full-script attempt has no
 renderable audio. Two exact source segments of 4,451 and 4,642 characters are pinned at a paragraph
 boundary. Both one-take River generations completed and their receipts were verified. The
-sample-exact assembled master is 582.356463 seconds with SHA-256
+sample-exact assembled master uses River voice ID `SAz9YHcvj6GT2YYXdXww` with
+`eleven_multilingual_v2`. It is 13,978,270 bytes and 582.356463 seconds, with SHA-256
 `f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`; it remains unpublished.
 Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130 cues, with 4.1412%
-WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; the
-segment boundary lies inside 0.431905 seconds below -60 dBFS. These automated results do not replace
+WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; its
+measured loudness is -24.6 LUFS with a -2.2 dBTP true peak, and the segment boundary lies inside
+0.431905 seconds below -60 dBFS. These automated results do not replace
 listening. Rendering is blocked pending human listening, qualified captures, private source-archive
 verification and release binding, so no replacement video link is published yet.
 

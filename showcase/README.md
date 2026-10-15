@@ -22,7 +22,7 @@ first full-script River request failed because the connector caps one request at
 the locked script is 9,093 characters. That attempt has no renderable audio. The exact script is
 now pinned as two minimum-count inputs of 4,451 and 4,642 characters, split between the Get apps
 and Remove apps paragraphs. Both one-take River generations completed. Their verified sample-exact
-assembly is 582.356463 seconds and has SHA-256
+assembly is 13,978,270 bytes and 582.356463 seconds, with SHA-256
 `f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`. The audio is preserved
 outside Git and remains unpublished. Two offline faster-whisper 1.2.1 alignment runs produced
 byte-identical outputs. The measured WER is 4.1412%, exact-token coverage is 97.4202%, and no cue
@@ -30,18 +30,21 @@ falls below half exact-token coverage. Human listening review remains pending.
 
 The new source has **not** been rendered or published. Final-image captures for direct VoxType,
 wallpaper management and What's New remain explicitly pending until the matching Arctic image
-finishes qualification. Full decode, subtitle mux, representative-frame review, human listening,
+finishes qualification. The source composition keeps evidence cards in those five positions and
+will replace them only with contract-validated, manually reviewed exact-image assets bound to the
+same ISO receipt. Full decode, subtitle mux, representative-frame review, human listening,
 release binding and public download verification must then run on the final render. The public
 link above therefore continues to point to the 3 October edition.
 
 ## What the source shows
 
 The app scenes cover GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
-Fish/Bash. Arctic downloads signature-checked official VoxType 1.1.1 binaries and uses a small
-setup and status adapter around VoxType's public commands. Online installation automatically
-downloads and verifies the compatible CPU engine and multilingual model. Offline installation
-reports that dictation is not ready and leaves a clear first-boot retry. Mango's readiness helper
-invokes VoxType record toggle, and Arctic's VoxType-backed indicator stays visible. The script
+Fish/Bash. VoxType's official 1.1.1 daemon records, transcribes and inserts text directly. Arctic
+downloads and verifies the signed upstream binary and multilingual model, supplies safe local
+configuration, and presents sanitized readiness and error states. Online installation performs
+that setup automatically. Offline installation reports that dictation is not ready and leaves a
+clear first-boot retry. Mango's readiness helper starts the official service on first use and
+invokes `voxtype record toggle`; Arctic's indicator follows VoxType's runtime state. The script
 reports hosted Westmere CPU measurements of 7.77% English WER and 42.0%
 Hebrew WER; processing took 15.79 and 11.63 times the respective audio durations. Evidence cards
 remain until those paths are captured from the qualified ISO.

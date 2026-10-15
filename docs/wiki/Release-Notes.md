@@ -2,17 +2,16 @@
 
 ## Arctic Linux 1.2.1 — prepared release
 
-The completed desktop, installer and setup changes described here are on `main`. The v1.2.1
-release notes are prepared, while the replacement ISO and its final measurements still require
-aggregate qualification. Until the public release exists, [v1.2.0](#arctic-linux-120) remains
-the latest downloadable image.
+The v1.2.1 desktop, installer and setup changes are integrated in the retained candidate. These
+release notes are prepared while the candidate still completes aggregate qualification. Until the
+public release exists, [v1.2.0](#arctic-linux-120) remains the latest downloadable image.
 
-Keep the signed **stable arctic** channel selected. The packages are published there now;
-existing systems can use `arctic-update now`, then `arctic-update apply` (save your work; this
-asks before restarting). **The testing channel is not required.** Existing app and wallpaper
-choices are preserved.
+Keep the signed **stable arctic** channel selected; **the testing channel is not required**.
+Existing systems receive v1.2.1 through stable after the final package set is published, while
+existing app and wallpaper choices are preserved. When it appears, use `arctic-update now`, then
+`arctic-update apply` (save your work; this asks before restarting).
 
-The stable package set includes:
+The prepared package set includes:
 
 - New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
   Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
@@ -24,9 +23,11 @@ The stable package set includes:
   explicitly selected Tor/Tailscale/VPN support.
 - Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
   status, the lock-screen clock, and installer restoration after a console/output change.
-- Local VoxType 1.1.1 dictation for Hebrew and English: verified online-install downloads,
-  nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
-  selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
+- Direct official VoxType 1.1.1 dictation for Hebrew and English: signature-checked online setup,
+  a nonfatal offline setup queue, explicit recording/cancel, visible readiness and explicit CPU
+  selection after a GPU failure. VoxType records, transcribes and inserts; Arctic handles verified
+  setup, the Mango shortcut and status presentation. See [Local dictation](Local-Dictation) for
+  measured limitations.
 - A **What's New** card keyed by a unique packaged update ID, shown once per account after every
   Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
   reopens the current notes.
@@ -44,13 +45,15 @@ Its final record intentionally leaves these values pending:
 
 Source checks or a successful artifact build alone do not establish release readiness.
 
-The current retained diagnostic candidate was built from `fc501fdf90c17c617b15b8b13038d062d519fcc6`.
-It is **1,936,185,344 bytes** with SHA-256
-`92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66`, below the strict
-2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its matching signed stable-update
-lane passed offline apply, reboot, SELinux and Nix-persistence checks. Dictation readiness and the
-remaining native, installer, reliability and performance lanes still have to pass before this can
-become the public v1.2.1 image. See the
+The current retained artifact-only candidate was built from
+`10b94bf1f6aef4950889d4a498c9e1138cf7973d` in
+[run 38808271154](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38808271154).
+It is **1,936,328,704 bytes** with SHA-256
+`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`, below the strict
+2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its UEFI Try, BIOS Install and
+UEFI Safe startup targets passed. That startup matrix and the artifact build do not prove the full
+installation, native, installer, dictation, reliability, performance or final signed-update record,
+which must all be bound before this can become the public v1.2.1 image. See the
 [prepared release record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
 for run links and the remaining evidence boundaries.
 
