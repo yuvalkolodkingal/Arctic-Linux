@@ -596,33 +596,6 @@ class Controller:
                 f"controller screen expectation {expectation} absent")
         raise c.Invalid(f"controller screen expectation {expectation} absent")
 
-    def wait_installed_fetch_clear(self, seconds=30):
-        """Prove Fish consumed a fresh Ctrl-L before the prompt gate."""
-        deadline = time.monotonic() + seconds
-        while time.monotonic() < deadline:
-            path = None
-            try:
-                path, info, image, text = self._shot("installed-fetch-cleared")
-                colors = image.resize((32, 20)).getcolors(maxcolors=640)
-                if (image.size == (1280, 800) and colors is not None
-                        and len(colors) < 16):
-                    self.record("installed-console", "screen", {
-                        "bytes": info.st_size, "sha256": c.sha256(path),
-                        "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
-                        "expectation": "installed-fetch-cleared",
-                        "width": image.width, "height": image.height,
-                    })
-                    path.unlink(missing_ok=True)
-                    path = None
-                    return
-            except (c.Invalid, OSError):
-                pass
-            finally:
-                if path is not None and path.exists():
-                    path.unlink(missing_ok=True)
-            time.sleep(2)
-        raise c.Invalid("controller screen expectation installed-fetch-cleared absent")
-
     def pointer_click(self, stage: str, x: int, y: int):
         c.require(0 <= x < 1280 and 0 <= y < 800, "controller pointer is outside output")
         move = [{"type": "abs", "data": {"axis": "x", "value": x * 0x7fff // 1279}},
@@ -813,39 +786,36 @@ class Controller:
         # prompt.  A command sent during that animation can be consumed as the
         # keypress that dismisses it.  First prove the exact installed greeting,
         # then hand one empty Return through the renderer to Fish.  After a
-        # fixed settling interval, send a fresh Ctrl-L to the established line
-        # editor and prove its clear before applying the exact prompt gate.
+        # fixed settling interval, issue the fixed nonsecret proof.  Its exact
+        # response and a final Fish prompt are the authoritative readiness gate
+        # before the controller can enter the sudo launcher or another secret.
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.installed_startup.fetch_observed()
         # Dismiss arctic-fetch with one empty line.  The renderer deliberately
         # leaves that single byte queued, so Fish completes an empty command and
         # establishes its line editor while the rich greeting remains visible.
-        # Do not queue Ctrl-L across that external-process/termios handoff: two
-        # exact runs showed that early clear left a stable low-color surface
-        # that neither a later Return nor Ctrl-C repainted for full-frame OCR.
+        # Do not queue Ctrl-L across that external-process/termios handoff:
+        # three exact runs showed a stable low-color surface after clearing.
         self.press_held("installed-console", "ret")
         self.installed_startup.dismissal_sent()
         time.sleep(3)
         # Three seconds is sixty times the renderer's 50 ms polling period and
         # gives Fish time to complete the empty command after the renderer has
-        # exited.  The bounded QEMU hold remains below keyboard repeat delay.
-        # arctic-fetch never clears the VT on exit, so the exact low-color
-        # transition proves this fresh Ctrl-L reached Fish before the unchanged
-        # prompt gate begins.
-        self.press_held("installed-console", "ctrl-l")
-        self.wait_installed_fetch_clear()
-        # Do not type even the nonsecret proof command until a later exact frame
-        # contains the fixed installed account's real Fish prompt.  The fixed
-        # interval orders the controls; only this pixel observation authorizes
-        # subsequent text.
+        # exited.  The proof contains no secret and cannot mimic its fixed
+        # response.  This is the same readiness pattern used by the successful
+        # installed-image qualification: sudo remains forbidden until the
+        # fresh response and the exact final prompt are visible together.
         shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
                         + c.CONTROLLER["account"]["hostname"])
         prompt_contract = c.CONTROLLER["account"]["prompt"]
         installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
+        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
+        self.press("installed-console", "ret")
         try:
             self.wait_screen("installed-console", "installed-shell-ready",
-                             (), seconds=90, exact_output=True,
+                             ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
+                             seconds=90, exact_output=True, ordered=True,
                              prompt_contract=installed_prompt)
         except InstalledShellReadyTimeout as error:
             try:
@@ -861,15 +831,13 @@ class Controller:
             except (c.Invalid, OSError):
                 self.installed_startup.interrupt("sent-no-prompt")
             raise error
-        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
-        self.press("installed-console", "ret")
-        # The executed marker can reach the VT before Fish has drawn its next
-        # prompt and resumed its line editor.  Do not type the longer sudo
-        # launcher into that interval: require the fixed account's real prompt
-        # in the same exact output after the marker.
+        # Recheck an independent unchanged frame before entering the longer
+        # sudo launcher.  Both gates require the fixed response in order and
+        # the fixed account's prompt as the final OCR line.
         self.wait_screen("installed-console", "installed-shell",
                          ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
-                         seconds=90, exact_output=True, ordered=True)
+                         seconds=90, exact_output=True, ordered=True,
+                         prompt_contract=installed_prompt)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
         self.press("installed-scenes", "ret")
         self.wait_screen("installed-console", "installed-sudo-password",

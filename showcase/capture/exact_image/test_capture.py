@@ -178,12 +178,10 @@ def controller_trace():
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-fetch-greeting")),
         ("installed-console", "keys", {"names": ["ret"]}),
-        ("installed-console", "keys", {"names": ["ctrl-l"]}),
-        ("installed-console", "screen", screen("installed-fetch-cleared")),
-        ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
                                          "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),
         ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "screen", screen("installed-shell")),
         ("installed-scenes", "text", {"command": "installed-scenes", "characters": 548,
                                         "sha256": "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"}),
@@ -317,13 +315,29 @@ class Protocol(unittest.TestCase):
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
 
-    def test_fetch_redraw_is_one_control_l_before_the_prompt_gate(self):
+    def test_nonsecret_proof_precedes_the_prompt_gate(self):
         value = controller_trace()
-        redraw = next(event for event in value["events"]
-                      if event["kind"] == "keys"
-                      and event["detail"] == {"names": ["ctrl-l"]})
-        redraw["detail"] = {"names": ["ret"]}
-        with self.assertRaisesRegex(c.Invalid, "fetch redraw|key inventory"):
+        proof = next(event for event in value["events"]
+                     if event["kind"] == "text"
+                     and event["detail"].get("command") == "installed-shell-proof")
+        proof["detail"]["command"] = "installed-scenes"
+        with self.assertRaisesRegex(c.Invalid, "text record|fetch redraw|key inventory"):
+            c.controller_trace(value)
+
+    def test_second_exact_prompt_frame_precedes_sudo_launcher(self):
+        value = controller_trace()
+        events = value["events"]
+        shell = next(index for index, event in enumerate(events)
+                     if event["kind"] == "screen"
+                     and event["detail"].get("expectation") == "installed-shell")
+        launcher = next(index for index, event in enumerate(events)
+                        if event["kind"] == "text"
+                        and event["detail"].get("command") == "installed-scenes")
+        moved = events.pop(launcher)
+        events.insert(shell, moved)
+        for index, event in enumerate(events):
+            event["index"] = index
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw sequence"):
             c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):

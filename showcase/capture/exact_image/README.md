@@ -96,17 +96,15 @@ candidate's animated greeting, the host sends one empty command terminator. Its
 3D renderer deliberately leaves that single ordinary byte queued for Fish,
 which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
-host sends one bounded Ctrl-L as a fresh Fish control. Because the renderer
-itself never clears on exit, an exact 1280x800 low-color frame then proves Fish
-consumed Ctrl-L. No command text is sent. The host then requires the fixed account's real
-`arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
-typing even its nonsecret proof command. The host accepts only a complete final
+host types one fixed nonsecret proof which cannot contain its required response.
+The host then requires `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
+account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
+1280x800 frame. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the
 successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
 suffix on separate rows, or the greeting's own `user@host` info row, cannot
-satisfy this gate. It then proves the Fish session with the fixed
-`ARCTIC-SHOWCASE-SHELL-READY` command and requires another fixed prompt in the
-same exact output after the marker before typing the sudo launcher. An earlier
+satisfy this gate. It requires a second unchanged exact frame with the response
+and final prompt before typing the sudo launcher. An earlier
 echoed prompt, a fixed settling delay or marker output alone cannot authorize
 that input.
 
