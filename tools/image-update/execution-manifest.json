@@ -1,7 +1,7 @@
 {
   "execution_files": {
     ".github/workflows/image-update-20261008.yml": "5a9960ad4f039c680714ddc5c115dbdaf847954c0a082e7c900ec9859a79f8e3",
-    "tools/image-update/guard.py": "d92fb3a4c13543642bf018280721cbf7830ecdbf88779530a8db8242af87b2a1",
+    "tools/image-update/guard.py": "2b00b807bc71fe42bc48d359c34407bea2883a4990ace5b9d35d11eb7ee77b43",
     "tools/image-update/verify-records.py": "99f98f9760f6ddd98a9531b7bb05ce5e329badd29c038b0b384359ef0b8e143e",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
@@ -10,7 +10,8 @@
     "tools/nix-acceptance/guest.py": "f1aa4415e8e5e7f03e1270040db215503a3d6bf63c7f68679343d77cdcefcd0a",
     "tools/performance/compose-nix-probe.py": "743788e3c2329c0916de26e02295af5af4f5f26d7eda42c81fc4097f652e5684",
     "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
-    "tools/performance/offline-update-boot.py": "9b16c14adbd1129a2bfe01a44c7157f695c68a30956d19c865e8dc66d5d01b09",
+    "tools/performance/offline-update-boot.py": "0ee3f0f9669cb4db99337f7be98b9bbd0e5699f70e8aa2765ff11f61e951657b",
+    "tools/performance/offline_screen.py": "e2196f5eea906354e181fc4556c4ad36d492c6321d8a2f3963209285975891b0",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
   },

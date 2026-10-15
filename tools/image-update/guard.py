@@ -18,6 +18,7 @@ FILES = {
     'tools/native-functional/screen-evidence.py', 'tools/test-install.sh',
     'tools/lib/container.sh', 'tools/lib/vmtest.py',
     'tools/performance/prepare-vm-tools.sh', 'tools/performance/offline-update-boot.py',
+    'tools/performance/offline_screen.py',
     'tools/performance/compose-nix-probe.py', 'tools/performance/guest.py',
     'tools/nix-acceptance/guest.py',
 }
