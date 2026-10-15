@@ -18,6 +18,52 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertLess(adapter.index("*'Audio stream error, capture is now dead:'*"),
                         adapter.index("*'Transcription failed:'*"))
 
+    def test_status_journal_cursor_uses_supported_mutually_exclusive_bounds(self):
+        adapter = (D / "arctic-dictation").read_text()
+        start = adapter.index("journal_events() {")
+        end = adapter.index("\n}\nstatus() {", start) + 3
+        helper = adapter[start:end]
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            runtime = root / "runtime"
+            runtime.mkdir(mode=0o700)
+            calls = root / "calls"
+            journalctl = root / "journalctl"
+            journalctl.write_text("""#!/bin/sh
+printf '%s\\n' "$*" >>"$CALLS"
+case " $* " in
+  *' --show-cursor '*) printf '%s\\n' '-- cursor: s=abc;i=1;b=2;m=3;t=4;x=5' ;;
+  *' --since '*) printf '%s\\n' 'Failed to start audio: fixture' ;;
+  *' --cursor-file='*) printf '%s\\n' 'Audio stream error, capture is now dead: fixture' ;;
+esac
+""")
+            journalctl.chmod(0o700)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
+                       CALLS=str(calls))
+            command = helper + '\njournal_events "$1"\n'
+
+            first = subprocess.run(["sh", "-c", command, "sh", str(runtime)],
+                                   env=env, text=True, capture_output=True, check=True)
+            self.assertEqual(first.stdout, "Failed to start audio: fixture\n")
+            first_calls = calls.read_text().splitlines()
+            self.assertEqual(len(first_calls), 2)
+            self.assertTrue(any("--show-cursor" in row for row in first_calls))
+            self.assertTrue(any("--since -30 seconds" in row for row in first_calls))
+            self.assertFalse(any("--since" in row and "--cursor-file" in row
+                                 for row in first_calls))
+            cursor = runtime / "voxtype-journal.cursor"
+            self.assertEqual(cursor.read_text(), "s=abc;i=1;b=2;m=3;t=4;x=5\n")
+
+            calls.write_text("")
+            second = subprocess.run(["sh", "-c", command, "sh", str(runtime)],
+                                    env=env, text=True, capture_output=True, check=True)
+            self.assertEqual(second.stdout,
+                             "Audio stream error, capture is now dead: fixture\n")
+            second_calls = calls.read_text().splitlines()
+            self.assertEqual(len(second_calls), 1)
+            self.assertIn("--cursor-file=" + str(cursor), second_calls[0])
+            self.assertNotIn("--since", second_calls[0])
+
     def test_shells_parse_and_old_runtime_is_gone(self):
         for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-dictation-toggle", "sh"), ("arctic-voxtype-setup", "bash"),
                             ("arctic-voxtype-configure", "sh"),
@@ -487,7 +533,7 @@ esac''')
         adapter = (D / "arctic-dictation").read_text()
         active = adapter.index('if [ "$state" = recording ]')
         clear = adapter.index('rm -f "$runtime/voxtype-error"', active)
-        scan = adapter.index("journalctl --user", clear)
+        scan = adapter.index('recent=$(journal_events "$runtime")', clear)
         self.assertLess(active, clear)
         self.assertLess(clear, scan)
         self.assertNotIn("*'Vulkan'*", adapter)

@@ -49,6 +49,42 @@ clear_runtime_error() {
     runtime=$(private_runtime 2>/dev/null) || return 0
     rm -f "$runtime/voxtype-error"
 }
+journal_events() {
+    runtime=$1
+    cursor_file=$runtime/voxtype-journal.cursor
+    if [ -e "$cursor_file" ] || [ -L "$cursor_file" ]; then
+        [ ! -L "$cursor_file" ] && [ -f "$cursor_file" ] \
+            && [ "$(stat -c %u "$cursor_file" 2>/dev/null || true)" = "$(id -u)" ] \
+            || return 0
+        journalctl --user -u voxtype.service -n 40 --no-pager -o cat \
+            --cursor-file="$cursor_file" 2>/dev/null || true
+        return 0
+    fi
+
+    # journalctl rejects --since together with --cursor-file. Seed the cursor
+    # first, then use a bounded initial look-back so an error emitted just
+    # before the first status poll is still projected. Later polls read only
+    # entries after that private cursor.
+    seed=$(journalctl --user -u voxtype.service -n 0 --no-pager -o cat \
+        --show-cursor 2>/dev/null || true)
+    case "$seed" in
+        '-- cursor: '*) cursor=${seed#-- cursor: } ;;
+        *) cursor= ;;
+    esac
+    case "$cursor" in
+        ''|*[!A-Za-z0-9_:.';'=-]*) ;;
+        *)
+            temporary=$(mktemp "$runtime/.voxtype-journal.cursor.XXXXXX") || return 0
+            if ! printf '%s\n' "$cursor" >"$temporary" || ! chmod 0600 "$temporary" \
+                    || ! mv -f -- "$temporary" "$cursor_file"; then
+                rm -f -- "$temporary"
+                return 0
+            fi
+            ;;
+    esac
+    journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
+        2>/dev/null || true
+}
 status() {
     state=unavailable error= language=auto backend= backend_state_valid=false integrity_ready=false
     runtime_version=1.1.1 upgrade_pending=false
@@ -187,8 +223,7 @@ status() {
             if [ "$state" = recording ] || [ "$state" = transcribing ]; then
                 rm -f "$runtime/voxtype-error"
             elif [ "$state" != starting ] && [ -n "${runtime:-}" ]; then
-                recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
-                    --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
+                recent=$(journal_events "$runtime")
                 case "$recent" in
                     *'Failed to start audio:'*|*'Failed to create audio capture:'*|*'Audio stream error, capture is now dead:'*|*'failed during this recording; the transcript will be short or empty.'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
                     *'Transcription failed: Model not found:'*|*'Transcription failed: Failed to load model:'*) printf '%s\n' model >"$runtime/voxtype-error" ;;
