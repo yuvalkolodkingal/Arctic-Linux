@@ -1,7 +1,7 @@
 {
   "status": "verified_direct_voxtype_1_1_1_master_locally_aligned",
   "source_commit": null,
-  "source_branch": "codex/prepare-showcase-video-121-20261015",
+  "source_branch": "codex/showcase-river-production",
   "workflow_run": null,
   "audio": {
     "file": "narration-river-arctic-1.2.1-voxtype-1.1.1-2026-10-15.mp3",
