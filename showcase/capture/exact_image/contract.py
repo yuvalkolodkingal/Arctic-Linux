@@ -474,7 +474,8 @@ def capture_failure(value) -> None:
     require(type(value) is dict and set(value) == {
         "schema", "status", "release_acceptance", "image", "host_phase",
         "failure_code", "guest_progress", "private_runtime_removed",
-        "screens_exported", "logs_exported", "pixels_exported", "privacy"
+        "screens_exported", "logs_exported", "pixels_exported", "privacy",
+        "live_startup"
     } and value["schema"] == "arctic-showcase-capture-failure-v1"
         and value["status"] == "failed" and value["release_acceptance"] is False
         and value["host_phase"] in (
@@ -493,6 +494,11 @@ def capture_failure(value) -> None:
             "human_review": "not_applicable",
         }, "capture failure projection differs")
     image_identity(value["image"])
+    if value["live_startup"] is not None:
+        live_startup_diagnostic(value["live_startup"])
+    else:
+        require(value["host_phase"] == "vm-start",
+                "live startup diagnostic is absent after controller start")
     progress = value["guest_progress"]
     require(type(progress) is list and len(progress) <= 63,
             "capture failure progress count differs")
@@ -502,6 +508,95 @@ def capture_failure(value) -> None:
     if value["failure_code"] == "guest-install-failed":
         require(progress and progress[-1]["status"] == "failed",
                 "guest installation failure projection differs")
+
+
+def live_startup_diagnostic(value) -> None:
+    """Validate fixed enums and bounded timings exported without private pixels/text."""
+    require(type(value) is dict and set(value) == {
+        "schema", "release_acceptance", "boot_menu", "selection",
+        "welcome_gate", "post_failure_probe"
+    } and value["schema"] == "arctic-showcase-live-startup-diagnostic-v1"
+        and value["release_acceptance"] is False,
+        "live startup diagnostic identity differs")
+
+    def timed(item, statuses, limit):
+        require(type(item) is dict and set(item) == {"status", "elapsed_seconds"}
+                and item["status"] in statuses
+                and (item["elapsed_seconds"] is None
+                     or (type(item["elapsed_seconds"]) is int
+                         and 0 <= item["elapsed_seconds"] <= limit)),
+                "live startup timing differs")
+
+    timed(value["boot_menu"], ("not-observed", "observed"), 300)
+    timed(value["selection"], ("not-sent", "sent"), 300)
+    require((value["boot_menu"]["status"] == "observed")
+            == (value["boot_menu"]["elapsed_seconds"] is not None)
+            and (value["selection"]["status"] == "sent")
+            == (value["selection"]["elapsed_seconds"] is not None),
+            "live startup event timing differs")
+    require(value["selection"]["status"] != "sent"
+            or (value["boot_menu"]["status"] == "observed"
+                and value["boot_menu"]["elapsed_seconds"]
+                <= value["selection"]["elapsed_seconds"]),
+            "live startup selection preceded boot menu")
+
+    surfaces = {
+        "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+        "boot-menu", "boot-progress", "live-desktop", "installer-partial",
+        "installer-error", "console-or-emergency", "other-text", "installer-welcome",
+    }
+    gate = value["welcome_gate"]
+    require(type(gate) is dict and set(gate) == {
+        "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
+        "last_observation", "first_observation_seconds"
+    } and gate["expectation"] == "live-installer-visible"
+        and gate["timeout_seconds"] == 600
+        and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
+        and (gate["elapsed_seconds"] is None
+             or (type(gate["elapsed_seconds"]) is int
+                 and 0 <= gate["elapsed_seconds"] <= 600))
+        and type(gate["samples"]) is int and 0 <= gate["samples"] <= 301
+        and gate["last_observation"] in surfaces
+        and type(gate["first_observation_seconds"]) is dict
+        and set(gate["first_observation_seconds"]) == surfaces,
+        "live startup Welcome gate differs")
+    require((gate["status"] in ("passed", "timed-out"))
+            == (gate["elapsed_seconds"] is not None),
+            "live startup Welcome timing differs")
+    require(gate["status"] == "not-started"
+            or value["selection"]["status"] == "sent",
+            "live startup Welcome gate preceded selection")
+    observed = 0
+    for seconds in gate["first_observation_seconds"].values():
+        require(seconds is None or (type(seconds) is int and 0 <= seconds <= 600),
+                "live startup observation timing differs")
+        observed += seconds is not None
+    require(observed <= gate["samples"], "live startup observation count differs")
+    require((gate["samples"] == 0) == (observed == 0),
+            "live startup observation presence differs")
+    if gate["samples"]:
+        require(gate["first_observation_seconds"][gate["last_observation"]] is not None,
+                "live startup last observation was not observed")
+    if gate["status"] == "passed":
+        require(gate["last_observation"] == "installer-welcome",
+                "live startup passed without Welcome observation")
+
+    probe = value["post_failure_probe"]
+    require(type(probe) is dict and set(probe) == {
+        "status", "boot_mode", "graphical_session", "installer_process"
+    } and probe["status"] in (
+        "not-run", "console-unavailable", "command-sent", "channel-unavailable", "completed")
+        and probe["boot_mode"] in ("unknown", "install", "other")
+        and probe["graphical_session"] in ("unknown", "running", "absent")
+        and probe["installer_process"] in ("unknown", "running", "absent"),
+        "live startup post-failure probe differs")
+    require((probe["status"] == "completed")
+            == (probe["boot_mode"] != "unknown"
+                and probe["graphical_session"] != "unknown"
+                and probe["installer_process"] != "unknown"),
+            "live startup probe completion differs")
+    require(probe["status"] == "not-run" or gate["status"] == "timed-out",
+            "live startup probe preceded authoritative timeout")
 
 
 def vm_provenance(value) -> None:

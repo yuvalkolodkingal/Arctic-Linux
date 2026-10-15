@@ -153,6 +153,80 @@ class UnattendedController(unittest.TestCase):
                              for phrase in installer[3]))
         self.assertEqual(operations[3], ("keys", "live-console", ("ctrl-alt-f6",)))
 
+    def test_live_startup_surface_projection_uses_only_fixed_enums(self):
+        image = Image.new("RGB", (1280, 800))
+        # At least sixteen sampled colours makes this a visible frame under the
+        # exact same rule as the authoritative gate.
+        pixels = image.load()
+        for y in range(800):
+            for x in range(1280):
+                pixels[x, y] = ((x // 40) % 32, (y // 40) % 20, (x + y) % 251)
+        cases = {
+            "Try Arctic Linux\nInstall Arctic Linux\nSafe graphics mode": "boot-menu",
+            "Starting Arctic Linux": "boot-progress",
+            "Install Arctic Linux": "live-desktop",
+            "Welcome to Arctic Linux\nKeyboard": "installer-partial",
+            "The installer isn't on this USB": "installer-error",
+            "You are in emergency mode": "console-or-emergency",
+            "unrecognized private-looking words": "other-text",
+            "": "ocr-empty",
+            "Welcome to Arctic Linux\nKeyboard\nTime zone\nSummary": "installer-welcome",
+        }
+        for text, expected in cases.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(automation._live_surface_class(image, text), expected)
+        self.assertEqual(automation._live_surface_class(
+            Image.new("RGB", (1280, 800), "black"), "private"), "blank-output")
+        self.assertEqual(automation._live_surface_class(
+            Image.new("RGB", (1024, 768), "black"), "private"), "geometry-mismatch")
+
+    def test_live_startup_failure_probe_accepts_only_fixed_result(self):
+        for character in automation.Controller.LIVE_STARTUP_PROBE:
+            automation.chord_for(character)
+        self.assertLessEqual(len(automation.Controller.LIVE_STARTUP_PROBE), 4096)
+        self.controller.live_startup.boot_observed()
+        self.controller.live_startup.selection_sent()
+        self.controller.live_startup.gate_started = automation.time.monotonic()
+        self.controller.live_startup.gate_end("timed-out")
+        self.controller.accept_live_failure_probe(
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 install running absent")
+        value = self.controller.live_startup.projection()
+        c.live_startup_diagnostic(value)
+        self.assertEqual(value["post_failure_probe"], {
+            "status": "completed", "boot_mode": "install",
+            "graphical_session": "running", "installer_process": "absent",
+        })
+        self.assertNotIn("ARCTIC-SHOWCASE-LIVE-STARTUP-V1", repr(value))
+        for forged in (
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 private running absent",
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 install running absent private",
+            "private guest output",
+        ):
+            with self.subTest(forged=forged), self.assertRaises(c.Invalid):
+                self.controller.accept_live_failure_probe(forged)
+
+    def test_live_startup_diagnostic_is_bounded_and_rejects_flexible_content(self):
+        diagnostic = automation.LiveStartupDiagnostic()
+        diagnostic.boot_observed()
+        diagnostic.selection_sent()
+        diagnostic.gate_start()
+        diagnostic.observe("boot-menu")
+        diagnostic.observe("ocr-empty")
+        diagnostic.gate_end("timed-out")
+        diagnostic.probe("channel-unavailable")
+        value = diagnostic.projection()
+        c.live_startup_diagnostic(value)
+        self.assertEqual(value["welcome_gate"]["timeout_seconds"], 600)
+        self.assertLessEqual(value["welcome_gate"]["samples"], 301)
+        forged = copy.deepcopy(value)
+        forged["welcome_gate"]["private_ocr"] = "do not export"
+        with self.assertRaises(c.Invalid):
+            c.live_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["welcome_gate"]["last_observation"] = "guest-selected"
+        with self.assertRaises(c.Invalid):
+            c.live_startup_diagnostic(forged)
+
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
@@ -773,12 +847,14 @@ class GuestAutomation(unittest.TestCase):
                          "release_acceptance": False}]
             capture_vm._write_failure_report(
                 path, "live-install", progress,
-                c.Invalid("private capture channel timed out"), None)
+                c.Invalid("private capture channel timed out"), None,
+                automation.LiveStartupDiagnostic().projection())
             self.assertLessEqual(path.stat().st_size, 32768)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             value = c.strict_json(path.read_bytes())
             c.capture_failure(value)
             self.assertEqual(value["failure_code"], "private-channel-timeout")
+            self.assertEqual(value["live_startup"]["release_acceptance"], False)
             self.assertNotIn("private capture channel timed out", path.read_text())
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):

@@ -57,6 +57,18 @@ the real installer Welcome page (`Welcome to Arctic Linux`, `Keyboard`, `Time
 zone`, and `Summary`) before switching to the private console. The boot menu's
 own `Install Arctic Linux` label cannot satisfy that gate.
 
+The Welcome gate remains the authoritative, unchanged 600-second acceptance
+condition. If it times out, a diagnostic path runs only after that failure. It
+reduces each already-private QMP frame to a fixed surface enum and bounded
+elapsed seconds, then attempts one bounded VT6 probe. The probe reports only
+whether the selected kernel mode is `install`, the Mango process is present,
+and the exact packaged installer command is present. These untrusted facts can
+separate a boot-menu/input failure, a slow graphical session, an absent or
+stopped installer, a wrong visible surface, and an output/OCR mismatch. They
+cannot turn a failed capture into a pass or authorize input or publication.
+Every diagnostic screenshot and OCR string remains in the private runtime and
+is deleted before the closed projection is written.
+
 The only guest transport is the owned
 `org.arctic.showcase.capture` virtio-serial channel. The live guest receives a
 deterministic reviewed tooling archive over it, drives the real installer only
@@ -153,7 +165,10 @@ GitHub-hosted Ubuntu 24.04 KVM runner, and uploads a successfully validated,
 bounded `exact-image-showcase-captures-unreviewed` artifact for 14 days. A failed
 host attempt may instead upload one separately validated failure projection. It
 is at most 32 KiB, mode 0600 before upload, remains `release_acceptance:false`,
-and contains no guest text, error strings, logs, screenshots or pixels. The
+and contains no guest text, error strings, logs, screenshots or pixels. Its
+live-startup section, once the controller exists, contains only fixed enums and
+integer seconds;
+the contract rejects extra keys, flexible strings and out-of-range values. The
 workflow first proves that all private runtime, image and capture paths were
 removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
