@@ -79,22 +79,13 @@ def validate_receipt(value, environ):
     return value
 
 
-def retract(receipt_path, environ=None, call_api=api, run=subprocess.run):
-    environ = os.environ if environ is None else environ
-    receipt_path = Path(receipt_path)
-    if not receipt_path.exists():
-        print('No owned release receipt exists; no release was changed.', flush=True)
-        return False
-    require(receipt_path.is_file() and not receipt_path.is_symlink()
-            and 0 < receipt_path.stat().st_size <= 16_384,
-            'Owned release receipt is unsafe or oversized')
-    receipt = validate_receipt(strict_json(receipt_path.read_text()), environ)
-    release = call_api('/releases/' + str(receipt['release_id']))
+def validate_release(release, receipt, call_api, required_draft=None):
     require(type(release) is dict and release.get('id') == receipt['release_id']
             and release.get('tag_name') == TAG
             and release.get('target_commitish') == receipt['target']
             and release.get('prerelease') is False
             and release.get('draft') in (True, False)
+            and (required_draft is None or release['draft'] is required_draft)
             and tag_target(call_api) == receipt['target'],
             'Actual release no longer matches the owned publication receipt')
     rows = release.get('assets')
@@ -106,16 +97,28 @@ def retract(receipt_path, environ=None, call_api=api, run=subprocess.run):
                      for item in rows}
     require(len(actual_assets) == len(rows) and actual_assets == receipt['assets'],
             'Actual release assets no longer match the owned publication receipt')
+    return release
+
+
+def retract(receipt_path, environ=None, call_api=api, run=subprocess.run):
+    environ = os.environ if environ is None else environ
+    receipt_path = Path(receipt_path)
+    if not receipt_path.exists():
+        print('No owned release receipt exists; no release was changed.', flush=True)
+        return False
+    require(receipt_path.is_file() and not receipt_path.is_symlink()
+            and 0 < receipt_path.stat().st_size <= 16_384,
+            'Owned release receipt is unsafe or oversized')
+    receipt = validate_receipt(strict_json(receipt_path.read_text()), environ)
+    endpoint = '/releases/' + str(receipt['release_id'])
+    release = validate_release(call_api(endpoint), receipt, call_api)
     if release['draft'] is True:
         print('Owned release is already a draft.', flush=True)
         return True
-    run(['gh', 'release', 'edit', TAG, '--repo', REPOSITORY, '--draft=true'],
-        check=True, timeout=60)
-    changed = call_api('/releases/' + str(receipt['release_id']))
-    require(changed.get('id') == receipt['release_id'] and changed.get('tag_name') == TAG
-            and changed.get('target_commitish') == receipt['target']
-            and changed.get('draft') is True,
-            'Owned release could not be returned to draft')
+    run(['gh', 'api', '--method', 'PATCH', 'repos/' + REPOSITORY + endpoint,
+         '-F', 'draft=true'],
+        check=True, stdout=subprocess.DEVNULL, timeout=60)
+    validate_release(call_api(endpoint), receipt, call_api, required_draft=True)
     print('Returned the owned v1.2.1 release to draft after publication verification failed.',
           flush=True)
     return True

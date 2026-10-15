@@ -45,13 +45,14 @@ class ReleaseRetractionTests(unittest.TestCase):
         }
         return result | changes
 
-    def api(self, releases):
+    def api(self, releases, targets=None):
         values = iter(releases)
+        targets = iter(targets or [self.target] * len(releases))
         def call(path):
             if path.startswith('/releases/'):
                 return next(values)
             if path == '/git/ref/tags/' + R.TAG:
-                return {'object': {'type': 'commit', 'sha': self.target}}
+                return {'object': {'type': 'commit', 'sha': next(targets)}}
             raise AssertionError(path)
         return call
 
@@ -66,8 +67,49 @@ class ReleaseRetractionTests(unittest.TestCase):
         self.assertTrue(R.retract(self.path, self.environ,
                                   self.api([self.release(), self.release(draft=True)]), run))
         run.assert_called_once_with(
-            ['gh', 'release', 'edit', R.TAG, '--repo', R.REPOSITORY, '--draft=true'],
-            check=True, timeout=60)
+            ['gh', 'api', '--method', 'PATCH',
+             'repos/' + R.REPOSITORY + '/releases/456', '-F', 'draft=true'],
+            check=True, stdout=R.subprocess.DEVNULL, timeout=60)
+
+    def test_delete_recreate_tag_race_cannot_draft_replacement_release(self):
+        calls = 0
+        replacement = self.release(id=999, draft=False)
+
+        def call(path):
+            nonlocal calls
+            if path == '/releases/456':
+                calls += 1
+                if calls == 1:
+                    return self.release()
+                raise RuntimeError('GitHub reports the receipt release ID was deleted')
+            if path == '/git/ref/tags/' + R.TAG:
+                return {'object': {'type': 'commit', 'sha': self.target}}
+            raise AssertionError(path)
+
+        def patch(command, **kwargs):
+            self.assertEqual(command, ['gh', 'api', '--method', 'PATCH',
+                'repos/' + R.REPOSITORY + '/releases/456', '-F', 'draft=true'])
+            self.assertNotIn(R.TAG, command)
+            self.assertEqual(kwargs, {'check': True, 'stdout': R.subprocess.DEVNULL, 'timeout': 60})
+            # Model deletion/recreation after the exact-ID request. The
+            # replacement retains a different immutable ID and stays public.
+            self.assertEqual(replacement['id'], 999)
+            self.assertFalse(replacement['draft'])
+
+        with self.assertRaisesRegex(RuntimeError, 'receipt release ID was deleted'):
+            R.retract(self.path, self.environ, call, patch)
+        self.assertFalse(replacement['draft'])
+
+    def test_post_patch_rechecks_prerelease_assets_and_tag_target(self):
+        cases = [
+            (self.release(draft=True, prerelease=True), [self.target, self.target]),
+            (self.release(draft=True, assets=[]), [self.target, self.target]),
+            (self.release(draft=True), [self.target, 'b' * 40]),
+        ]
+        for changed, targets in cases:
+            with self.subTest(changed=changed, targets=targets), self.assertRaises(RuntimeError):
+                R.retract(self.path, self.environ,
+                          self.api([self.release(), changed], targets), Mock())
 
     def test_existing_owned_draft_needs_no_mutation(self):
         run = Mock()
