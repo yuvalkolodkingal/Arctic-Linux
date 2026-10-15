@@ -135,8 +135,8 @@ class UnattendedController(unittest.TestCase):
         source = Image.new("RGB", (1280, 800), "black")
         source.putpixel((10, 12), (0, 32, 96))
         source.putpixel((11, 12), (224, 224, 224))
-        source.putpixel((10, 44), (0, 32, 96))
-        source.putpixel((11, 44), (224, 224, 224))
+        source.putpixel((10, 28), (0, 32, 96))
+        source.putpixel((11, 28), (224, 224, 224))
 
         def screendump(path):
             source.save(path)
@@ -176,11 +176,11 @@ class UnattendedController(unittest.TestCase):
              "background": (0, 0, 0), "blue_glyph": (0, 32, 96),
              "white_glyph": (224, 224, 224)},
             {"name": "controller-001-installed-shell-ready-marker-ocr.png",
-             "size": (5120, 256),
+             "size": (5120, 128),
              "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
              "white_glyph": (255, 255, 255)},
             {"name": "controller-001-installed-shell-ready-prompt-ocr.png",
-             "size": (5120, 256),
+             "size": (5120, 128),
              "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
              "white_glyph": (255, 255, 255)},
         ])
@@ -245,20 +245,20 @@ class UnattendedController(unittest.TestCase):
 
     def test_shell_ocr_row_focuses_use_exact_cell_bounds_and_whiten_glyphs(self):
         source = Image.new("RGB", (1280, 800), "black")
-        source.putpixel((7, 9), (0, 1, 0))
+        source.putpixel((7, 0), (0, 1, 0))
+        source.putpixel((639, 15), (12, 34, 56))
+        source.putpixel((8, 16), (0, 1, 0))
         source.putpixel((639, 31), (12, 34, 56))
-        source.putpixel((8, 32), (0, 1, 0))
-        source.putpixel((639, 63), (12, 34, 56))
-        source.putpixel((640, 9), (255, 255, 255))
-        source.putpixel((7, 64), (255, 255, 255))
+        source.putpixel((640, 15), (255, 255, 255))
+        source.putpixel((7, 32), (255, 255, 255))
         unchanged = source.copy()
-        marker = Image.new("RGB", (640, 32), "black")
-        marker.putpixel((7, 9), (255, 255, 255))
-        marker.putpixel((639, 31), (255, 255, 255))
-        prompt = Image.new("RGB", (640, 32), "black")
+        marker = Image.new("RGB", (640, 16), "black")
+        marker.putpixel((7, 0), (255, 255, 255))
+        marker.putpixel((639, 15), (255, 255, 255))
+        prompt = Image.new("RGB", (640, 16), "black")
         prompt.putpixel((8, 0), (255, 255, 255))
-        prompt.putpixel((639, 31), (255, 255, 255))
-        expected = tuple(image.resize((5120, 256), Image.Resampling.NEAREST)
+        prompt.putpixel((639, 15), (255, 255, 255))
+        expected = tuple(image.resize((5120, 128), Image.Resampling.NEAREST)
                          for image in (marker, prompt))
 
         focused = automation._shell_ocr_row_focuses(source)
@@ -266,7 +266,7 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(source.size, (1280, 800))
         self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
         self.assertEqual(tuple(image.size for image in focused),
-                         ((5120, 256), (5120, 256)))
+                         ((5120, 128), (5120, 128)))
         for actual, wanted in zip(focused, expected, strict=True):
             self.assertIsNone(ImageChops.difference(actual, wanted).getbbox())
 

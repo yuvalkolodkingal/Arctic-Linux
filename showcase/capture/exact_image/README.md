@@ -104,7 +104,7 @@ marker, using the same pattern as the successful installed-image identity
 challenge. Fish itself invokes the session prompt function after the proof
 command returns. The host
 keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
-in the marker and prompt rows within the fixed left 640×64 pixels to white. It
+in the marker and prompt rows within the fixed left 640×32 pixels to white. It
 reads each private row through an 8x nearest-neighbour enlargement and pinned
 single-line PSM 7. Both transformed crops are always deleted; the
 original 1280x800 frame remains the sole screen evidence and geometry gate. It requires

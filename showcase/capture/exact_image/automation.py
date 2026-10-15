@@ -178,10 +178,10 @@ def _shell_ocr_row_focuses(image):
     """Expose the two fixed VT proof rows as ephemeral single-line crops."""
     c.require(image.mode == "RGB" and image.size == (1280, 800),
               "controller shell OCR source geometry differs")
-    # The proof clears and homes the fixed 80x25 VT. Each cell is 16x32 pixels;
-    # its 27-character marker and 33-character prompt occupy rows zero and one
-    # and necessarily fit in the left 40 columns.
-    crop = image.crop((0, 0, 640, 64))
+    # The proof clears and homes the fixed VT. The bounded pixel diagnostic
+    # established two 16-pixel rows: marker y=0..15 and prompt y=16..31. Both
+    # necessarily fit within the fixed left 640 pixels.
+    crop = image.crop((0, 0, 640, 32))
     pixels = list(crop.getdata())
     foreground = [pixel != (0, 0, 0) for pixel in pixels]
     c.require(any(foreground) and not all(foreground),
@@ -190,8 +190,8 @@ def _shell_ocr_row_focuses(image):
     normalized.putdata([(255, 255, 255) if present else (0, 0, 0)
                         for present in foreground])
     return tuple(
-        normalized.crop((0, row * 32, 640, (row + 1) * 32)).resize(
-            (5120, 256), Image.Resampling.NEAREST)
+        normalized.crop((0, row * 16, 640, (row + 1) * 16)).resize(
+            (5120, 128), Image.Resampling.NEAREST)
         for row in (0, 1)
     )
 
@@ -671,8 +671,8 @@ class Controller:
         full_text = self.ocr(path)
         c.privacy_text(full_text, self.fragments)
         if shell_ocr_focus:
-            # The fixed 80x25 Linux VT draws the cleared marker and prompt in
-            # its first two 16x32-pixel cell rows. Normalize only those private
+            # The fixed Linux VT draws the cleared marker and prompt in its
+            # first two 640x16-pixel rows. Normalize only those private
             # row crops, enlarge each source pixel 8x, and read each as one
             # pinned PSM-7 line. The original 1280x800 frame remains the sole
             # screen evidence and acceptance geometry.
