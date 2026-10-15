@@ -1,0 +1,292 @@
+name: Inspect exact VoxType small failure 38816689427
+
+on:
+  push:
+    branches: [codex/inspect-voxtype-turbo-388166-20261015]
+    paths: [.github/workflows/inspect-voxtype-small-388166-20261015.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify immutable producer and emit bounded transcript-free diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import datetime
+          import hashlib
+          import importlib.util
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import stat
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH = 'codex/inspect-voxtype-turbo-388166-20261015'
+          WORKFLOWS = [
+              '.github/workflows/inspect-voxtype-small-388166-20261015.yml',
+              '.github/workflows/inspect-voxtype-turbo-388166-20261015.yml',
+          ]
+          PRODUCER_HEAD = 'ef70561d64015352d6fc2308ac088150890a50d1'
+          RUN_ID = 38816689427
+          JOB_ID = 116703027960
+          ARTIFACT_ID = 12013395492
+          ARTIFACT_NAME = 'dictation-candidate-qualification-small-v2'
+          ARTIFACT_BYTES = 158_008
+          ARTIFACT_SHA256 = '4fbf9202b47547f83bf07e36e0187b8f2abde7f6da383b2bb5a16daf651f3990'
+          PHASES = {'online-installed', 'offline-installed', 'recovery', 'recovered-offline'}
+          FINAL_STATUSES = {'failed_or_unrun', 'exact_image_dictation_online_offline_local_sessions_passed'}
+
+          def unique(rows):
+              value = {}
+              for key, item in rows:
+                  assert key not in value, 'duplicate JSON field'
+                  value[key] = item
+              return value
+
+          def strict_json(raw):
+              assert isinstance(raw, bytes) and b'\x00' not in raw
+              return json.loads(raw.decode('utf-8', errors='strict'), object_pairs_hook=unique,
+                                parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+
+          def api(endpoint):
+              raw = subprocess.check_output(
+                  ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}'], timeout=60)
+              return strict_json(raw)
+
+          def timestamp(value):
+              assert isinstance(value, str) and value.endswith('Z')
+              return datetime.datetime.fromisoformat(value[:-1] + '+00:00')
+
+          assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH
+          assert os.environ['GITHUB_EVENT_NAME'] == 'push' and os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == PRODUCER_HEAD
+          assert subprocess.check_output(
+              ['git', 'diff', '--name-only', PRODUCER_HEAD, head], text=True).splitlines() == WORKFLOWS
+          assert subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip() == ''
+          remote = api('git/ref/heads/' + BRANCH)
+          assert remote['ref'] == 'refs/heads/' + BRANCH and remote['object']['sha'] == head
+
+          run = api(f'actions/runs/{RUN_ID}')
+          assert run['id'] == RUN_ID and run['workflow_id'] == 380362486
+          assert run['name'] == 'Candidate direct VoxType image qualification'
+          assert run['path'] == '.github/workflows/dictation-candidate-20261009.yml'
+          assert run['head_branch'] == 'codex/qualification-dispatch-20261010'
+          assert run['head_sha'] == PRODUCER_HEAD and run['event'] == 'push' and run['run_attempt'] == 1
+          assert run['status'] == 'completed' and run['conclusion'] == 'failure'
+          assert run['repository']['full_name'] == REPOSITORY
+          assert run['head_repository']['full_name'] == REPOSITORY
+
+          job = api(f'actions/jobs/{JOB_ID}')
+          assert job['id'] == JOB_ID and job['run_id'] == RUN_ID and job['head_sha'] == PRODUCER_HEAD
+          assert job['name'] == 'dictation (small-v2)'
+          assert job['status'] == 'completed' and job['conclusion'] == 'failure'
+          steps = {step['name']: step for step in job['steps']}
+          measured = steps['Direct upstream commands, online install, offline retry, local sessions and privacy']
+          assert measured['status'] == 'completed' and measured['conclusion'] == 'failure'
+          setup_start = timestamp(measured['started_at'])
+          setup_end = timestamp(measured['completed_at'])
+          assert setup_end >= setup_start
+          print(json.dumps({'record': 'ARCTIC-DICTATION-JOB', 'run': RUN_ID, 'job': JOB_ID,
+                            'profile': 'small-v2', 'status': 'failed',
+                            'qualification_step_elapsed_seconds': int((setup_end - setup_start).total_seconds())},
+                           sort_keys=True), flush=True)
+
+          artifact = api(f'actions/artifacts/{ARTIFACT_ID}')
+          assert artifact['id'] == ARTIFACT_ID and artifact['name'] == ARTIFACT_NAME
+          assert artifact['expired'] is False and artifact['size_in_bytes'] == ARTIFACT_BYTES
+          assert artifact['digest'] == 'sha256:' + ARTIFACT_SHA256
+          assert artifact['workflow_run']['id'] == RUN_ID
+          assert artifact['workflow_run']['head_branch'] == 'codex/qualification-dispatch-20261010'
+          assert artifact['workflow_run']['head_sha'] == PRODUCER_HEAD
+
+          spec = importlib.util.spec_from_file_location(
+              'dictation_contract', 'tools/dictation-qualification/contract.py')
+          contract = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(contract)
+          runner_spec = importlib.util.spec_from_file_location(
+              'dictation_runner', 'tools/dictation-qualification/runner.py')
+          runner = importlib.util.module_from_spec(runner_spec)
+          runner_spec.loader.exec_module(runner)
+
+          with tempfile.TemporaryDirectory(prefix='arctic-voxtype-reader-') as temp:
+              archive_path = Path(temp) / 'evidence.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api',
+                      f'repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}/zip'],
+                      stdout=output, check=True, timeout=180)
+              assert archive_path.stat().st_size == ARTIFACT_BYTES
+              assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == ARTIFACT_SHA256
+
+              retained = {}
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert 1 <= len(items) <= 20 and len({item.filename for item in items}) == len(items)
+                  assert sum(item.file_size for item in items) <= 8 * 1024 * 1024
+                  assert sum(item.compress_size for item in items) <= ARTIFACT_BYTES
+                  for item in items:
+                      name = item.filename
+                      path = PurePosixPath(name)
+                      mode = item.external_attr >> 16
+                      assert name and len(name.encode()) <= 256 and '\\' not in name and '\x00' not in name
+                      assert not path.is_absolute() and all(part not in ('', '.', '..') for part in path.parts)
+                      assert len(path.parts) == 1 and not item.is_dir() and not name.endswith('/')
+                      assert stat.S_IFMT(mode) in (0, stat.S_IFREG) and not item.flag_bits & 0x1
+                      assert 0 <= item.compress_size <= ARTIFACT_BYTES and 0 < item.file_size <= 4 * 1024 * 1024
+                      assert re.fullmatch(
+                          r'(?:execution|fixtures|(?:online-installed|offline-installed|recovery|recovered-offline)(?:-live)?|'
+                          r'dictation-indicator-(?:online-installed|recovered-offline)|'
+                          r'dictation-recovery-(?:online-installed|recovered-offline)-(?:gpu-failure|cpu-ready)|'
+                          r'launch-preterminal-online-installed)'
+                          r'\.(?:json|png)', name), name
+                      retained[name] = archive.read(item)
+                  assert archive.testzip() is None
+
+              state = strict_json(retained['execution.json'])
+              required = {'schema', 'hardware_profile', 'status', 'release_acceptance', 'image',
+                          'execution_checker_head', 'fixture_manifest_sha256', 'reports',
+                          'installations', 'indicators', 'recovery_screens', 'recorded_at_utc'}
+              allowed = required | {'current_phase', 'vm_tool_image_id', 'error'}
+              assert isinstance(state, dict) and required <= set(state) <= allowed
+              assert state['schema'] == 'arctic-voxtype-execution-v3'
+              assert state['hardware_profile'] == 'small-v2' and state['release_acceptance'] is False
+              assert state['status'] in FINAL_STATUSES and state['execution_checker_head'] == PRODUCER_HEAD
+              manifest = strict_json(Path('tools/dictation-qualification/execution-manifest.json').read_bytes())
+              assert state['image'] == manifest['image']
+              assert state['fixture_manifest_sha256'] == manifest['fixture_manifest_sha256']
+              current = state.get('current_phase')
+              assert current is None or current in PHASES
+              if state['status'] == 'failed_or_unrun':
+                  assert state.get('error') == 'Qualification failed; inspect private Actions harness logs'
+              print(json.dumps({'record': 'ARCTIC-DICTATION-EXECUTION', 'status': state['status'],
+                                'current_phase': current, 'report_count': len(state['reports']),
+                                'indicator_count': len(state['indicators']),
+                                'recovery_screen_set_count': len(state['recovery_screens'])},
+                               sort_keys=True), flush=True)
+
+              fixtures = retained['fixtures.json']
+              assert hashlib.sha256(fixtures).hexdigest() == state['fixture_manifest_sha256']
+              referenced_reports = set()
+              for key, descriptor in sorted(state['reports'].items()):
+                  assert isinstance(key, str) and re.fullmatch(
+                      r'(?:online-installed|offline-installed|recovery|recovered-offline)(?:-live)?', key)
+                  assert isinstance(descriptor, dict) and set(descriptor) == {
+                      'path', 'sha256', 'phase', 'installation_id', 'boot_id', 'status'}
+                  name = descriptor['path']
+                  assert name == key + '.json' and name in retained
+                  referenced_reports.add(name)
+                  assert hashlib.sha256(retained[name]).hexdigest() == descriptor['sha256']
+                  report = strict_json(retained[name])
+                  contract.validate(report, report['context'], require_passed=False,
+                                    fixture_manifest=fixtures)
+                  assert descriptor['phase'] == report['context']['phase']
+                  assert descriptor['installation_id'] == report['context']['installation_id']
+                  assert descriptor['boot_id'] == report['boot_id'] and descriptor['status'] == report['status']
+                  failed = [{'id': gate['id'], 'status': gate['status'], 'code': gate['code'],
+                             'observations': gate['observations']}
+                            for gate in report['gates'] if gate['status'] != 'passed']
+                  print(json.dumps({'record': 'ARCTIC-DICTATION-REPORT', 'key': key,
+                                    'phase': report['context']['phase'], 'status': report['status'],
+                                    'failed_gates': failed}, sort_keys=True), flush=True)
+                  aggregates = {}
+                  for sample in report['samples']:
+                      group = (sample['language'], sample['purpose'])
+                      row = aggregates.setdefault(group, {'count': 0, 'elapsed_ns': 0,
+                          'reference_words': 0, 'word_edits': 0,
+                          'reference_chars': 0, 'char_edits': 0})
+                      row['count'] += 1
+                      for field in ('elapsed_ns', 'reference_words', 'word_edits',
+                                    'reference_chars', 'char_edits'):
+                          row[field] += sample[field]
+                  for (language, purpose), values in sorted(aggregates.items()):
+                      print(json.dumps({'record': 'ARCTIC-DICTATION-TIMING', 'key': key,
+                                        'language': language, 'purpose': purpose, **values},
+                                       sort_keys=True), flush=True)
+
+              # reports() writes a contract-valid failed report before the
+              # stricter passing check raises, so it may not yet be linked by
+              # execution.json. Inspect only the same fixed schema and fields.
+              report_name = re.compile(
+                  r'(?:online-installed|offline-installed|recovery|recovered-offline)(?:-live)?\.json')
+              for name in sorted(set(retained) - referenced_reports):
+                  if report_name.fullmatch(name) is None:
+                      continue
+                  report = strict_json(retained[name])
+                  contract.validate(report, report['context'], require_passed=False,
+                                    fixture_manifest=fixtures)
+                  failed = [{'id': gate['id'], 'status': gate['status'], 'code': gate['code'],
+                             'observations': gate['observations']}
+                            for gate in report['gates'] if gate['status'] != 'passed']
+                  print(json.dumps({'record': 'ARCTIC-DICTATION-UNLINKED-REPORT',
+                                    'key': name[:-5], 'phase': report['context']['phase'],
+                                    'status': report['status'], 'failed_gates': failed},
+                                   sort_keys=True), flush=True)
+                  aggregates = {}
+                  for sample in report['samples']:
+                      group = (sample['language'], sample['purpose'])
+                      row = aggregates.setdefault(group, {'count': 0, 'elapsed_ns': 0,
+                          'reference_words': 0, 'word_edits': 0,
+                          'reference_chars': 0, 'char_edits': 0})
+                      row['count'] += 1
+                      for field in ('elapsed_ns', 'reference_words', 'word_edits',
+                                    'reference_chars', 'char_edits'):
+                          row[field] += sample[field]
+                  for (language, purpose), values in sorted(aggregates.items()):
+                      print(json.dumps({'record': 'ARCTIC-DICTATION-UNLINKED-TIMING',
+                                        'key': name[:-5], 'language': language,
+                                        'purpose': purpose, **values}, sort_keys=True), flush=True)
+
+              log_path = Path(temp) / 'job.log'
+              with log_path.open('xb') as output:
+                  subprocess.run(['gh', 'api', '--allow-escape-sequences',
+                                  f'repos/{REPOSITORY}/actions/jobs/{JOB_ID}/logs'],
+                                 stdout=output, check=True, timeout=180)
+              assert 0 < log_path.stat().st_size <= 32 * 1024 * 1024
+              raw_log = log_path.read_bytes()
+              assert b'\x00' not in raw_log
+              failure_codes = ({'contract-invalid', 'timeout-expired', 'command-error', 'file-not-found',
+                                'permission-error', 'os-error', 'unicode-error', 'json-error', 'key-error',
+                                'type-error', 'value-error', 'runtime-error', 'interrupted-error',
+                                'keyboard-interrupt', 'system-exit', 'other-error'}
+                               | set(runner.TRUSTED_ERRORS.values()) | set(runner.TRUSTED_CONTRACT_ERRORS)
+                               | set(runner.COLLECTOR_DIAGNOSTIC_CODES) | {'collector-invalid-record'})
+              stage_codes = set(runner.CATCH_STAGES) | {'collector'}
+              progress = []
+              failures = []
+              progress_re = re.compile(rb'ARCTIC-DICTATION-HOST-PROGRESS ([a-z-]+) ([a-z0-9-]+)')
+              failure_re = re.compile(rb'ARCTIC-DICTATION-HOST-FAILURE ([a-z-]+) ([a-z-]+) ([a-z0-9-]+)')
+              for line in raw_log.splitlines():
+                  for match in progress_re.finditer(line):
+                      phase, code = (item.decode('ascii') for item in match.groups())
+                      assert phase in PHASES and code in runner.HOST_STAGES
+                      if (phase, code) not in progress:
+                          progress.append((phase, code))
+                  for match in failure_re.finditer(line):
+                      phase, stage, code = (item.decode('ascii') for item in match.groups())
+                      assert phase in PHASES and stage in stage_codes and code in failure_codes
+                      if (phase, stage, code) not in failures:
+                          failures.append((phase, stage, code))
+              assert failures, 'No closed failure code found in the immutable failed job log'
+              print(json.dumps({'record': 'ARCTIC-DICTATION-CLOSED-DIAGNOSTIC',
+                                'progress': [{'phase': phase, 'code': code} for phase, code in progress],
+                                'failures': [{'phase': phase, 'stage': stage, 'code': code}
+                                             for phase, stage, code in failures]},
+                               sort_keys=True), flush=True)
+          PY
