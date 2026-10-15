@@ -166,7 +166,7 @@ class RunnerGuards(unittest.TestCase):
     def test_unreviewed_hardware_profile_stops_before_checkout_commands(self):
         identity = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted',
                         GITHUB_REPOSITORY='yuvalkolodkingal/Arctic-Linux',
-                        GITHUB_REF='refs/heads/codex/qualification-dispatch-20261010',
+                        GITHUB_REF='refs/heads/codex/diagnose-voxtype-readiness-387951',
                         GITHUB_WORKFLOW='Candidate direct VoxType image qualification',
                         GITHUB_EVENT_NAME='push', GITHUB_RUN_ATTEMPT='1')
         with tempfile.TemporaryDirectory() as temp:
