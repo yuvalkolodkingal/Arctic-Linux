@@ -106,8 +106,45 @@ def restore_runtime_failure_fix(source):
     return source
 
 
+def restore_post_geometry_readiness(source):
+    """Remove only the post-fullscreen playback readiness correction."""
+    replacements=(("""        pre_geometry_time=state['time-pos']
+        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
+                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
+                'pre-geometry visual playback clock is invalid')
+        # Anchor readiness after the fullscreen and controls transitions.  A
+        # clock sampled before those transitions can satisfy the old delta as
+        # soon as the window enters fullscreen, while its GL content is still
+        # unpainted.  The exact same owned player must advance for a bounded
+        # interval in its final capture geometry before the sole screenshot.
+        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'post-geometry visual playback clock is invalid')
+        minimum_post_geometry_advance=.5
+""","""        initial_time=state['time-pos']
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'initial visual playback clock is invalid')
+"""),
+        ("            return observed if delta>=minimum_post_geometry_advance else None\n",
+         "            return observed if delta>=.05 else None\n"),
+        ("""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+""","""                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+"""))
+    for index,(current,previous) in enumerate(replacements):
+        if source.count(current)!=1:
+            raise AssertionError(f'Post-geometry readiness inverse occurrence differs at {index}')
+        source=source.replace(current,previous,1)
+    return source
+
+
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_post_geometry_readiness(source)
     source=restore_epiphany_product_route(source)
     source=restore_moving_player_retirement(source)
     source=restore_runtime_failure_fix(source)

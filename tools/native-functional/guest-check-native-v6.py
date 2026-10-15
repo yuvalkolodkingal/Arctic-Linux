@@ -1911,10 +1911,20 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
-        initial_time=state['time-pos']
+        pre_geometry_time=state['time-pos']
+        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
+                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
+                'pre-geometry visual playback clock is invalid')
+        # Anchor readiness after the fullscreen and controls transitions.  A
+        # clock sampled before those transitions can satisfy the old delta as
+        # soon as the window enters fullscreen, while its GL content is still
+        # unpainted.  The exact same owned player must advance for a bounded
+        # interval in its final capture geometry before the sole screenshot.
+        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
-                'initial visual playback clock is invalid')
+                'post-geometry visual playback clock is invalid')
+        minimum_post_geometry_advance=.5
         def playback_advanced():
             observed=mpv_property(ipc,'time-pos',player['pid'],self.uid)
             require(type(observed) in (int,float) and not isinstance(observed,bool)
@@ -1922,7 +1932,7 @@ class Smoke:
                     'visual playback clock is invalid')
             delta=observed-initial_time
             if delta<0: delta+=2
-            return observed if delta>=.05 else None
+            return observed if delta>=minimum_post_geometry_advance else None
         advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
         time.sleep(.5)
         client=self.alive(player)
@@ -2000,7 +2010,10 @@ class Smoke:
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
-                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
@@ -2669,7 +2682,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203'
+    native_source_sha = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

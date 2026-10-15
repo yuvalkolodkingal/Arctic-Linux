@@ -355,11 +355,10 @@ class NewControls(unittest.TestCase):
                     grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_calls=0
+            time_values=iter((0,.2,.8,.8))
             def prop(path,key,*args):
-                nonlocal time_calls
                 if key!='time-pos':return props[key]
-                time_calls+=1;return 0 if time_calls==1 else .2
+                return next(time_values)
             oracle_control=(patch.object(N,'evaluate_reference_rgb',side_effect=ValueError('synthetic oracle failure'))
                             if case=='oracle-failed' else contextlib.nullcontext())
             with socket.socket(socket.AF_UNIX) as peer:
@@ -381,6 +380,9 @@ class NewControls(unittest.TestCase):
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]
             self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
+            self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
+                advanced_seconds=.8,minimum_advance_seconds=.5,
+                anchor='after fullscreen and controls transitions'))
             self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
             self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
             self.assertFalse((root/'celluloid-reference-player-2.png').exists())

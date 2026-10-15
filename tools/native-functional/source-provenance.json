@@ -1,9 +1,9 @@
 {
   "upstream_execution_commit": "bdf797b19833fc8fe4002a328333edfc3777dfed",
-  "native_source_sha256": "9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203",
+  "native_source_sha256": "76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68",
   "files": {
-    "native_smoke.py": "9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203",
-    "guest-check-native-v6.py": "5607bdd44967abd5b26d420d0432bb35e1673fe3b12f47a44bc65e34c99795e5",
+    "native_smoke.py": "76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68",
+    "guest-check-native-v6.py": "6a18094e8026cb6c2ca8f153bea8cedfbcf2171f4f21094c8642fbda1d5c350c",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e"
   },
@@ -27,14 +27,14 @@
   "adapted_host_controls": {
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_v6.py": "3ae66c48d5cbe7edae483f43d0e8f689bab088cec87751728802ff2c0c2c643e",
+    "test_native_v6.py": "bda64e830206e387410053e58c75afdafa1ccca6a28241d9eb1b5dac118496ea",
     "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
     "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_bulk_transport.py": "ba874be9520e920fc5430d87f98a5d7ea9259034704a7dd0cd4090daac462757",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_controls_state_trials.py": "ccf1f01c7b60ff423b29ae209c6b138870c7203f06c478535148a6052013f8e7",
+    "test_controls_state_trials.py": "9c4e5ae430500be51d9f287b83b70617d2249cf30f66b4447447bf9dccbc7ed4",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
   },
@@ -310,12 +310,18 @@
     "maximum_owned_player_attempts": 1,
     "capture_attempt_limit": 1,
     "first_failed_or_unmatched_oracle": "hard gate failure; no recapture, restart, or diagnostic acceptance path",
-    "playback_clock_minimum_advance_seconds": 0.05,
+    "playback_clock_minimum_advance_seconds": 0.5,
     "playback_clock_timeout_seconds": 5,
     "capture_command_timeout_seconds": 3,
     "oracle_thresholds_unchanged": true,
     "screenshot_path": "celluloid-reference.png",
     "host_attempt_receipt_schema_exact": true,
-    "release_acceptance": false
+    "release_acceptance": false,
+    "playback_clock_anchor": "sampled after the exact owned player reaches fullscreen and its controls-hidden transition completes",
+    "post_geometry_settle_seconds": 0.5,
+    "failure_run": 38672376980,
+    "failure_artifact_id": 11945334674,
+    "failure_artifact_sha256": "8b8c5477316f57626a99acd1eb9c38805b61a55c3ec8b5e22e48cca2ab730c02",
+    "failure_diagnosis": "installed sole capture observed an entirely black owned fullscreen GL client while the same exact ISO live capture matched all 316224 checked pixels; the earlier clock sample preceded fullscreen and controls transitions, so it did not prove post-geometry playback readiness"
   }
 }
