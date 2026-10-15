@@ -141,6 +141,7 @@ on_transcription = false
         checker.route = Mock()
         checker.loop = None
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
         checker.state = Mock(side_effect=['idle', 'recording', 'idle'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
         checker.adapter = Mock(side_effect=[
@@ -190,8 +191,10 @@ on_transcription = false
         checker.destroy_route.assert_called_once_with(restore=False)
         checker.route.assert_called_once_with()
         configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
-        self.assertTrue(any(call.args == (configure + [checker.source_name],)
+        self.assertTrue(any(call.args == (configure + ['default'],)
                             for call in checker.cmd.call_args_list))
+        self.assertFalse(any(call.args == (configure + [checker.source_name],)
+                             for call in checker.cmd.call_args_list))
         self.assertTrue(any(call.args == (configure + ['default'],)
                             and call.kwargs == {}
                             for call in checker.cmd.call_args_list))
@@ -209,6 +212,7 @@ on_transcription = false
         checker.route = Mock()
         checker.loop = None
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
         checker.state = Mock(side_effect=['recording'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
         checker.adapter = Mock(return_value={
@@ -239,6 +243,7 @@ on_transcription = false
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
         checker.select.assert_called_with(language='en')
+        self.assertIsNone(checker.selected_language)
 
     def test_microphone_pre_disconnect_failure_restores_config_without_duplicate_route(self):
         checker = self.checker()
@@ -251,6 +256,7 @@ on_transcription = false
         checker.route = Mock()
         checker.loop = object()
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'he'
         checker.state = Mock(return_value='recording')
         checker.adapter = Mock(return_value={
             'state': 'ready', 'ready': True, 'error': '', 'language': 'he'})
@@ -285,6 +291,7 @@ on_transcription = false
         checker.route = Mock(side_effect=guest.Invalid('private-route-failure'))
         checker.loop = None
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
         checker.state = Mock(return_value='recording')
         checker.adapter = Mock(return_value={
             'state': 'ready', 'ready': True, 'error': '', 'language': 'en'})

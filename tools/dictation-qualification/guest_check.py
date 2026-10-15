@@ -1138,14 +1138,15 @@ class Checker:
             return restore_language
         restore_language = self.microphone_stage('initial-status', initial_status)
         try:
-            # Pin the owned source instead of relying on PipeWire's default. A
-            # virtual source which disappears while CPAL already has it open
-            # can leave the stream suspended without an error callback; that
-            # does not reproduce a device absent when VoxType opens it again.
+            # VoxType accepts ALSA/CPAL device names, not PipeWire node names.
+            # The fixture has already made its owned source the PipeWire
+            # default, so exercise the same supported `default` route users
+            # receive.  After that source disappears, a fresh official daemon
+            # open deterministically observes that no input device remains.
             # All mutations are inside this cleanup boundary: a failed start
             # or link assertion must not poison the following lock/GPU gates.
             self.microphone_stage('source-selection', lambda: self.cmd(
-                [str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name]))
+                [str(VOXTYPE), 'config', 'set', 'audio.device', 'default']))
             self.microphone_stage('pinned-daemon-restart', lambda: self.cmd(
                 ['systemctl', '--user', 'restart', 'voxtype.service']))
             self.microphone_stage('pinned-daemon-ready', lambda: self.daemon_ready(
@@ -1213,6 +1214,12 @@ class Checker:
             # Arctic's supported settings operation to restart the daemon and
             # clear the already-observed error, rather than mutating its
             # private runtime projection from the qualification client.
+            # The failed daemon owns an audio error even when its configured
+            # language is unchanged.  Invalidate the qualification cache so
+            # the supported language selection performs its documented
+            # restart/readiness boundary and clears that error before the
+            # independent lock and backend gates run.
+            self.selected_language = None
             cleanup('language-restore', lambda: self.select(language=restore_language))
             error_path = self.runtime / 'arctic/voxtype-error'
             cleanup('error-clear', lambda: require(
