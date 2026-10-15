@@ -199,6 +199,30 @@ class ContractControls(unittest.TestCase):
             with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
                 c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
 
+    def test_failed_readiness_requires_bounded_numeric_stage(self):
+        for phase, gate_id in (('online-installed', 'online-installer-ready'),
+                               ('recovered-offline', 'recovered-ready')):
+            report = synthetic(phase)
+            gate = next(gate for gate in report['gates'] if gate['id'] == gate_id)
+            gate.update(status='failed', code='gate-' + gate_id + '-timeout',
+                        observations={'failure_stage':
+                                      c.READINESS_FAILURE_STAGES['first-activation-command']})
+            report['status'] = 'failed'
+            self.assertEqual(c.validate(report, report['context'],
+                                        fixture_manifest=FIXTURES)['status'], 'failed')
+
+            missing = copy.deepcopy(report)
+            next(g for g in missing['gates'] if g['id'] == gate_id)['observations'] = {}
+            with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
+                c.validate(missing, missing['context'], fixture_manifest=FIXTURES)
+
+            for value in (True, 0, max(c.READINESS_FAILURE_STAGES.values()) + 1):
+                changed = copy.deepcopy(report)
+                next(g for g in changed['gates'] if g['id'] == gate_id)[
+                    'observations']['failure_stage'] = value
+                with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+                    c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
+
     def test_failure_stage_is_rejected_outside_failed_transcription_gate(self):
         report = synthetic('online-installed')
         cpu = next(gate for gate in report['gates']
