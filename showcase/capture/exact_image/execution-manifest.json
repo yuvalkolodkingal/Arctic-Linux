@@ -32,11 +32,11 @@
   },
   "execution_files": {
     ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
-    "showcase/capture/exact_image/automation.py": "130cd9bc67adaaaa7889467f2fb3dc9da7c134e788e2e0e858dc82f93980681c",
+    "showcase/capture/exact_image/automation.py": "9b5489b25bdf745e5818f0ab10be7677575570fae8062759ed4979cfce8ec9a4",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "2629e63663d3c7573b76f64f3a8de0eec238a213439e4ddad85666e8ba15845a",
-    "showcase/capture/exact_image/contract.py": "94f75b4f3522795a1b071daf83daceba84936746799e7f02c57cc2071fcdb884",
+    "showcase/capture/exact_image/contract.py": "4c7d6398b05e559482134a35d0c517d8f42a2885bcf3ea0e347cd33ef714151e",
     "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
     "showcase/capture/exact_image/unattended.py": "61f65ff246e2d1acbde8fa9831430e398967549ec47b00996862b05aa370aa84",

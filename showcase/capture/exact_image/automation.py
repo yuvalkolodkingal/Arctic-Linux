@@ -279,8 +279,8 @@ class LiveStartupDiagnostic:
 
 INSTALLED_SHELL_SURFACES = (
     "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
-    "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
-    "suffix-only", "login-or-password", "other-text",
+    "fetch-greeting", "prompt-exact", "prompt-not-final", "proof-marker",
+    "account-only", "suffix-only", "login-or-password", "other-text",
 )
 
 
@@ -288,21 +288,19 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     """Reduce a private installed-console frame to one reviewed public enum."""
     if image.size != (1280, 800):
         return "geometry-mismatch"
-    # A cleared Linux text console is intentionally low-color.  Preserve the
-    # authoritative gate's exact final-line rule before reducing all other
-    # sparse surfaces to the privacy-safe blank-output enum.
+    # A cleared Linux text console is intentionally low-color.  Preserve only
+    # the reviewed fixed-string diagnostic enums before reducing every other
+    # sparse surface to the privacy-safe blank-output enum.  These observations
+    # do not alter the authoritative exact final-line gate in wait_screen().
     if _fixed_fish_prompt_present(text, account, suffixes):
         return "prompt-exact"
-    colors = image.resize((32, 20)).getcolors(maxcolors=640)
-    if colors is None or len(colors) < 16:
-        return "blank-output"
     folded = text.casefold().strip()
-    if not folded:
-        return "ocr-empty"
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
     accepted = {account + " " + suffix for suffix in suffixes}
     if any(line in accepted for line in lines):
         return "prompt-not-final"
+    if "arctic-showcase-shell-ready" in folded:
+        return "proof-marker"
     if "arctic linux" in folded and "fish 4.6" in folded:
         return "fetch-greeting"
     if account.casefold() in folded:
@@ -311,6 +309,11 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
         return "suffix-only"
     if "login:" in folded or "password:" in folded:
         return "login-or-password"
+    colors = image.resize((32, 20)).getcolors(maxcolors=640)
+    if colors is None or len(colors) < 16:
+        return "blank-output"
+    if not folded:
+        return "ocr-empty"
     return "other-text"
 
 

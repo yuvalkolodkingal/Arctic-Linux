@@ -112,9 +112,10 @@ that input.
 
 The installed prompt remains an authoritative 90-second gate. Its failure
 projection reduces private frames to closed enums for fetch still visible,
-exact prompt on a nonfinal row, account-only or suffix-only OCR, login/password,
-blank output, geometry mismatch, OCR-empty, and other text, plus bounded integer
-timings. Only after a timeout, the controller sends one interrupt and records
+exact prompt on a nonfinal row, the fixed proof marker, account-only or
+suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty,
+and other text, plus bounded integer timings. Only after a timeout, the
+controller sends one interrupt and records
 whether the exact prompt becomes visible within 30 seconds. That post-failure
 probe cannot promote the attempt or authorize the proof or sudo commands. Its
 screens and OCR strings stay private and are deleted with the runtime.

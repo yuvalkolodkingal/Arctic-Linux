@@ -697,8 +697,8 @@ def installed_startup_diagnostic(value) -> None:
 
     surfaces = {
         "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
-        "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
-        "suffix-only", "login-or-password", "other-text",
+        "fetch-greeting", "prompt-exact", "prompt-not-final", "proof-marker",
+        "account-only", "suffix-only", "login-or-password", "other-text",
     }
     gate = value["shell_ready_gate"]
     require(type(gate) is dict and set(gate) == {

@@ -354,6 +354,7 @@ class UnattendedController(unittest.TestCase):
         cases = {
             account + " ~>": "prompt-exact",
             account + " ~>\ntrailing fetch row": "prompt-not-final",
+            "ARCTIC-SHOWCASE-SHELL-READY": "proof-marker",
             "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
             account: "account-only",
             "~ >": "suffix-only",
@@ -371,6 +372,19 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(automation._installed_shell_surface_class(
             Image.new("RGB", (1280, 800), "black"), account + " ~>", account, suffixes),
             "prompt-exact")
+        low_color_cases = {
+            account + " ~>\ntrailing row": "prompt-not-final",
+            "ARCTIC-SHOWCASE-SHELL-READY": "proof-marker",
+            "Arctic Linux\nshell fish 4.6": "fetch-greeting",
+            account: "account-only",
+            "~ >": "suffix-only",
+            "Password:": "login-or-password",
+        }
+        for text, expected in low_color_cases.items():
+            with self.subTest(low_color=expected):
+                self.assertEqual(automation._installed_shell_surface_class(
+                    Image.new("RGB", (1280, 800), "black"), text, account, suffixes),
+                    expected)
         self.assertEqual(automation._installed_shell_surface_class(
             Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
             "geometry-mismatch")
