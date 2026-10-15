@@ -14,6 +14,19 @@ REPOSITORY = N.HERE.parents[1]
 
 
 class ExecutionControls(unittest.TestCase):
+    def test_adapted_host_control_provenance_matches_repository_bytes(self):
+        provenance = json.loads((N.HERE / 'source-provenance.json').read_text())
+        controls = provenance['adapted_host_controls']
+        self.assertTrue(controls)
+        for name, expected in controls.items():
+            with self.subTest(name=name):
+                self.assertEqual(Path(name).name, name)
+                self.assertRegex(expected, r'^[0-9a-f]{64}$')
+                path = N.HERE / name
+                self.assertTrue(path.is_file())
+                self.assertFalse(path.is_symlink())
+                self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected)
+
     def test_checked_in_manifest_matches_runner_inventory_and_repository_bytes(self):
         manifest = json.loads((N.HERE / 'execution-manifest.json').read_text())
         self.assertIs(manifest['release_acceptance'], False)

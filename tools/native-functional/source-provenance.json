@@ -1,7 +1,7 @@
 {
   "adapted_host_controls": {
     "test_controls_state_trials.py": "5837a22e7a2f3e2a4cffb7d905ba2e62ee934bb5d5c5b7f21acaf5369d4a9f2c",
-    "test_native_bulk_transport.py": "fa558657aa710bbd8d7edea9cf9bb686cfbf89276d2bd8488dead2ad6b19f9ad",
+    "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
