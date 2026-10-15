@@ -2,7 +2,7 @@
   "status": "PASSED_DIRECT_VOXTYPE_ALIGNED_SOURCE_ONLY",
   "base_commit": "b5d8585d34e4356c6bbc659a837dbbdd7f98dff7",
   "base_tree": "5e76efd762cc7d785bb154787a244e29c34905c4",
-  "source_branch": "codex/prepare-showcase-video-121-20261015",
+  "source_branch": "codex/showcase-river-production",
   "scene_ids": 38,
   "unique_scene_ids": 38,
   "sentence_cues": 130,
