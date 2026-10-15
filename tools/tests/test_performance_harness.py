@@ -75,6 +75,8 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
                                for target in node.targets))
         host_observer = next(node for node in ast.parse(DRIVER).body
                              if isinstance(node, ast.FunctionDef) and node.name == 'dictation_host_stage')
+        dictation_observer = next(node for node in ast.parse(DRIVER).body
+                                  if isinstance(node, ast.FunctionDef) and node.name == 'dictation_poll')
         indicator = next(node for node in ast.parse(DRIVER).body
                          if isinstance(node, ast.FunctionDef) and node.name == 'dictation_indicator_poll')
         recovery = next(node for node in ast.parse(DRIVER).body
@@ -102,11 +104,13 @@ with open(os.environ['TEST_ENGINE_LOG'],'w') as target: json.dump(sys.argv[1:],t
             # collection must neither request its recording image nor inject a nonce.
             # Execute the real optional host observer too. Without its opt-in
             # token it must preserve ordinary performance collection behavior.
-            exec(compile(ast.Module(body=[host_stages, host_observer, indicator, recovery, wrapper], type_ignores=[]),
+            exec(compile(ast.Module(body=[host_stages, host_observer, dictation_observer,
+                                         indicator, recovery, wrapper], type_ignores=[]),
                          '<actual collection branch>','exec'), namespace)
             collected = namespace['collect_branch']()
             namespace['print'].assert_not_called()
             self.assertFalse(namespace['dictation_indicator_seen'])
+            self.assertEqual(namespace['dictation_recovery_seen'], set())
             self.assertFalse(any(call.args[0].startswith('dictation-') for call in vm.shot.call_args_list))
             if mode=='console':
                 terminal.assert_not_called()

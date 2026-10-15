@@ -53,7 +53,21 @@ HOST_STAGES = frozenset({
     'vm-acquire-json-error', 'vm-acquire-qmp-error', 'vm-acquire-keyboard-interrupt',
     'vm-acquire-other-error', 'vm-acquire-stderr-unobserved',
     'vm-acquire-enforce-host-unavailable', 'vm-acquire-enforce-only-spec-ctrl',
-    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable'})
+    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable',
+    'boot-indicator-poll-json-error', 'boot-indicator-poll-unicode-error',
+    'boot-indicator-poll-qmp-error', 'boot-indicator-poll-file-missing',
+    'boot-indicator-poll-permission-error', 'boot-indicator-poll-os-error',
+    'boot-indicator-poll-key-error', 'boot-indicator-poll-type-error',
+    'boot-indicator-poll-value-error', 'boot-indicator-poll-runtime-error',
+    'boot-indicator-poll-system-exit', 'boot-indicator-poll-keyboard-interrupt',
+    'boot-indicator-poll-other-error',
+    'boot-recovery-poll-json-error', 'boot-recovery-poll-unicode-error',
+    'boot-recovery-poll-qmp-error', 'boot-recovery-poll-file-missing',
+    'boot-recovery-poll-permission-error', 'boot-recovery-poll-os-error',
+    'boot-recovery-poll-key-error', 'boot-recovery-poll-type-error',
+    'boot-recovery-poll-value-error', 'boot-recovery-poll-runtime-error',
+    'boot-recovery-poll-system-exit', 'boot-recovery-poll-keyboard-interrupt',
+    'boot-recovery-poll-other-error'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
 CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator', 'recovery-screens'})
 TRUSTED_ERRORS = {

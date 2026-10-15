@@ -281,10 +281,10 @@ def failure_phase_summary(work, screen_failure):
             last_observer_phase='unavailable')
         envelope = result['guest_envelope']  # envelope-only
         pins = dict(guest='69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73',
-            causal='dafe6d744e55a4205c416ec67ba890ebaf5375be9bcf5fe48086bb145dcfddf0')
-        observer = dict(source_sha256='12d104c47d4cad17dc35cac2386d23fe8019428aa0280e7410ba4f8420f364de',
-            frozen_sha256='2938c9d4eb522b6b5b577ef042be1f5c2f31a0942d0aa7ce63935ad8bd23a29b',
-            comparator_sha256='8aee3965affb58af2aab1d2af7143c08d64845354c6985b012443de4ea0ba17c')
+            causal='96ccc1e7a992a092e79aa00661f0098acaeba8e3f3ef76ff856716b720ac3158')
+        observer = dict(source_sha256='ae57b29c0d36b833ec571b2d8886e3468459db40551e2a127b906602e7401818',
+            frozen_sha256='d751e1f6f52f574a3d247dfa09aa984ad791d2c3873d8193fa4eb9c6e8c2d02e',
+            comparator_sha256='1de5938ab1c96951dffcc84980d59f373124a26955a6ef292216973917d3aafd')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
             return unknown
@@ -785,216 +785,6 @@ def pre_screen_evidence_members(out, members, screen):
             raise EarlyEvidenceScreeningError(category, fixed_screening_failure(error)) from None
 
 
-INSTALL_SERIAL_PROJECTION = b'ARCTIC-INSTALL-SERIAL-PROJECTION=arctic-performance-install-v1\n'
-INSTALL_SERIAL_OMITTED = b'ARCTIC-INSTALL-SERIAL-OMITTED='
-INSTALL_EXIT = b'ARCTIC-INSTALL-EXIT=0\n'
-BOOT_SERIAL_PROJECTION = b'ARCTIC-BOOT-SERIAL-PROJECTION=arctic-performance-boot-v1\n'
-BOOT_SERIAL_OMITTED = b'ARCTIC-BOOT-SERIAL-OMITTED='
-BOOT_CONSOLE_RESTORED = b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED\n'
-BOOT_COLLECT_BEGIN = b'ARCTIC-COLLECT-BEGIN\n'
-BOOT_COLLECT_END = b'ARCTIC-COLLECT-END\n'
-BOOT_SMOKE_EXIT = b'ARCTIC-INSTALLED-SMOKE-EXIT=0\n'
-PERFORMANCE_RECORD = b'ARCTIC-PERFORMANCE '
-
-
-def public_install_serial_projection(data):
-    """Keep only the validated install result, with positions of private lines.
-
-    The complete UART is consumed locally before this function returns. It is
-    not release evidence: Fedora boot diagnostics can contain account-shaped
-    unit names and other machine text. The retained projection has a closed
-    grammar and still proves that exactly one successful installer exit was
-    observed; omission counts preserve its position without copying or hashing
-    any omitted content.
-    """
-    if type(data) is not bytes or not data or len(data) > 128 * 1024 * 1024:
-        raise RuntimeError('Performance install UART is empty or oversized')
-    output = [INSTALL_SERIAL_PROJECTION]
-    omitted = 0
-    exits = 0
-
-    def flush_omitted():
-        nonlocal omitted
-        if omitted:
-            output.append(INSTALL_SERIAL_OMITTED + str(omitted).encode('ascii') + b'\n')
-            omitted = 0
-
-    for line in data.splitlines(keepends=True):
-        if b'ARCTIC-INSTALL-EXIT=' in line:
-            if line not in (b'ARCTIC-INSTALL-EXIT=0\n', b'ARCTIC-INSTALL-EXIT=0\r\n'):
-                raise RuntimeError('Performance install UART exit record differs')
-            flush_omitted()
-            output.append(INSTALL_EXIT)
-            exits += 1
-        else:
-            omitted += 1
-    if exits != 1:
-        raise RuntimeError('Performance install UART requires one successful exit record')
-    flush_omitted()
-    result = b''.join(output)
-    if len(result) > 4096:
-        raise RuntimeError('Performance install UART projection exceeds bound')
-    return result
-
-
-def publish_install_serial_projection(path, out):
-    """Replace one owned regular UART with its public projection fail-closed."""
-    path, out = Path(path).absolute(), Path(out).resolve()
-    try:
-        before = path.lstat()
-        contained = path.resolve().is_relative_to(out)
-    except OSError:
-        before, contained = None, False
-    if (before is None or not stat.S_ISREG(before.st_mode) or path.is_symlink()
-            or before.st_uid != os.geteuid() or not contained
-            or before.st_size <= 0 or before.st_size > 128 * 1024 * 1024):
-        raise RuntimeError('Performance install UART is not an owned bounded regular file')
-    data = path.read_bytes()
-    after = path.lstat()
-    identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    if len(data) != before.st_size or identity(before) != identity(after):
-        raise RuntimeError('Performance install UART changed while being validated')
-    projection = public_install_serial_projection(data)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(prefix='.arctic-install-uart-', dir=path.parent,
-                                         delete=False) as output:
-            temporary = Path(output.name)
-            os.fchmod(output.fileno(), stat.S_IMODE(before.st_mode) & 0o600)
-            output.write(projection)
-            output.flush()
-            os.fsync(output.fileno())
-        if identity(before) != identity(path.lstat()) or path.is_symlink():
-            raise RuntimeError('Performance install UART changed before publication')
-        os.replace(temporary, path)
-        temporary = None
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
-    if path.read_bytes() != projection:
-        raise RuntimeError('Performance install UART projection publication differs')
-    return projection
-
-
-def public_boot_serial_projection(data):
-    """Retain only the exact replay protocol from a successful private UART.
-
-    The guest's canonical performance JSON remains complete and is still
-    screened normally. Ambient boot, service and command text is omitted
-    without retaining or hashing it; line counts preserve record positions.
-    """
-    if type(data) is not bytes or not data or len(data) > 128 * 1024 * 1024:
-        raise RuntimeError('Performance boot UART is empty or oversized')
-    try:
-        data.decode('utf-8', errors='strict')
-    except UnicodeError:
-        raise RuntimeError('Performance boot UART is not UTF-8') from None
-    if not data.endswith(b'\n') or b'\x00' in data:
-        raise RuntimeError('Performance boot UART termination differs')
-    output = [BOOT_SERIAL_PROJECTION]
-    omitted = 0
-    counts = dict(restored=0, begin=0, end=0, exit=0, performance=0)
-    order = []
-
-    def flush_omitted():
-        nonlocal omitted
-        if omitted:
-            output.append(BOOT_SERIAL_OMITTED + str(omitted).encode('ascii') + b'\n')
-            omitted = 0
-
-    for raw in data.split(b'\n')[:-1]:
-        line = raw[:-1] if raw.endswith(b'\r') else raw
-        retained = None
-        if re.fullmatch(br'ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=[1-9][0-9]{0,18} vt=[1-9][0-9]{0,4}', line):
-            retained, key = BOOT_CONSOLE_RESTORED, 'restored'
-        elif line == BOOT_COLLECT_BEGIN.rstrip(b'\n'):
-            retained, key = BOOT_COLLECT_BEGIN, 'begin'
-        elif line == BOOT_COLLECT_END.rstrip(b'\n'):
-            retained, key = BOOT_COLLECT_END, 'end'
-        elif line == BOOT_SMOKE_EXIT.rstrip(b'\n'):
-            retained, key = BOOT_SMOKE_EXIT, 'exit'
-        elif line.startswith(PERFORMANCE_RECORD):
-            if counts['begin'] != 1 or counts['exit'] or counts['end']:
-                raise RuntimeError('Performance boot observer record order differs')
-            if len(line) > 4 * 1024 * 1024:
-                raise RuntimeError('Performance boot observer record is oversized')
-            def unique(pairs):
-                value = {}
-                for name, item in pairs:
-                    if name in value:
-                        raise ValueError('duplicate')
-                    value[name] = item
-                return value
-            try:
-                record = json.loads(line[len(PERFORMANCE_RECORD):].decode('utf-8'),
-                    object_pairs_hook=unique,
-                    parse_constant=lambda _: (_ for _ in ()).throw(ValueError('nonfinite')))
-            except (ValueError, UnicodeError, RecursionError):
-                raise RuntimeError('Performance boot observer record differs') from None
-            if (type(record) is not dict or set(record) != {'stage', 'check', 'value'}
-                    or record['stage'] != 'installed' or type(record['check']) is not str
-                    or re.fullmatch(r'[a-z0-9_.]{1,128}', record['check']) is None):
-                raise RuntimeError('Performance boot observer record differs')
-            retained, key = line + b'\n', 'performance'
-        if retained is None:
-            omitted += 1
-            continue
-        flush_omitted()
-        output.append(retained)
-        counts[key] += 1
-        if key != 'performance':
-            order.append(key)
-    flush_omitted()
-    if counts['restored'] != 1 or counts['begin'] != 1 or counts['end'] != 1 \
-            or counts['exit'] != 1 or order != ['restored', 'begin', 'exit', 'end']:
-        raise RuntimeError('Performance boot UART protocol markers differ')
-    if counts['performance'] == 0:
-        raise RuntimeError('Performance boot UART has no observer records')
-    result = b''.join(output)
-    if len(result) > 128 * 1024 * 1024:
-        raise RuntimeError('Performance boot UART projection exceeds bound')
-    return result
-
-
-def publish_boot_serial_projection(path, out):
-    """Replace one successful owned boot UART with its public projection."""
-    path, out = Path(path).absolute(), Path(out).resolve()
-    try:
-        before = path.lstat()
-        contained = path.resolve().is_relative_to(out)
-    except OSError:
-        before, contained = None, False
-    if (before is None or not stat.S_ISREG(before.st_mode) or path.is_symlink()
-            or before.st_uid != os.geteuid() or not contained
-            or before.st_size <= 0 or before.st_size > 128 * 1024 * 1024):
-        raise RuntimeError('Performance boot UART is not an owned bounded regular file')
-    data = path.read_bytes()
-    after = path.lstat()
-    identity = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-    if len(data) != before.st_size or identity(before) != identity(after):
-        raise RuntimeError('Performance boot UART changed while being validated')
-    projection = public_boot_serial_projection(data)
-    temporary = None
-    try:
-        with tempfile.NamedTemporaryFile(prefix='.arctic-boot-uart-', dir=path.parent,
-                                         delete=False) as output:
-            temporary = Path(output.name)
-            os.fchmod(output.fileno(), stat.S_IMODE(before.st_mode) & 0o600)
-            output.write(projection)
-            output.flush()
-            os.fsync(output.fileno())
-        if identity(before) != identity(path.lstat()) or path.is_symlink():
-            raise RuntimeError('Performance boot UART changed before publication')
-        os.replace(temporary, path)
-        temporary = None
-    finally:
-        if temporary is not None:
-            temporary.unlink(missing_ok=True)
-    if path.read_bytes() != projection:
-        raise RuntimeError('Performance boot UART projection publication differs')
-    return projection
-
-
 def stage_evidence_members(out, roots):
     """Return the exact collectable members newly closed by one install or boot stage."""
     out = Path(out).resolve()
@@ -1311,9 +1101,6 @@ def main():
             if 'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean' not in (args.out/(name+'-install-harness.log')).read_text():
                 raise RuntimeError('Installed source did not cleanly power off; first-use snapshot refused')
             # performance-prescreen-stage-only-begin
-            # Validate the complete private UART, then retain only its closed
-            # install-result projection before any screening or publication.
-            publish_install_serial_projection(args.out/name/'serial-install.log', args.out)
             pre_screen([args.out/'status.json', args.out/(name+'-install-harness.log'), args.out/name],
                        observer=name == 'baseline')
             # performance-prescreen-stage-only-end
@@ -1341,11 +1128,6 @@ def main():
                 verify_toolchain(archive)
                 if not 'ARCTIC-PERFORMANCE-CONSOLE-RESTORED' in (archive/'serial-boot.log').read_text(errors='replace'):
                     raise RuntimeError('No console-to-desktop VT restoration evidence')
-                # performance-prescreen-stage-only-begin
-                # Preserve only the exact replay protocol. Ambient boot and
-                # service text is private and supplies no performance proof.
-                publish_boot_serial_projection(archive/'serial-boot.log', args.out)
-                # performance-prescreen-stage-only-end
             finally:
                 # Per-boot output is already independent. Keep logs on failure,
                 # but discard only this fresh overlay/data CD to bound disk use.

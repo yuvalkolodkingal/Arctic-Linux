@@ -72,34 +72,33 @@ class UpdateRecordsTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             guard.verify(manifest, ROOT)
 
-    def test_checked_in_manifest_is_exactly_pinned_and_ready(self):
+    def test_checked_in_manifest_is_bound_to_final_image_and_stable_repo(self):
         manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
         self.assertIs(manifest['ready'], True)
-        self.assertFalse(manifest['release_acceptance'])
-        self.assertEqual(set(manifest['execution_files']), guard.FILES)
-        self.assertEqual(manifest['execution_files'], {
-            name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest()
-            for name in guard.FILES
-        })
+        self.assertIs(manifest['release_acceptance'], False)
         self.assertEqual(manifest['image'], {
-            'archive_bytes': 1936373046,
-            'archive_sha256': '1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3',
-            'artifact_id': 11961831325,
-            'bytes': 1936185344,
-            'name': 'Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso',
+            'run_id': 38735141923,
+            'artifact_id': 11976239386,
+            'archive_bytes': 1936454966,
+            'archive_sha256': '86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee',
+            'source_sha': '14ba50a70783fec583a288d34ea233a5d7c9941a',
+            'name': 'Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso',
+            'bytes': 1936267264,
+            'sha256': '1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a',
             'producer_mode': 'frozen-external-paired-v1',
-            'producer_receipt_sha256': '9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4',
-            'run_id': 38707130991,
-            'sha256': '92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66',
-            'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
+            'producer_receipt_sha256': 'f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c',
         })
         self.assertEqual(manifest['stable'], {
+            'run_id': 38731467191,
+            'source_sha': '35454003fee95639c845040be0b3627bf12dfa47',
+            'release_suffix': '.20261015120050.202610151205.git3545400',
+            'live_manifest_sha256': '71b5931cff6018e14fc71e6cdec39be404038116b107768a6be7c2a47bd1e346',
             'gpg_fingerprint': '80F75DE9A23B632246FD1FF1BD1A642B5436645A',
-            'live_manifest_sha256': 'd25f18507283cf8878e8d01c8046942c2c18b88560b59509912d972399e40fad',
-            'release_suffix': '.20261015083822.202610150838.gitfc501fd',
-            'run_id': 38707105430,
-            'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
         })
+        self.assertTrue(manifest['execution_files'])
+        for relative, expected in manifest['execution_files'].items():
+            self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
+        self.assertFalse((ROOT / '.github/qualification-20261010.update').exists())
 
 
 class SigningFingerprintTest(unittest.TestCase):

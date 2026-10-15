@@ -106,6 +106,277 @@ def controller_decode(path: Path):
         raise c.Invalid("controller PNG decode failed") from error
 
 
+def _phrases_present(text: str, phrases, *, ordered: bool) -> bool:
+    """Match reviewed OCR phrases, optionally requiring their screen order."""
+    folded = text.casefold()
+    if not ordered:
+        return all(phrase.casefold() in folded for phrase in phrases)
+    offset = 0
+    for phrase in phrases:
+        needle = phrase.casefold()
+        found = folded.find(needle, offset)
+        if found < 0:
+            return False
+        offset = found + len(needle)
+    return True
+
+
+def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
+    """Accept only a complete final OCR line for the fixed Fish prompt."""
+    if (type(text) is not str or type(account) is not str or not account
+            or type(suffixes) not in (tuple, list) or not suffixes
+            or any(type(item) is not str or not item for item in suffixes)):
+        return False
+    lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
+    accepted = {account + " " + suffix for suffix in suffixes}
+    return bool(lines) and lines[-1] in accepted
+
+
+LIVE_SURFACES = (
+    "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+    "boot-menu", "boot-progress", "live-desktop", "installer-partial",
+    "installer-error", "console-or-emergency", "other-text", "installer-welcome",
+)
+
+
+def _live_surface_class(image, text: str) -> str:
+    """Reduce a private live-boot frame to one reviewed public enum."""
+    if image.size != (1280, 800):
+        return "geometry-mismatch"
+    colors = image.resize((32, 20)).getcolors(maxcolors=640)
+    if colors is None or len(colors) < 16:
+        return "blank-output"
+    folded = text.casefold().strip()
+    if not folded:
+        return "ocr-empty"
+    welcome = ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary")
+    if _phrases_present(text, welcome, ordered=False):
+        return "installer-welcome"
+    if any(item.casefold() in folded for item in welcome):
+        return "installer-partial"
+    if (("try arctic linux" in folded and "install arctic linux" in folded)
+            or ("safe graphics mode" in folded and "install arctic linux" in folded)):
+        return "boot-menu"
+    if any(item in folded for item in (
+            "the installer isn't on this usb", "installer has stopped",
+            "installer could not start", "application problem detected")):
+        return "installer-error"
+    if any(item in folded for item in ("emergency mode", "dracut", " login:")):
+        return "console-or-emergency"
+    if "install arctic linux" in folded:
+        return "live-desktop"
+    if any(item in folded for item in ("starting arctic linux", "starting version",
+                                        "reached target", "loading linux")):
+        return "boot-progress"
+    return "other-text"
+
+
+class LiveInstallerGateTimeout(c.Invalid):
+    """The authoritative 600-second Welcome-page gate did not pass."""
+
+
+class LiveStartupDiagnostic:
+    """Bounded, privacy-safe projection of the otherwise private live startup."""
+
+    def __init__(self):
+        self.started = time.monotonic()
+        self.boot_status = "not-observed"
+        self.boot_seconds = None
+        self.selection_status = "not-sent"
+        self.selection_seconds = None
+        self.gate_status = "not-started"
+        self.gate_started = None
+        self.gate_seconds = None
+        self.samples = 0
+        self.last = "capture-error"
+        self.first = {item: None for item in LIVE_SURFACES}
+        self.probe_status = "not-run"
+        self.mode = self.session = self.installer = "unknown"
+
+    @staticmethod
+    def _seconds(start, limit):
+        return min(limit, max(0, int(time.monotonic() - start)))
+
+    def boot_observed(self):
+        self.boot_status = "observed"
+        self.boot_seconds = self._seconds(self.started, 300)
+
+    def selection_sent(self):
+        self.selection_status = "sent"
+        self.selection_seconds = self._seconds(self.started, 300)
+
+    def gate_start(self):
+        self.gate_status = "waiting"
+        self.gate_started = time.monotonic()
+
+    def observe(self, surface):
+        c.require(surface in LIVE_SURFACES, "live startup surface differs")
+        self.samples = min(301, self.samples + 1)
+        self.last = surface
+        if self.first[surface] is None:
+            self.first[surface] = self._seconds(self.gate_started, 600)
+
+    def gate_end(self, status):
+        c.require(status in ("passed", "timed-out"), "live startup gate status differs")
+        self.gate_status = status
+        self.gate_seconds = self._seconds(self.gate_started, 600)
+
+    def probe(self, status, mode="unknown", session="unknown", installer="unknown"):
+        c.require(status in ("not-run", "console-unavailable", "command-sent",
+                             "channel-unavailable", "completed"),
+                  "live startup probe status differs")
+        c.require(mode in ("unknown", "install", "other")
+                  and session in ("unknown", "running", "absent")
+                  and installer in ("unknown", "running", "absent"),
+                  "live startup probe value differs")
+        self.probe_status, self.mode = status, mode
+        self.session, self.installer = session, installer
+
+    def projection(self):
+        return {
+            "schema": "arctic-showcase-live-startup-diagnostic-v1",
+            "release_acceptance": False,
+            "boot_menu": {"status": self.boot_status,
+                          "elapsed_seconds": self.boot_seconds},
+            "selection": {"status": self.selection_status,
+                          "elapsed_seconds": self.selection_seconds},
+            "welcome_gate": {
+                "expectation": "live-installer-visible", "timeout_seconds": 600,
+                "status": self.gate_status, "elapsed_seconds": self.gate_seconds,
+                "samples": self.samples, "last_observation": self.last,
+                "first_observation_seconds": dict(self.first),
+            },
+            "post_failure_probe": {
+                "status": self.probe_status, "boot_mode": self.mode,
+                "graphical_session": self.session,
+                "installer_process": self.installer,
+            },
+        }
+
+
+INSTALLED_SHELL_SURFACES = (
+    "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+    "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
+    "suffix-only", "login-or-password", "other-text",
+)
+
+
+def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> str:
+    """Reduce a private installed-console frame to one reviewed public enum."""
+    if image.size != (1280, 800):
+        return "geometry-mismatch"
+    colors = image.resize((32, 20)).getcolors(maxcolors=640)
+    if colors is None or len(colors) < 16:
+        return "blank-output"
+    folded = text.casefold().strip()
+    if not folded:
+        return "ocr-empty"
+    if _fixed_fish_prompt_present(text, account, suffixes):
+        return "prompt-exact"
+    lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
+    accepted = {account + " " + suffix for suffix in suffixes}
+    if any(line in accepted for line in lines):
+        return "prompt-not-final"
+    if "arctic linux" in folded and "fish 4.6" in folded:
+        return "fetch-greeting"
+    if account.casefold() in folded:
+        return "account-only"
+    if any(line.endswith(tuple(suffixes)) for line in lines):
+        return "suffix-only"
+    if "login:" in folded or "password:" in folded:
+        return "login-or-password"
+    return "other-text"
+
+
+class InstalledShellReadyTimeout(c.Invalid):
+    """The authoritative 90-second installed Fish prompt gate did not pass."""
+
+
+class InstalledStartupDiagnostic:
+    """Bounded, privacy-safe projection of installed login and Fish readiness."""
+
+    def __init__(self):
+        self.started = None
+        self.login_status = "not-observed"
+        self.login_seconds = None
+        self.authentication = "not-sent"
+        self.fetch_status = "not-observed"
+        self.fetch_seconds = None
+        self.dismissal = "not-sent"
+        self.gate_status = "not-started"
+        self.gate_started = None
+        self.gate_seconds = None
+        self.samples = 0
+        self.last = "capture-error"
+        self.first = {item: None for item in INSTALLED_SHELL_SURFACES}
+        self.interrupt_status = "not-run"
+
+    @staticmethod
+    def _seconds(start, limit):
+        return min(limit, max(0, int(time.monotonic() - start)))
+
+    def start(self):
+        c.require(self.started is None, "installed startup diagnostic was restarted")
+        self.started = time.monotonic()
+
+    def login_observed(self):
+        self.login_status = "observed"
+        self.login_seconds = self._seconds(self.started, 900)
+
+    def authentication_sent(self):
+        self.authentication = "sent"
+
+    def fetch_observed(self):
+        self.fetch_status = "observed"
+        self.fetch_seconds = self._seconds(self.started, 1035)
+
+    def dismissal_sent(self):
+        self.dismissal = "sent"
+
+    def gate_start(self):
+        self.gate_status = "waiting"
+        self.gate_started = time.monotonic()
+
+    def observe(self, surface):
+        c.require(surface in INSTALLED_SHELL_SURFACES,
+                  "installed startup surface differs")
+        self.samples = min(46, self.samples + 1)
+        self.last = surface
+        if self.first[surface] is None:
+            self.first[surface] = self._seconds(self.gate_started, 90)
+
+    def gate_end(self, status):
+        c.require(status in ("passed", "timed-out"),
+                  "installed startup gate status differs")
+        self.gate_status = status
+        self.gate_seconds = self._seconds(self.gate_started, 90)
+
+    def interrupt(self, status):
+        c.require(status in ("not-run", "sent-no-prompt", "recovered-prompt",
+                             "controller-unavailable"),
+                  "installed startup interrupt status differs")
+        self.interrupt_status = status
+
+    def projection(self):
+        return {
+            "schema": "arctic-showcase-installed-startup-diagnostic-v1",
+            "release_acceptance": False,
+            "login": {"status": self.login_status,
+                      "elapsed_seconds": self.login_seconds},
+            "authentication": self.authentication,
+            "fetch": {"status": self.fetch_status,
+                      "elapsed_seconds": self.fetch_seconds},
+            "dismissal": self.dismissal,
+            "shell_ready_gate": {
+                "expectation": "installed-shell-ready", "timeout_seconds": 90,
+                "status": self.gate_status, "elapsed_seconds": self.gate_seconds,
+                "samples": self.samples, "last_observation": self.last,
+                "first_observation_seconds": dict(self.first),
+            },
+            "post_failure_interrupt": self.interrupt_status,
+        }
+
+
 class Controller:
     """Finite host state machine. Guest JSON and messages never choose actions."""
 
@@ -119,7 +390,13 @@ class Controller:
         "cd $d; exec python3 unattended.py live-install --timeout 5400'"
     )
     INSTALLED_COMMAND = (
-        "sudo sh -c 'set -eu; d=/run/user/1000/arctic-showcase-tooling; install -d -m 0700 -o 1000 -g 1000 $d; "
+        # Emit a fixed public marker only after the shell executes the command,
+        # immediately before sudo's password prompt.  The typed bytes do not
+        # contain the marker, so echoed input cannot satisfy the host OCR gate.
+        # -k also makes a cached credential unable to skip this proof.
+        "printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127\\103\\101\\123\\105"
+        "\\055\\101\\125\\124\\110\\055\\122\\105\\101\\104\\131\\072\\040'; exec sudo -k sh -c "
+        "'set -eu; d=/run/user/1000/arctic-showcase-tooling; install -d -m 0700 -o 1000 -g 1000 $d; "
         "IFS= read -r line </dev/virtio-ports/org.arctic.showcase.capture; "
         "case \"$line\" in \"ARCTIC-SHOWCASE-TOOLING-V1 \"*) ;; *) exit 1;; esac; "
         "printf %s \"${line#ARCTIC-SHOWCASE-TOOLING-V1 }\" | base64 -d | gzip -d | tar -x -C $d; "
@@ -131,6 +408,13 @@ class Controller:
     SHELL_PROOF = ("printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
                    "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
                    "\\105\\101\\104\\131\\n'")
+    LIVE_STARTUP_PROBE = (
+        "m=other; grep -qw arctic.mode=install /proc/cmdline && m=install; "
+        "s=absent; pgrep -x mango >/dev/null 2>&1 && s=running; "
+        "i=absent; pgrep -u $(id -u) -f 'quickshell.* [-]p /usr/share/arctic/installer-ui' "
+        ">/dev/null 2>&1 && i=running; printf 'ARCTIC-SHOWCASE-LIVE-STARTUP-V1 %s %s %s\\n' "
+        "$m $s $i >/dev/virtio-ports/org.arctic.showcase.capture"
+    )
 
     def __init__(self, qmp, runtime: Path, ocr, private_fragments, tooling_sha256: str):
         c.require(tooling_sha256 and c.fullmatch(c.HEX64, tooling_sha256),
@@ -142,6 +426,8 @@ class Controller:
         self.tooling_sha256 = tooling_sha256
         self.events = []
         self.counter = 0
+        self.live_startup = LiveStartupDiagnostic()
+        self.installed_startup = InstalledStartupDiagnostic()
 
     def record(self, stage, kind, detail):
         c.require(type(stage) is str and re.fullmatch(r"[a-z0-9-]{1,64}", stage),
@@ -202,17 +488,32 @@ class Controller:
         return path, info, image, text
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
-                    visible=False, retain=False, exact_output=False):
+                    visible=False, retain=False, exact_output=False, ordered=False,
+                    prompt_contract=None):
+        startup_gate = expectation == "live-installer-visible"
+        installed_gate = expectation == "installed-shell-ready"
+        if startup_gate:
+            self.live_startup.gate_start()
+        if installed_gate:
+            self.installed_startup.gate_start()
         deadline = time.monotonic() + seconds
         last = None
         while time.monotonic() < deadline:
             path = None
             try:
                 path, info, image, text = self._shot(expectation)
-                folded = text.casefold()
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
-                if ((not phrases or all(phrase.casefold() in folded for phrase in phrases))
+                if startup_gate:
+                    self.live_startup.observe(_live_surface_class(image, text))
+                if installed_gate:
+                    account, suffixes = prompt_contract
+                    self.installed_startup.observe(
+                        _installed_shell_surface_class(image, text, account, suffixes))
+                prompt_ok = (prompt_contract is None
+                             or _fixed_fish_prompt_present(text, *prompt_contract))
+                if ((not phrases or _phrases_present(text, phrases, ordered=ordered))
+                        and prompt_ok
                         and (not exact_output or image.size == (1280, 800))
                         and (not visible or nonblank)):
                     detail = {"bytes": info.st_size, "sha256": c.sha256(path),
@@ -220,6 +521,10 @@ class Controller:
                               "expectation": expectation, "width": image.width,
                               "height": image.height}
                     self.record(stage, "screen", detail)
+                    if startup_gate:
+                        self.live_startup.gate_end("passed")
+                    if installed_gate:
+                        self.installed_startup.gate_end("passed")
                     kept = path if retain else None
                     if retain:
                         path = None
@@ -230,11 +535,25 @@ class Controller:
                 last = "screen expectation absent"
             except (c.Invalid, OSError) as error:
                 last = str(error)
+                if startup_gate:
+                    self.live_startup.observe("capture-error")
+                if installed_gate:
+                    self.installed_startup.observe("capture-error")
             finally:
                 if path is not None and path.exists():
                     path.unlink(missing_ok=True)
             time.sleep(2)
-        raise c.Invalid(last or "controller screen timed out")
+        # Expectation is a reviewed public enum.  Do not surface OCR text or a
+        # decoder detail in Actions logs when private screenshots are removed.
+        if startup_gate:
+            self.live_startup.gate_end("timed-out")
+            raise LiveInstallerGateTimeout(
+                f"controller screen expectation {expectation} absent")
+        if installed_gate:
+            self.installed_startup.gate_end("timed-out")
+            raise InstalledShellReadyTimeout(
+                f"controller screen expectation {expectation} absent")
+        raise c.Invalid(f"controller screen expectation {expectation} absent")
 
     def pointer_click(self, stage: str, x: int, y: int):
         c.require(0 <= x < 1280 and 0 <= y < 800, "controller pointer is outside output")
@@ -299,9 +618,17 @@ class Controller:
 
     def boot_live_and_start(self):
         self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
+        self.live_startup.boot_observed()
         self.press("live-boot", "home", "down", "ret")
-        self.wait_screen("live-boot", "live-installer-visible", ("Install", "Arctic"), seconds=600,
-                         visible=True)
+        self.live_startup.selection_sent()
+        # "Install Arctic Linux" is also present in the boot menu.  Requiring
+        # that text here let the just-selected GRUB frame satisfy this gate and
+        # moved to VT6 before the graphical installer had actually started.
+        # Use copy unique to the real Welcome page so the following VT switch
+        # cannot race live-session's one-shot installer launch.
+        self.wait_screen("live-boot", "live-installer-visible",
+                         ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
+                         seconds=600, visible=True, exact_output=True)
         self.press("live-console", "ctrl-alt-f6")
         self.wait_screen("live-console", "live-console-login", ("login",), seconds=60)
         self.type_text("live-console", "live-username", "liveuser")
@@ -312,12 +639,39 @@ class Controller:
         self.press("live-install", "ret")
         self.record("live-install", "command", {"id": "live-install"})
 
+    def start_live_failure_probe(self):
+        """Run a fixed console probe only after the Welcome gate has failed."""
+        c.require(self.live_startup.gate_status == "timed-out",
+                  "live startup probe preceded authoritative gate failure")
+        self.press("live-diagnostic", "ctrl-alt-f6")
+        try:
+            self.wait_screen("live-diagnostic", "live-diagnostic-login", ("login",), seconds=45)
+        except c.Invalid:
+            self.live_startup.probe("console-unavailable")
+            return False
+        self.type_text("live-diagnostic", "live-diagnostic-username", "liveuser")
+        self.press("live-diagnostic", "ret")
+        time.sleep(2)
+        self.press("live-diagnostic", "ret")
+        self.type_text("live-diagnostic", "live-startup-probe", self.LIVE_STARTUP_PROBE)
+        self.press("live-diagnostic", "ret")
+        self.live_startup.probe("command-sent")
+        return True
+
+    def accept_live_failure_probe(self, line):
+        match = re.fullmatch(
+            r"ARCTIC-SHOWCASE-LIVE-STARTUP-V1 (install|other) (running|absent) (running|absent)",
+            line)
+        c.require(match is not None, "live startup diagnostic response differs")
+        self.live_startup.probe("completed", *match.groups())
+
     def verify_install_complete(self):
         self.wait_screen("install-complete", "installer-done",
                          ("Arctic Linux is ready", "Remove the USB stick"), seconds=5400,
                          exact_output=True)
 
     def boot_installed_and_start(self):
+        self.installed_startup.start()
         # A generic nonblank frame can be firmware or Plymouth. Retry the fixed
         # VT chord until OCR sees the installed system's real login prompt.
         deadline = time.monotonic() + 900
@@ -326,22 +680,71 @@ class Controller:
             self.press("installed-console", "ctrl-alt-f6")
             try:
                 self.wait_screen("installed-boot", "installed-login-ready", ("login",), seconds=10)
+                self.installed_startup.login_observed()
                 break
             except c.Invalid:
                 time.sleep(3)
         self.type_text("installed-console", "installed-username", c.CONTROLLER["account"]["username"])
         self.press("installed-console", "ret")
+        self.installed_startup.authentication_sent()
         self.wait_screen("installed-console", "installed-password-prompt", ("Password",), seconds=45)
         self.type_secret("installed-console")
         self.press("installed-console", "ret")
-        time.sleep(2)
+        # Fish starts the packaged animated arctic-fetch before presenting its
+        # prompt.  A command sent during that animation can be consumed as the
+        # keypress that dismisses it.  First prove the exact installed greeting,
+        # then send one Ctrl-L.  The exact candidate's renderer deliberately
+        # leaves a single ordinary byte queued for Fish; Ctrl-L cannot submit a
+        # command and makes Fish clear the retained greeting before redrawing
+        # its prompt.  If the renderer has already returned, the same Fish
+        # binding only clears and redraws.  A later bounded exact-frame gate,
+        # rather than elapsed time, proves that its input loop and terminal
+        # restoration have completed.
+        self.wait_screen("installed-console", "installed-fetch-greeting",
+                         ("Arctic Linux", "fish 4.6"), seconds=90)
+        self.installed_startup.fetch_observed()
+        self.press("installed-console", "ctrl-l")
+        self.installed_startup.dismissal_sent()
+        # The fetch renderer can remain visible after it has accepted the
+        # dismissal key.  Do not type even the nonsecret proof command until a
+        # later exact frame contains the fixed installed account's real Fish
+        # prompt.  This makes readiness a pixel observation instead of a fixed
+        # settling delay.
+        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
+                        + c.CONTROLLER["account"]["hostname"])
+        prompt_contract = c.CONTROLLER["account"]["prompt"]
+        installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
+        try:
+            self.wait_screen("installed-console", "installed-shell-ready",
+                             (), seconds=90, exact_output=True,
+                             prompt_contract=installed_prompt)
+        except InstalledShellReadyTimeout as error:
+            try:
+                self.press("installed-diagnostic", "ctrl-c")
+            except (c.Invalid, OSError):
+                self.installed_startup.interrupt("controller-unavailable")
+                raise error
+            try:
+                self.wait_screen("installed-diagnostic", "installed-diagnostic-shell-ready",
+                                 (), seconds=30, exact_output=True,
+                                 prompt_contract=installed_prompt)
+                self.installed_startup.interrupt("recovered-prompt")
+            except (c.Invalid, OSError):
+                self.installed_startup.interrupt("sent-no-prompt")
+            raise error
         self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
         self.press("installed-console", "ret")
-        self.wait_screen("installed-console", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",),
-                         seconds=90)
+        # The executed marker can reach the VT before Fish has drawn its next
+        # prompt and resumed its line editor.  Do not type the longer sudo
+        # launcher into that interval: require the fixed account's real prompt
+        # in the same exact output after the marker.
+        self.wait_screen("installed-console", "installed-shell",
+                         ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
+                         seconds=90, exact_output=True, ordered=True)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
         self.press("installed-scenes", "ret")
-        self.wait_screen("installed-console", "installed-sudo-password", ("password",), seconds=45)
+        self.wait_screen("installed-console", "installed-sudo-password",
+                         ("ARCTIC-SHOWCASE-AUTH-READY", "password"), seconds=45)
         self.type_secret("installed-console")
         self.press("installed-console", "ret")
         self.record("installed-scenes", "command", {"id": "installed-scenes"})

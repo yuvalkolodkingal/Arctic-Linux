@@ -11,6 +11,8 @@ DRIVER = (ROOT / 'tools/test-install.sh').read_text().split("DRIVER <<'PY' || tr
 
 
 def functions(names, env):
+    if names & {'dictation_indicator_poll', 'dictation_recovery_poll'}:
+        names = names | {'dictation_serial_snapshot'}
     nodes = [node for node in ast.parse(DRIVER).body if isinstance(node, ast.FunctionDef) and node.name in names]
     exec(compile(ast.Module(body=nodes, type_ignores=[]), '<actual VM harness>', 'exec'), env)
     return env

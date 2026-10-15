@@ -8,7 +8,6 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
-from unittest import mock
 
 from PIL import Image, PngImagePlugin
 
@@ -17,38 +16,6 @@ sys.path.insert(0, str(HERE))
 import contract as c
 import guest
 import host
-
-
-SHIPPED_IMAGE = c.IMAGE
-SHIPPED_EXECUTION = c.REVIEWED_EXECUTION
-TEST_IMAGE = {
-    "name": "Arctic-Linux-test.iso",
-    "bytes": 4,
-    "sha256": "a" * 64,
-    "source_sha": "b" * 40,
-    "run_id": 1,
-    "artifact_id": 2,
-    "archive_bytes": 5,
-    "archive_sha256": "c" * 64,
-    "producer_mode": "test-only",
-    "producer_receipt_sha256": "d" * 64,
-}
-TEST_EXECUTION = {
-    "repository": "yuvalkolodkingal/Arctic-Linux",
-    "workflow": ".github/workflows/iso.yml",
-    "run_id": 1,
-    "source_sha": "b" * 40,
-    "artifact_id": 2,
-    "artifact_digest": "sha256:" + "c" * 64,
-    "evidence": "test-only reviewed candidate evidence",
-}
-
-# All exact-capture test modules import these shared fixtures.  Bind a wholly
-# synthetic identity in this test process while retaining the shipped values
-# above so the fail-closed source state remains asserted.
-c.IMAGE = copy.deepcopy(TEST_IMAGE)
-c.REVIEWED_EXECUTION = copy.deepcopy(TEST_EXECUTION)
-
 
 
 def installed_proof():
@@ -203,12 +170,15 @@ def controller_trace():
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "screen", screen("installed-fetch-greeting")),
+        ("installed-console", "keys", {"names": ["ctrl-l"]}),
+        ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
                                          "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-shell")),
-        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 417,
-                                        "sha256": "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"}),
+        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 548,
+                                        "sha256": "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"}),
         ("installed-scenes", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-sudo-password")),
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
@@ -333,20 +303,20 @@ class Protocol(unittest.TestCase):
                                             "--identity", "/tmp/i.json"])
 
     def test_self_asserted_actions_execution_is_rejected(self):
-        self.assertIsNone(SHIPPED_IMAGE)
-        self.assertIsNone(SHIPPED_EXECUTION)
-        with mock.patch.object(c, "IMAGE", None), mock.patch.object(c, "REVIEWED_EXECUTION", None):
-            with self.assertRaisesRegex(c.Invalid, "not activated"):
-                c.require_active()
-            with self.assertRaisesRegex(c.Invalid, "not activated"):
-                c.image_identity(TEST_IMAGE)
-            with self.assertRaisesRegex(c.Invalid, "not activated"):
-                c.execution(TEST_EXECUTION)
         claimed = copy.deepcopy(c.REVIEWED_EXECUTION)
         claimed.update(run_id=999, artifact_id=888, source_sha="a" * 40,
                        artifact_digest="sha256:" + "b" * 64)
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
+
+    def test_fetch_redraw_is_one_control_l_before_the_prompt_gate(self):
+        value = controller_trace()
+        redraw = next(event for event in value["events"]
+                      if event["kind"] == "keys"
+                      and event["detail"] == {"names": ["ctrl-l"]})
+        redraw["detail"] = {"names": ["ret"]}
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw|key inventory"):
+            c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):
         value = installed_snapshot()

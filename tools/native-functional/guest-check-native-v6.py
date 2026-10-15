@@ -459,6 +459,27 @@ def visual_reference_frame():
                  for channel in palette[(y//30)*4+x//40])
 
 
+def visual_reference_stream():
+    """Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    """
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+
+
 def visual_capture_geometry(client, monitors):
     """Validate an observed focused client and scale1 SDR monitor before cropping."""
     require(isinstance(client,dict) and client.get('is_focused') is True
@@ -1799,7 +1820,7 @@ class Smoke:
                     scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
-        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
+        source=self.write('visual-reference-input.raw',visual_reference_stream())
         fixture=self.root/'visual-reference.mkv'
         expected=self.root/'visual-reference-frame.rgb'
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
@@ -1934,7 +1955,27 @@ class Smoke:
             if delta<0: delta+=2
             return observed if delta>=minimum_post_geometry_advance else None
         advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
+        # The pulsed fixture above proves post-fullscreen presentation work, but
+        # capturing while the software GL path is replacing that texture can
+        # expose a transient tiled buffer rather than one complete frame. Pause
+        # this same proved player, require the clock to settle, and keep the
+        # sole screenshot/oracle and every acceptance threshold unchanged.
+        mpv_pause_reference(ipc,player['pid'],self.uid)
+        def paused_reference():
+            value=mpv_property(ipc,'pause',player['pid'],self.uid)
+            require(type(value) is bool, 'visual pause state is not Boolean')
+            return value
+        self.wait(paused_reference,3,'owned visual playback pause')
+        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
+                and math.isfinite(paused_time) and 0<=paused_time<=2,
+                'paused visual playback clock is invalid')
         time.sleep(.5)
+        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
+                and math.isfinite(settled_time) and 0<=settled_time<=2
+                and abs(settled_time-paused_time)<=.05,
+                'paused visual playback clock did not settle')
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
         self.trace('visual-capture-before',player=player,client=client,monitors=monitors)
@@ -2011,15 +2052,17 @@ class Smoke:
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
                   playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
-                                      advanced_seconds=advanced_time,
+                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
+                                      settled_seconds=settled_time,capture_paused=True,
+                                      maximum_settled_drift_seconds=.05,
                                       minimum_advance_seconds=minimum_post_geometry_advance,
                                       anchor='after fullscreen and controls transitions'),
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
-                  product_renderer=renderer,
+                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
-                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
+                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
@@ -2446,6 +2489,42 @@ def mpv_hide_reference_controls(path, expected_pid, expected_uid):
         raise RuntimeError('reference controls IPC acknowledgement timed out')
 
 
+def mpv_pause_reference(path, expected_pid, expected_uid):
+    """Pause only the proved reference player through its owned IPC socket."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
+            'reference pause IPC identity is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'reference pause IPC path owner/type differs')
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'reference pause IPC peer differs')
+        peer.sendall(b'{"command":["set_property","pause",true],"request_id":44}\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'reference pause IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'reference pause IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'reference pause IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'reference pause IPC reply is not an object')
+                if message.get('request_id')==44:
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'reference pause IPC command failed')
+                    return
+        raise RuntimeError('reference pause IPC acknowledgement timed out')
+
+
 def mpv_property(path, key, expected_pid, expected_uid):
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
@@ -2682,7 +2761,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
+    native_source_sha = 'e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

@@ -456,11 +456,14 @@ def _failure_code(error, cleanup_failure) -> str:
     return "capture-contract-failed"
 
 
-def _write_failure_report(path: Path, phase: str, progress: list, error, cleanup_failure):
+def _write_failure_report(path: Path, phase: str, progress: list, error, cleanup_failure,
+                          live_startup, installed_startup):
     value = {"schema": "arctic-showcase-capture-failure-v1", "status": "failed",
              "release_acceptance": False, "image": dict(c.IMAGE), "host_phase": phase,
              "failure_code": _failure_code(error, cleanup_failure),
              "guest_progress": list(progress), "private_runtime_removed": True,
+             "live_startup": live_startup,
+             "installed_startup": installed_startup,
              "screens_exported": False, "logs_exported": False, "pixels_exported": False,
              "privacy": {"content": "no guest text, logs, screenshots or pixels exported",
                          "human_review": "not_applicable"}}
@@ -558,7 +561,15 @@ def host_mode(args) -> int:
                   "exact capture requires the reviewed unattended KVM controller")
         controller = automation.Controller(qmp, runtime, ocr, fragments, tooling_sha256)
         phase = "live-boot"
-        controller.boot_live_and_start()
+        try:
+            controller.boot_live_and_start()
+        except automation.LiveInstallerGateTimeout as error:
+            try:
+                if controller.start_live_failure_probe():
+                    controller.accept_live_failure_probe(lines.read(timeout=90))
+            except (c.Invalid, OSError):
+                controller.live_startup.probe("channel-unavailable")
+            raise error
         phase = "live-install"
         seal_line = _install_seal(lines, guest_progress)
         # This is an operator transition signal. Its JSON is guest-supplied
@@ -665,8 +676,13 @@ def host_mode(args) -> int:
             if failure_path is not None and safe_projection:
                 report_error = failure if failure is not None else cleanup_failure
                 try:
+                    live_startup = (controller.live_startup.projection()
+                                    if controller is not None else None)
+                    installed_startup = (controller.installed_startup.projection()
+                                         if controller is not None else None)
                     _write_failure_report(failure_path, phase, guest_progress,
-                                          report_error, cleanup_failure)
+                                          report_error, cleanup_failure, live_startup,
+                                          installed_startup)
                 except BaseException as error:
                     if failure is None:
                         failure = error

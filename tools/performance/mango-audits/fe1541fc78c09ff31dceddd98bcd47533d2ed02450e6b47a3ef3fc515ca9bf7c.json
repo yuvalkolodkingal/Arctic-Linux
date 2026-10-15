@@ -2,6 +2,8 @@
   "abi": {
     "field_chain_contract": {
       "compiled_role_evidence": {
+        "client_ext_handle_load_file_offset": 27484,
+        "client_ext_handle_store_file_offset": 275186,
         "client_surface_load_file_offsets": [
           27516,
           27575
@@ -10,6 +12,8 @@
           27511,
           27570
         ],
+        "foreign_identifier_load_file_offset": 27502,
+        "foreign_owner_store_file_offset": 275194,
         "xdg_app_id_load_file_offset": 27593,
         "xdg_toplevel_load_file_offsets": [
           27530,
@@ -60,7 +64,7 @@
     "static_profile_admitted": true
   },
   "candidate": {
-    "build_id": "20d90fa674cdea636aa58186b83eac33af0f274d",
+    "build_id": "279e666e61c0e40a15b4335301c36652af0f274d",
     "bytes": 530776,
     "elf_class": "ELF64",
     "executable_pt_load": {
@@ -72,9 +76,9 @@
     },
     "machine": "x86_64",
     "path": "/usr/bin/mango",
-    "rpm_nevra": "mangowm-0.17.3-1.preview.38616494387.1.gitda59f68.fc44.x86_64",
+    "rpm_nevra": "mangowm-0.17.3-1.preview.38707130991.1.gitfc501fd.fc44.x86_64",
     "rpmdb_file_digest_verified": true,
-    "sha256": "9a88aa4b6e9bc47ee33a876e9f922af884f6d645abf063ef56874bdd30edee65",
+    "sha256": "fe1541fc78c09ff31dceddd98bcd47533d2ed02450e6b47a3ef3fc515ca9bf7c",
     "text": {
       "bytes": 375664,
       "file_offset": 21312,
@@ -107,8 +111,8 @@
       "transcript_present": false
     },
     "size": {
-      "bounded_static_artifact_bytes": 3731612,
-      "iso_bytes": 1936222208,
+      "bounded_static_artifact_bytes": 3731615,
+      "iso_bytes": 1936185344,
       "iso_strict_limit_bytes": 2000000000,
       "preferred_limit_bytes": 1600000000,
       "preferred_limit_passed": false,
@@ -125,13 +129,14 @@
       "all three pre-insertion sites pass R14 (Client.link) as the second wl_list_insert argument",
       "common_post is reached only after one managed-list insertion and precedes focus-stack insertion"
     ],
-    "disassembly_sha256": "d33b1635632c56b7f447017e94332f0580a386fb99bfa4b38859d84f0d7010ba",
     "exact_byte_equivalent_profiles": [
       "2f1107221157f47418cfda87dd091a3bb81ecd97dc2945184d0c42de7bbd254b",
       "98582eccb610fc83282d1e64e975968aff2ddcfd5124d783a2bab78b98f681ca",
       "315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01bbb2ab",
       "f19e61512a2dbfc97b470edc7ae302fd442c1bbaa03487453935c3ae24853b28",
-      "9c44252b7651a3fac5251c93e9aa82999f1b3008b71aae9e53a81497e9168e71"
+      "9c44252b7651a3fac5251c93e9aa82999f1b3008b71aae9e53a81497e9168e71",
+      "9a88aa4b6e9bc47ee33a876e9f922af884f6d645abf063ef56874bdd30edee65",
+      "0d5fec706197207d735c0c5f640d049f334e1ea495f0005bcedfb27911afc51e"
     ],
     "file_offset": 274704,
     "inherited_cfg_audit_sha256": "dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c",
@@ -187,10 +192,13 @@
   "original_appid_getter": {
     "artifact_excerpt_sha256": "b5022d81a58c70fe43d745d3ce98df4e7cc66b8a26c31df9a60479e398ffda6d",
     "bytes": 1234,
-    "disassembly_sha256": "99c52d8432a42464ffc1fcff21fc15d77fdada1d2a43aecbead4097de44b68f1",
     "file_offset": 27392,
     "instruction_count": 246,
     "machine_paths": {
+      "foreign_identity": {
+        "handle_load_file_offset": 27484,
+        "identifier_load_file_offset": 27502
+      },
       "xdg": {
         "app_id_load_file_offset": 27593,
         "surface_load_file_offset": 27516,
@@ -208,31 +216,32 @@
     "source_symbol": "client_get_appid (inlined by build_client_json)"
   },
   "provenance": {
-    "iso_bytes": 1936222208,
-    "iso_sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
-    "mango_disassembly_sha256": "1d74eabaa68be02fe278f5fb562becd395a10194e4e197d00bdff6062a222dd3",
-    "producer_artifact_bytes": 1936409910,
-    "producer_artifact_id": 11924131449,
+    "iso_bytes": 1936185344,
+    "iso_sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
+    "mango_disassembly_sha256": "6f76a9aba8e7d42ead0ca64e8b1769ae10c0c7d88215066d6d159e0fe9303fbb",
+    "producer_artifact_bytes": 1936373046,
+    "producer_artifact_id": 11961831325,
     "producer_artifact_name": "arctic-linux-iso",
-    "producer_artifact_sha256": "78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73",
-    "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd",
+    "producer_artifact_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
     "producer_run_attempt": 1,
-    "producer_run_id": 38616494387,
-    "producer_source_sha": "da59f68a967c39205b2aa7648f3c11224247982c",
+    "producer_run_id": 38707130991,
+    "producer_source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
     "producer_workflow": ".github/workflows/iso.yml",
-    "static_artifact_bytes": 3731612,
-    "static_artifact_id": 11928747028,
+    "static_artifact_bytes": 3731615,
+    "static_artifact_id": 11962866705,
     "static_artifact_name": "unqualified-exact-image-mango-static",
-    "static_artifact_sha256": "e414c9822b9a9a4f66ea1b49e45c630f5c1386f20a8dcf6cc19f63d0805ec10c",
-    "static_execution_manifest_sha256": "6c14c74318568feb4199e9dad1f8a7261dc521c5c92531e0f28d04f0b159c687",
-    "static_execution_sha": "ddf4d4251f313fd75f8934834fb6ea1af11b76c3",
-    "static_parent_sha": "2332a3dc69b3f4a552c276d8a4da0d567c02861e",
+    "static_artifact_sha256": "95eca61a5c358dc28756293bd08da6a9fbdf5d96379d49f185e1d40488c9a24b",
+    "static_execution_manifest_sha256": "99f0e5a8e9e1a61c6b86987fe802094ac7a1188d1f87747074e7e69fce7af932",
+    "static_execution_sha": "0a1df4d9a24d8b21a0562b0bf3851feba2dffe6b",
+    "static_parent_sha": "365eebced619cb12f74ab95ed2da937d8ecea42c",
     "static_report_bytes": 47752,
-    "static_report_sha256": "223c4997489995e177d2fb0f9906af5c68ce08cf6fe08d8b5a198f66cade7580",
+    "static_report_sha256": "3320a1d0c82184e0337fdbb1512f3eebc04bf3f166ea33698bc6d73c94fe243e",
+    "static_report_status": "static_evidence_complete_pending_independent_review",
     "static_run_attempt": 1,
-    "static_run_id": 38637532023,
+    "static_run_id": 38715312294,
     "static_workflow": ".github/workflows/inspect-exact-image-mango-20261010.yml",
-    "wlroots_disassembly_sha256": "85dd74d94ba05c3ad1cf159c9980d6ee7ed144e5e28faf82d34ef00ec9fb0c39"
+    "wlroots_disassembly_sha256": "8cec78a9234d6e882e60fdf101390e45b1e238334f9ab6f5aa25b71edb000f56"
   },
   "runtime_requirements": [
     "whole executable, complete mapping function, role getter and wlroots library hashes must match this record",

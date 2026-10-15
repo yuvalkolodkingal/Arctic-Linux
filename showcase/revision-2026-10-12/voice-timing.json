@@ -1,7 +1,7 @@
 {
   "status": "direct_voxtype_1_1_1_master_aligned_capture_listening_pending",
   "source_commit": null,
-  "source_branch": "codex/prepare-showcase-video-121-20261015",
+  "source_branch": "codex/showcase-river-production",
   "voice": {
     "provider": "ElevenLabs",
     "name": "River - Relaxed, Neutral, Informative",

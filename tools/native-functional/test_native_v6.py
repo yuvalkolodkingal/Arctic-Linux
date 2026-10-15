@@ -356,8 +356,9 @@ class NewControls(unittest.TestCase):
                     grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_values=iter((0,.2,.8,.8))
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
             def prop(path,key,*args):
+                if key=='pause':return next(pause_values)
                 if key!='time-pos':return props[key]
                 return next(time_values)
             oracle_control=(patch.object(N,'evaluate_reference_rgb',side_effect=ValueError('synthetic oracle failure'))
@@ -368,7 +369,8 @@ class NewControls(unittest.TestCase):
                 # shared stdlib module also records unrelated background sleeps.
                 sleep=Mock()
                 tested_time=SimpleNamespace(sleep=sleep,monotonic=N.time.monotonic)
-                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N,'time',tested_time):
+                with oracle_control,patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'time',tested_time):
                     if case=='positive':
                         value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
                     else:
@@ -381,13 +383,16 @@ class NewControls(unittest.TestCase):
             self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
+            self.assertEqual(receipt['fixture_cadence'],N.visual_reference_cadence())
             self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]
             self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
             self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
-                advanced_seconds=.8,minimum_advance_seconds=.5,
+                advanced_seconds=.8,paused_seconds=.8,settled_seconds=.8,capture_paused=True,
+                maximum_settled_drift_seconds=.05,minimum_advance_seconds=.5,
                 anchor='after fullscreen and controls transitions'))
+            pause.assert_called_once_with(root/'visual-reference-ipc.sock',proof['pid'],smoke.uid)
             self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
             self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
             self.assertFalse((root/'celluloid-reference-player-2.png').exists())

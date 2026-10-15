@@ -55,6 +55,22 @@ class UnattendedController(unittest.TestCase):
                                   "characters": 38})
         self.assertNotIn(automation.Controller.PASSWORD, repr(self.controller.events))
 
+    def test_control_l_redraw_has_no_return_or_text_byte(self):
+        self.controller.press("installed-console", "ctrl-l", gap=0)
+        self.assertEqual(len(self.qmp.commands), 1)
+        name, arguments = self.qmp.commands[0]
+        self.assertEqual(name, "input-send-event")
+        events = arguments["events"]
+        self.assertEqual([event["data"]["key"]["data"] for event in events],
+                         ["ctrl", "l", "l", "ctrl"])
+        self.assertEqual([event["data"]["down"] for event in events],
+                         [True, True, False, False])
+        self.assertNotIn("ret", repr(events))
+        self.assertEqual(self.controller.events, [{
+            "index": 0, "stage": "installed-console", "kind": "keys",
+            "detail": {"names": ["ctrl-l"]},
+        }])
+
     def test_screen_gate_records_host_qmp_pixels_and_deletes_probe(self):
         self.controller.ocr = lambda path: "Arctic Linux is ready Remove the USB stick"
         path, _ = self.controller.wait_screen("install-complete", "installer-done",
@@ -69,7 +85,8 @@ class UnattendedController(unittest.TestCase):
     def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
         self.controller.ocr = lambda path: "wrong screen"
         with mock.patch.object(automation.time, "sleep"):
-            with self.assertRaises(c.Invalid):
+            with self.assertRaisesRegex(
+                    c.Invalid, "controller screen expectation whats-new-layer absent"):
                 self.controller.wait_screen("updates", "whats-new-layer", ("Local dictation",),
                                             seconds=0)
         self.controller.ocr = lambda path: "/home/private-user/secret"
@@ -121,9 +138,344 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
                          "first-login-dismissed")
 
+    def test_live_boot_proves_the_real_installer_before_switching_vt(self):
+        operations = []
+
+        def wait(stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", stage, expectation, phrases, kwargs))
+            return None, ""
+
+        def press(stage, *names, **_kwargs):
+            operations.append(("keys", stage, names))
+
+        def text(stage, command_id, _value, **_kwargs):
+            operations.append(("text", stage, command_id))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_live_and_start()
+
+        installer = operations[2]
+        self.assertEqual(installer[:4], (
+            "screen", "live-boot", "live-installer-visible",
+            ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
+        ))
+        self.assertEqual(installer[4], {
+            "seconds": 600, "visible": True, "exact_output": True,
+        })
+        self.assertFalse(all(phrase.casefold() in "Try Arctic Linux Install Arctic Linux".casefold()
+                             for phrase in installer[3]))
+        self.assertEqual(operations[3], ("keys", "live-console", ("ctrl-alt-f6",)))
+
+    def test_live_startup_surface_projection_uses_only_fixed_enums(self):
+        image = Image.new("RGB", (1280, 800))
+        # At least sixteen sampled colours makes this a visible frame under the
+        # exact same rule as the authoritative gate.
+        pixels = image.load()
+        for y in range(800):
+            for x in range(1280):
+                pixels[x, y] = ((x // 40) % 32, (y // 40) % 20, (x + y) % 251)
+        cases = {
+            "Try Arctic Linux\nInstall Arctic Linux\nSafe graphics mode": "boot-menu",
+            "Starting Arctic Linux": "boot-progress",
+            "Install Arctic Linux": "live-desktop",
+            "Welcome to Arctic Linux\nKeyboard": "installer-partial",
+            "The installer isn't on this USB": "installer-error",
+            "You are in emergency mode": "console-or-emergency",
+            "unrecognized private-looking words": "other-text",
+            "": "ocr-empty",
+            "Welcome to Arctic Linux\nKeyboard\nTime zone\nSummary": "installer-welcome",
+        }
+        for text, expected in cases.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(automation._live_surface_class(image, text), expected)
+        self.assertEqual(automation._live_surface_class(
+            Image.new("RGB", (1280, 800), "black"), "private"), "blank-output")
+        self.assertEqual(automation._live_surface_class(
+            Image.new("RGB", (1024, 768), "black"), "private"), "geometry-mismatch")
+
+    def test_live_startup_failure_probe_accepts_only_fixed_result(self):
+        for character in automation.Controller.LIVE_STARTUP_PROBE:
+            automation.chord_for(character)
+        self.assertLessEqual(len(automation.Controller.LIVE_STARTUP_PROBE), 4096)
+        self.controller.live_startup.boot_observed()
+        self.controller.live_startup.selection_sent()
+        self.controller.live_startup.gate_started = automation.time.monotonic()
+        self.controller.live_startup.gate_end("timed-out")
+        self.controller.accept_live_failure_probe(
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 install running absent")
+        value = self.controller.live_startup.projection()
+        c.live_startup_diagnostic(value)
+        self.assertEqual(value["post_failure_probe"], {
+            "status": "completed", "boot_mode": "install",
+            "graphical_session": "running", "installer_process": "absent",
+        })
+        self.assertNotIn("ARCTIC-SHOWCASE-LIVE-STARTUP-V1", repr(value))
+        for forged in (
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 private running absent",
+            "ARCTIC-SHOWCASE-LIVE-STARTUP-V1 install running absent private",
+            "private guest output",
+        ):
+            with self.subTest(forged=forged), self.assertRaises(c.Invalid):
+                self.controller.accept_live_failure_probe(forged)
+
+    def test_live_startup_diagnostic_is_bounded_and_rejects_flexible_content(self):
+        diagnostic = automation.LiveStartupDiagnostic()
+        diagnostic.boot_observed()
+        diagnostic.selection_sent()
+        diagnostic.gate_start()
+        diagnostic.observe("boot-menu")
+        diagnostic.observe("ocr-empty")
+        diagnostic.gate_end("timed-out")
+        diagnostic.probe("channel-unavailable")
+        value = diagnostic.projection()
+        c.live_startup_diagnostic(value)
+        self.assertEqual(value["welcome_gate"]["timeout_seconds"], 600)
+        self.assertLessEqual(value["welcome_gate"]["samples"], 301)
+        forged = copy.deepcopy(value)
+        forged["welcome_gate"]["private_ocr"] = "do not export"
+        with self.assertRaises(c.Invalid):
+            c.live_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["welcome_gate"]["last_observation"] = "guest-selected"
+        with self.assertRaises(c.Invalid):
+            c.live_startup_diagnostic(forged)
+
+    def test_installed_shell_surface_projection_uses_only_fixed_enums(self):
+        image = Image.new("RGB", (1280, 800))
+        pixels = image.load()
+        for y in range(800):
+            for x in range(1280):
+                pixels[x, y] = ((x // 40) % 32, (y // 40) % 20, (x + y) % 251)
+        account = "arcticshowcase@arctic-showcase"
+        suffixes = ("~>", "~ >")
+        cases = {
+            account + " ~>": "prompt-exact",
+            account + " ~>\ntrailing fetch row": "prompt-not-final",
+            "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
+            account: "account-only",
+            "~ >": "suffix-only",
+            "arctic-showcase login:": "login-or-password",
+            "unrecognized private-looking words": "other-text",
+            "": "ocr-empty",
+        }
+        for text, expected in cases.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(automation._installed_shell_surface_class(
+                    image, text, account, suffixes), expected)
+        self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1280, 800), "black"), "private", account, suffixes),
+            "blank-output")
+        self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
+            "geometry-mismatch")
+
+    def test_installed_startup_diagnostic_is_bounded_and_rejects_private_content(self):
+        diagnostic = automation.InstalledStartupDiagnostic()
+        diagnostic.start()
+        diagnostic.login_observed()
+        diagnostic.authentication_sent()
+        diagnostic.fetch_observed()
+        diagnostic.dismissal_sent()
+        diagnostic.gate_start()
+        diagnostic.observe("fetch-greeting")
+        diagnostic.observe("account-only")
+        diagnostic.gate_end("timed-out")
+        diagnostic.interrupt("sent-no-prompt")
+        value = diagnostic.projection()
+        c.installed_startup_diagnostic(value)
+        self.assertEqual(value["shell_ready_gate"]["timeout_seconds"], 90)
+        self.assertLessEqual(value["shell_ready_gate"]["samples"], 46)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["private_ocr"] = "do not export"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["post_failure_interrupt"] = "guest-selected"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+
+    def test_installed_prompt_timeout_interrupts_only_after_failure_and_never_types_proof(self):
+        operations = []
+
+        def wait(_stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", expectation, phrases, kwargs))
+            if expectation == "installed-shell-ready":
+                raise automation.InstalledShellReadyTimeout(
+                    "controller screen expectation installed-shell-ready absent")
+            return None, ""
+
+        def press(_stage, *names, **_kwargs):
+            operations.append(("keys", names))
+
+        def text(_stage, command_id, _value, **_kwargs):
+            operations.append(("text", command_id))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
+                automation.InstalledShellReadyTimeout, "installed-shell-ready absent"):
+            self.controller.boot_installed_and_start()
+        timeout_at = operations.index((
+            "screen", "installed-shell-ready", (),
+            {"seconds": 90, "exact_output": True,
+             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >"))},
+        ))
+        self.assertEqual(operations[timeout_at + 1], ("keys", ("ctrl-c",)))
+        self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
+        self.assertNotIn(("text", "installed-shell-proof"), operations)
+        self.assertEqual(self.controller.installed_startup.interrupt_status,
+                         "recovered-prompt")
+
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
+
+    def test_shell_proof_waits_for_fixed_fish_prompt_before_proof_and_sudo_launcher(self):
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+
+        ready = [call for call in self.controller.wait_screen.call_args_list
+                 if call.args[1] == "installed-shell-ready"]
+        shell = [call for call in self.controller.wait_screen.call_args_list
+                 if call.args[1] == "installed-shell"]
+        self.assertEqual((len(ready), len(shell)), (1, 1))
+        prompt = (c.CONTROLLER["account"]["username"] + "@"
+                  + c.CONTROLLER["account"]["hostname"])
+        self.assertEqual(ready[0].args[2], ())
+        self.assertEqual(ready[0].kwargs,
+                         {"seconds": 90, "exact_output": True,
+                          "prompt_contract": (prompt, ("~>", "~ >"))})
+        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
+        self.assertEqual(shell[0].kwargs,
+                         {"seconds": 90, "exact_output": True, "ordered": True})
+        self.assertFalse(all(phrase.casefold()
+                             in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
+                             for phrase in shell[0].args[2]))
+
+    def test_preproof_prompt_gate_rejects_realistic_full_fetch_greeting(self):
+        account = "arcticshowcase@arctic-showcase"
+        greeting = """\
+arcticshowcase@arctic-showcase
+------------------------------
+os       Arctic Linux 1.2.1
+base     Fedora 44
+kernel   Linux 7.2.10
+wm       Mango
+shell    fish 4.6
+term     linux
+theme    Polar night
+uptime   2 mins
+"""
+        suffixes = ("~>", "~ >")
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting, account, suffixes))
+        # Account text and a valid suffix on different rows cannot mimic one
+        # complete final prompt line.
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting + account + "\n~ >\n", account, suffixes))
+        # A prompt-like row inside a still-active greeting is not the final OCR
+        # row and therefore cannot authorize input.
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting + account + " ~>\nos       Arctic Linux 1.2.1\n", account, suffixes))
+        for forged in ("other@arctic-showcase ~>", account + "~>",
+                       account + " ~>>", account + " ~> command",
+                       "prefix " + account + " ~>"):
+            with self.subTest(forged=forged):
+                self.assertFalse(automation._fixed_fish_prompt_present(
+                    forged + "\n", account, suffixes))
+        for spelling in suffixes:
+            with self.subTest(spelling=spelling):
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    greeting + "\n" + account + " " + spelling + "\n",
+                    account, suffixes))
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    account + " " + spelling + " _|\n", account, suffixes))
+
+    def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
+        marker = "ARCTIC-SHOWCASE-SHELL-READY"
+        prompt = "arcticshowcase@arctic-showcase"
+        old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
+        returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
+        self.assertFalse(automation._phrases_present(
+            old_prompt_only, (marker, prompt), ordered=True))
+        self.assertTrue(automation._phrases_present(
+            returned_prompt, (marker, prompt), ordered=True))
+        self.assertTrue(automation._phrases_present(
+            old_prompt_only, (marker, prompt), ordered=False))
+
+    def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
+        marker = "ARCTIC-SHOWCASE-AUTH-READY"
+        self.assertNotIn(marker, automation.Controller.INSTALLED_COMMAND)
+        self.assertNotIn(automation.Controller.PASSWORD, automation.Controller.INSTALLED_COMMAND)
+        self.assertIn("exec sudo -k sh -c", automation.Controller.INSTALLED_COMMAND)
+        prefix = automation.Controller.INSTALLED_COMMAND.split("; exec sudo", 1)[0]
+        rendered = subprocess.run(["/bin/sh", "-c", prefix], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  timeout=5, check=True)
+        self.assertEqual(rendered.stdout.decode(), marker + ": ")
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+        sudo = [call for call in self.controller.wait_screen.call_args_list
+                if call.args[1] == "installed-sudo-password"]
+        self.assertEqual(len(sudo), 1)
+        self.assertEqual(sudo[0].args[2], (marker, "password"))
+        self.controller.type_secret.assert_called_with("installed-console")
+
+    def test_installed_shell_clears_fetch_without_submitting_before_prompt(self):
+        operations = []
+
+        def wait(_stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", expectation, phrases, kwargs))
+            return None, ""
+
+        def press(_stage, *names, **_kwargs):
+            operations.append(("keys", names))
+
+        def text(_stage, command_id, _value, **_kwargs):
+            operations.append(("text", command_id))
+
+        def secret(_stage):
+            operations.append(("secret",))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        self.controller.type_secret = secret
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+
+        greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
+                    {"seconds": 90})
+        ready = ("screen", "installed-shell-ready",
+                 (), {"seconds": 90, "exact_output": True,
+                      "prompt_contract": ("arcticshowcase@arctic-showcase",
+                                          ("~>", "~ >"))})
+        proof = ("text", "installed-shell-proof")
+        at = operations.index(greeting)
+        self.assertEqual(operations[at + 1], ("keys", ("ctrl-l",)))
+        self.assertEqual(operations[at + 2], ready)
+        self.assertEqual(operations[at + 3], proof)
+        self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
+        self.assertLess(operations.index(("secret",)), at)
+        self.assertEqual(operations[at + 5],
+                         ("screen", "installed-shell",
+                          ("ARCTIC-SHOWCASE-SHELL-READY",
+                           "arcticshowcase@arctic-showcase"),
+                          {"seconds": 90, "exact_output": True, "ordered": True}))
+        self.assertEqual(operations[at + 6], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):
@@ -151,10 +503,179 @@ class TraceContract(unittest.TestCase):
 
 
 class GuestAutomation(unittest.TestCase):
+    @staticmethod
+    def _ipc_process(root, pid, *, argv, executable="/usr/bin/quickshell",
+                     comm="quickshell"):
+        process = root / str(pid)
+        process.mkdir()
+        (process / "comm").write_text(comm + "\n")
+        (process / "exe").symlink_to(executable)
+        (process / "cmdline").write_bytes(
+            b"/usr/bin/quickshell\0" + b"\0".join(value.encode() for value in argv) + b"\0")
+        # proc_pid_stat fields 3..22; index 19 below is starttime.
+        (process / "stat").write_text(
+            f"{pid} (quickshell) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 {1000 + int(pid)}\n")
+        return process
+
+    def test_ipc_discovery_selects_one_stable_exact_packaged_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._ipc_process(root, 101, argv=["-p", "/usr/share/arctic/installer-ui"])
+            self._ipc_process(root, 102, argv=["-p", "/usr/share/arctic/shell"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+            result = types.SimpleNamespace(returncode=0, stdout=b'{"page":"welcome"}\n')
+            with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
+                self.assertEqual(unattended._find_ipc(
+                    account, {}, "installer", "state", root),
+                    ("101", '{"page":"welcome"}'))
+            self.assertEqual(invoke.call_args.kwargs["timeout"], 15)
+            self.assertEqual(invoke.call_args.args[2][3:5], ["101", "call"])
+
+            self._ipc_process(root, 103, argv=["-p", "/usr/share/arctic/installer-ui"])
+            with mock.patch.object(unattended, "_as_user") as ambiguous:
+                with self.assertRaises(unattended.InstallerIpcFailure) as caught:
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+                self.assertEqual(caught.exception.reason, "installer-process-ambiguous")
+                ambiguous.assert_not_called()
+
+    def test_ipc_diagnostic_distinguishes_absent_ambiguous_and_call_failure(self):
+        account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(unattended.InstallerIpcFailure) as absent:
+                unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(absent.exception.reason, "installer-process-absent")
+
+            self._ipc_process(root, 101, argv=["-p", "/usr/share/arctic/installer-ui"])
+            failed = types.SimpleNamespace(returncode=1, stdout=b"private failure text")
+            with mock.patch.object(unattended, "_as_user", return_value=failed), \
+                 self.assertRaises(unattended.InstallerIpcFailure) as call:
+                unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(call.exception.reason, "installer-ipc-call-failed")
+            self.assertNotIn("private failure text", str(call.exception))
+
+    def test_ipc_discovery_rejects_identity_change_during_bounded_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            process = self._ipc_process(
+                root, 201, argv=["-p", "/usr/share/arctic/installer-ui"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+
+            def replace(*_args, **_kwargs):
+                stat_path = process / "stat"
+                stat_path.write_text(stat_path.read_text().replace("1201\n", "1202\n"))
+                return types.SimpleNamespace(returncode=0, stdout=b'{}\n')
+
+            with mock.patch.object(unattended, "_as_user", side_effect=replace):
+                with self.assertRaises(unattended.InstallerIpcFailure) as caught:
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(caught.exception.reason, "installer-ipc-call-failed")
+
+    def test_installer_readiness_requires_same_endpoint_twice(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        ready = {"page": "welcome", "current": "welcome", "ready": True,
+                 "connected": True, "busy": False, "failure": ""}
+        samples = iter([(("101", 10), ready), (("202", 20), ready),
+                        (("202", 20), ready)])
+        with mock.patch.object(unattended, "_installer_state",
+                               side_effect=lambda *_args: next(samples)), \
+             mock.patch.object(unattended.time, "sleep"):
+            self.assertEqual(unattended._stable_installer_endpoint(account, {}),
+                             ("202", 20))
+
+    def test_ipc_diagnostic_distinguishes_invalid_response_and_never_ready(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        with mock.patch.object(unattended, "_find_ipc",
+                               return_value=("101", "private malformed response")):
+            with self.assertRaises(unattended.InstallerIpcFailure) as invalid:
+                unattended._installer_endpoint(account, {})
+        self.assertEqual(invalid.exception.reason, "installer-ipc-response-invalid")
+        self.assertNotIn("private malformed response", str(invalid.exception))
+
+        not_ready = {"page": "welcome", "current": "welcome", "ready": False,
+                     "connected": True, "busy": False, "failure": ""}
+        def once(function, _seconds, message):
+            self.assertIsNone(function())
+            raise c.Invalid(message)
+        with mock.patch.object(unattended, "_installer_state",
+                               return_value=(("101", 10), not_ready)), \
+             mock.patch.object(unattended, "_wait", side_effect=once), \
+             self.assertRaises(unattended.InstallerIpcFailure) as never:
+            unattended._stable_installer_endpoint(account, {})
+        self.assertEqual(never.exception.reason, "installer-never-ready")
+
+        with mock.patch.object(unattended, "_installer_state",
+                               side_effect=c.Invalid("private invalid detail")), \
+             mock.patch.object(unattended, "_wait", side_effect=once), \
+             self.assertRaises(unattended.InstallerIpcFailure) as invalid_sample:
+            unattended._stable_installer_endpoint(account, {})
+        self.assertEqual(invalid_sample.exception.reason,
+                         "installer-ipc-response-invalid")
+        self.assertNotIn("private invalid detail", str(invalid_sample.exception))
+
+    def test_second_state_call_preserves_call_failure_and_rejects_non_object(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               return_value=("101", 10)), \
+             mock.patch.object(unattended, "_as_user",
+                               side_effect=c.Invalid("private command failure")), \
+             self.assertRaises(unattended.InstallerIpcFailure) as call:
+            unattended._installer_state(account, {})
+        self.assertEqual(call.exception.reason, "installer-ipc-call-failed")
+        self.assertNotIn("private command failure", str(call.exception))
+
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               return_value=("101", 10)), \
+             mock.patch.object(unattended, "_installer_call", return_value="[]"), \
+             self.assertRaises(unattended.InstallerIpcFailure) as invalid:
+            unattended._installer_state(account, {})
+        self.assertEqual(invalid.exception.reason, "installer-ipc-response-invalid")
+
+    def test_installer_ipc_failure_exports_only_closed_reason(self):
+        rows = []
+
+        class Channel:
+            def __init__(self, *args, **kwargs): pass
+            def write(self, value): rows.append(value)
+            def close(self): pass
+
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser",
+                                        pw_dir="/home/liveuser")
+        failure = unattended.InstallerIpcFailure("installer-process-absent")
+        with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+             mock.patch.object(unattended, "Channel", Channel), \
+             mock.patch.object(unattended, "_graphical_environment",
+                               return_value=(account, 2, {})), \
+             mock.patch.object(unattended, "_run"), \
+             mock.patch.object(unattended, "_stable_installer_endpoint",
+                               side_effect=failure), \
+             self.assertRaises(unattended.InstallerIpcFailure):
+            unattended.live_install(600)
+        progress = [c.strict_json(row[len(c.INSTALL_PROGRESS_PREFIX):]) for row in rows]
+        self.assertEqual(progress[-1], {
+            "schema": "arctic-showcase-install-progress-v1", "sequence": 5,
+            "stage": "installer-ipc", "status": "failed",
+            "failure_reason": "installer-process-absent", "release_acceptance": False,
+        })
+        c.install_progress(progress[-1])
+        self.assertNotIn("private", repr(progress))
+
+        for reason in c.INSTALLER_IPC_FAILURE_REASONS:
+            changed = dict(progress[-1], failure_reason=reason)
+            c.install_progress(changed)
+        for forged in (
+            dict(progress[-1], failure_reason="guest-selected"),
+            dict(progress[-1], stage="page-welcome"),
+            dict(progress[-1], status="passed"),
+        ):
+            with self.assertRaises(c.Invalid):
+                c.install_progress(forged)
+
     def _run_installer(self, pages):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
         fills = []
+        filled = set()
         channel_rows = []
 
         def ipc(_account, _environment, _pid, method, payload=None):
@@ -162,9 +683,14 @@ class GuestAutomation(unittest.TestCase):
                 page = pages[index["value"]]
                 return json.dumps({"page": page, "current": page, "ready": True,
                                    "connected": True, "busy": False, "failure": "",
-                                   "valid": True, "percent": 100 if page == "done" else 0})
+                                   # Reproduce the exact-image race: Welcome
+                                   # can be ready before its suggested locale
+                                   # makes the page valid.
+                                   "valid": page != "welcome" or page in filled,
+                                   "percent": 100 if page == "done" else 0})
             if method == "fill":
                 fills.append((pages[index["value"]], payload))
+                filled.add(pages[index["value"]])
                 return "ok"
             index["value"] += 1
             return "ok"
@@ -178,8 +704,10 @@ class GuestAutomation(unittest.TestCase):
         with mock.patch.object(unattended.os, "geteuid", return_value=0), \
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
-             mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_installer_endpoint", return_value=("123", 456)), \
              mock.patch.object(unattended, "_process_start_ticks", return_value=456), \
+             mock.patch.object(unattended, "_stable_installer_endpoint",
+                               return_value=("123", 456)), \
              mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
              mock.patch.object(unattended, "_run"), \
              mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
@@ -195,19 +723,6 @@ class GuestAutomation(unittest.TestCase):
                  "connected": True, "busy": False, "failure": "", "valid": True}
         value.update(changed)
         return json.dumps(value)
-
-    def test_unique_installer_ipc_rejects_ambiguous_targets(self):
-        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
-
-        def run(argv, **_kwargs):
-            self.assertEqual(argv[:5], ["/usr/bin/pgrep", "-u", "1000", "-x", "quickshell"])
-            return types.SimpleNamespace(returncode=0, stdout=b"101\n202\n")
-
-        with mock.patch.object(unattended, "_run", side_effect=run), \
-             mock.patch.object(unattended, "_as_user",
-                               return_value=types.SimpleNamespace(returncode=0, stdout=b"{}")):
-            with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
-                unattended._find_ipc(account, {}, "installer", "state")
 
     def test_installer_reacquires_a_replacement_before_first_input(self):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
@@ -282,6 +797,7 @@ class GuestAutomation(unittest.TestCase):
                       "account", "apps", "summary", "done"))
         fills, rows = self._run_installer(pages)
         choices = dict(fills)
+        self.assertEqual(choices["welcome"], {"language": "en_US.UTF-8"})
         self.assertEqual(choices["network"], {"offline": False})
         self.assertEqual(choices["disk"], {"disk": "/dev/vda", "mode": "erase"})
         self.assertEqual(choices["encryption"], {"enabled": False})
@@ -436,12 +952,16 @@ class GuestAutomation(unittest.TestCase):
                          "release_acceptance": False}]
             capture_vm._write_failure_report(
                 path, "live-install", progress,
-                c.Invalid("private capture channel timed out"), None)
+                c.Invalid("private capture channel timed out"), None,
+                automation.LiveStartupDiagnostic().projection(),
+                automation.InstalledStartupDiagnostic().projection())
             self.assertLessEqual(path.stat().st_size, 32768)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             value = c.strict_json(path.read_bytes())
             c.capture_failure(value)
             self.assertEqual(value["failure_code"], "private-channel-timeout")
+            self.assertEqual(value["live_startup"]["release_acceptance"], False)
+            self.assertEqual(value["installed_startup"]["release_acceptance"], False)
             self.assertNotIn("private capture channel timed out", path.read_text())
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):

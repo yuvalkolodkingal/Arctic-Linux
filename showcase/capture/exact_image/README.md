@@ -10,10 +10,24 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-No candidate is currently bound. `contract.IMAGE`, `contract.REVIEWED_EXECUTION`
-and the image in `execution-manifest.json` are null, the manifest is not ready,
-and there is no activation marker. The lane therefore fails closed until a
-reviewed replacement ISO is bound atomically in a new preparation commit.
+The preparation is bound to the reviewed candidate from producer run
+`38735141923`, attempt 1, source
+`14ba50a70783fec583a288d34ea233a5d7c9941a`: ISO
+`Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso`, size `1936267264`,
+SHA-256
+`1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a`.
+The retained artifact is `11976239386`, archive size `1936454966`, archive
+SHA-256
+`86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee`,
+producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
+`f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c`.
+The execution manifest is ready for a later marker-only activation and remains
+`release_acceptance:false`.
+
+The producer ran from the reviewed marker-only source
+`14ba50a70783fec583a288d34ea233a5d7c9941a` by `workflow_dispatch` and passed
+UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
+absent from this preparation.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
@@ -39,6 +53,22 @@ RGB QMP PNGs, pass the same automated privacy rules as final captures, and are
 deleted. Their byte, pixel-source, and OCR hashes are recorded in the controller
 trace. The full QEMU argv hash, exact ISO/disk/channel topology, fixed scene
 commands, QMP events, input events, and final pixels are bound into each receipt.
+After selecting the Install boot entry, the controller requires copy unique to
+the real installer Welcome page (`Welcome to Arctic Linux`, `Keyboard`, `Time
+zone`, and `Summary`) before switching to the private console. The boot menu's
+own `Install Arctic Linux` label cannot satisfy that gate.
+
+The Welcome gate remains the authoritative, unchanged 600-second acceptance
+condition. If it times out, a diagnostic path runs only after that failure. It
+reduces each already-private QMP frame to a fixed surface enum and bounded
+elapsed seconds, then attempts one bounded VT6 probe. The probe reports only
+whether the selected kernel mode is `install`, the Mango process is present,
+and the exact packaged installer command is present. These untrusted facts can
+separate a boot-menu/input failure, a slow graphical session, an absent or
+stopped installer, a wrong visible surface, and an output/OCR mismatch. They
+cannot turn a failed capture into a pass or authorize input or publication.
+Every diagnostic screenshot and OCR string remains in the private runtime and
+is deleted before the closed projection is written.
 
 The only guest transport is the owned
 `org.arctic.showcase.capture` virtio-serial channel. The live guest receives a
@@ -49,8 +79,32 @@ the isolated VM. After the installer's normal cleanup unmounts its target, the
 reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
-drops permanently to UID 1000 for scene work. The host proves the Fish session
-with its fixed `ARCTIC-SHOWCASE-SHELL-READY` command before starting that wrapper.
+drops permanently to UID 1000 for scene work. After observing the exact
+candidate's animated greeting, the host sends one Ctrl-L. Its 3D renderer
+deliberately leaves that single ordinary byte queued for Fish, where Ctrl-L can
+only clear the retained greeting and redraw the line editor; if the renderer
+has already returned, the same binding only clears and redraws. No command byte
+or command terminator is sent. The host then requires the fixed account's real
+`arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
+typing even its nonsecret proof command. The host accepts only a complete final
+OCR line for that account with the two spellings already admitted by the
+successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
+suffix on separate rows, or the greeting's own `user@host` info row, cannot
+satisfy this gate. It then proves the Fish session with the fixed
+`ARCTIC-SHOWCASE-SHELL-READY` command and requires another fixed prompt in the
+same exact output after the marker before typing the sudo launcher. An earlier
+echoed prompt, a fixed settling delay or marker output alone cannot authorize
+that input.
+
+The installed prompt remains an authoritative 90-second gate. Its failure
+projection reduces private frames to closed enums for fetch still visible,
+exact prompt on a nonfinal row, account-only or suffix-only OCR, login/password,
+blank output, geometry mismatch, OCR-empty, and other text, plus bounded integer
+timings. Only after a timeout, the controller sends one interrupt and records
+whether the exact prompt becomes visible within 30 seconds. That post-failure
+probe cannot promote the attempt or authorize the proof or sudo commands. Its
+screens and OCR strings stay private and are deleted with the runtime.
+
 The installed helper must prove local dictation is fully ready
 with one supported multilingual profile before the host will observe the
 Dictation scene. A missing model, failed online setup, GPU/CPU mismatch, or timeout
@@ -126,7 +180,10 @@ GitHub-hosted Ubuntu 24.04 KVM runner, and uploads a successfully validated,
 bounded `exact-image-showcase-captures-unreviewed` artifact for 14 days. A failed
 host attempt may instead upload one separately validated failure projection. It
 is at most 32 KiB, mode 0600 before upload, remains `release_acceptance:false`,
-and contains no guest text, error strings, logs, screenshots or pixels. The
+and contains no guest text, error strings, logs, screenshots or pixels. Its
+live-startup section, once the controller exists, contains only fixed enums and
+integer seconds;
+the contract rejects extra keys, flexible strings and out-of-range values. The
 workflow first proves that all private runtime, image and capture paths were
 removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,

@@ -19,7 +19,6 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
-         'tools/qualified-release/retract.py',
          'tools/dictation-qualification/contract.py', 'tools/installer-qualification/contract.py',
          'tools/installer-qualification/active-contract.py',
          'tools/native-functional/apps.py',
@@ -408,35 +407,6 @@ def performance_proof(evidence, manifest, fetch):
     return dict(pin=pin, replay=replay, candidate_source_files=candidate_sources, observer=observer)
 
 
-def dictation_media_names(hardware_profile):
-    require(hardware_profile in ('small-v2', 'turbo-q5-v3'), 'Unknown dictation media profile')
-    names = {'dictation-indicator-' + phase + '.png'
-             for phase in ('online-installed', 'recovered-offline')}
-    if hardware_profile == 'turbo-q5-v3':
-        names |= {'dictation-recovery-' + phase + '-' + stage.replace('_', '-') + '.png'
-                  for phase in ('online-installed', 'recovered-offline')
-                  for stage in ('gpu_failure', 'cpu_ready')}
-    return names
-
-
-def require_distinct_dictation_recovery_frames(stages):
-    require(isinstance(stages, dict) and set(stages) == {'gpu_failure', 'cpu_ready'},
-            'Missing dictation recovery screen stages')
-    require(all(isinstance(stages[stage], dict) for stage in ('gpu_failure', 'cpu_ready')),
-            'Missing dictation recovery screen stages')
-    hashes = [stages[stage].get('sha256') for stage in ('gpu_failure', 'cpu_ready')]
-    require(all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
-                for value in hashes) and len(set(hashes)) == 2,
-            'Dictation recovery screens are byte-identical')
-
-
-def dictation_recovery_status(stage):
-    require(stage in ('gpu_failure', 'cpu_ready'), 'Unknown dictation recovery stage')
-    # The guarded Vulkan preflight fails before recording and preserves the
-    # selected CPU backend while surfacing an actionable error.
-    return ('error', 'cpu') if stage == 'gpu_failure' else ('ready', 'cpu')
-
-
 def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
@@ -458,10 +428,9 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                 'offline-installed', 'recovery', 'recovered-offline'}
     require(set(state['reports']) == required and set(state['installations']) == {'online', 'offline'},
             'Missing/extra dictation installation or report phases')
-    media_names = dictation_media_names(hardware_profile)
+    indicator_names = {'dictation-indicator-' + phase + '.png' for phase in ('online-installed', 'recovered-offline')}
     require({entry.filename for entry in archive.infolist() if not entry.is_dir()}
-            == {'execution.json', 'fixtures.json'} | {name + '.json' for name in required}
-               | media_names,
+            == {'execution.json', 'fixtures.json'} | {name + '.json' for name in required} | indicator_names,
             'Dictation evidence contains unexpected or missing files')
     require(archive.getinfo('fixtures.json').file_size < 128 * 1024, 'Oversized dictation fixture manifest')
     fixtures = archive.read('fixtures.json')
@@ -534,48 +503,10 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                 and hashlib.sha256(archive.read(name)).hexdigest() == info['sha256']
                 and archive.read(name).startswith(b'\x89PNG\r\n\x1a\n'), 'Dictation indicator provenance/bytes differ')
         required_images[name] = info['sha256']
-    recovery = state.get('recovery_screens')
-    if hardware_profile == 'turbo-q5-v3':
-        require(isinstance(recovery, dict)
-                and set(recovery) == {'online-installed', 'recovered-offline'},
-                'Missing dictation recovery screen phases')
-        for phase, stages in recovery.items():
-            require_distinct_dictation_recovery_frames(stages)
-            gate = next(row for row in reports[phase]['gates']
-                        if row['id'] == contract.MODERN_GPU_GATE)
-            for stage, info in stages.items():
-                request = info['request']
-                state_name, backend = dictation_recovery_status(stage)
-                name = 'dictation-recovery-' + phase + '-' + stage.replace('_', '-') + '.png'
-                ack = stage + '_capture_ack_sha256'
-                require(set(info) == {'request', 'path', 'sha256', 'iso_sha256', 'installation_id'}
-                        and set(request) == {'boot_id', 'installation_id', 'phase', 'desktop_uid',
-                                             'receiver_empty', 'stage', 'state', 'backend',
-                                             'language', 'capture_nonce'}
-                        and info['path'] == name and info['iso_sha256'] == image['sha256']
-                        and info['installation_id'] == reports[phase]['context']['installation_id']
-                        and request['boot_id'] == reports[phase]['boot_id']
-                        and request['phase'] == phase and request['installation_id'] == info['installation_id']
-                        and request['receiver_empty'] is True and request['stage'] == stage
-                        and request['state'] == state_name and request['backend'] == backend
-                        and request['language'] in ('en', 'he')
-                        and (stage != 'cpu_ready' or request['language'] == 'he')
-                        and type(request['desktop_uid']) is int and request['desktop_uid'] > 0
-                        and re.fullmatch('[0-9a-f]{32}', request['capture_nonce'])
-                        and gate['status'] == 'passed'
-                        and gate['observations'].get(ack) ==
-                            hashlib.sha256(request['capture_nonce'].encode()).hexdigest()
-                        and archive.getinfo(name).file_size < 4 * 1024 * 1024
-                        and hashlib.sha256(archive.read(name)).hexdigest() == info['sha256']
-                        and archive.read(name).startswith(b'\x89PNG\r\n\x1a\n'),
-                        'Dictation recovery screen provenance/bytes differ')
-                required_images[name] = info['sha256']
-    else:
-        require(recovery == {}, 'Legacy dictation lane contains recovery screens')
     review = manifest['dictation_media_review'][hardware_profile]
     require(review['image_sha256'] == image['sha256'] and review['dictation_archive_sha256'] == pin['archive_sha256']
             and review['visual_status'] == 'passed' and review['images'] == required_images,
-            'Exact-image dictation visual review is absent')
+            'Exact-image dictation recording indicator visual review is absent')
     measurements = {}
     for phase in ('online-installed', 'recovered-offline'):
         measurements[phase] = {}
@@ -1214,8 +1145,7 @@ def release_notes(proof, comparison):
               'or Whisper accuracy parity. Owned-process failure and a private invalid-ICD loader fixture do not prove recovery '
               'from a physical GPU/driver crash; loader CPU continuation was inferred rather than native-device observed. '
               'The legacy CPU profile does not certify Vulkan, and this VM does not certify physical GPU acceleration. '
-              'Recording indicators and the modern lane’s actionable Vulkan-error and explicit CPU-ready Settings screens '
-              'have a separate exact-image screenshot review. First-boot/service recovery was tested separately '
+              'Recording indicators have a separate screenshot review. First-boot/service recovery was tested separately '
               'from the interactive polkit authorization dialog. Explicit English/Hebrew selection does not establish '
               'mixed-language recognition. The exact machine-readable limitations for each profile are:', '']
     for name in ('small-v2', 'turbo-q5-v3'):
