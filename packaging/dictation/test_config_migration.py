@@ -43,10 +43,13 @@ class ConfigMigration(unittest.TestCase):
         self.root = pathlib.Path(self.temporary.name)
         self.home = self.root / "home"
         self.directory = self.home / ".config/voxtype"
+        self.control = self.home / ".migration-test"
         self.directory.mkdir(parents=True)
+        self.control.mkdir()
         self.home.chmod(0o700)
         (self.home / ".config").chmod(0o700)
         self.directory.chmod(0o700)
+        self.control.chmod(0o700)
         self.model = self.root / "ggml-small.bin"
         self.validator = self.root / "voxtype-baseline"
         self.helper = self.root / "arctic-voxtype-migrate-config"
@@ -61,7 +64,8 @@ class ConfigMigration(unittest.TestCase):
             account = pwd.getpwnam("nobody")
             self.uid = account.pw_uid
             self.root.chmod(0o755)
-            for path in (self.home, self.home / ".config", self.directory):
+            for path in (self.home, self.home / ".config", self.directory,
+                         self.control):
                 os.chown(path, account.pw_uid, account.pw_gid)
             self.run_as = {"user": account.pw_uid, "group": account.pw_gid,
                            "extra_groups": []}
@@ -103,6 +107,15 @@ class ConfigMigration(unittest.TestCase):
                                 env=merged, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                 start_new_session=True, **self.run_as)
 
+    @staticmethod
+    def _stop(process):
+        if process.poll() is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        process.communicate(timeout=10)
+
     def test_old_managed_languages_migrate_without_changing_other_bytes(self):
         for language in ('["he", "en"]', '"he"', '"en"'):
             with self.subTest(language=language):
@@ -129,37 +142,43 @@ class ConfigMigration(unittest.TestCase):
 
     def test_concurrent_user_edit_wins(self):
         config = self._write(self._config(resident=False))
-        ready = self.root / "ready"
-        release = self.root / "release"
+        ready = self.control / "ready"
+        release = self.control / "release"
         self._validator(True)
         process = self._popen({"MIGRATION_READY": str(ready),
                                "MIGRATION_RELEASE": str(release)})
-        for _ in range(200):
-            if ready.exists():
-                break
-            time.sleep(0.01)
-        self.assertTrue(ready.exists())
-        custom = b'[whisper]\nmodel = "personal-model.bin"\nlanguage = "en"\n'
-        self._write(custom)
-        release.touch()
-        stdout, stderr = process.communicate(timeout=10)
-        self.assertEqual(process.returncode, 24, (stdout + stderr).decode())
-        self.assertEqual(config.read_bytes(), custom)
+        try:
+            for _ in range(200):
+                if ready.exists():
+                    break
+                time.sleep(0.01)
+            self.assertTrue(ready.exists())
+            custom = b'[whisper]\nmodel = "personal-model.bin"\nlanguage = "en"\n'
+            self._write(custom)
+            release.touch()
+            stdout, stderr = process.communicate(timeout=10)
+            self.assertEqual(process.returncode, 24, (stdout + stderr).decode())
+            self.assertEqual(config.read_bytes(), custom)
+        finally:
+            self._stop(process)
 
     def test_crash_before_rename_retries_cleanly(self):
         config = self._write(self._config(resident=False))
-        ready = self.root / "ready"
-        release = self.root / "release"
+        ready = self.control / "ready"
+        release = self.control / "release"
         self._validator(True)
         process = self._popen({"MIGRATION_READY": str(ready),
                                "MIGRATION_RELEASE": str(release)})
-        for _ in range(200):
-            if ready.exists():
-                break
-            time.sleep(0.01)
-        self.assertTrue(ready.exists())
-        os.killpg(process.pid, signal.SIGKILL)
-        process.communicate(timeout=10)
+        try:
+            for _ in range(200):
+                if ready.exists():
+                    break
+                time.sleep(0.01)
+            self.assertTrue(ready.exists())
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate(timeout=10)
+        finally:
+            self._stop(process)
         self.assertEqual(config.read_bytes(), self._config(resident=False))
         self._validator(False)
         result = self._run()
