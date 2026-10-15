@@ -42,7 +42,7 @@ def restore_native_bulk_driver(driver):
         driver = driver.replace(addition, '', 1)
     recovery_state = 'dictation_indicator_seen = False\ndictation_recovery_seen = set()\n'
     recovery_state_original = 'dictation_indicator_seen = False\n'
-    recovery_call = '                dictation_recovery_poll(vm)\n'
+    recovery_call = '                dictation_poll("recovery", dictation_recovery_poll, vm)\n'
     recovery_start = 'def dictation_recovery_poll(vm):\n'
     recovery_end = 'taskbar_display_module = None\n'
     if (driver.count(recovery_state) != 1 or driver.count(recovery_call) != 1
@@ -51,7 +51,7 @@ def restore_native_bulk_driver(driver):
     start = driver.index(recovery_start)
     end = driver.index(recovery_end, start)
     recovery_block = driver[start:end]
-    if sha(recovery_block.encode()) != '8007db17a13bd01cbe3f4fb0fc8fe5487d134c5f043d27efdd935eb6407b2893':
+    if sha(recovery_block.encode()) != 'bcde3a47560330c3d1490c77c43fa25b41fcc283216d7105d4705fb6c1961791':
         raise AssertionError('Dictation recovery rollback requires the exact helper block')
     driver = driver[:start] + driver[end:]
     driver = driver.replace(recovery_state, recovery_state_original, 1)
@@ -117,7 +117,7 @@ class BulkTransportControls(unittest.TestCase):
         driver = shell.split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
         restored = restore_native_bulk_driver(driver)
         original = shell.replace(driver, restored, 1)
-        self.assertEqual(sha(original.encode()), '1b51c4242b2ace099af284aa01c8f1b5617c02049a42dbd5fad137767ba5b744')
+        self.assertEqual(sha(original.encode()), '5fae8fad9c4d4ad664967723044d3c764a48ece083fefc03dba3bc0e8a3c6223')
         for before, after in [('name=arctic-native-evidence', 'name=arctic-native-evidence-mutated'),
                               ('def record_native_stop(', 'def record_native_stop_mutated('),
                               ('            record_native_stop(vm,"install",t,install_timeout,rc)\n', ''),
@@ -156,7 +156,11 @@ class BulkTransportControls(unittest.TestCase):
                                'dictation_recovery_seen = {}'),
                               ('def dictation_recovery_poll(vm):',
                                'def dictation_recovery_poll_mutated(vm):'),
-                              ('                dictation_recovery_poll(vm)\n', '')]:
+                              ('                dictation_poll("recovery", dictation_recovery_poll, vm)\n', ''),
+                              ('dictation_poll("recovery", dictation_recovery_poll, vm)',
+                               'dictation_poll("indicator", dictation_recovery_poll, vm)'),
+                              ('dictation_poll("recovery", dictation_recovery_poll, vm)',
+                               'dictation_poll("recovery", dictation_indicator_poll, vm)')]:
             with self.subTest(mutation=before):
                 self.assertEqual(driver.count(before), 1)
                 with self.assertRaises(AssertionError):
