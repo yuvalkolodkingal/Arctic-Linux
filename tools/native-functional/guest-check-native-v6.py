@@ -31,7 +31,7 @@ import time
 
 
 SCHEMA = 'arctic-native-functional-smoke-v4'
-ROLES = dict(terminal='foot', browser='epiphany', editor='featherpad', files='pcmanfm')
+ROLES = dict(terminal='foot', browser='gtk-launch org.gnome.Epiphany', editor='featherpad', files='pcmanfm')
 MIMES = {'inode/directory': 'pcmanfm.desktop', 'text/plain': 'featherpad.desktop',
          'video/x-matroska': 'io.github.celluloid_player.Celluloid.desktop',
          'application/zip': 'xarchiver.desktop'}
@@ -2669,7 +2669,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'a5d818d035a81f428a0953f70de10e22920df00b586aa9371b169b2b5b8457c0'
+    native_source_sha = '9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

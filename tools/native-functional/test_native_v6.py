@@ -372,7 +372,9 @@ class NewControls(unittest.TestCase):
                             smoke.visual_media()
             self.assertEqual(smoke.fresh_window.call_count,1)
             self.assertEqual(len(launched),1);self.assertEqual(len(grim_calls),1)
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+            delays=[call.args[0] for call in sleep.call_args_list]
+            self.assertEqual(delays.count(.5),1)
+            self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
             self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)

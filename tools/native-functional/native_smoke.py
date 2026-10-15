@@ -31,7 +31,7 @@ import time
 
 
 SCHEMA = 'arctic-native-functional-smoke-v4'
-ROLES = dict(terminal='foot', browser='epiphany', editor='featherpad', files='pcmanfm')
+ROLES = dict(terminal='foot', browser='gtk-launch org.gnome.Epiphany', editor='featherpad', files='pcmanfm')
 MIMES = {'inode/directory': 'pcmanfm.desktop', 'text/plain': 'featherpad.desktop',
          'video/x-matroska': 'io.github.celluloid_player.Celluloid.desktop',
          'application/zip': 'xarchiver.desktop'}
