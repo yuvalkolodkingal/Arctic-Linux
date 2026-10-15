@@ -174,6 +174,42 @@ class GateDiagnosticControls(unittest.TestCase):
         with self.assertRaisesRegex(guest.Invalid, '^unknown-microphone-failure-family$'):
             guest.MicrophoneStageFailure('actionable-error', 'private-family')
 
+    def test_readiness_failures_project_only_fixed_stage_number_and_family(self):
+        families = (
+            (PrivateInvalid('sensitive-canary transcript'), 'invalid'),
+            (OSError('sensitive-canary path'), 'os-error'),
+            (ValueError('sensitive-canary value'), 'value-error'),
+            (subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                       output=b'sensitive-canary'), 'timeout'),
+            (KeyError('sensitive-canary key'), 'key-error'),
+            (TypeError('sensitive-canary type'), 'type-error'),
+        )
+        gate = 'online-installer-ready'
+        for stage, number in guest.READINESS_FAILURE_STAGES.items():
+            for error, label in families:
+                with self.subTest(stage=stage, label=label):
+                    checker = self.checker(gate)
+                    action = lambda: checker.readiness_stage(
+                        stage, self.raising(error))
+                    self.assertFalse(checker.gate(gate, action))
+                    result = checker.report['gates'][0]
+                    self.assertEqual(result['code'], 'gate-' + gate + '-' + label)
+                    self.assertEqual(result['observations'], {'failure_stage': number})
+                    self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_readiness_stage_inventory_is_closed_and_used_by_ready_path(self):
+        checker = self.checker('online-installer-ready')
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-readiness-failure-stage$'):
+            checker.readiness_stage('private-stage', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-readiness-failure-family$'):
+            guest.ReadinessStageFailure('status-command', 'private-family')
+        source = Path(guest.__file__).read_text()
+        used = set(__import__('re').findall(
+            r"self\.readiness_stage\('([^']+)'", source))
+        self.assertEqual(used, set(guest.READINESS_FAILURE_STAGES))
+
     def test_state_contract_reports_allowed_cardinality_not_observed_count(self):
         checker = guest.Checker.__new__(guest.Checker)
         checker.state = lambda: 'idle'
