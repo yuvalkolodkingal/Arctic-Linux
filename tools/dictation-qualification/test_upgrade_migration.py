@@ -558,13 +558,39 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertEqual(json.loads((self.state / "verified.json").read_text())["backend"],
                          "vulkan")
 
+    def test_vulkan_proof_accepts_official_device_outcome_without_backend_word(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
+        self._write_executable(
+            self.current_assets / "voxtype-vulkan",
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'ggml_vulkan: Found 1 Vulkan devices:' >&2\n"
+            "printf '%s\\n' 'whisper_backend_init_gpu: found GPU device 0: "
+            "llvmpipe (LLVM 20.1.8, 256 bits) (type: 2, cnt: 1)' >&2\n"
+            "exit 0\n",
+        )
+        self._run(self._fixture_setup(), verb="--backend-vulkan")
+        self.assertEqual((self.state / "backend").read_text(), "vulkan\n")
+        self.assertEqual(json.loads((self.state / "verified.json").read_text())["backend"],
+                         "vulkan")
+
     def test_vulkan_proof_rejects_contradiction_intent_unknown_oversize_and_nonzero(self):
         self._prepare_current_vulkan()
         self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
         cases = {
             "positive-and-negative": (
-                "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n"
+                "printf '%s\\n' 'whisper_backend_init_gpu: found GPU device 0: llvmpipe' >&2\n"
                 "printf '%s\\n' 'ggml_vulkan: Found 0 Vulkan devices' >&2\n", 0),
+            "init-failure-after-positive": (
+                "printf '%s\\n' 'whisper_backend_init_gpu: found GPU device 0: llvmpipe' >&2\n"
+                "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n"
+                "printf '%s\\n' 'whisper_backend_init_gpu: failed to initialize Vulkan0 backend' >&2\n",
+                0),
+            "init-failure-before-positive": (
+                "printf '%s\\n' 'whisper_backend_init_gpu: failed to initialize Vulkan0 backend' >&2\n"
+                "printf '%s\\n' 'whisper_backend_init_gpu: found GPU device 0: llvmpipe' >&2\n"
+                "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n",
+                0),
             "intent-only": (
                 "printf '%s\\n' 'whisper_init_with_params_no_state: use gpu = 1' >&2\n", 0),
             "unknown": ("printf '%s\\n' 'model initialized' >&2\n", 0),

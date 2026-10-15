@@ -795,9 +795,17 @@ for raw in kept.decode("utf-8", "replace").splitlines():
         negative = True
     if "whisper_backend_init_gpu:" in line and "no gpu found" in line:
         negative = True
+    if ("whisper_backend_init_gpu:" in line
+            and "failed to initialize" in line and "backend" in line):
+        negative = True
     if "ggml_vulkan" in line and "found 0" in line:
         negative = True
-    if "whisper_backend_init_gpu:" not in line or "vulkan" not in line:
+    # whisper.cpp names the selected device on this outcome line, but common
+    # Vulkan implementations (including lavapipe and vendor drivers) do not
+    # necessarily include the word "Vulkan" in the device name.  This parser
+    # is already scoped to the signed Vulkan binary after vulkaninfo succeeds,
+    # so requiring that unrelated substring rejects a real initialized GPU.
+    if "whisper_backend_init_gpu:" not in line:
         continue
     if "found gpu device" in line or ("using" in line and "backend" in line):
         positive = True
