@@ -53,16 +53,34 @@ HOST_STAGES = frozenset({
     'vm-acquire-json-error', 'vm-acquire-qmp-error', 'vm-acquire-keyboard-interrupt',
     'vm-acquire-other-error', 'vm-acquire-stderr-unobserved',
     'vm-acquire-enforce-host-unavailable', 'vm-acquire-enforce-only-spec-ctrl',
-    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable'})
+    'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable',
+    'boot-indicator-poll-json-error', 'boot-indicator-poll-unicode-error',
+    'boot-indicator-poll-qmp-error', 'boot-indicator-poll-file-missing',
+    'boot-indicator-poll-permission-error', 'boot-indicator-poll-os-error',
+    'boot-indicator-poll-key-error', 'boot-indicator-poll-type-error',
+    'boot-indicator-poll-value-error', 'boot-indicator-poll-runtime-error',
+    'boot-indicator-poll-system-exit', 'boot-indicator-poll-keyboard-interrupt',
+    'boot-indicator-poll-other-error',
+    'boot-recovery-poll-json-error', 'boot-recovery-poll-unicode-error',
+    'boot-recovery-poll-qmp-error', 'boot-recovery-poll-file-missing',
+    'boot-recovery-poll-permission-error', 'boot-recovery-poll-os-error',
+    'boot-recovery-poll-key-error', 'boot-recovery-poll-type-error',
+    'boot-recovery-poll-value-error', 'boot-recovery-poll-runtime-error',
+    'boot-recovery-poll-system-exit', 'boot-recovery-poll-keyboard-interrupt',
+    'boot-recovery-poll-other-error'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
-CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator'})
+CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator', 'recovery-screens'})
 TRUSTED_ERRORS = {
     'Private dictation harness command failed': 'command-failed',
     'Missing or oversized private dictation serial log': 'serial-missing-or-oversized',
     'Missing/duplicate/oversized dictation report': 'report-missing-duplicate-or-oversized',
     'Missing dictation indicator receipt': 'indicator-receipt-missing',
     'Indicator receipt/report binding differs': 'indicator-binding-differs',
-    'Indicator screenshot bytes differ': 'indicator-image-differs'}
+    'Indicator screenshot bytes differ': 'indicator-image-differs',
+    'Missing dictation recovery screen receipts': 'recovery-receipts-missing',
+    'Missing/extra dictation recovery screen receipts': 'recovery-receipt-count-differs',
+    'Recovery screen receipt/report binding differs': 'recovery-binding-differs',
+    'Recovery screen screenshot bytes differ': 'recovery-image-differs'}
 TRUSTED_CONTRACT_ERRORS = frozenset({
     'report-fields', 'report-schema-scope', 'report-context-boot', 'report-upstream-pin',
     'report-profile-descriptor', 'report-hardware-fields', 'report-hardware-profile',
@@ -141,35 +159,49 @@ def relay_host_stages(path, token, phase):
                 pass
 
 
-def relay_collector_diagnostic(vm, phase):
+def relay_collector_diagnostic(vm, phase, stage):
     """Relay one finite guest setup code without exposing the private serial log."""
-    if phase not in PHASES:
+    if phase not in PHASES or stage not in ('all', 'boot'):
         return
-    descriptor = None
     try:
-        path = Path(vm) / 'serial-boot.log'
-        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        with os.fdopen(descriptor, 'rb') as stream:
-            descriptor = None
-            before = os.fstat(stream.fileno())
-            if (not stat.S_ISREG(before.st_mode) or before.st_uid not in (0, os.geteuid())
-                    or before.st_mode & 0o022 or not 0 < before.st_size < 128 * 1024 * 1024):
-                return
-            raw = stream.read(128 * 1024 * 1024)
-            after = os.fstat(stream.fileno())
         fields = lambda info: (info.st_dev, info.st_ino, info.st_uid, info.st_mode,
                                info.st_size, info.st_mtime_ns, info.st_ctime_ns)
-        if (fields(before) != fields(after)
-                or fields(after) != fields(os.stat(path, follow_symlinks=False))
-                or len(raw) != before.st_size):
-            return
         prefix = b'ARCTIC-DICTATION-COLLECTOR-ERROR '
-        selected = [line for line in raw.splitlines(keepends=True) if line.startswith(prefix)]
+        selected = []
+        names = ('serial-install.log', 'serial-boot.log') if stage == 'all' else ('serial-boot.log',)
+        for name in names:
+            path = Path(vm) / name
+            try:
+                descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            except FileNotFoundError:
+                continue
+            with os.fdopen(descriptor, 'rb') as stream:
+                before = os.fstat(stream.fileno())
+                if (not stat.S_ISREG(before.st_mode) or before.st_uid not in (0, os.geteuid())
+                        or before.st_mode & 0o022 or not 0 < before.st_size < 128 * 1024 * 1024):
+                    return
+                raw = stream.read(128 * 1024 * 1024)
+                after = os.fstat(stream.fileno())
+            if (fields(before) != fields(after)
+                    or fields(after) != fields(os.stat(path, follow_symlinks=False))
+                    or len(raw) != before.st_size):
+                return
+            selected.extend(line for line in raw.splitlines(keepends=True) if line.startswith(prefix))
         if not selected:
             return
         code = 'collector-invalid-record'
-        if (len(selected) == 1 and len(selected[0]) <= 512
-                and selected[0].endswith(b'\n') and not selected[0].endswith(b'\r\n')):
+        if len(selected) == 1 and len(selected[0]) <= 512:
+            # collect.sh writes through /dev/ttyS0.  A normal Linux tty has
+            # OPOST|ONLCR enabled and therefore transports print()'s LF as
+            # CRLF.  Normalize only that complete terminal line ending; bare
+            # or embedded CR bytes remain invalid private input.
+            line = selected[0]
+            if line.endswith(b'\r\n'):
+                body = line[len(prefix):-2]
+            elif line.endswith(b'\n'):
+                body = line[len(prefix):-1]
+            else:
+                body = b''
             def strict_object(pairs):
                 value = {}
                 for key, item in pairs:
@@ -177,22 +209,16 @@ def relay_collector_diagnostic(vm, phase):
                         raise ValueError('duplicate')
                     value[key] = item
                 return value
-            record = json.loads(selected[0][len(prefix):-1].decode('ascii'),
-                                object_pairs_hook=strict_object)
-            if (type(record) is dict and set(record) == {'code', 'release_acceptance'}
-                    and type(record.get('code')) is str
-                    and record['code'] in COLLECTOR_DIAGNOSTIC_CODES
-                    and record.get('release_acceptance') is False):
-                code = record['code']
+            if body and b'\r' not in body and b'\n' not in body:
+                record = json.loads(body.decode('ascii'), object_pairs_hook=strict_object)
+                if (type(record) is dict and set(record) == {'code', 'release_acceptance'}
+                        and type(record.get('code')) is str
+                        and record['code'] in COLLECTOR_DIAGNOSTIC_CODES
+                        and record.get('release_acceptance') is False):
+                    code = record['code']
         print('ARCTIC-DICTATION-HOST-FAILURE ' + phase + ' collector ' + code, flush=True)
     except (OSError, ValueError, UnicodeError, json.JSONDecodeError):
         pass
-    finally:
-        if descriptor is not None:
-            try:
-                os.close(descriptor)
-            except OSError:
-                pass
 
 
 def launch_diagnostic_read(root, name, maximum):
@@ -487,6 +513,65 @@ def indicator(vm, ctx, evidence):
     return proof
 
 
+def recovery_screens(vm, ctx, evidence):
+    receipt = vm / 'dictation-recovery-screen-receipts.json'
+    require(receipt.is_file() and not receipt.is_symlink() and receipt.stat().st_size < 32 * 1024,
+            'Missing dictation recovery screen receipts')
+    proofs = json.loads(receipt.read_text())
+    report = json.loads((evidence / (ctx['phase'] + '.json')).read_text())
+    require(type(proofs) is list and len(proofs) == 2, 'Missing/extra dictation recovery screen receipts')
+    result = {}
+    for proof, stage in zip(proofs, ('gpu_failure', 'cpu_ready')):
+        request = proof['request']
+        expected_state, expected_backend = (('error', 'cpu') if stage == 'gpu_failure'
+                                            else ('ready', 'cpu'))
+        name = 'dictation-recovery-' + ctx['phase'] + '-' + stage.replace('_', '-') + '.png'
+        ack_key = stage + '_capture_ack_sha256'
+        require(set(proof) == {'request', 'path', 'sha256', 'iso_sha256', 'installation_id'}
+                and set(request) == {'boot_id', 'installation_id', 'phase', 'desktop_uid',
+                                     'receiver_empty', 'stage', 'state', 'backend', 'language',
+                                     'capture_nonce'}
+                and request['stage'] == stage and request['state'] == expected_state
+                and request['backend'] == expected_backend
+                and request['language'] in ('en', 'he')
+                and (stage != 'cpu_ready' or request['language'] == 'he')
+                and re.fullmatch('[0-9a-f]{32}', request['capture_nonce'])
+                and request['phase'] == ctx['phase'] and request['installation_id'] == ctx['installation_id']
+                and request['boot_id'] == report['boot_id'] and request['receiver_empty'] is True
+                and type(request['desktop_uid']) is int and request['desktop_uid'] > 0
+                and proof['iso_sha256'] == ctx['iso_sha256']
+                and proof['installation_id'] == ctx['installation_id'] and proof['path'] == name
+                and any(gate['id'] == 'gpu-failure-explicit-cpu-fallback' and gate['status'] == 'passed'
+                        and gate['observations'].get(ack_key) ==
+                        hashlib.sha256(request['capture_nonce'].encode()).hexdigest()
+                        for gate in report['gates']), 'Recovery screen receipt/report binding differs')
+        image = vm / name
+        regular = image.is_file() and not image.is_symlink()
+        bounded = regular and image.stat().st_size < 4 * 1024 * 1024
+        data = image.read_bytes() if bounded else b''
+        try:
+            dimensions = launch_diagnostic_png(data)
+        except RuntimeError:
+            dimensions = None
+        require(bounded and sha(image) == proof['sha256'] and dimensions == (1280, 800)
+                and len(data) > 25 and data[25] == 2,
+                'Recovery screen screenshot bytes differ')
+        result[stage] = (proof, image)
+    require(len({proof['sha256'] for proof, _image in result.values()}) == 2,
+            'Recovery screen images are byte-identical')
+    targets = [evidence / image.name for _proof, image in result.values()]
+    require(not any(target.exists() for target in targets),
+            'Recovery screen public destination already exists')
+    try:
+        for (_proof, image), target in zip(result.values(), targets):
+            shutil.copyfile(image, target)
+    except BaseException:
+        for target in targets:
+            target.unlink(missing_ok=True)
+        raise
+    return {stage: proof for stage, (proof, _image) in result.items()}
+
+
 def run(args):
     manifest = verify(args)
     require(Path('/dev/kvm').is_char_device(), 'KVM unavailable')
@@ -498,7 +583,8 @@ def run(args):
     state = dict(schema='arctic-voxtype-execution-v3', hardware_profile=args.hardware_profile,
                  status='prepared', release_acceptance=False,
                  image=manifest['image'], execution_checker_head=os.environ['GITHUB_SHA'],
-                 fixture_manifest_sha256=manifest['fixture_manifest_sha256'], reports={}, installations={}, indicators={})
+                 fixture_manifest_sha256=manifest['fixture_manifest_sha256'], reports={}, installations={},
+                 indicators={}, recovery_screens={})
     prepared = None
     def save():
         state['recorded_at_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -560,7 +646,7 @@ def run(args):
                 errors.append('harness-failed')
                 diagnostic(phase, 'harness', error, contract)
                 relay_host_stages(private / (phase + '.log'), diagnostic_token, phase)
-                relay_collector_diagnostic(vm, phase)
+                relay_collector_diagnostic(vm, phase, stage)
                 preserve_launch_diagnostic(vm, private / (phase + '.log'), diagnostic_token, ctx, args.evidence, contract)
             # Preserve structurally safe reports even when the collector's
             # nonzero exit correctly prevents acceptance.
@@ -578,6 +664,12 @@ def run(args):
                 except BaseException as error:
                     errors.append(phase + '-indicator-failed-or-unrun')
                     diagnostic(phase, 'indicator', error, contract)
+                if args.hardware_profile == 'turbo-q5-v3':
+                    try:
+                        state['recovery_screens'][phase] = recovery_screens(vm, ctx, args.evidence)
+                    except BaseException as error:
+                        errors.append(phase + '-recovery-screens-failed-or-unrun')
+                        diagnostic(phase, 'recovery-screens', error, contract)
             save()
             require(not errors, 'Exact image dictation phase failed')
         contract.validate_execution(state, {name: json.loads((args.evidence / item['path']).read_text())
