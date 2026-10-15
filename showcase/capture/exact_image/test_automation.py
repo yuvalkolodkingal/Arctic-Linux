@@ -478,6 +478,11 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(shell[0].kwargs,
                          {"seconds": 90, "exact_output": True, "ordered": True,
                           "prompt_contract": (prompt, ("~>", "~ >"))})
+        proof = [call for call in self.controller.type_text.call_args_list
+                 if call.args[1] == "installed-shell-proof"]
+        self.assertEqual(len(proof), 1)
+        self.assertEqual(proof[0].args[2], automation.Controller.SHELL_PROOF)
+        self.assertEqual(proof[0].kwargs, {"gap": .08})
         self.assertFalse(all(phrase.casefold()
                              in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
                              for phrase in shell[0].args[2]))

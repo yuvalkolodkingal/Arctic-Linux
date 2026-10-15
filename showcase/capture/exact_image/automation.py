@@ -813,7 +813,11 @@ class Controller:
                         + c.CONTROLLER["account"]["hostname"])
         prompt_contract = c.CONTROLLER["account"]["prompt"]
         installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
-        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
+        # Match the exact-image installer qualification's proven Fish/VT input
+        # rate.  The generic 12 ms controller rate can outrun a busy installed
+        # console's line-editor redraw and corrupt this long readiness command.
+        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF,
+                       gap=.08)
         self.press("installed-console", "ret")
         try:
             self.wait_screen("installed-console", "installed-shell-ready",
