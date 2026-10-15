@@ -9,7 +9,7 @@ import types
 from pathlib import Path
 from unittest import mock
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 import sys
 HERE = Path(__file__).parent
@@ -132,24 +132,80 @@ class UnattendedController(unittest.TestCase):
     def test_installed_shell_ocr_focus_is_fixed_private_and_does_not_replace_frame(self):
         observations = []
 
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        source.putpixel((11, 12), (224, 224, 224))
+
+        def screendump(path):
+            source.save(path)
+
         def ocr(path):
             with Image.open(path) as image:
-                observations.append((path.name, image.size, image.getpixel((0, 0))))
+                observations.append({
+                    "name": path.name,
+                    "size": image.size,
+                    "background": image.getpixel((0, 0)),
+                    "blue_glyph": image.getpixel((40, 48)),
+                    "white_glyph": image.getpixel((44, 48)),
+                })
             return ("ARCTIC - SHOWCASE - SHELL - READY\n"
                     "arcticshowcase@arctic-showcase ~>")
 
+        self.qmp.screendump = screendump
         self.controller.ocr = ocr
         path, info, image, text = self.controller._shot(
             "installed-shell-ready", shell_ocr_focus=True)
         self.assertEqual(observations, [
-            ("controller-001-installed-shell-ready.png", (1280, 800), (35, 48, 65)),
-            ("controller-001-installed-shell-ready-ocr.png", (3840, 384), (35, 48, 65)),
+            {"name": "controller-001-installed-shell-ready.png", "size": (1280, 800),
+             "background": (0, 0, 0), "blue_glyph": (0, 0, 0),
+             "white_glyph": (0, 0, 0)},
+            {"name": "controller-001-installed-shell-ready-ocr.png", "size": (5120, 512),
+             "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
+             "white_glyph": (255, 255, 255)},
         ])
         self.assertEqual((path.stat().st_size, info.st_size, image.size),
                          (info.st_size, info.st_size, (1280, 800)))
+        self.assertEqual(image.getpixel((10, 12)), (0, 32, 96))
+        self.assertEqual(image.getpixel((11, 12)), (224, 224, 224))
         self.assertEqual(text.splitlines()[-1], "arcticshowcase@arctic-showcase ~>")
         self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
         path.unlink()
+
+    def test_installed_shell_ocr_focus_is_deleted_when_private_ocr_fails(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        calls = 0
+
+        def ocr(_path):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise c.Invalid("private focus OCR failed")
+            return "clean"
+
+        self.controller.ocr = ocr
+        with self.assertRaisesRegex(c.Invalid, "private focus OCR failed"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+
+    def test_shell_ocr_focus_whitens_only_nonblack_glyph_pixels(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((7, 9), (0, 1, 0))
+        source.putpixel((8, 9), (12, 34, 56))
+        source.putpixel((7, 130), (255, 255, 255))
+        unchanged = source.copy()
+        expected = Image.new("RGB", (1280, 128), "black")
+        expected.putpixel((7, 9), (255, 255, 255))
+        expected.putpixel((8, 9), (255, 255, 255))
+        expected = expected.resize((5120, 512), Image.Resampling.NEAREST)
+
+        focused = automation._shell_ocr_focus(source)
+
+        self.assertEqual(source.size, (1280, 800))
+        self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
+        self.assertEqual(focused.size, (5120, 512))
+        self.assertIsNone(ImageChops.difference(focused, expected).getbbox())
 
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
         order = []
@@ -614,6 +670,9 @@ uptime   2 mins
 
     def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
         prompt = "arcticshowcase@arctic-showcase"
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (255, 255, 255))
+        self.qmp.screendump = lambda path: source.save(path)
         self.controller.ocr = lambda _path: (
             "ARCTIC - SHOWCASE - SHELL - READY\n"
             "arcticshowcase @ arctic - showcase ~ >")

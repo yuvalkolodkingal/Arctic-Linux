@@ -169,6 +169,21 @@ def _fixed_shell_proof_present(text: str, account: str, suffixes) -> bool:
         text[marker.end():], account, suffixes)
 
 
+def _shell_ocr_focus(image):
+    """Expose low-color VT glyphs in one ephemeral, deterministic OCR crop."""
+    c.require(image.mode == "RGB" and image.size == (1280, 800),
+              "controller shell OCR source geometry differs")
+    crop = image.crop((0, 0, 1280, 128))
+    pixels = list(crop.getdata())
+    foreground = [pixel != (0, 0, 0) for pixel in pixels]
+    c.require(any(foreground) and not all(foreground),
+              "controller shell OCR foreground differs")
+    normalized = Image.new("RGB", crop.size, "black")
+    normalized.putdata([(255, 255, 255) if present else (0, 0, 0)
+                        for present in foreground])
+    return normalized.resize((5120, 512), Image.Resampling.NEAREST)
+
+
 def _boot_entry_selected(image, entry: str) -> bool:
     """Recognize one immutable ISO GRUB highlight row, not OCR alone."""
     if entry not in ("try", "install"):
@@ -568,15 +583,16 @@ class Controller:
         c.privacy_text(full_text, self.fragments)
         if shell_ocr_focus:
             # The exact Linux VT draws the cleared proof in its first few
-            # 8x16-cell rows.  Whole-frame sparse-text OCR missed every fixed
-            # string in three exact runs.  OCR a deterministic private nearest-
-            # neighbour enlargement while retaining the original 1280x800
-            # frame as the sole screen evidence and acceptance geometry.
+            # cell rows. Whole-frame sparse-text OCR missed the fixed strings,
+            # and the colored non-bold Fish prompt remained invisible beside
+            # the bold white proof in a 3x crop. Normalize only the nonblack
+            # glyph pixels to white, then OCR a private 4x nearest-neighbour
+            # enlargement. The original 1280x800 frame
+            # remains the sole screen evidence and acceptance geometry.
             focus = self.runtime / f"controller-{self.counter:03d}-{label}-ocr.png"
             c.require(not focus.exists(), "controller OCR focus path reused")
             try:
-                image.crop((0, 0, 1280, 128)).resize(
-                    (3840, 384), Image.Resampling.NEAREST).save(focus, format="PNG")
+                _shell_ocr_focus(image).save(focus, format="PNG")
                 host._regular_new(focus, host.MAX_PNG_BYTES)
                 text = self.ocr(focus)
             finally:

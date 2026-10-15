@@ -99,9 +99,10 @@ rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
 The proof clears and homes the VT itself before printing a bold marker, using
 the same pattern as the successful installed-image identity challenge. The host
-keeps full-frame OCR for privacy screening, then reads the fixed top 128 pixels
-through a private 3x nearest-neighbour enlargement; the original 1280x800 frame
-remains the screen evidence and geometry gate. It requires
+keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
+in the fixed top 128 pixels to white and reads that private mask through a 4x
+nearest-neighbour enlargement. The transformed crop is always deleted; the
+original 1280x800 frame remains the sole screen evidence and geometry gate. It requires
 `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
 1280x800 frame. Spaces that Tesseract inserts immediately around the marker's
