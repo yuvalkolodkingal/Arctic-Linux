@@ -223,6 +223,22 @@ class ContractControls(unittest.TestCase):
                 with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
                     c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
 
+    def test_failed_status_contract_requires_closed_boolean_projection(self):
+        report = synthetic('online-installed')
+        gate = next(g for g in report['gates'] if g['id'] == 'online-installer-ready')
+        projection = {key: True for key in c.READINESS_STATUS_FIELDS}
+        gate.update(status='failed', code='gate-online-installer-ready-invalid',
+                    observations={'failure_stage': c.READINESS_FAILURE_STAGES['status-contract'],
+                                  **projection})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'], fixture_manifest=FIXTURES)['status'],
+                         'failed')
+        for key in c.READINESS_STATUS_FIELDS:
+            changed = copy.deepcopy(report)
+            del next(g for g in changed['gates'] if g['id'] == gate['id'])['observations'][key]
+            with self.assertRaisesRegex(c.Invalid, '^gate-readiness-status-projection$'):
+                c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
+
     def test_failure_stage_is_rejected_outside_failed_transcription_gate(self):
         report = synthetic('online-installed')
         cpu = next(gate for gate in report['gates']

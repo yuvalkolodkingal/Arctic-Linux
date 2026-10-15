@@ -99,6 +99,14 @@ OBSERVATIONS = {
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
     'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes',
+    'status_ready', 'status_state_ready', 'status_profile_matches',
+    'status_backend_valid', 'status_pending_absent', 'status_receipt_exists',
+    'status_readiness_marker_exists',
+}
+READINESS_STATUS_FIELDS = {
+    'status_ready', 'status_state_ready', 'status_profile_matches',
+    'status_backend_valid', 'status_pending_absent', 'status_receipt_exists',
+    'status_readiness_marker_exists',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 TRANSCRIPTION_FAILURE_STAGES = {
@@ -364,6 +372,13 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                     'gate-failure-stage-value')
         elif gate['status'] == 'failed' and gate['id'] in STAGED_FAILURE_GATES:
             require(False, 'gate-failure-stage-missing')
+        status_projection = set(observed) & READINESS_STATUS_FIELDS
+        if observed.get('failure_stage') == READINESS_FAILURE_STAGES['status-contract']:
+            require(status_projection == READINESS_STATUS_FIELDS
+                    and all(type(observed[key]) is bool for key in READINESS_STATUS_FIELDS),
+                    'gate-readiness-status-projection')
+        else:
+            require(not status_projection, 'gate-readiness-status-projection-scope')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value

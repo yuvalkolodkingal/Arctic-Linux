@@ -194,7 +194,10 @@ class GateDiagnosticControls(unittest.TestCase):
                     self.assertFalse(checker.gate(gate, action))
                     result = checker.report['gates'][0]
                     self.assertEqual(result['code'], 'gate-' + gate + '-' + label)
-                    self.assertEqual(result['observations'], {'failure_stage': number})
+                    expected = {'failure_stage': number}
+                    if stage == 'status-contract':
+                        expected.update({key: False for key in guest.READINESS_STATUS_FIELDS})
+                    self.assertEqual(result['observations'], expected)
                     self.assertNotIn('sensitive-canary', json.dumps(result))
 
     def test_readiness_stage_inventory_is_closed_and_used_by_ready_path(self):
@@ -209,6 +212,23 @@ class GateDiagnosticControls(unittest.TestCase):
         used = set(__import__('re').findall(
             r"self\.readiness_stage\('([^']+)'", source))
         self.assertEqual(used, set(guest.READINESS_FAILURE_STAGES))
+
+    def test_status_contract_failure_projects_only_fixed_booleans(self):
+        checker = self.checker('online-installer-ready')
+        checker.readiness_status_projection = {
+            'status_ready': True, 'status_state_ready': False,
+            'status_profile_matches': True, 'status_backend_valid': True,
+            'status_pending_absent': True, 'status_receipt_exists': True,
+            'status_readiness_marker_exists': True,
+        }
+        action = lambda: checker.readiness_stage(
+            'status-contract', self.raising(PrivateInvalid('sensitive-canary')))
+        self.assertFalse(checker.gate('online-installer-ready', action))
+        result = checker.report['gates'][0]
+        self.assertEqual(set(result['observations']),
+                         {'failure_stage'} | set(guest.READINESS_STATUS_FIELDS))
+        self.assertFalse(result['observations']['status_state_ready'])
+        self.assertNotIn('sensitive-canary', json.dumps(result))
 
     def test_state_contract_reports_allowed_cardinality_not_observed_count(self):
         checker = guest.Checker.__new__(guest.Checker)

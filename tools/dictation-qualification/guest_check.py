@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, READINESS_FAILURE_STAGES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, READINESS_FAILURE_STAGES, READINESS_STATUS_FIELDS, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -583,6 +583,10 @@ class Checker:
                                ReadinessStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
+                if (type(error) is ReadinessStageFailure
+                        and error.failure_stage == READINESS_FAILURE_STAGES['status-contract']):
+                    observations.update(getattr(self, 'readiness_status_projection',
+                                                {key: False for key in READINESS_STATUS_FIELDS}))
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
             result['observations'] = observations
             if type(error) is MicrophoneIsolationUnavailable:
@@ -719,11 +723,20 @@ class Checker:
 
     def ready(self):
         value = self.readiness_stage('status-command', lambda: self.adapter('status'))
+        self.readiness_status_projection = {
+            'status_ready': value.get('ready') is True,
+            'status_state_ready': value.get('state') == 'ready',
+            'status_profile_matches': value.get('profile') == self.profile_id,
+            'status_backend_valid': value.get('backend') in ('cpu', 'vulkan'),
+            'status_pending_absent': not (SYSTEM / 'pending').exists(),
+            'status_receipt_exists': (SYSTEM / 'verified.json').is_file(),
+            'status_readiness_marker_exists': (SYSTEM / 'upstream-direct-v1').is_file(),
+        }
         self.readiness_stage('status-contract', lambda: require(
-            value.get('ready') is True and value.get('state') == 'ready'
-            and value.get('profile') == self.profile_id
-            and value.get('backend') in ('cpu', 'vulkan')
-            and not (SYSTEM / 'pending').exists(), 'upstream-not-ready'))
+            all(self.readiness_status_projection[key] for key in (
+                'status_ready', 'status_state_ready', 'status_profile_matches',
+                'status_backend_valid', 'status_pending_absent')),
+            'upstream-not-ready'))
         marker = SYSTEM / 'upstream-direct-v1'
         self.readiness_stage('readiness-marker-stat', lambda: owned_file(marker))
         self.readiness_stage('readiness-marker-content', lambda: require(
