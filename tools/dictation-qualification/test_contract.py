@@ -215,7 +215,7 @@ class ContractControls(unittest.TestCase):
         with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-scope$'):
             c.validate(report, report['context'], fixture_manifest=FIXTURES)
 
-    def test_gpu_gate_allows_stage_only_for_a_transcription_substep(self):
+    def test_gpu_gate_allows_only_transcription_or_fixed_recovery_stage(self):
         report = synthetic('online-installed')
         gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
         gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
@@ -224,6 +224,13 @@ class ContractControls(unittest.TestCase):
         report['status'] = 'failed'
         self.assertEqual(c.validate(report, report['context'],
                                     fixture_manifest=FIXTURES)['status'], 'failed')
+        gate['observations'] = {
+            'failure_stage': c.GPU_FAILURE_STAGES['gpu-failure-screen']}
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        gate['observations'] = {'failure_stage': 999}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+            c.validate(report, report['context'], fixture_manifest=FIXTURES)
         gate['observations'] = {}
         self.assertEqual(c.validate(report, report['context'],
                                     fixture_manifest=FIXTURES)['status'], 'failed')

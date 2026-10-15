@@ -147,6 +147,22 @@ MICROPHONE_FAILURE_STAGES = {
     'language-restore': 122,
     'error-clear': 123,
 }
+GPU_FAILURE_STAGES = {
+    'receiver-clear': 201,
+    'initial-vulkan-setup': 202,
+    'vulkan-payload-integrity': 203,
+    'cpu-backend-selection': 204,
+    'language-selection': 205,
+    'loader-fixture': 206,
+    'failed-vulkan-setup': 207,
+    'cpu-preservation': 208,
+    'receiver-empty': 209,
+    'actionable-error': 210,
+    'gpu-failure-screen': 211,
+    'cpu-recovery-selection': 212,
+    'cpu-ready-status': 213,
+    'cpu-ready-screen': 214,
+}
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',
@@ -158,6 +174,8 @@ FAILURE_STAGE_GATES = {
        for gate in TRANSCRIPTION_GATES},
     'microphone-disconnect-error': frozenset(MICROPHONE_FAILURE_STAGES.values()),
 }
+FAILURE_STAGE_GATES[MODERN_GPU_GATE] = frozenset(
+    set(TRANSCRIPTION_FAILURE_STAGES.values()) | set(GPU_FAILURE_STAGES.values()))
 TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',

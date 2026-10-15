@@ -174,6 +174,34 @@ class GateDiagnosticControls(unittest.TestCase):
         with self.assertRaisesRegex(guest.Invalid, '^unknown-microphone-failure-family$'):
             guest.MicrophoneStageFailure('actionable-error', 'private-family')
 
+    def test_gpu_failures_project_only_fixed_stage_number_and_family(self):
+        gate = guest.MODERN_GPU_GATE
+        checker = self.checker(gate)
+        error = subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                          output=b'sensitive-canary')
+        action = lambda: checker.gpu_stage(
+            'gpu-failure-screen', self.raising(error))
+        self.assertFalse(checker.gate(gate, action))
+        result = checker.report['gates'][0]
+        self.assertEqual(result['code'], 'gate-' + gate + '-timeout')
+        self.assertEqual(result['observations'], {
+            'failure_stage': guest.GPU_FAILURE_STAGES['gpu-failure-screen']})
+        self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_gpu_stage_inventory_is_closed(self):
+        checker = self.checker(guest.MODERN_GPU_GATE)
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-stage$'):
+            checker.gpu_stage('private-stage', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-family$'):
+            guest.GpuStageFailure('gpu-failure-screen', 'private-family')
+
+    def test_gpu_wrapper_preserves_nested_transcription_stage(self):
+        checker = self.checker(guest.MODERN_GPU_GATE)
+        nested = guest.TranscriptionStageFailure('text-delivery', 'invalid')
+        with self.assertRaises(guest.TranscriptionStageFailure) as raised:
+            checker.gpu_stage('cpu-ready-screen', self.raising(nested))
+        self.assertIs(raised.exception, nested)
+
     def test_state_contract_reports_allowed_cardinality_not_observed_count(self):
         checker = guest.Checker.__new__(guest.Checker)
         checker.state = lambda: 'idle'
