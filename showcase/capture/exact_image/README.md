@@ -96,39 +96,45 @@ candidate's animated greeting, the host sends one empty command terminator. Its
 3D renderer deliberately leaves that single ordinary byte queued for Fish,
 which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
-host types one fixed nonsecret proof which cannot contain its required response.
-The proof defines a `fish_prompt` function only in the disposable Fish session.
-That function renders the fixed contiguous uppercase account token in bold bright white
-and the `~>` suffix in regular bright white. The proof then clears and homes the VT before printing a bold
-marker, using the same pattern as the successful installed-image identity
-challenge. Fish itself invokes the session prompt function after the proof
-command returns. The host
-keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
+host types one fixed nonsecret proof and then sends a fresh 128-bit challenge
+over the held virtio-serial connection. The installed interactive Fish reads
+that challenge from the root-owned character device. It emits a response only
+after checking UID 1000, the exact account and hostname, interactive Fish state,
+the device type and root ownership. The response binds those fixed facts to the
+host nonce. The reviewed tooling archive is deliberately withheld until this
+exchange passes, so no guest helper can answer it.
+
+The same guarded Fish branch defines `fish_prompt` only in the disposable
+session. It renders the fixed contiguous uppercase account token in bold bright
+white and the `~>` suffix in regular bright white, then clears and homes the VT
+before printing a bold marker. Fish itself invokes that prompt function after
+the proof command returns. The host keeps full-frame OCR for privacy screening,
+then maps only nonblack glyph pixels
 in the marker and prompt rows within the fixed left 640×32 pixels to white. It
 reads each private row through an 8x nearest-neighbour enlargement and pinned
 single-line PSM 7. Both transformed crops are always deleted; the
-original 1280x800 frame remains the sole screen evidence and geometry gate. It requires
-`ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
-account's real `ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>` Fish prompt on an exact
-1280x800 frame. Spaces that Tesseract inserts immediately around the marker's
-hyphens, the fixed account's `@` and hostname hyphen, or between `~` and `>` are
-admitted; every alphanumeric account and host byte remains exact. The host
-accepts only a complete final OCR line for that account. Account text and a
-suffix on separate rows, a trailing line, or the greeting's own `user@host`
-info row cannot satisfy this gate. It requires a second unchanged exact frame
-with the response and final prompt before typing the sudo launcher. An earlier
-echoed prompt, a fixed settling delay or marker output alone cannot authorize
-that input.
+original 1280x800 frame remains the sole screen evidence and geometry gate. The
+visual half requires `ARCTIC-SHOWCASE-SHELL-READY` followed only by the fixed
+Fish `~>` suffix on an exact 1280x800 frame. The nonce-bound response proves the
+exact account, hostname, UID and shell without accepting OCR substitutions for
+the account token. A missing marker, alternate suffix, reversed order, extra
+line, wrong nonce or different session identity fails closed. A second unchanged
+exact frame is required before the sudo launcher. Neither guest diagnostics,
+an echoed command, a settling delay nor marker pixels alone can authorize input.
 
-The installed prompt remains an authoritative 90-second gate. Its failure
+The installed session and visual prompt remain an authoritative bounded gate.
+The channel response has a 30-second limit and the visual gate has a 90-second
+limit. Its failure
 projection reduces private frames to closed enums for fetch still visible,
 exact prompt on a nonfinal row, the fixed proof marker, account-only or
 suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty,
 and other text, plus bounded integer timings. Each sample also retains four
 independent booleans for the exact fixed marker, the account pattern with only
 the acceptance-approved punctuation spacing, suffix and complete prompt, with
-only their boolean seen/final aggregates exported. After full-frame geometry
-and privacy validation, it also exports bounded nonblack-pixel counts for
+only their boolean seen/final aggregates exported. It records only the challenge
+SHA-256 and a fixed closed identity enum for a successful transport proof. After
+full-frame geometry and privacy validation, it also exports bounded
+nonblack-pixel counts for
 sixteen fixed 640x8 bands at the top left. Those integers can locate the VT
 glyph rows but contain no pixels, text, crops, screens or identifiers. OCR
 strings remain private. Only after a timeout, the

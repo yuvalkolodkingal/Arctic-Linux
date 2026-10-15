@@ -78,6 +78,8 @@ INSTALL_ACK = "ARCTIC-SHOWCASE-INSTALL-BOOT-ACK"
 INSTALL_PROGRESS_PREFIX = "ARCTIC-SHOWCASE-INSTALL-PROGRESS "
 AUTOMATION_READY_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-READY "
 AUTOMATION_GO_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-GO "
+SHELL_CHALLENGE_PREFIX = "ARCTIC-SHOWCASE-SHELL-CHALLENGE "
+SHELL_SESSION_PREFIX = "ARCTIC-SHOWCASE-INSTALLED-SHELL-V1 "
 INSTALL_PROGRESS_STAGES = (
     "live-helper", "graphical-session", "installer-ipc",
     "page-welcome", "page-keyboard", "online-route", "page-network",
@@ -93,6 +95,15 @@ INSTALLER_IPC_FAILURE_REASONS = (
     "installer-never-ready",
 )
 HEX32 = re.compile(r"[0-9a-f]{32}")
+
+
+def installed_shell_session_proof(nonce: str, line: str) -> None:
+    """Accept only the nonce-bound identity emitted by the installed Fish."""
+    require(type(nonce) is str and HEX32.fullmatch(nonce) is not None
+            and type(line) is str
+            and line == (SHELL_SESSION_PREFIX + nonce
+                         + " 1000 arcticshowcase arctic-showcase fish"),
+            "installed shell session proof differs")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
 EMAIL = re.compile(r"(?i)\b[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+\b")
@@ -196,8 +207,10 @@ OCR_IDENTITY = {
 def controller_trace(value) -> None:
     """Validate host-observed unattended input and screen evidence.
 
-    Guest messages never enter this object.  The host controller records only
-    its reviewed fixed commands, QMP input, QMP screenshots and approved OCR.
+    Guest diagnostics never enter this object. The installed-shell event keeps
+    only the host challenge hash and fixed identity enum after exact response
+    validation. The controller otherwise records reviewed commands, QMP input,
+    QMP screenshots and approved OCR.
     """
     keys = {"schema", "contract", "tooling_sha256", "events", "status",
             "guest_diagnostics_used", "release_acceptance"}
@@ -233,7 +246,7 @@ def controller_trace(value) -> None:
         "live-username": (8, "4f8841fb7db59dee76d1f5b74e14010bb1beabce549fa6da7b790f5497dd0f94"),
         "live-install": (623, "86818a073728d6702ca128ccb0b3c4e881a170f3887d7386129047ec97a14bde"),
         "installed-username": (14, "b8214c27644e8af628d5030b053746bea3f72aca7325a066a912de18aef48c0a"),
-        "installed-shell-proof": (146, "c8533799f8acc2632edb50dcf0845c1bd3a1b199df95dbbf6802ef73d8b00ab0"),
+        "installed-shell-proof": (996, "ff17d3cc4effe8d74d6f059d5d017ae9443b0310763d3c329785d395f80e273c"),
         "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
@@ -253,7 +266,8 @@ def controller_trace(value) -> None:
         require(type(event) is dict and set(event) == {"index", "stage", "kind", "detail"}
                 and event["index"] == index and type(event["stage"]) is str
                 and event["stage"] in stages
-                and event["kind"] in ("screen", "keys", "text", "secret", "pointer", "command", "qmp", "cleanup")
+                and event["kind"] in ("screen", "keys", "text", "secret", "session",
+                                      "pointer", "command", "qmp", "cleanup")
                 and type(event["detail"]) is dict,
                 "controller event fields differ")
         stage, kind, detail = event["stage"], event["kind"], event["detail"]
@@ -294,6 +308,14 @@ def controller_trace(value) -> None:
             require(detail == {"source": "reviewed-disposable-controller-constant",
                                "characters": 38} and stage == "installed-console",
                     "controller credential record differs")
+        elif kind == "session":
+            require(stage == "installed-console" and set(detail) == {
+                        "transport", "challenge_sha256", "identity"
+                    } and detail["transport"] == "owned-root-virtio-serial"
+                    and fullmatch(HEX64, detail["challenge_sha256"])
+                    and detail["identity"]
+                        == "uid-1000-arcticshowcase-at-arctic-showcase-fish",
+                    "controller installed session proof differs")
         elif kind == "pointer":
             require(set(detail) == {"x", "y", "button", "target"}
                     and all(type(detail[key]) is int for key in ("x", "y"))
@@ -316,7 +338,8 @@ def controller_trace(value) -> None:
         sequence.append((stage, kind))
     required = [("live-boot", "screen"), ("live-console", "keys"),
                 ("live-install", "command"), ("install-complete", "screen"),
-                ("installed-boot", "screen"), ("dictation-readiness", "command"),
+                ("installed-boot", "screen"), ("installed-console", "session"),
+                ("dictation-readiness", "command"),
                 ("dictationsetup", "screen"), ("winter", "pointer"),
                 ("winter", "screen"), ("updates", "screen"), ("shutdown", "qmp"),
                 ("shutdown", "cleanup")]
@@ -385,7 +408,7 @@ def controller_trace(value) -> None:
                 if event["stage"] == "installed-console"
                 and event["kind"] == "screen"
                 and event["detail"].get("expectation") == "installed-fetch-greeting"]
-    require(len(greeting) == 1 and greeting[0] + 7 < len(events),
+    require(len(greeting) == 1 and greeting[0] + 8 < len(events),
             "installed fetch redraw sequence differs")
     at = greeting[0]
     require(events[at + 1]["stage"] == "installed-console"
@@ -398,22 +421,25 @@ def controller_trace(value) -> None:
             and events[at + 3]["kind"] == "keys"
             and events[at + 3]["detail"] == {"names": ["ret"]}
             and events[at + 4]["stage"] == "installed-console"
-            and events[at + 4]["kind"] == "screen"
-            and events[at + 4]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 4]["kind"] == "session"
             and events[at + 5]["stage"] == "installed-console"
             and events[at + 5]["kind"] == "screen"
-            and events[at + 5]["detail"].get("expectation") == "installed-shell"
-            and events[at + 6]["stage"] == "installed-scenes"
-            and events[at + 6]["kind"] == "text"
-            and events[at + 6]["detail"].get("command") == "installed-scenes"
+            and events[at + 5]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 6]["stage"] == "installed-console"
+            and events[at + 6]["kind"] == "screen"
+            and events[at + 6]["detail"].get("expectation") == "installed-shell"
             and events[at + 7]["stage"] == "installed-scenes"
-            and events[at + 7]["kind"] == "keys"
-            and events[at + 7]["detail"] == {"names": ["ret"]},
+            and events[at + 7]["kind"] == "text"
+            and events[at + 7]["detail"].get("command") == "installed-scenes"
+            and events[at + 8]["stage"] == "installed-scenes"
+            and events[at + 8]["kind"] == "keys"
+            and events[at + 8]["detail"] == {"names": ["ret"]},
             "installed fetch redraw sequence differs")
     require([event["detail"]["command"] for event in events if event["kind"] == "text"]
             == ["live-username", "live-install", "installed-username",
                 "installed-shell-proof", "installed-scenes"]
             and sum(event["kind"] == "secret" for event in events) == 2
+            and sum(event["kind"] == "session" for event in events) == 1
             and [event["detail"]["id"] for event in events if event["kind"] == "command"]
             == ["live-install", "installed-scenes", "dictation-readiness",
                 "dictationsetup", "winter", "updates"]
@@ -666,7 +692,8 @@ def installed_startup_diagnostic(value) -> None:
     """Validate the fixed installed login/Fish diagnostic projection."""
     require(type(value) is dict and set(value) == {
         "schema", "release_acceptance", "login", "authentication", "fetch",
-        "dismissal", "shell_ready_gate", "post_failure_interrupt"
+        "dismissal", "session_transport", "shell_ready_gate",
+        "post_failure_interrupt"
     } and value["schema"] == "arctic-showcase-installed-startup-diagnostic-v1"
         and value["release_acceptance"] is False,
         "installed startup diagnostic identity differs")
@@ -696,6 +723,17 @@ def installed_startup_diagnostic(value) -> None:
             "installed fetch preceded authentication")
     require(value["dismissal"] != "sent" or value["fetch"]["status"] == "observed",
             "installed fetch dismissal preceded greeting")
+    session = value["session_transport"]
+    require(type(session) is dict and set(session) == {
+        "status", "transport", "challenge_sha256", "identity"
+    } and session["status"] in ("not-proved", "proved")
+        and session["transport"] == "owned-root-virtio-serial"
+        and session["identity"] == "uid-1000-arcticshowcase-at-arctic-showcase-fish"
+        and ((session["status"] == "proved")
+             == (type(session["challenge_sha256"]) is str
+                 and fullmatch(HEX64, session["challenge_sha256"]) is not None))
+        and (session["status"] == "proved" or session["challenge_sha256"] is None),
+        "installed shell session transport differs")
 
     surfaces = {
         "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
@@ -723,6 +761,8 @@ def installed_startup_diagnostic(value) -> None:
             "installed shell-ready timing differs")
     require(gate["status"] == "not-started" or value["dismissal"] == "sent",
             "installed shell-ready gate preceded fetch dismissal")
+    require(gate["status"] == "not-started" or session["status"] == "proved",
+            "installed shell-ready gate preceded session proof")
     observed = 0
     for seconds in gate["first_observation_seconds"].values():
         require(seconds is None or (type(seconds) is int and 0 <= seconds <= 90),
@@ -775,9 +815,11 @@ def installed_startup_diagnostic(value) -> None:
         require(occupancy["samples"] and occupancy["samples"][-1] is not None,
                 "installed shell passed without occupancy sample")
     if gate["status"] == "passed":
-        require(gate["last_observation"] == "prompt-exact"
-                and all(gate["signal_final"].values()),
-                "installed shell gate passed without exact prompt")
+        require(session["status"] == "proved"
+                and gate["last_observation"] in ("proof-marker", "prompt-exact")
+                and gate["signal_final"]["marker"]
+                and gate["signal_final"]["suffix"],
+                "installed shell gate passed without session and visual proof")
     interrupt = value["post_failure_interrupt"]
     require(interrupt in ("not-run", "sent-no-prompt", "recovered-prompt",
                           "controller-unavailable")

@@ -208,6 +208,16 @@ class Lines:
             at += written
 
 
+def _installed_shell_exchange(lines, random=os.urandom):
+    """Issue one fresh bounded challenge over the owned QEMU channel."""
+    raw = random(16)
+    c.require(type(raw) is bytes and len(raw) == 16,
+              "installed shell challenge differs")
+    nonce = raw.hex()
+    lines.write(c.SHELL_CHALLENGE_PREFIX + nonce)
+    return nonce, lines.read(timeout=30)
+
+
 class QMP:
     def __init__(self, path: Path, process: subprocess.Popen, startup_timeout: int):
         self.socket = self.file = None
@@ -587,12 +597,14 @@ def host_mode(args) -> int:
         lines.write(c.INSTALL_ACK)
         qmp.command("system_reset")
         controller.qmp_event("installed-transition", "system-reset")
-        # /run is a different filesystem after the installed boot. Deliver the
-        # same reviewed helper again; the installed probe itself came from and
-        # remains bound to the immutable live-install marker.
-        lines.write(TOOLING_PREFIX + tooling)
         phase = "installed-boot"
-        controller.boot_installed_and_start()
+        controller.boot_installed_and_start(
+            lambda: _installed_shell_exchange(lines))
+        # /run is a different filesystem after the installed boot. Deliver the
+        # same reviewed helper only after the authenticated shell proves its
+        # nonce-bound session over the owned channel. The installed probe came
+        # from and remains bound to the immutable live-install marker.
+        lines.write(TOOLING_PREFIX + tooling)
         phase = "capture-scenes"
         capture = host.Capture(runtime / "captures", execution, provenance, ocr_identity,
                                qmp.screendump, ocr, fragments)

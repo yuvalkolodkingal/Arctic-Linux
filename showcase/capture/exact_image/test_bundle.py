@@ -278,6 +278,31 @@ class WrapperProtocol(unittest.TestCase):
             first.close()
             second.close()
 
+    def test_installed_shell_exchange_is_fresh_bounded_and_exact(self):
+        calls = []
+
+        class Channel:
+            def write(self, line):
+                calls.append(("write", line))
+
+            def read(self, timeout=None):
+                calls.append(("read", timeout))
+                return (c.SHELL_SESSION_PREFIX + "ab" * 16
+                        + " 1000 arcticshowcase arctic-showcase fish")
+
+        nonce, response = capture_vm._installed_shell_exchange(
+            Channel(), random=lambda size: b"\xab" * size)
+        self.assertEqual(nonce, "ab" * 16)
+        self.assertEqual(calls, [
+            ("write", c.SHELL_CHALLENGE_PREFIX + nonce), ("read", 30),
+        ])
+        c.installed_shell_session_proof(nonce, response)
+        calls.clear()
+        with self.assertRaisesRegex(c.Invalid, "shell challenge differs"):
+            capture_vm._installed_shell_exchange(
+                Channel(), random=lambda _size: b"too-short")
+        self.assertEqual(calls, [])
+
     def test_fixed_vm_rejects_wrong_disk_and_fake_channel_or_server(self):
         qmp, channel = Path("/run/qmp"), Path("/run/channel")
         command = capture_vm._qemu_command(qmp, channel, 7, 8, "none", "tcg")
