@@ -92,10 +92,12 @@ class UnattendedController(unittest.TestCase):
                     image.putpixel((x, y), (250, 190, 84))
             return image
 
-        self.assertTrue(automation._install_boot_entry_selected(frame(279)))
-        self.assertFalse(automation._install_boot_entry_selected(frame(235)))
-        self.assertFalse(automation._install_boot_entry_selected(
-            Image.new("RGB", (1280, 800), (250, 190, 84))))
+        self.assertTrue(automation._boot_entry_selected(frame(235), "try"))
+        self.assertFalse(automation._boot_entry_selected(frame(235), "install"))
+        self.assertTrue(automation._boot_entry_selected(frame(279), "install"))
+        self.assertFalse(automation._boot_entry_selected(frame(279), "try"))
+        self.assertFalse(automation._boot_entry_selected(
+            Image.new("RGB", (1280, 800), (250, 190, 84)), "install"))
 
     def test_install_selection_records_only_fixed_menu_and_pixel_proof(self):
         path = self.root / "selected.png"
@@ -124,6 +126,37 @@ class UnattendedController(unittest.TestCase):
         event = self.controller.events[0]
         self.assertEqual(event["kind"], "screen")
         self.assertEqual(event["detail"]["expectation"], "installer-done")
+
+    def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
+        order = []
+        image = Image.new("RGB", (1920, 1080), "#101820")
+        for y in range(235, 275):
+            for x in range(750, 1168):
+                image.putpixel((x, y), (250, 190, 84))
+
+        def screendump(path):
+            image.save(path)
+
+        def ocr(_path):
+            order.append("ocr")
+            self.assertTrue(self.controller.boot_countdown_held)
+            return "Try Arctic Linux Install Arctic Linux"
+
+        self.qmp.screendump = screendump
+        self.controller.ocr = ocr
+        original = self.controller.press_held
+
+        def held(*args, **kwargs):
+            order.append("home")
+            return original(*args, **kwargs)
+
+        self.controller.press_held = held
+        self.controller.wait_screen(
+            "live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=1,
+            before_ocr=self.controller.hold_boot_countdown_before_ocr)
+        self.assertEqual(order, ["home", "ocr"])
+        self.assertEqual([event["kind"] for event in self.controller.events],
+                         ["keys", "screen"])
 
     def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
         self.controller.ocr = lambda path: "wrong screen"
@@ -184,7 +217,16 @@ class UnattendedController(unittest.TestCase):
     def test_live_boot_proves_the_real_installer_before_switching_vt(self):
         operations = []
 
+        def boot_frame():
+            image = Image.new("RGB", (1920, 1080), "#101820")
+            for y in range(235, 275):
+                for x in range(750, 1168):
+                    image.putpixel((x, y), (250, 190, 84))
+            return image
+
         def wait(stage, expectation, phrases=(), **kwargs):
+            if expectation == "install-boot-menu":
+                kwargs["before_ocr"](boot_frame())
             operations.append(("screen", stage, expectation, phrases, kwargs))
             return None, ""
 
@@ -205,11 +247,15 @@ class UnattendedController(unittest.TestCase):
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_live_and_start()
 
-        self.assertEqual(operations[1], ("keys", "live-boot", ("home", "down")))
-        self.assertEqual(operations[2],
+        self.assertEqual(operations[0], ("keys", "live-boot", ("home",)))
+        self.assertEqual(operations[1][:4],
+                         ("screen", "live-boot", "install-boot-menu",
+                          ("Arctic", "Install")))
+        self.assertEqual(operations[2], ("keys", "live-boot", ("down",)))
+        self.assertEqual(operations[3],
                          ("selection", "live-boot", "install-boot-menu-selected"))
-        self.assertEqual(operations[3], ("keys", "live-boot", ("ret",)))
-        installer = operations[4]
+        self.assertEqual(operations[4], ("keys", "live-boot", ("ret",)))
+        installer = operations[5]
         self.assertEqual(installer[:4], (
             "screen", "live-boot", "live-installer-visible",
             ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
@@ -219,7 +265,7 @@ class UnattendedController(unittest.TestCase):
         })
         self.assertFalse(all(phrase.casefold() in "Try Arctic Linux Install Arctic Linux".casefold()
                              for phrase in installer[3]))
-        self.assertEqual(operations[5], ("keys", "live-console", ("ctrl-alt-f6",)))
+        self.assertEqual(operations[6], ("keys", "live-console", ("ctrl-alt-f6",)))
 
     def test_live_startup_surface_projection_uses_only_fixed_enums(self):
         image = Image.new("RGB", (1280, 800))

@@ -148,8 +148,9 @@ def controller_trace():
                 "ocr_sha256": "b" * 64, "expectation": expectation,
                 "width": width, "height": height}
     rows = [
+        ("live-boot", "keys", {"names": ["home"]}),
         ("live-boot", "screen", screen("install-boot-menu")),
-        ("live-boot", "keys", {"names": ["home", "down"]}),
+        ("live-boot", "keys", {"names": ["down"]}),
         ("live-boot", "screen", screen("install-boot-menu-selected")),
         ("live-boot", "keys", {"names": ["ret"]}),
         ("live-boot", "screen", screen("live-installer-visible")),

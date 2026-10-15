@@ -132,8 +132,10 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     return bool(lines) and lines[-1] in accepted
 
 
-def _install_boot_entry_selected(image) -> bool:
-    """Recognize the immutable ISO's highlighted Install row, not OCR alone."""
+def _boot_entry_selected(image, entry: str) -> bool:
+    """Recognize one immutable ISO GRUB highlight row, not OCR alone."""
+    if entry not in ("try", "install"):
+        return False
     if image.size != (1920, 1080):
         return False
     # The reviewed GRUB theme draws one 418x40 amber selection pill.  Restrict
@@ -147,8 +149,10 @@ def _install_boot_entry_selected(image) -> bool:
                     and pixels[x, y][2] <= 130)
         if amber >= 300:
             rows.append(y)
+    centers = {"try": (246, 263), "install": (290, 307)}
+    low, high = centers[entry]
     return (30 <= len(rows) <= 50 and rows == list(range(rows[0], rows[-1] + 1))
-            and 290 <= (rows[0] + rows[-1]) / 2 <= 307)
+            and low <= (rows[0] + rows[-1]) / 2 <= high)
 
 
 LIVE_SURFACES = (
@@ -445,6 +449,7 @@ class Controller:
         self.tooling_sha256 = tooling_sha256
         self.events = []
         self.counter = 0
+        self.boot_countdown_held = False
         self.live_startup = LiveStartupDiagnostic()
         self.installed_startup = InstalledStartupDiagnostic()
 
@@ -507,20 +512,22 @@ class Controller:
         self.record(stage, "secret", {"source": "reviewed-disposable-controller-constant",
                     "characters": 38})
 
-    def _shot(self, label):
+    def _shot(self, label, before_ocr=None):
         self.counter += 1
         path = self.runtime / f"controller-{self.counter:03d}-{label}.png"
         c.require(not path.exists(), "controller screenshot path reused")
         self.qmp.screendump(path)
         info = host._regular_new(path, host.MAX_PNG_BYTES)
         image = controller_decode(path)
+        if before_ocr is not None:
+            before_ocr(image)
         text = self.ocr(path)
         c.privacy_text(text, self.fragments)
         return path, info, image, text
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
                     visible=False, retain=False, exact_output=False, ordered=False,
-                    prompt_contract=None):
+                    prompt_contract=None, before_ocr=None):
         startup_gate = expectation == "live-installer-visible"
         installed_gate = expectation == "installed-shell-ready"
         if startup_gate:
@@ -532,7 +539,7 @@ class Controller:
         while time.monotonic() < deadline:
             path = None
             try:
-                path, info, image, text = self._shot(expectation)
+                path, info, image, text = self._shot(expectation, before_ocr=before_ocr)
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
                 if startup_gate:
@@ -661,7 +668,7 @@ class Controller:
                 phrases = ("Try Arctic Linux", "Safe graphics mode",
                            "Check USB for errors", "Boot from first disk")
                 if (_phrases_present(text, phrases, ordered=True)
-                        and _install_boot_entry_selected(image)):
+                        and _boot_entry_selected(image, "install")):
                     self.record("live-boot", "screen", {
                         "bytes": info.st_size, "sha256": c.sha256(path),
                         "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
@@ -679,14 +686,27 @@ class Controller:
             time.sleep(.25)
         raise c.Invalid("controller Install boot selection proof absent")
 
+    def hold_boot_countdown_before_ocr(self, image):
+        """Stop the five-second GRUB timer as soon as its exact pixels exist."""
+        if self.boot_countdown_held:
+            return
+        if _boot_entry_selected(image, "try"):
+            self.press_held("live-boot", "home")
+            self.boot_countdown_held = True
+
     def boot_live_and_start(self):
-        self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
+        # Pixel decoding precedes OCR.  Stop GRUB's five-second countdown on
+        # the exact immutable Try highlight so OCR latency cannot consume the
+        # remaining menu window.  The full OCR menu gate still follows.
+        self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"),
+                         seconds=300, before_ocr=self.hold_boot_countdown_before_ocr)
+        c.require(self.boot_countdown_held, "controller boot countdown was not held")
         self.live_startup.boot_observed()
         # Firmware/GRUB can miss zero-duration down/up batches.  The exact ISO
         # has a five-second menu, so use QEMU's bounded hold timer, then prove
         # the amber Install row before Enter.  A missed key can no longer boot
         # the default Try entry and burn the full Welcome timeout.
-        self.press_held("live-boot", "home", "down")
+        self.press_held("live-boot", "down")
         self.wait_install_boot_selection()
         self.press_held("live-boot", "ret")
         self.live_startup.selection_sent()

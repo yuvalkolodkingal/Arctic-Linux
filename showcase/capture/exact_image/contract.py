@@ -235,7 +235,7 @@ def controller_trace(value) -> None:
         "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
-        "live-boot": {("home", "down"), ("ret",)},
+        "live-boot": {("home",), ("down",), ("ret",)},
         "live-console": {("ctrl-alt-f6",), ("ret",)},
         "live-install": {("ret",)},
         "installed-console": {("ctrl-alt-f6",), ("ctrl-l",), ("ret",)},
@@ -325,8 +325,9 @@ def controller_trace(value) -> None:
         require(cursor < len(sequence), "controller required event sequence differs")
         cursor += 1
     boot_prefix = [
+        ("live-boot", "keys", ("home",)),
         ("live-boot", "screen", "install-boot-menu"),
-        ("live-boot", "keys", ("home", "down")),
+        ("live-boot", "keys", ("down",)),
         ("live-boot", "screen", "install-boot-menu-selected"),
         ("live-boot", "keys", ("ret",)),
         ("live-boot", "screen", "live-installer-visible"),
@@ -409,7 +410,8 @@ def controller_trace(value) -> None:
             "controller exact input or operation inventory differs")
     keys = [(event["stage"], tuple(event["detail"]["names"]))
             for event in events if event["kind"] == "keys"]
-    require(keys.count(("live-boot", ("home", "down"))) == 1
+    require(keys.count(("live-boot", ("home",))) == 1
+            and keys.count(("live-boot", ("down",))) == 1
             and keys.count(("live-boot", ("ret",))) == 1
             and keys.count(("live-console", ("ctrl-alt-f6",))) == 1
             and keys.count(("live-console", ("ret",))) == 2
