@@ -238,6 +238,14 @@
     "selected_input_error_fallback": false
   },
   "installed_renderer_matrix": {
+    "activation_preflight": {
+      "cause": "the reviewed preparation and marker-only activation were pushed to the fixed dispatch branch in one ref update, so the push event before SHA was 7a61cffe rather than the marker-pinned immediate parent a21144a3",
+      "failed_run": 38726866330,
+      "failure_stage": "Verify reviewed single-file activation and pinned source",
+      "guest_or_iso_started": false,
+      "release_acceptance": false,
+      "repair": "publish this provenance-only reviewed parent with the marker unchanged, then publish one marker-only child that pins its exact commit"
+    },
     "capture_attempts_per_mode": 1,
     "diagnosis": "installed guest grim evidence shows the moving Celluloid fixture as corrupted color tiles and the later paused fullscreen reference as black while the same exact live session passes; this is not an oracle-only false negative, but existing guest screencopy evidence alone cannot distinguish displayed corruption from an installed-session GL/screencopy interaction",
     "explicit_user_or_admin_renderer_policy_unchanged": true,
