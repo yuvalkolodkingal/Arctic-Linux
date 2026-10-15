@@ -608,9 +608,7 @@ class Controller:
         "printf 'ARCTIC-SHOWCASE-INSTALLED-SHELL-V1 %s %s %s %s fish\\n' "
         "$arctic_nonce (id -u) (id -un) (hostname) "
         ">/dev/virtio-ports/org.arctic.showcase.capture; "
-        "function fish_prompt; set_color --bold brwhite; "
-        f"printf '{SHELL_PROMPT_ACCOUNT}'; "
-        "set_color normal; set_color brwhite; printf ' ~> '; "
+        "function fish_prompt; set_color brwhite; printf ' ~> '; "
         "set_color normal; end; "
         "printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
         "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
@@ -1049,8 +1047,8 @@ class Controller:
         # gives Fish time to complete the empty command after the renderer has
         # exited.  The proof contains no secret and cannot mimic its fixed
         # response. It defines only this Fish session's prompt function so the
-        # complete fixed account token is contiguous, bold and bright white;
-        # the fixed suffix remains bright white. It then clears and homes the
+        # exact suffix remains bright white. The authenticated channel already
+        # proves the fixed account and hostname. It then clears and homes the
         # VT before drawing a bold marker,
         # matching the successful installed-image identity challenge. Fish
         # itself calls that function after the command returns. This removes
@@ -1089,8 +1087,8 @@ class Controller:
                 self.installed_startup.interrupt("sent-no-prompt")
             raise error
         # Recheck an independent unchanged frame before entering the longer
-        # sudo launcher.  Both gates require the fixed response in order and
-        # the fixed account's prompt as the final OCR line.
+        # sudo launcher. Both gates require the fixed marker in order and the
+        # exact Fish suffix as the sole final OCR line.
         self.wait_screen("installed-console", "installed-shell",
                          ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
                          seconds=90, exact_output=True, ordered=True,

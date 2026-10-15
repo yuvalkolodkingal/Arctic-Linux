@@ -750,11 +750,15 @@ class UnattendedController(unittest.TestCase):
         self.assertNotIn("funcsave", prefix)
         self.assertNotIn("functions --copy", prefix)
         account = automation.SHELL_PROMPT_ACCOUNT
-        self.assertEqual(prefix.count(account), 1)
-        self.assertIn("printf '" + account + "'; set_color normal; ", prefix)
-        self.assertIn("set_color brwhite; printf ' "
-                      + c.CONTROLLER["account"]["prompt"]["rendered"] + " ';",
-                      prefix)
+        self.assertNotIn(account, prefix)
+        prompt_definition = ("function fish_prompt; set_color brwhite; printf ' "
+                             + c.CONTROLLER["account"]["prompt"]["rendered"]
+                             + " '; set_color normal; end; ")
+        self.assertEqual(prefix.count(prompt_definition), 1)
+        self.assertTrue(automation._fixed_shell_transport_visual_present(
+            "ARCTIC-SHOWCASE-SHELL-READY\n"
+            + c.CONTROLLER["account"]["prompt"]["rendered"],
+            tuple(c.CONTROLLER["account"]["prompt"]["ocr_suffixes"])))
         self.assertTrue(rendered_command.endswith("; end"))
         rendered = subprocess.run(
             ["/bin/sh", "-c", "printf " + rendered_command.removesuffix("; end")],
@@ -905,6 +909,7 @@ uptime   2 mins
             marker + "\n~>\ntrailing",
             "ARCTIC-SHOWCASE-SHELL-WRONG\n~>",
             marker + "\naccount\n~>",
+            marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>",
         ):
             with self.subTest(forged=forged):
                 self.assertFalse(automation._fixed_shell_transport_visual_present(

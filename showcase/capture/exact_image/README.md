@@ -105,9 +105,8 @@ host nonce. The reviewed tooling archive is deliberately withheld until this
 exchange passes, so no guest helper can answer it.
 
 The same guarded Fish branch defines `fish_prompt` only in the disposable
-session. It renders the fixed contiguous uppercase account token in bold bright
-white and the `~>` suffix in regular bright white, then clears and homes the VT
-before printing a bold marker. Fish itself invokes that prompt function after
+session. It renders only the fixed `~>` suffix in bright white, then clears and
+homes the VT before printing a bold marker. Fish itself invokes that prompt after
 the proof command returns. The host keeps full-frame OCR for privacy screening,
 then maps only nonblack glyph pixels
 in the marker and prompt rows within the fixed left 640×32 pixels to white. It
@@ -116,8 +115,8 @@ single-line PSM 7. Both transformed crops are always deleted; the
 original 1280x800 frame remains the sole screen evidence and geometry gate. The
 visual half requires `ARCTIC-SHOWCASE-SHELL-READY` followed only by the fixed
 Fish `~>` suffix on an exact 1280x800 frame. The nonce-bound response proves the
-exact account, hostname, UID and shell without accepting OCR substitutions for
-the account token. A missing marker, alternate suffix, reversed order, extra
+exact account, hostname, UID and shell without relying on OCR for that identity.
+A missing marker, alternate suffix, reversed order, extra
 line, wrong nonce or different session identity fails closed. A second unchanged
 exact frame is required before the sudo launcher. Neither guest diagnostics,
 an echoed command, a settling delay nor marker pixels alone can authorize input.
