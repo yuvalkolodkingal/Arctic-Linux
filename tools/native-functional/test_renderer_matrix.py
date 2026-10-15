@@ -12,17 +12,17 @@ import unittest
 from unittest.mock import Mock, patch
 
 HERE=Path(__file__).resolve().parent
-spec=importlib.util.spec_from_file_location('installed_renderer_matrix_tested',HERE/'native_smoke.py')
+spec=importlib.util.spec_from_file_location('renderer_matrix_tested',HERE/'native_smoke.py')
 N=importlib.util.module_from_spec(spec);spec.loader.exec_module(N)
 
 
-class InstalledRendererMatrixControls(unittest.TestCase):
+class RendererMatrixControls(unittest.TestCase):
     def test_launch_requests_each_explicit_lowercase_renderer_on_owned_pipe(self):
         for mode in ('gl','ngl','cairo','vulkan'):
             with self.subTest(mode=mode),tempfile.TemporaryDirectory() as t:
                 parent=Mock(root=Path(t),user=pwd.getpwuid(os.getuid()),uid=os.getuid(),stage='installed',
                             prefix=['synthetic-prefix'],original_prefix=['synthetic-prefix'])
-                trial=N.InstalledRendererTrialSmoke(parent,mode);drain=Mock()
+                trial=N.RendererMatrixTrialSmoke(parent,mode);drain=Mock()
                 with patch.object(N,'NativeProtocolDrain',return_value=drain), \
                      patch.object(N.subprocess,'Popen',return_value=Mock()) as popen:
                     trial.launch_renderer(['/usr/bin/celluloid','--no-existing-session','fixture.mkv'])
@@ -42,7 +42,7 @@ class InstalledRendererMatrixControls(unittest.TestCase):
             with self.subTest(mode=mode,realized=realized),tempfile.TemporaryDirectory() as t:
                 parent=Mock(root=Path(t),user=pwd.getpwuid(os.getuid()),uid=os.getuid(),stage='installed',
                             prefix=[],original_prefix=[])
-                trial=N.InstalledRendererTrialSmoke(parent,mode)
+                trial=N.RendererMatrixTrialSmoke(parent,mode)
                 inherited=dict(intervention=mode,status='observed',oracle=dict(status='matched'),
                     realized_renderer=dict(status='reported-realized',renderer=realized),release_acceptance=False)
                 with patch.object(N.RendererTrialSmoke,'observe',return_value=copy.deepcopy(inherited)):
@@ -72,19 +72,20 @@ class InstalledRendererMatrixControls(unittest.TestCase):
             trials=[Mock(owned=[],launches=[],observe=Mock(return_value=dict(
                 intervention=mode,status='observed',oracle=dict(status='matched'),release_acceptance=False)))
                 for mode in modes]
-            with patch.object(N,'InstalledRendererTrialSmoke',side_effect=trials), \
+            with patch.object(N,'RendererMatrixTrialSmoke',side_effect=trials), \
                  patch.object(N,'retire_renderer_player') as retire:
-                smoke.installed_renderer_matrix(fixture,expected,'b'*64,primary)
+                smoke.renderer_matrix(fixture,expected,'b'*64,primary)
             receipt=json.loads((root/'0-controlled-renderer-trials.json').read_bytes())
-            self.assertEqual(receipt['schema'],'arctic-native-installed-renderer-matrix-v1')
+            self.assertEqual(receipt['schema'],'arctic-native-renderer-matrix-v2')
             self.assertEqual([row['intervention'] for row in receipt['trials']],list(modes))
             self.assertEqual(smoke.gates,before);self.assertEqual(primary['oracle']['status'],'unmatched')
             self.assertTrue(receipt['primary_failure_preserved']);self.assertFalse(receipt['release_acceptance'])
             self.assertEqual(receipt['controls']['capture_attempts_per_mode'],1)
             self.assertEqual(retire.call_count,6)
 
-    def test_matrix_rejects_live_stage_or_wrong_exact_inventory_before_trials(self):
-        for stage,count in (('live',6),('installed',5),('installed',7)):
+    def test_matrix_accepts_native_stages_and_rejects_wrong_scope_or_inventory(self):
+        for stage,count,run in (('live',6,True),('installed',6,True),('context',6,False),
+                                ('live',5,False),('installed',7,False)):
             with self.subTest(stage=stage,count=count),tempfile.TemporaryDirectory() as t:
                 root=Path(t);fixture=root/'fixture';fixture.write_bytes(b'f');expected=root/'expected';expected.write_bytes(b'e')
                 smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.stage=stage
@@ -92,19 +93,25 @@ class InstalledRendererMatrixControls(unittest.TestCase):
                 smoke.launches=[];smoke.finish_native_protocol=Mock()
                 primary=dict(oracle=dict(status='unmatched'),screenshot=dict(sha256='a'*64),
                     fixture_sha256=N.digest(fixture),expected_rgb_sha256=N.digest(expected))
-                with patch.object(N,'InstalledRendererTrialSmoke') as trial,patch.object(N,'retire_renderer_player'):
-                    smoke.installed_renderer_matrix(fixture,expected,'b'*64,primary)
+                with patch.object(N,'RendererMatrixTrialSmoke') as trial,patch.object(N,'retire_renderer_player'):
+                    if run:
+                        trial.return_value=Mock(owned=[],launches=[],observe=Mock(return_value=dict(
+                            intervention='gl',status='observed',release_acceptance=False)))
+                    smoke.renderer_matrix(fixture,expected,'b'*64,primary)
                 receipt=json.loads((root/'0-controlled-renderer-trials.json').read_bytes())
-                self.assertEqual(receipt['preparation_error'],'guard-error');trial.assert_not_called()
-                self.assertTrue(all(row['status']=='unrun' for row in receipt['trials']))
+                if run:
+                    self.assertNotIn('preparation_error',receipt);self.assertEqual(trial.call_count,4)
+                else:
+                    self.assertEqual(receipt['preparation_error'],'guard-error');trial.assert_not_called()
+                    self.assertTrue(all(row['status']=='unrun' for row in receipt['trials']))
 
     def test_matrix_inverse_restores_exact_preparation_parent(self):
-        from test_controls_state_trials import restore_installed_renderer_matrix
+        from test_controls_state_trials import restore_renderer_matrix
         current=(HERE/'native_smoke.py').read_text()
-        restored=restore_installed_renderer_matrix(current)
-        self.assertNotIn('INSTALLED_RENDERER_MATRIX',restored)
-        self.assertNotIn('installed_renderer_matrix(',restored)
-        self.assertNotIn('InstalledRendererTrialSmoke',restored)
+        restored=restore_renderer_matrix(current)
+        self.assertNotIn('RENDERER_MATRIX',restored)
+        self.assertNotIn('renderer_matrix(',restored)
+        self.assertNotIn('RendererMatrixTrialSmoke',restored)
         self.assertEqual(hashlib.sha256(restored.encode()).hexdigest(),
                          'e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151')
 

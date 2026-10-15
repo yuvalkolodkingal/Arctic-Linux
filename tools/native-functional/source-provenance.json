@@ -1,7 +1,6 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "e4174f15f87feef369bc107301358213f2bbe01cca42727ec9afbe10c1678039",
-    "test_installed_renderer_matrix.py": "d8e869100f1b7919bb45b301ba1d3365e8f94039141ae3e6a7e0db84e5dabed8",
+    "test_controls_state_trials.py": "03a04b847d9a6f1af6a214ac49794eb49cad6891bb01fa4d45d5324f93c6d371",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
@@ -10,6 +9,7 @@
     "test_native_public_evidence.py": "116a5b7956e08f1b5c1cc61fa5de39a77d2ca7dfb2af34eafc65491f5b95e9ab",
     "test_native_smoke.py": "3243823c0cf35e8976724e482f79424f677211942ad9eeee829ba64e39676b8e",
     "test_native_v6.py": "960878317845337f35f45e5231eb6290720923dd54f3edbc5f8a9e31367d8c96",
+    "test_renderer_matrix.py": "fc6c1a3a184e48937c40498484c9cfc27a135f78b587c1eac25cbf63ebf8e292",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "c9bd34912cbd8fa5e6c5e510754e9749e0d3c4884fc2674129896cac5902556a",
+    "guest-check-native-v6.py": "718a452bd28cc375fcfe949303f5ddb493528abdbb079b7c09210168a997cf54",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e",
-    "native_smoke.py": "6d5d0c88a78ea742311940f92f154ff32c7f0a161e8400ee097ce175b8a17d16"
+    "native_smoke.py": "dda54700d23cc88d7f81095278c71b663fcab477e8bad5e8da6d52b04d103dce"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,37 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "installed_renderer_matrix": {
-    "activation_preflight": {
-      "cause": "the reviewed preparation and marker-only activation were pushed to the fixed dispatch branch in one ref update, so the push event before SHA was 7a61cffe rather than the marker-pinned immediate parent a21144a3",
-      "failed_run": 38726866330,
-      "failure_stage": "Verify reviewed single-file activation and pinned source",
-      "guest_or_iso_started": false,
-      "release_acceptance": false,
-      "repair": "publish this provenance-only reviewed parent with the marker unchanged, then publish one marker-only child that pins its exact commit"
-    },
-    "capture_attempts_per_mode": 1,
-    "diagnosis": "installed guest grim evidence shows the moving Celluloid fixture as corrupted color tiles and the later paused fullscreen reference as black while the same exact live session passes; this is not an oracle-only false negative, but existing guest screencopy evidence alone cannot distinguish displayed corruption from an installed-session GL/screencopy interaction",
-    "explicit_user_or_admin_renderer_policy_unchanged": true,
-    "fresh_owned_player_per_mode": true,
-    "historical_repeat_run": 38672376980,
-    "installed_session_only": true,
-    "modes": [
-      "gl",
-      "ngl",
-      "cairo",
-      "vulkan"
-    ],
-    "preparation_parent_commit": "7a61cffe584ef84fc1a82109b8b1b2d0dfb4f3b5",
-    "primary_failure_preserved": true,
-    "raw_stderr_exported": false,
-    "release_acceptance": false,
-    "scope": "diagnostic renderer selection only; no mode becomes a product default without exact runtime evidence and independent review",
-    "strict_oracle_thresholds_unchanged": true,
-    "trigger_artifact_id": 11965638911,
-    "trigger_run": 38719636973
-  },
-  "native_source_sha256": "6d5d0c88a78ea742311940f92f154ff32c7f0a161e8400ee097ce175b8a17d16",
+  "native_source_sha256": "dda54700d23cc88d7f81095278c71b663fcab477e8bad5e8da6d52b04d103dce",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -310,6 +280,48 @@
     "unknown_admitted_suffix_outside_public_inventory": "export failure"
   },
   "release_acceptance": false,
+  "renderer_matrix": {
+    "activation_preflight": {
+      "cause": "the reviewed preparation and marker-only activation were pushed to the fixed dispatch branch in one ref update, so the push event before SHA was 7a61cffe rather than the marker-pinned immediate parent a21144a3",
+      "failed_run": 38726866330,
+      "failure_stage": "Verify reviewed single-file activation and pinned source",
+      "guest_or_iso_started": false,
+      "release_acceptance": false,
+      "repair": "publish this provenance-only reviewed parent with the marker unchanged, then publish one marker-only child that pins its exact commit"
+    },
+    "capture_attempts_per_mode": 1,
+    "diagnosis": "exact frozen-image runs now show the same intermittent GL failure in both stages: installed run 38719636973 rendered moving tiles then a black paused reference, and live run 38727127095 rendered the moving fixture in an undersized region then a black paused reference; each strict oracle found zero candidate color components",
+    "existing_guest_screencopy_limit": "the evidence is not an oracle-only false negative, but guest grim captures alone still cannot distinguish physical display corruption from a GL/screencopy interaction",
+    "explicit_user_or_admin_renderer_policy_unchanged": true,
+    "fresh_owned_player_per_mode": true,
+    "historical_repeat_run": 38672376980,
+    "latest_failure_artifact_bytes": 13760725,
+    "latest_failure_artifact_id": 11970065357,
+    "latest_failure_artifact_sha256": "12085d5d508b90e330dcd6cc11268d4e2fb55f028a78aa357f719e68861ef96a",
+    "latest_failure_run": 38727127095,
+    "matrix_ran_in_latest_failure": false,
+    "modes": [
+      "gl",
+      "ngl",
+      "cairo",
+      "vulkan"
+    ],
+    "preparation_parent_commit": "7a61cffe584ef84fc1a82109b8b1b2d0dfb4f3b5",
+    "primary_failure_preserved": true,
+    "raw_stderr_exported": false,
+    "release_acceptance": false,
+    "schema": "arctic-native-renderer-matrix-v2",
+    "scope": "diagnostic renderer selection only; no mode becomes a product default without exact runtime evidence and independent review",
+    "scope_expansion_parent_commit": "058c6e3305b2f94e8218d37a8e8321564a1ad7e6",
+    "scope_expansion_reason": "run 38727127095 failed the live primary oracle before the installed-only matrix could run, so the same failure-only matrix must trigger after either live or installed primary failure",
+    "stages": [
+      "live",
+      "installed"
+    ],
+    "strict_oracle_thresholds_unchanged": true,
+    "trigger_artifact_id": 11965638911,
+    "trigger_run": 38719636973
+  },
   "sequential_celluloid_renderers": {
     "diagnosis": "the proved moving GL player remained mapped while the separate static GL oracle player advanced and decoded but presented a black video surface; earlier bounded controls trials with the same fixture, flags, hide action and timing matched immediately after all prior Celluloid players were retired",
     "directory_relocation_control": "the final predicate reads the socket basename through the still-open original dirfd and independently requires the absolute evidence-root path to retain the pinned directory device/inode, owner, type and private mode; renaming or replacing the root fails closed",
