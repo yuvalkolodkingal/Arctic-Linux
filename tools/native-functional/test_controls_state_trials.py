@@ -30,6 +30,61 @@ PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb851
 FRESH_PLAYER_RESTART_NATIVE_SHA = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
 PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
+PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
+
+
+def restore_pulsed_visual_native(source):
+    """Reverse only the continuous-damage visual fixture correction."""
+    current="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+
+
+def visual_reference_stream():
+    \"\"\"Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    \"\"\"
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+"""
+    previous="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+"""
+    replacements=((current,previous),
+                  ("        source=self.write('visual-reference-input.raw',visual_reference_stream())\n",
+                   "        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)\n"),
+                  ("                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')\n",
+                   "                  product_renderer=renderer,\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')\n"))
+    for index,(new,old) in enumerate(replacements):
+        if source.count(new)!=1:raise AssertionError(f'Pulsed visual inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=PRE_PULSE_NATIVE_SHA:
+        raise AssertionError('Pre-pulsed visual Native source differs')
+    return source
 
 
 def restore_epiphany_product_route(source):
@@ -144,6 +199,7 @@ def restore_post_geometry_readiness(source):
 
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_pulsed_visual_native(source)
     source=restore_post_geometry_readiness(source)
     source=restore_epiphany_product_route(source)
     source=restore_moving_player_retirement(source)
@@ -561,7 +617,9 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(segment(new,name,'Smoke'),segment(old,name,'Smoke'))
         bounded=restore_bounded_retry_native(new)
         self.assertEqual(segment(bounded,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
-        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),
+        for text in (new.replace("pulse=bytes(channel+4 for channel in base)",
+                                  "pulse=bytes(channel+5 for channel in base)",1),
+                     new.replace("time.sleep(.5)","time.sleep(.6)",1),
                      new.replace('(attempt_limit-1) * retry_settle_seconds + 3.5',
                                  '(attempt_limit-1) * retry_settle_seconds + 4.5',1),
                      new.replace("schema='arctic-native-visual-attempts-v1'",

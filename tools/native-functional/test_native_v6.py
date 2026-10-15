@@ -381,6 +381,7 @@ class NewControls(unittest.TestCase):
             self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
+            self.assertEqual(receipt['fixture_cadence'],N.visual_reference_cadence())
             self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]

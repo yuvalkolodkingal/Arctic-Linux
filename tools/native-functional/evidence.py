@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
+NATIVE_SOURCE_SHA = '4edcef1bc852f8ca91b9a555875d981a7f31259131a385bdca8e5e1bb8b88c73'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '6a18094e8026cb6c2ca8f153bea8cedfbcf2171f4f21094c8642fbda1d5c350c')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'b261a8486b8c0c2270930edfe6c9c7ee632e284bce199270b4c40bf754203ab5')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -185,6 +185,8 @@ def check_native(serial,stage,target):
     crop=visual['client_pixel_crop']
     result=native.evaluate_reference_rgb(raw['actual_rgb'],crop['width'],crop['height'],raw['expected_rgb'])
     R.require(result==visual['oracle'] and result['status']=='matched','Independent actual RGB visual oracle differs/fails')
+    R.require(visual.get('fixture_cadence')==native.visual_reference_cadence(),
+              'Pulsed visual fixture cadence proof differs')
     R.require('gui-trace.log' in copied and 'gui-trace-summary.json' in copied and 'final-clients.json' in copied
               and 'visual-oracle.json' in copied and 'moving-player-proof.json' in copied,'Required diagnostic/visual proof files missing')
     R.require(json.loads((target/'visual-oracle.json').read_text())==visual,'Actual visual report/file identity differs')

@@ -1,14 +1,14 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "9c4e5ae430500be51d9f287b83b70617d2249cf30f66b4447447bf9dccbc7ed4",
+    "test_controls_state_trials.py": "281052260d9809d2bf2ac46b74f9b5f6e28c63fb3215b8a4b2da2755559a2185",
     "test_native_bulk_transport.py": "fa558657aa710bbd8d7edea9cf9bb686cfbf89276d2bd8488dead2ad6b19f9ad",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
     "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "fbb66286832c1b25bb1a18c7d4995c4e01ac209ac7eb1c7c0c27526e947ba340",
-    "test_native_v6.py": "41f0669b06aff1c3977786b7a5d3282dac1fdbcc8c70313fde61995e49df2e5f",
+    "test_native_smoke.py": "59c4e28c9c960c5330c81e2b900ce1564bc16654beb628e7aeb2b03dc8f78ad0",
+    "test_native_v6.py": "c05c9f66d6a02b0028d1c07334afc2b77c4049e1952b6dbf41022d15b3da2d63",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
@@ -102,6 +102,22 @@
       "celluloid-view.c": "aa2981a472b61388cd53317afcee94991f1b17bd660456f0b252283dbc14bd1f"
     }
   },
+  "continuous_damage_visual_fixture": {
+    "alternating_rgb_delta": 4,
+    "changes_every_frame": true,
+    "diagnosis": "run 38691281619 proved the exact owned Celluloid process, GL renderer, FFV1 decode, fullscreen geometry and advancing playback clock, but its byte-identical-frame fixture presented an all-black GL surface; clock advancement did not prove post-resize frame damage or presentation",
+    "exact_wrapper_renderer_and_visual_proof_unchanged": true,
+    "failure_artifact_id": 11952911292,
+    "failure_artifact_sha256": "6acbcb7320292e20e9d3a1c7575ebe95ac68392c27f013b834786624201f4fa0",
+    "failure_run": 38691281619,
+    "frames": 20,
+    "frames_per_second": 10,
+    "oracle_thresholds_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false,
+    "scope": "observer fixture supplies bounded continuous frame damage; the sole captured frame must still match all 16 palette cells under the existing strict oracle",
+    "single_player_single_capture_policy_unchanged": true
+  },
   "controlled_renderer_trials": {
     "GTK_source_version": "4.22.5",
     "interventions": [
@@ -149,10 +165,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "6a18094e8026cb6c2ca8f153bea8cedfbcf2171f4f21094c8642fbda1d5c350c",
+    "guest-check-native-v6.py": "b261a8486b8c0c2270930edfe6c9c7ee632e284bce199270b4c40bf754203ab5",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e",
-    "native_smoke.py": "76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68"
+    "native_smoke.py": "4edcef1bc852f8ca91b9a555875d981a7f31259131a385bdca8e5e1bb8b88c73"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -220,7 +236,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68",
+  "native_source_sha256": "4edcef1bc852f8ca91b9a555875d981a7f31259131a385bdca8e5e1bb8b88c73",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -275,6 +291,7 @@
     "failure_diagnosis": "installed sole capture observed an entirely black owned fullscreen GL client while the same exact ISO live capture matched all 316224 checked pixels; the earlier clock sample preceded fullscreen and controls transitions, so it did not prove post-geometry playback readiness",
     "failure_run": 38672376980,
     "first_failed_or_unmatched_oracle": "hard gate failure; no recapture, restart, or diagnostic acceptance path",
+    "fixture_cadence": "20 frames at 10 fps alternating every RGB channel by +4; both phases remain inside unchanged oracle thresholds and every decoded frame differs from its predecessor",
     "host_attempt_receipt_schema_exact": true,
     "maximum_owned_player_attempts": 1,
     "oracle_thresholds_unchanged": true,
@@ -323,5 +340,5 @@
     "validate_harness_serial"
   ],
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
-  "validators_source_sha256": "626dc818049bd1836529926566f40adf59d2a9cb9d708473cd215608b9e0197c"
+  "validators_source_sha256": "da5648fd6f962ae2ce81ee72270e7203747da97e486183ba2e6fed58e3dad8f0"
 }
