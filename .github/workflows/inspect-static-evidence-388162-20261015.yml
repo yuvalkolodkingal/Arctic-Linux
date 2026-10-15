@@ -1,0 +1,314 @@
+name: Inspect static Mango evidence 38816249906
+
+on:
+  push:
+    branches: [codex/inspect-static-evidence-388162-20261015]
+    paths: [.github/workflows/inspect-static-evidence-388162-20261015.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify and report fixed static evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import shutil
+          import stat
+          import struct
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH = 'codex/inspect-static-evidence-388162-20261015'
+          WORKFLOW = '.github/workflows/inspect-static-evidence-388162-20261015.yml'
+          INSPECTION_HEAD = '28e8cc72a7ea9440b384bd76cc19c7cf6f32aeab'
+          RUN_ID = 38816249906
+          WORKFLOW_ID = 380360958
+          ARTIFACT_ID = 12010344440
+          ARTIFACT_NAME = 'unqualified-exact-image-mango-static'
+          ARCHIVE_BYTES = 3_731_634
+          ARCHIVE_SHA256 = 'e0cccf6db2962293f4268dca3a43bfa146c3e9bf582694547648fcb8fe02c107'
+          MAX_EXPANDED = 31 * 1024 * 1024
+          SOURCE_FILES = {
+              'candidate/source/.github/workflows/iso.yml',
+              'candidate/source/iso/kiwi/config.kiwi',
+              'candidate/source/packaging/mangowm.spec',
+              'candidate/source/packaging/patches/mango-client-geometry-events.patch',
+              'candidate/source/packaging/patches/mango-output-teardown.patch',
+              'candidate/source/packaging/patches/mango-software-renderer-dmabuf.patch',
+              'candidate/source/tools/build-iso.sh',
+          }
+          EXPECTED_FILES = SOURCE_FILES | {
+              'execution-manifest.json', 'candidate/performance-plan.json',
+              'candidate/mango.elf', 'candidate/mango-headers.txt',
+              'candidate/mango-unwind.txt', 'candidate/mango-disassembly.txt',
+              'candidate/wlroots.elf', 'candidate/wlroots-headers.txt',
+              'candidate/wlroots-unwind.txt', 'candidate/wlroots-disassembly.txt',
+          }
+          HEX40 = re.compile(r'[0-9a-f]{40}')
+          HEX64 = re.compile(r'[0-9a-f]{64}')
+          SECRET = re.compile(
+              r'gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|'
+              r'(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|'
+              r'(?i:(?:password|secret|authorization|access_token|refresh_token)\s*[:=]\s*\S+)')
+          URL = re.compile(r'https?://[^\s\"\'<>]+')
+
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  assert key not in result, 'Duplicate JSON field'
+                  result[key] = value
+              return result
+
+          def api(endpoint):
+              return json.loads(subprocess.check_output(
+                  ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}'], timeout=60),
+                  object_pairs_hook=unique)
+
+          def sanitize(value):
+              if isinstance(value, dict):
+                  return {key: sanitize(item) for key, item in value.items()}
+              if isinstance(value, list):
+                  return [sanitize(item) for item in value]
+              if isinstance(value, str):
+                  assert not SECRET.search(value), 'Sensitive report text refused'
+                  for name in ('GH_TOKEN', 'GITHUB_TOKEN'):
+                      token = os.environ.get(name)
+                      if token:
+                          value = value.replace(token, '<redacted>')
+                  return URL.sub('<public-url-redacted>', value)
+              return value
+
+          def valid_member(item):
+              name = item.filename
+              path = PurePosixPath(name)
+              mode = item.external_attr >> 16
+              kind = stat.S_IFMT(mode)
+              assert name and len(name.encode()) <= 1024
+              assert '\\' not in name and '\x00' not in name
+              assert not path.is_absolute() and all(part not in ('', '.', '..') for part in path.parts)
+              assert not item.is_dir() and not name.endswith('/')
+              assert kind in (0, stat.S_IFREG), f'Unsupported member type: {name}'
+              assert not item.flag_bits & 0x1, f'Encrypted member refused: {name}'
+              assert 0 <= item.compress_size <= ARCHIVE_BYTES
+              assert 0 <= item.file_size <= 16 * 1024 * 1024
+
+          assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH
+          assert os.environ['GITHUB_EVENT_NAME'] == 'push'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          parents = subprocess.check_output(['git', 'show', '-s', '--format=%P', 'HEAD'], text=True).split()
+          assert len(parents) == 1 and parents[0] == INSPECTION_HEAD
+          assert subprocess.check_output(
+              ['git', 'diff', '--name-only', INSPECTION_HEAD, head], text=True).splitlines() == [WORKFLOW]
+          assert subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip() == ''
+          ref = api('git/ref/heads/' + BRANCH)
+          assert ref['ref'] == 'refs/heads/' + BRANCH and ref['object']['sha'] == head
+
+          run = api(f'actions/runs/{RUN_ID}')
+          assert run['id'] == RUN_ID
+          assert run['name'] == 'Inspect exact candidate Mango and wlroots (static only)'
+          assert run['path'] == '.github/workflows/inspect-exact-image-mango-20261010.yml'
+          assert run['workflow_id'] == WORKFLOW_ID
+          assert run['head_branch'] == 'codex/inspect-exact-image-mango-20261010'
+          assert run['head_sha'] == INSPECTION_HEAD
+          assert run['event'] == 'push' and run['run_attempt'] == 1
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['repository']['full_name'] == REPOSITORY
+          assert run['head_repository']['full_name'] == REPOSITORY
+
+          artifact = api(f'actions/artifacts/{ARTIFACT_ID}')
+          assert artifact['id'] == ARTIFACT_ID and artifact['name'] == ARTIFACT_NAME
+          assert artifact['expired'] is False
+          assert artifact['size_in_bytes'] == ARCHIVE_BYTES
+          assert artifact['digest'] == 'sha256:' + ARCHIVE_SHA256
+          assert artifact['workflow_run']['id'] == RUN_ID
+          assert artifact['workflow_run']['head_sha'] == INSPECTION_HEAD
+          assert artifact['workflow_run']['head_branch'] == 'codex/inspect-exact-image-mango-20261010'
+
+          with tempfile.TemporaryDirectory(prefix='arctic-static-evidence-') as folder:
+              root = Path(folder)
+              archive_path = root / 'evidence.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(
+                      ['gh', 'api', f'repos/{REPOSITORY}/actions/artifacts/{ARTIFACT_ID}/zip'],
+                      stdout=output, check=True, timeout=180)
+              assert archive_path.stat().st_size == ARCHIVE_BYTES
+              assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == ARCHIVE_SHA256
+
+              extracted = root / 'extracted'
+              extracted.mkdir(mode=0o700)
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert 1 <= len(items) <= 32
+                  assert len({item.filename for item in items}) == len(items)
+                  assert sum(item.file_size for item in items) <= MAX_EXPANDED
+                  assert sum(item.compress_size for item in items) <= ARCHIVE_BYTES
+                  for item in items:
+                      valid_member(item)
+                  assert archive.testzip() is None, 'Artifact ZIP CRC failure'
+                  names = {item.filename for item in items}
+                  assert names == EXPECTED_FILES | {'report.json'}
+                  report_item = next(item for item in items if item.filename == 'report.json')
+                  assert 0 < report_item.file_size <= 512 * 1024
+                  raw_report = archive.read(report_item)
+                  report_text = raw_report.decode('utf-8', errors='strict')
+                  assert '\x00' not in report_text and len(report_text.splitlines()) <= 10_000
+                  report = json.loads(report_text, object_pairs_hook=unique,
+                      parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+                  for item in items:
+                      destination = extracted / item.filename
+                      assert destination.resolve().is_relative_to(extracted.resolve())
+                      destination.parent.mkdir(parents=True, exist_ok=True)
+                      with archive.open(item) as source, destination.open('xb') as output:
+                          shutil.copyfileobj(source, output, length=1024 * 1024)
+                      assert destination.stat().st_size == item.file_size
+
+              assert report['schema'] == 'arctic-exact-image-mango-static-v1'
+              assert report['release_acceptance'] is False
+              assert report['performance_acceptance'] is False
+              assert report['observer_profile_admitted'] is False
+              assert report['status'] == 'static_evidence_complete_pending_independent_review'
+              assert set(report['files']) == EXPECTED_FILES
+              inventory = {}
+              for name in sorted(EXPECTED_FILES | {'report.json'}):
+                  path = extracted / name
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  inventory[name] = {'bytes': path.stat().st_size, 'sha256': digest}
+                  if name != 'report.json':
+                      assert report['files'][name] == inventory[name]
+
+              candidate = report['images']['candidate']
+              manifest = json.loads((extracted / 'execution-manifest.json').read_text(),
+                                    object_pairs_hook=unique)
+              assert candidate['image'] == manifest['image']
+              assert candidate['producer']['run_id'] == manifest['image']['run_id']
+              assert candidate['producer']['source_sha'] == manifest['image']['source_sha']
+              assert candidate['producer']['run_attempt'] == 1
+              assert candidate['producer']['event'] == 'workflow_dispatch'
+              assert candidate['producer']['workflow_path'] == '.github/workflows/iso.yml'
+              assert candidate['producer']['conclusion'] == 'success'
+              assert candidate['artifact']['id'] == manifest['image']['artifact_id']
+              assert candidate['artifact']['digest'] == 'sha256:' + manifest['image']['archive_sha256']
+              assert candidate['artifact']['expired'] is False
+              assert candidate['source']['commit'] == manifest['image']['source_sha']
+              assert candidate['mango_rpm']['file_path'] == '/usr/bin/mango'
+              assert candidate['mango_rpm']['file_digest_algorithm'] == 'sha256'
+              assert candidate['mango_rpm']['file_digest_verified'] is True
+              assert candidate['wlroots_rpm']['file_digest_algorithm'] == 'sha256'
+              assert candidate['wlroots_rpm']['file_digest_verified'] is True
+              assert re.fullmatch(r'/usr/lib64/libwlroots-0\.20\.so(?:\.[0-9]+)*',
+                                  candidate['wlroots_rpm']['file_path'])
+              for label, maximum in (('mango', 4 * 1024 * 1024), ('wlroots', 8 * 1024 * 1024)):
+                  elf = candidate[label + '_elf']
+                  rpm = candidate[label + '_rpm']
+                  assert elf['machine'] == 'x86_64'
+                  assert 4096 <= elf['bytes'] <= maximum
+                  assert HEX64.fullmatch(elf['sha256'])
+                  assert elf['sha256'] == rpm['file_sha256']
+                  assert elf['sha256'] == inventory[f'candidate/{label}.elf']['sha256']
+                  assert elf['bytes'] == inventory[f'candidate/{label}.elf']['bytes']
+                  assert elf['profile_status'] == 'requires_independent_machine_code_and_abi_review'
+              assert HEX40.fullmatch(candidate['source']['commit'])
+
+              sanitized = sanitize(report)
+              build_ids = {}
+              executable_loads = {}
+              for label in ('mango', 'wlroots'):
+                  elf_raw = (extracted / f'candidate/{label}.elf').read_bytes()
+                  assert elf_raw[:20] == b'\x7fELF\x02\x01\x01\x00' + b'\x00' * 8 + b'\x03\x00>\x00'
+                  note = candidate[label + '_elf']['sections']['.note.gnu.build-id']
+                  assert note['type'] == 7 and note['bytes'] == 36
+                  note_raw = elf_raw[note['file_offset']:note['file_offset'] + note['bytes']]
+                  assert hashlib.sha256(note_raw).hexdigest() == note['sha256']
+                  namesz, descsz, note_type = struct.unpack_from('<III', note_raw)
+                  assert (namesz, descsz, note_type, note_raw[12:16]) == (4, 20, 3, b'GNU\x00')
+                  build_ids[label] = note_raw[16:36].hex()
+                  phoff = struct.unpack_from('<Q', elf_raw, 32)[0]
+                  phentsize, phnum = struct.unpack_from('<HH', elf_raw, 54)
+                  assert phentsize == 56 and 1 <= phnum <= 64
+                  loads = []
+                  for index in range(phnum):
+                      fields = struct.unpack_from('<IIQQQQQQ', elf_raw, phoff + index * phentsize)
+                      p_type, p_flags, p_offset, p_vaddr, _, p_filesz, p_memsz, _ = fields
+                      if p_type == 1 and p_flags & 1:
+                          loads.append({'file_offset': p_offset, 'virtual_address': p_vaddr,
+                                        'file_bytes': p_filesz, 'memory_bytes': p_memsz,
+                                        'flags': p_flags})
+                  assert len(loads) == 1
+                  executable_loads[label] = loads[0]
+              mango_raw = (extracted / 'candidate/mango.elf').read_bytes()
+              reviewed_slices = {
+                  'mapping': {'file_offset': 0x43110, 'bytes': 4109},
+                  'original_appid_getter': {'file_offset': 0x6b00, 'bytes': 1234},
+              }
+              for item in reviewed_slices.values():
+                  start, size = item['file_offset'], item['bytes']
+                  item['sha256'] = hashlib.sha256(mango_raw[start:start + size]).hexdigest()
+              prior = {
+                  'mango_sha256': 'f7a5fc37f530fed782d2597ac61e9b6dd50a2e6f6f3f07ef787dad6f588b2652',
+                  'wlroots_sha256': 'a1223d6311c31c18a00e64169e869cce0a128457c0113701f68b65c0c6cb4147',
+                  'mango_build_id': '34f9fbc65289436f00d1ab2f966b9b66af0f274d',
+                  'mango_text_sha256': 'a39a19bcaeab7fd3b516d9a6ef4551e162604a500624a1cb4677ea6ea0cdf37f',
+                  'wlroots_build_id': '94f7586649c4560dce6eb8edbf12927dcd318e8c',
+                  'wlroots_text_sha256': '813e4f046ee3678bcdec53b9295124866155dc13cf728589bcdb4ac2f815306b',
+                  'mapping_sha256': '3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
+                  'original_appid_getter_sha256': '11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+              }
+              comparison = {
+                  'mango_whole_elf_matches': candidate['mango_elf']['sha256'] == prior['mango_sha256'],
+                  'wlroots_whole_elf_matches': candidate['wlroots_elf']['sha256'] == prior['wlroots_sha256'],
+                  'mango_build_id_matches': build_ids['mango'] == prior['mango_build_id'],
+                  'mango_text_matches': candidate['mango_elf']['sections']['.text']['sha256'] == prior['mango_text_sha256'],
+                  'wlroots_build_id_matches': build_ids['wlroots'] == prior['wlroots_build_id'],
+                  'wlroots_text_matches': candidate['wlroots_elf']['sections']['.text']['sha256'] == prior['wlroots_text_sha256'],
+                  'mapping_slice_matches': reviewed_slices['mapping']['sha256'] == prior['mapping_sha256'],
+                  'original_appid_getter_slice_matches': reviewed_slices['original_appid_getter']['sha256'] == prior['original_appid_getter_sha256'],
+              }
+              print('ARCTIC-STATIC-IDENTITY', json.dumps({
+                  'producer_run_id': RUN_ID,
+                  'producer_head_sha': INSPECTION_HEAD,
+                  'artifact_id': ARTIFACT_ID,
+                  'artifact_archive_bytes': ARCHIVE_BYTES,
+                  'artifact_archive_sha256': ARCHIVE_SHA256,
+                  'report_bytes': len(raw_report),
+                  'report_sha256': hashlib.sha256(raw_report).hexdigest(),
+                  'mango_nevra': candidate['mango_rpm']['nevra'],
+                  'mango_bytes': candidate['mango_elf']['bytes'],
+                  'mango_sha256': candidate['mango_elf']['sha256'],
+                  'wlroots_nevra': candidate['wlroots_rpm']['nevra'],
+                  'wlroots_path': candidate['wlroots_rpm']['file_path'],
+                  'wlroots_bytes': candidate['wlroots_elf']['bytes'],
+                  'wlroots_sha256': candidate['wlroots_elf']['sha256'],
+                  'mango_build_id': build_ids['mango'],
+                  'wlroots_build_id': build_ids['wlroots'],
+                  'executable_loads': executable_loads,
+                  'reviewed_slices': reviewed_slices,
+                  'prior_comparison': comparison,
+              }, sort_keys=True))
+              print('ARCTIC-STATIC-INVENTORY-BEGIN')
+              print(json.dumps(inventory, sort_keys=True, indent=2))
+              print('ARCTIC-STATIC-INVENTORY-END')
+              print('ARCTIC-STATIC-REPORT-SANITIZED-BEGIN')
+              print(json.dumps(sanitized, sort_keys=True, indent=2))
+              print('ARCTIC-STATIC-REPORT-SANITIZED-END')
+          PY
