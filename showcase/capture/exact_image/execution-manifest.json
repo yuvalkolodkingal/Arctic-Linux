@@ -26,11 +26,11 @@
   "execution_files": {
     ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "showcase/capture/exact_image/automation.py": "85cdbe5b021d7f97aad843c4c1c6ec09faf3455e0536c5c813502eef55ca71a9",
+    "showcase/capture/exact_image/automation.py": "915318c4edc699d3843eb7c57115244cb47b1fcfb68c3952c4875a06773f75fa",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "f38d0ecc510531217c68508c94bba4b7ec71b775d6b312a5b1d02041e62d93f1",
-    "showcase/capture/exact_image/contract.py": "8d43566380e46494b396d2a6c21e3998de062aace00b92044db99dfdb823705f",
+    "showcase/capture/exact_image/contract.py": "4fb0b08010ca8977e5992cbf0f50f6274ec2adb66a0b238b1c8a196fd02ae49a",
     "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
     "showcase/capture/exact_image/unattended.py": "67a29136836ccda96eac97bca7607f7f1c9c76816850b9bbc513f4f79d5d0952",

@@ -213,7 +213,7 @@ def controller_trace(value) -> None:
         "live-install": (623, "86818a073728d6702ca128ccb0b3c4e881a170f3887d7386129047ec97a14bde"),
         "installed-username": (14, "b8214c27644e8af628d5030b053746bea3f72aca7325a066a912de18aef48c0a"),
         "installed-shell-proof": (119, "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"),
-        "installed-scenes": (417, "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"),
+        "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
         "live-boot": {("home", "down", "ret")},

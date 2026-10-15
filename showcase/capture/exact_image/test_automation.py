@@ -69,7 +69,8 @@ class UnattendedController(unittest.TestCase):
     def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
         self.controller.ocr = lambda path: "wrong screen"
         with mock.patch.object(automation.time, "sleep"):
-            with self.assertRaises(c.Invalid):
+            with self.assertRaisesRegex(
+                    c.Invalid, "controller screen expectation whats-new-layer absent"):
                 self.controller.wait_screen("updates", "whats-new-layer", ("Local dictation",),
                                             seconds=0)
         self.controller.ocr = lambda path: "/home/private-user/secret"
@@ -124,6 +125,28 @@ class UnattendedController(unittest.TestCase):
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
+
+    def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
+        marker = "ARCTIC-SHOWCASE-AUTH-READY"
+        self.assertNotIn(marker, automation.Controller.INSTALLED_COMMAND)
+        self.assertNotIn(automation.Controller.PASSWORD, automation.Controller.INSTALLED_COMMAND)
+        self.assertIn("exec sudo -k sh -c", automation.Controller.INSTALLED_COMMAND)
+        prefix = automation.Controller.INSTALLED_COMMAND.split("; exec sudo", 1)[0]
+        rendered = subprocess.run(["/bin/sh", "-c", prefix], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  timeout=5, check=True)
+        self.assertEqual(rendered.stdout.decode(), marker + ": ")
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+        sudo = [call for call in self.controller.wait_screen.call_args_list
+                if call.args[1] == "installed-sudo-password"]
+        self.assertEqual(len(sudo), 1)
+        self.assertEqual(sudo[0].args[2], (marker, "password"))
+        self.controller.type_secret.assert_called_with("installed-console")
 
 
 class TraceContract(unittest.TestCase):
