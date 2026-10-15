@@ -1380,7 +1380,8 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 # pinned upstream release also enters this queue: the model and user choice are
 # reused, while the new signed executable is fetched in the background. The
 # direct marker is published only after the binary, model and user config
-# verify; failures keep the last payload and remain retryable.
+# verify; failures keep the last verified upstream payload runnable and remain
+# retryable. The launcher switches releases only when the receipt commits.
 dictation_current=false
 python3 - <<'PY' && dictation_current=true || :
 import json, os, stat

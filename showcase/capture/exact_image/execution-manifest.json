@@ -30,25 +30,25 @@
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "f38d0ecc510531217c68508c94bba4b7ec71b775d6b312a5b1d02041e62d93f1",
-    "showcase/capture/exact_image/contract.py": "6564de20745aac41463eb489655540406dda52927de61affb70a8479ed5821a4",
+    "showcase/capture/exact_image/contract.py": "24e267d3642fe2cc06aaef29260e90f01adfdf3b16b1709cebe263037ade8efe",
     "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
-    "showcase/capture/exact_image/unattended.py": "67a29136836ccda96eac97bca7607f7f1c9c76816850b9bbc513f4f79d5d0952",
+    "showcase/capture/exact_image/unattended.py": "61f65ff246e2d1acbde8fa9831430e398967549ec47b00996862b05aa370aa84",
     "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38"
   },
   "image": {
-    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
-    "bytes": 1936173056,
-    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
-    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54",
-    "run_id": 38684683083,
-    "artifact_id": 11951877248,
-    "archive_bytes": 1936360758,
-    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59"
+    "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
+    "bytes": 1936185344,
+    "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
+    "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
+    "run_id": 38707130991,
+    "artifact_id": null,
+    "archive_bytes": null,
+    "archive_sha256": null,
+    "producer_mode": null,
+    "producer_receipt_sha256": null
   },
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }

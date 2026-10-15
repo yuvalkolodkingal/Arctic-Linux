@@ -42,6 +42,21 @@ assert.equal(context.parse('{"language":"unknown","backend":"unknown"}').backend
 assert.equal(context.size(593457131), '593.5 MB');
 assert.equal(context.detail(context.parse(JSON.stringify({ ...small, state: 'queued' }))).includes('Connect to the internet'), true);
 assert.equal(context.detail(context.parse(JSON.stringify({ ...turbo, state: 'transcribing' }))).includes('processing audio'), true);
+const pendingUpgrade = context.parse(JSON.stringify({
+    ...small, state: 'ready', ready: true, version: '1.1.0', upgrade_pending: true,
+}));
+assert.equal(pendingUpgrade.ready, true);
+assert.equal(pendingUpgrade.version, '1.1.0');
+assert.equal(pendingUpgrade.upgrade_pending, true);
+assert.equal(context.headline(pendingUpgrade).includes('update queued'), true);
+assert.equal(context.detail(pendingUpgrade).includes('remains available'), true);
+assert.equal(context.parse('{"version":"9.9.9","upgrade_pending":"true"}').upgrade_pending, false);
+const availableUpgrade = context.parse(JSON.stringify({
+    ...small, state: 'ready', ready: true, version: '1.1.0', upgrade_pending: false,
+}));
+assert.equal(context.headline(availableUpgrade).includes('update available'), true);
+assert.equal(context.detail(availableUpgrade).includes('Choose Update / retry'), true);
+assert.equal(context.detail(availableUpgrade).includes('automatically'), false);
 
 for (const profile of [small, turbo]) {
     const snapshot = context.parse(JSON.stringify({ ...profile, state: 'downloading' }));

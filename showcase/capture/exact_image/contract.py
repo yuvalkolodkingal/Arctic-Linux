@@ -14,26 +14,22 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
-    "bytes": 1_936_173_056,
-    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
-    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54",
-    "run_id": 38_684_683_083,
-    "artifact_id": 11_951_877_248,
-    "archive_bytes": 1_936_360_758,
-    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59",
+    "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
+    "bytes": 1_936_185_344,
+    "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
+    "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
+    "run_id": 38_707_130_991,
+    "artifact_id": None,
+    "archive_bytes": None,
+    "archive_sha256": None,
+    "producer_mode": None,
+    "producer_receipt_sha256": None,
 }
-REVIEWED_EXECUTION = {
-    "repository": "yuvalkolodkingal/Arctic-Linux",
-    "workflow": ".github/workflows/iso.yml",
-    "run_id": IMAGE["run_id"],
-    "source_sha": IMAGE["source_sha"],
-    "artifact_id": IMAGE["artifact_id"],
-    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
-    "evidence": "reviewed exact candidate build; capture remains human-review pending",
-}
+# Activation stays closed until the retained artifact identity and reviewed
+# producer receipt are available.  The partial IMAGE value binds only facts
+# already observed from the producer run; it is never accepted by
+# require_active().
+REVIEWED_EXECUTION = None
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",
@@ -85,6 +81,13 @@ INSTALL_PROGRESS_STAGES = (
     "page-apps", "page-summary", "installation", "target-mount",
     "install-seal", "host-handoff",
 )
+INSTALLER_IPC_FAILURE_REASONS = (
+    "installer-process-absent",
+    "installer-process-ambiguous",
+    "installer-ipc-call-failed",
+    "installer-ipc-response-invalid",
+    "installer-never-ready",
+)
 HEX32 = re.compile(r"[0-9a-f]{32}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -99,7 +102,15 @@ def require(condition: object, message: str) -> None:
 
 
 def require_active() -> None:
-    require(type(IMAGE) is dict and bool(IMAGE)
+    complete_image = {
+        "name": str, "bytes": int, "sha256": str, "source_sha": str,
+        "run_id": int, "artifact_id": int, "archive_bytes": int,
+        "archive_sha256": str, "producer_mode": str,
+        "producer_receipt_sha256": str,
+    }
+    require(type(IMAGE) is dict and set(IMAGE) == set(complete_image)
+            and all(type(IMAGE[key]) is expected
+                    for key, expected in complete_image.items())
             and type(REVIEWED_EXECUTION) is dict and bool(REVIEWED_EXECUTION),
             "exact image contract is not activated")
 
@@ -432,12 +443,20 @@ def install_seal(value) -> None:
 
 def install_progress(value) -> None:
     """Validate the privacy-safe live-install lifecycle projection."""
-    require(type(value) is dict and set(value) == {
+    base = {
         "schema", "sequence", "stage", "status", "release_acceptance"
-    } and value["schema"] == "arctic-showcase-install-progress-v1"
+    }
+    keys = set(value) if type(value) is dict else set()
+    diagnostic = keys == base | {"failure_reason"}
+    require(type(value) is dict and keys in (base, base | {"failure_reason"})
+        and value["schema"] == "arctic-showcase-install-progress-v1"
         and type(value["sequence"]) is int and 0 <= value["sequence"] < 64
         and value["stage"] in INSTALL_PROGRESS_STAGES
         and value["status"] in ("started", "passed", "failed")
+        and (not diagnostic or (
+            value["stage"] == "installer-ipc" and value["status"] == "failed"
+            and value["failure_reason"] in INSTALLER_IPC_FAILURE_REASONS
+        ))
         and value["release_acceptance"] is False,
         "installation progress differs")
 

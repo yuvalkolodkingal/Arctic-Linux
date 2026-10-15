@@ -19,11 +19,22 @@ ACTIONS = {
 
 
 class SupplyChainTest(unittest.TestCase):
-    def test_exact_capture_execution_manifest_matches_repository_bytes(self):
+    def test_exact_capture_execution_manifest_is_bound_but_fail_closed(self):
         manifest_path = ROOT / "capture/exact_image/execution-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        self.assertTrue(manifest["ready"])
-        self.assertIsInstance(manifest["image"], dict)
+        self.assertFalse(manifest["ready"])
+        self.assertEqual(manifest["image"], {
+            "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
+            "bytes": 1936185344,
+            "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
+            "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
+            "run_id": 38707130991,
+            "artifact_id": None,
+            "archive_bytes": None,
+            "archive_sha256": None,
+            "producer_mode": None,
+            "producer_receipt_sha256": None,
+        })
         self.assertFalse(manifest["release_acceptance"])
         expected_paths = {
             ".github/workflows/showcase-exact-capture-20261014.yml",

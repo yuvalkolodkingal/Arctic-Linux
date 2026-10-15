@@ -1,11 +1,11 @@
 [Unit]
 Description=Install official VoxType and its multilingual model
-ConditionPathExists=/var/lib/arctic/dictation/pending
 # Do not pull NetworkManager-wait-online into login; the post-boot timer retries offline.
 After=network-online.target
 
 [Service]
 Type=exec
+ExecCondition=/usr/libexec/arctic/arctic-voxtype-setup --needs-resume
 ExecStart=/usr/libexec/arctic/arctic-voxtype-setup --resume
 TimeoutStartSec=12min
 RuntimeMaxSec=12min
