@@ -165,6 +165,18 @@ jobs:
           expected = {path.name: (path.stat().st_size, 'sha256:' + sha(path)) for path in assets}
           assert {asset['name']: (asset['size'], asset['digest']) for asset in release['assets']} == expected
           assert all(asset['state'] == 'uploaded' for asset in release['assets'])
+          receipt = {
+              'schema': 'arctic-owned-qualified-release-v1',
+              'repository': 'yuvalkolodkingal/Arctic-Linux',
+              'workflow_run_id': int(os.environ['GITHUB_RUN_ID']),
+              'workflow_run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'release_id': release['id'], 'tag': 'v1.2.1', 'target': target,
+              'assets': {name: {'bytes': size, 'digest': digest}
+                         for name, (size, digest) in expected.items()},
+          }
+          with Path('owned-qualified-release.json').open('x') as output:
+              json.dump(receipt, output, indent=2, sort_keys=True)
+              output.write('\n')
           # Uploading nearly 2 GB can take minutes. Recheck the actual tag,
           # main and all-PR-closure gates immediately before public promotion.
           promotion_guard(target)
@@ -181,6 +193,11 @@ jobs:
             --iso assets/Arctic-Linux-1.2.1-x86_64.iso \
             --torrent assets/Arctic-Linux-1.2.1-x86_64.iso.torrent --tag v1.2.1 \
             > release-download-verification.json
+      - name: Return this run's release to draft if public verification failed
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B tools/qualified-release/retract.py --receipt owned-qualified-release.json
       - uses: actions/upload-artifact@v4
         with:
           name: release-download-verification

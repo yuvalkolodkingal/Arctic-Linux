@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REPO = 'repos/yuvalkolodkingal/Arctic-Linux'
 FILES = {'.github/workflows/publish-qualified-20261008.yml', 'tools/qualified-release/prepare.py',
          'tools/native-functional/fetch-image.py', 'tools/qualified-release/torrent.py',
+         'tools/qualified-release/retract.py',
          'tools/dictation-qualification/contract.py', 'tools/installer-qualification/contract.py',
          'tools/installer-qualification/active-contract.py',
          'tools/native-functional/apps.py',
