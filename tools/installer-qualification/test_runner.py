@@ -70,6 +70,9 @@ class Controls(unittest.TestCase):
                       (True,'active-execution-manifest.json','Candidate active installer restoration qualification'))
             for active,name,workflow in profiles:
                 manifest=json.loads((HERE/name).read_text())
+                if manifest['ready'] is False:
+                    self.assertIsNone(manifest['image'])
+                    continue
                 manifest['image'].update(source_sha=source_sha,name=iso_name,bytes=len(iso_bytes),
                     sha256=hashlib.sha256(iso_bytes).hexdigest())
                 manifest_path=root/name;manifest_path.write_text(json.dumps(manifest))

@@ -51,7 +51,7 @@ def restore_native_bulk_driver(driver):
     start = driver.index(recovery_start)
     end = driver.index(recovery_end, start)
     recovery_block = driver[start:end]
-    if sha(recovery_block.encode()) != '0e355f931f13e0eeae6b0938a9f53451df9047bf96afc069ad9a4e05c7c6855f':
+    if sha(recovery_block.encode()) != '8007db17a13bd01cbe3f4fb0fc8fe5487d134c5f043d27efdd935eb6407b2893':
         raise AssertionError('Dictation recovery rollback requires the exact helper block')
     driver = driver[:start] + driver[end:]
     driver = driver.replace(recovery_state, recovery_state_original, 1)

@@ -22,18 +22,7 @@
     "small-v2",
     "turbo-q5-v3"
   ],
-  "image": {
-    "archive_bytes": 1936577846,
-    "archive_sha256": "da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145",
-    "artifact_id": 11942517584,
-    "bytes": 1936390144,
-    "name": "Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae",
-    "run_id": 38662946177,
-    "sha256": "5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a",
-    "source_sha": "36ae2e8e1627a39f12ab5afee036721e91f97788"
-  },
-  "ready": true,
+  "image": null,
+  "ready": false,
   "release_acceptance": false
 }
