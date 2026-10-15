@@ -190,20 +190,34 @@ def _as_user(account, environment, argv, *, timeout=30, check=True):
     return _run(command, timeout=timeout, check=check)
 
 
-def _find_ipc(account, environment, target: str, method: str):
-    pids = _run(["/usr/bin/pgrep", "-u", str(account.pw_uid), "-x", "quickshell"],
-                check=False, maximum=16_384).stdout.decode().split()
-    matches = []
-    for pid in pids:
-        if not re.fullmatch(r"[1-9][0-9]{0,9}", pid):
+def _find_ipc(account, environment, target: str, method: str, proc_root=Path("/proc")):
+    """Address the one packaged app process, not every Quickshell IPC server."""
+    profiles = {"installer": "/usr/share/arctic/installer-ui",
+                "settings": "/usr/share/arctic/settings"}
+    c.require(target in profiles and re.fullmatch(r"[a-z]+", method),
+              "IPC target or method differs")
+    profile = profiles[target]
+    pids = []
+    for process in proc_root.glob("[0-9]*"):
+        try:
+            if (not re.fullmatch(r"[1-9][0-9]{0,9}", process.name)
+                    or process.stat().st_uid != account.pw_uid
+                    or (process / "comm").read_text().strip() != "quickshell"):
+                continue
+            raw = (process / "cmdline").read_bytes()
+            c.require(len(raw) <= 16_384, "Quickshell command line is oversized")
+            argv = [value.decode("utf-8", "strict") for value in raw.rstrip(b"\0").split(b"\0")]
+            if sum(1 for index, value in enumerate(argv[:-1])
+                   if value == "-p" and argv[index + 1] == profile) == 1:
+                pids.append(process.name)
+        except (FileNotFoundError, ProcessLookupError, OSError, UnicodeError):
             continue
-        result = _as_user(account, environment,
-                          ["/usr/bin/quickshell", "ipc", "--pid", pid, "call", target, method],
-                          check=False)
-        if result.returncode == 0:
-            matches.append((pid, result.stdout.decode("utf-8", "strict").strip()))
-    c.require(len(matches) == 1, "IPC target is absent or ambiguous")
-    return matches[0]
+    c.require(len(pids) == 1, "packaged IPC process is absent or ambiguous")
+    result = _as_user(account, environment,
+                      ["/usr/bin/quickshell", "ipc", "--pid", pids[0], "call", target, method],
+                      check=False)
+    c.require(result.returncode == 0, "packaged IPC call failed")
+    return pids[0], result.stdout.decode("utf-8", "strict").strip()
 
 
 def _installer_call(account, environment, pid: str, method: str, payload=None):

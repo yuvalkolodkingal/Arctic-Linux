@@ -151,6 +151,32 @@ class TraceContract(unittest.TestCase):
 
 
 class GuestAutomation(unittest.TestCase):
+    def test_ipc_discovery_selects_only_the_exact_packaged_profile(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for pid, profile in (("101", "/usr/share/arctic/installer-ui"),
+                                 ("102", "/usr/share/arctic/shell")):
+                process = root / pid
+                process.mkdir()
+                (process / "comm").write_text("quickshell\n")
+                (process / "cmdline").write_bytes(
+                    b"quickshell\0-p\0" + profile.encode() + b"\0")
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+            result = types.SimpleNamespace(returncode=0, stdout=b'{"page":"welcome"}\n')
+            with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
+                pid, value = unattended._find_ipc(
+                    account, {"PATH": "/usr/bin"}, "installer", "state", root)
+            self.assertEqual((pid, value), ("101", '{"page":"welcome"}'))
+            self.assertEqual(invoke.call_args.args[2][3:5], ["101", "call"])
+
+            duplicate = root / "103"
+            duplicate.mkdir()
+            (duplicate / "comm").write_text("quickshell\n")
+            (duplicate / "cmdline").write_bytes(
+                b"quickshell\0-p\0/usr/share/arctic/installer-ui\0")
+            with self.assertRaises(c.Invalid):
+                unattended._find_ipc(account, {}, "installer", "state", root)
+
     def _run_installer(self, pages):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
