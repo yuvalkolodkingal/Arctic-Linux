@@ -30,6 +30,14 @@ class CandidateMangoProfileControls(unittest.TestCase):
         }
         for name, expected in old_hashes.items():
             current = (ROOT / 'tools/performance' / name).read_bytes()
+            new_marker = b'\n# candidate-profile-fe154-begin\n'
+            new_ending = b'# candidate-profile-fe154-end\n'
+            self.assertEqual(current.count(new_marker), 1)
+            before_new, addition_new = current.split(new_marker)
+            self.assertEqual(addition_new.count(new_ending), 1)
+            profile_new, after_new = addition_new.split(new_ending)
+            self.assertTrue(profile_new.startswith(b'MAPPING_PROFILES += (\n'))
+            current = before_new + after_new
             self.assertEqual(current.count(marker), 1)
             before, addition = current.split(marker)
             self.assertEqual(addition.count(ending), 1)
