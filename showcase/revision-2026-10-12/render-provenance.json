@@ -63,17 +63,16 @@
     "The Winter wallpaper picker is a repository UI capture; the adjoining Ember scene shows the published original photograph."
   ],
   "superseded_by": {
-    "source_branch": "codex/showcase-direct-voxtype-source-20261014",
-    "wording": "direct official VoxType 1.1.0",
+    "source_branch": "codex/prepare-showcase-video-121-20261015",
+    "wording": "direct official VoxType 1.1.1",
     "render_ready": false,
     "rendered": false,
     "published": false,
     "pending": [
-      "new River master and alignment",
-      "qualified direct-VoxType ISO captures",
-      "human listening",
-      "strict render validation",
-      "release binding"
+      "qualified direct-VoxType 1.1.1 ISO captures",
+      "human listening of the new 1.1.1 River master",
+      "strict final render validation",
+      "qualified release binding and publication approval"
     ]
   }
 }

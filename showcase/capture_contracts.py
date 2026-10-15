@@ -23,7 +23,7 @@ CAPTURES = {
     "dictationsetup": {
         "output": "showcase/assets/dictation-setup-current.png",
         "required_evidence": [
-            "signature-checked official VoxType 1.1.0 identity and ready status",
+            "signature-checked official VoxType 1.1.1 identity and ready status",
             "verified automatic online setup",
             "offline not-ready state with retry",
         ],
