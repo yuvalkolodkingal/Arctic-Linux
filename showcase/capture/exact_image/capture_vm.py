@@ -258,7 +258,10 @@ class QMP:
         self.command("screendump", {"filename": str(path), "format": "png"})
 
     def eject_iso(self):
-        self.command("eject", {"device": "arcticcd", "force": True})
+        # ``arcticcd`` is the fixed guest-device/QOM ID.  QMP's deprecated
+        # ``device`` member names a block backend instead, so passing the
+        # frontend ID there deterministically returns DeviceNotFound.
+        self.command("eject", {"id": "arcticcd", "force": True})
 
     def quit(self):
         try:
@@ -740,6 +743,7 @@ def parser():
 def main(argv=None) -> int:
     try:
         args = parser().parse_args(argv)
+        c.require_active()
         c.require(1 <= args.timeout <= 7200, "capture timeout invalid")
         if args.mode == "host":
             c.require(1 <= args.ocr_timeout <= 300, "OCR timeout invalid")

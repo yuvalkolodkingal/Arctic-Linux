@@ -119,7 +119,13 @@ class Controller:
         "cd $d; exec python3 unattended.py live-install --timeout 5400'"
     )
     INSTALLED_COMMAND = (
-        "sudo sh -c 'set -eu; d=/run/user/1000/arctic-showcase-tooling; install -d -m 0700 -o 1000 -g 1000 $d; "
+        # Emit a fixed public marker only after the shell executes the command,
+        # immediately before sudo's password prompt.  The typed bytes do not
+        # contain the marker, so echoed input cannot satisfy the host OCR gate.
+        # -k also makes a cached credential unable to skip this proof.
+        "printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127\\103\\101\\123\\105"
+        "\\055\\101\\125\\124\\110\\055\\122\\105\\101\\104\\131\\072\\040'; exec sudo -k sh -c "
+        "'set -eu; d=/run/user/1000/arctic-showcase-tooling; install -d -m 0700 -o 1000 -g 1000 $d; "
         "IFS= read -r line </dev/virtio-ports/org.arctic.showcase.capture; "
         "case \"$line\" in \"ARCTIC-SHOWCASE-TOOLING-V1 \"*) ;; *) exit 1;; esac; "
         "printf %s \"${line#ARCTIC-SHOWCASE-TOOLING-V1 }\" | base64 -d | gzip -d | tar -x -C $d; "
@@ -234,7 +240,9 @@ class Controller:
                 if path is not None and path.exists():
                     path.unlink(missing_ok=True)
             time.sleep(2)
-        raise c.Invalid(last or "controller screen timed out")
+        # Expectation is a reviewed public enum.  Do not surface OCR text or a
+        # decoder detail in Actions logs when private screenshots are removed.
+        raise c.Invalid(f"controller screen expectation {expectation} absent")
 
     def pointer_click(self, stage: str, x: int, y: int):
         c.require(0 <= x < 1280 and 0 <= y < 800, "controller pointer is outside output")
@@ -351,7 +359,8 @@ class Controller:
                          seconds=90)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
         self.press("installed-scenes", "ret")
-        self.wait_screen("installed-console", "installed-sudo-password", ("password",), seconds=45)
+        self.wait_screen("installed-console", "installed-sudo-password",
+                         ("ARCTIC-SHOWCASE-AUTH-READY", "password"), seconds=45)
         self.type_secret("installed-console")
         self.press("installed-console", "ret")
         self.record("installed-scenes", "command", {"id": "installed-scenes"})

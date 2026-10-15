@@ -272,6 +272,13 @@ class WrapperProtocol(unittest.TestCase):
                 client.close()
                 listener.close()
 
+    def test_iso_eject_targets_the_fixed_frontend_id(self):
+        qmp = capture_vm.QMP.__new__(capture_vm.QMP)
+        qmp.command = mock.Mock(return_value={})
+        qmp.eject_iso()
+        qmp.command.assert_called_once_with(
+            "eject", {"id": "arcticcd", "force": True})
+
     def test_process_group_shutdown_reaps_descendant(self):
         with tempfile.TemporaryDirectory() as temp:
             capture_vm._become_subreaper()

@@ -25,6 +25,15 @@ IMAGE = {
     "producer_mode": "frozen-external-paired-v1",
     "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23",
 }
+REVIEWED_EXECUTION = {
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "workflow": ".github/workflows/iso.yml",
+    "run_id": IMAGE["run_id"],
+    "source_sha": IMAGE["source_sha"],
+    "artifact_id": IMAGE["artifact_id"],
+    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
+    "evidence": "reviewed exact candidate build; capture remains human-review pending",
+}
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",
@@ -76,6 +85,13 @@ INSTALL_PROGRESS_STAGES = (
     "page-apps", "page-summary", "installation", "target-mount",
     "install-seal", "host-handoff",
 )
+INSTALLER_IPC_FAILURE_REASONS = (
+    "installer-process-absent",
+    "installer-process-ambiguous",
+    "installer-ipc-call-failed",
+    "installer-ipc-response-invalid",
+    "installer-never-ready",
+)
 HEX32 = re.compile(r"[0-9a-f]{32}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -87,6 +103,12 @@ HOME = re.compile(r"/(?:var/)?home/[^\s]+|/root(?:/[^\s]+)?(?=$|[\s)\]}>,'\"])")
 def require(condition: object, message: str) -> None:
     if not condition:
         raise Invalid(message)
+
+
+def require_active() -> None:
+    require(type(IMAGE) is dict and bool(IMAGE)
+            and type(REVIEWED_EXECUTION) is dict and bool(REVIEWED_EXECUTION),
+            "exact image contract is not activated")
 
 
 def fullmatch(pattern, value) -> bool:
@@ -122,20 +144,10 @@ def hashed(value: str) -> str:
 
 
 def image_identity(value) -> None:
+    require_active()
     require(type(value) is dict and set(value) == set(IMAGE)
             and all(type(value[key]) is type(expected) and value[key] == expected
                     for key, expected in IMAGE.items()), "exact image identity differs")
-
-
-REVIEWED_EXECUTION = {
-    "repository": "yuvalkolodkingal/Arctic-Linux",
-    "workflow": ".github/workflows/iso.yml",
-    "run_id": IMAGE["run_id"],
-    "source_sha": IMAGE["source_sha"],
-    "artifact_id": IMAGE["artifact_id"],
-    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
-    "evidence": "reviewed exact candidate build; capture remains human-review pending",
-}
 
 CONTROLLER = {
     "schema": "arctic-showcase-unattended-controller-v1",
@@ -209,7 +221,7 @@ def controller_trace(value) -> None:
         "live-install": (623, "86818a073728d6702ca128ccb0b3c4e881a170f3887d7386129047ec97a14bde"),
         "installed-username": (14, "b8214c27644e8af628d5030b053746bea3f72aca7325a066a912de18aef48c0a"),
         "installed-shell-proof": (119, "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"),
-        "installed-scenes": (417, "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"),
+        "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
         "live-boot": {("home", "down", "ret")},
@@ -357,6 +369,7 @@ def controller_trace(value) -> None:
 
 
 def execution(value) -> None:
+    require_active()
     require(type(value) is dict and value == REVIEWED_EXECUTION
             and all(type(value[key]) is type(expected)
                     for key, expected in REVIEWED_EXECUTION.items()),
@@ -426,12 +439,20 @@ def install_seal(value) -> None:
 
 def install_progress(value) -> None:
     """Validate the privacy-safe live-install lifecycle projection."""
-    require(type(value) is dict and set(value) == {
+    base = {
         "schema", "sequence", "stage", "status", "release_acceptance"
-    } and value["schema"] == "arctic-showcase-install-progress-v1"
+    }
+    keys = set(value) if type(value) is dict else set()
+    diagnostic = keys == base | {"failure_reason"}
+    require(type(value) is dict and keys in (base, base | {"failure_reason"})
+        and value["schema"] == "arctic-showcase-install-progress-v1"
         and type(value["sequence"]) is int and 0 <= value["sequence"] < 64
         and value["stage"] in INSTALL_PROGRESS_STAGES
         and value["status"] in ("started", "passed", "failed")
+        and (not diagnostic or (
+            value["stage"] == "installer-ipc" and value["status"] == "failed"
+            and value["failure_reason"] in INSTALLER_IPC_FAILURE_REASONS
+        ))
         and value["release_acceptance"] is False,
         "installation progress differs")
 

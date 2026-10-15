@@ -69,7 +69,8 @@ class UnattendedController(unittest.TestCase):
     def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
         self.controller.ocr = lambda path: "wrong screen"
         with mock.patch.object(automation.time, "sleep"):
-            with self.assertRaises(c.Invalid):
+            with self.assertRaisesRegex(
+                    c.Invalid, "controller screen expectation whats-new-layer absent"):
                 self.controller.wait_screen("updates", "whats-new-layer", ("Local dictation",),
                                             seconds=0)
         self.controller.ocr = lambda path: "/home/private-user/secret"
@@ -125,6 +126,28 @@ class UnattendedController(unittest.TestCase):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
 
+    def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
+        marker = "ARCTIC-SHOWCASE-AUTH-READY"
+        self.assertNotIn(marker, automation.Controller.INSTALLED_COMMAND)
+        self.assertNotIn(automation.Controller.PASSWORD, automation.Controller.INSTALLED_COMMAND)
+        self.assertIn("exec sudo -k sh -c", automation.Controller.INSTALLED_COMMAND)
+        prefix = automation.Controller.INSTALLED_COMMAND.split("; exec sudo", 1)[0]
+        rendered = subprocess.run(["/bin/sh", "-c", prefix], stdin=subprocess.DEVNULL,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  timeout=5, check=True)
+        self.assertEqual(rendered.stdout.decode(), marker + ": ")
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+        sudo = [call for call in self.controller.wait_screen.call_args_list
+                if call.args[1] == "installed-sudo-password"]
+        self.assertEqual(len(sudo), 1)
+        self.assertEqual(sudo[0].args[2], (marker, "password"))
+        self.controller.type_secret.assert_called_with("installed-console")
+
     def test_installed_shell_waits_for_fetch_and_dismisses_it_with_one_key(self):
         operations = []
 
@@ -157,6 +180,7 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(operations[at + 4],
                          ("screen", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",)))
 
+
 class TraceContract(unittest.TestCase):
     def test_guest_fields_cannot_enter_or_promote_trace(self):
         value = controller_trace()
@@ -182,10 +206,179 @@ class TraceContract(unittest.TestCase):
 
 
 class GuestAutomation(unittest.TestCase):
+    @staticmethod
+    def _ipc_process(root, pid, *, argv, executable="/usr/bin/quickshell",
+                     comm="quickshell"):
+        process = root / str(pid)
+        process.mkdir()
+        (process / "comm").write_text(comm + "\n")
+        (process / "exe").symlink_to(executable)
+        (process / "cmdline").write_bytes(
+            b"/usr/bin/quickshell\0" + b"\0".join(value.encode() for value in argv) + b"\0")
+        # proc_pid_stat fields 3..22; index 19 below is starttime.
+        (process / "stat").write_text(
+            f"{pid} (quickshell) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 {1000 + int(pid)}\n")
+        return process
+
+    def test_ipc_discovery_selects_one_stable_exact_packaged_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._ipc_process(root, 101, argv=["-p", "/usr/share/arctic/installer-ui"])
+            self._ipc_process(root, 102, argv=["-p", "/usr/share/arctic/shell"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+            result = types.SimpleNamespace(returncode=0, stdout=b'{"page":"welcome"}\n')
+            with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
+                self.assertEqual(unattended._find_ipc(
+                    account, {}, "installer", "state", root),
+                    ("101", '{"page":"welcome"}'))
+            self.assertEqual(invoke.call_args.kwargs["timeout"], 15)
+            self.assertEqual(invoke.call_args.args[2][3:5], ["101", "call"])
+
+            self._ipc_process(root, 103, argv=["-p", "/usr/share/arctic/installer-ui"])
+            with mock.patch.object(unattended, "_as_user") as ambiguous:
+                with self.assertRaises(unattended.InstallerIpcFailure) as caught:
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+                self.assertEqual(caught.exception.reason, "installer-process-ambiguous")
+                ambiguous.assert_not_called()
+
+    def test_ipc_diagnostic_distinguishes_absent_ambiguous_and_call_failure(self):
+        account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            with self.assertRaises(unattended.InstallerIpcFailure) as absent:
+                unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(absent.exception.reason, "installer-process-absent")
+
+            self._ipc_process(root, 101, argv=["-p", "/usr/share/arctic/installer-ui"])
+            failed = types.SimpleNamespace(returncode=1, stdout=b"private failure text")
+            with mock.patch.object(unattended, "_as_user", return_value=failed), \
+                 self.assertRaises(unattended.InstallerIpcFailure) as call:
+                unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(call.exception.reason, "installer-ipc-call-failed")
+            self.assertNotIn("private failure text", str(call.exception))
+
+    def test_ipc_discovery_rejects_identity_change_during_bounded_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            process = self._ipc_process(
+                root, 201, argv=["-p", "/usr/share/arctic/installer-ui"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+
+            def replace(*_args, **_kwargs):
+                stat_path = process / "stat"
+                stat_path.write_text(stat_path.read_text().replace("1201\n", "1202\n"))
+                return types.SimpleNamespace(returncode=0, stdout=b'{}\n')
+
+            with mock.patch.object(unattended, "_as_user", side_effect=replace):
+                with self.assertRaises(unattended.InstallerIpcFailure) as caught:
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+            self.assertEqual(caught.exception.reason, "installer-ipc-call-failed")
+
+    def test_installer_readiness_requires_same_endpoint_twice(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        ready = {"page": "welcome", "current": "welcome", "ready": True,
+                 "connected": True, "busy": False, "failure": ""}
+        samples = iter([(("101", 10), ready), (("202", 20), ready),
+                        (("202", 20), ready)])
+        with mock.patch.object(unattended, "_installer_state",
+                               side_effect=lambda *_args: next(samples)), \
+             mock.patch.object(unattended.time, "sleep"):
+            self.assertEqual(unattended._stable_installer_endpoint(account, {}),
+                             ("202", 20))
+
+    def test_ipc_diagnostic_distinguishes_invalid_response_and_never_ready(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        with mock.patch.object(unattended, "_find_ipc",
+                               return_value=("101", "private malformed response")):
+            with self.assertRaises(unattended.InstallerIpcFailure) as invalid:
+                unattended._installer_endpoint(account, {})
+        self.assertEqual(invalid.exception.reason, "installer-ipc-response-invalid")
+        self.assertNotIn("private malformed response", str(invalid.exception))
+
+        not_ready = {"page": "welcome", "current": "welcome", "ready": False,
+                     "connected": True, "busy": False, "failure": ""}
+        def once(function, _seconds, message):
+            self.assertIsNone(function())
+            raise c.Invalid(message)
+        with mock.patch.object(unattended, "_installer_state",
+                               return_value=(("101", 10), not_ready)), \
+             mock.patch.object(unattended, "_wait", side_effect=once), \
+             self.assertRaises(unattended.InstallerIpcFailure) as never:
+            unattended._stable_installer_endpoint(account, {})
+        self.assertEqual(never.exception.reason, "installer-never-ready")
+
+        with mock.patch.object(unattended, "_installer_state",
+                               side_effect=c.Invalid("private invalid detail")), \
+             mock.patch.object(unattended, "_wait", side_effect=once), \
+             self.assertRaises(unattended.InstallerIpcFailure) as invalid_sample:
+            unattended._stable_installer_endpoint(account, {})
+        self.assertEqual(invalid_sample.exception.reason,
+                         "installer-ipc-response-invalid")
+        self.assertNotIn("private invalid detail", str(invalid_sample.exception))
+
+    def test_second_state_call_preserves_call_failure_and_rejects_non_object(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               return_value=("101", 10)), \
+             mock.patch.object(unattended, "_as_user",
+                               side_effect=c.Invalid("private command failure")), \
+             self.assertRaises(unattended.InstallerIpcFailure) as call:
+            unattended._installer_state(account, {})
+        self.assertEqual(call.exception.reason, "installer-ipc-call-failed")
+        self.assertNotIn("private command failure", str(call.exception))
+
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               return_value=("101", 10)), \
+             mock.patch.object(unattended, "_installer_call", return_value="[]"), \
+             self.assertRaises(unattended.InstallerIpcFailure) as invalid:
+            unattended._installer_state(account, {})
+        self.assertEqual(invalid.exception.reason, "installer-ipc-response-invalid")
+
+    def test_installer_ipc_failure_exports_only_closed_reason(self):
+        rows = []
+
+        class Channel:
+            def __init__(self, *args, **kwargs): pass
+            def write(self, value): rows.append(value)
+            def close(self): pass
+
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser",
+                                        pw_dir="/home/liveuser")
+        failure = unattended.InstallerIpcFailure("installer-process-absent")
+        with mock.patch.object(unattended.os, "geteuid", return_value=0), \
+             mock.patch.object(unattended, "Channel", Channel), \
+             mock.patch.object(unattended, "_graphical_environment",
+                               return_value=(account, 2, {})), \
+             mock.patch.object(unattended, "_run"), \
+             mock.patch.object(unattended, "_stable_installer_endpoint",
+                               side_effect=failure), \
+             self.assertRaises(unattended.InstallerIpcFailure):
+            unattended.live_install(600)
+        progress = [c.strict_json(row[len(c.INSTALL_PROGRESS_PREFIX):]) for row in rows]
+        self.assertEqual(progress[-1], {
+            "schema": "arctic-showcase-install-progress-v1", "sequence": 5,
+            "stage": "installer-ipc", "status": "failed",
+            "failure_reason": "installer-process-absent", "release_acceptance": False,
+        })
+        c.install_progress(progress[-1])
+        self.assertNotIn("private", repr(progress))
+
+        for reason in c.INSTALLER_IPC_FAILURE_REASONS:
+            changed = dict(progress[-1], failure_reason=reason)
+            c.install_progress(changed)
+        for forged in (
+            dict(progress[-1], failure_reason="guest-selected"),
+            dict(progress[-1], stage="page-welcome"),
+            dict(progress[-1], status="passed"),
+        ):
+            with self.assertRaises(c.Invalid):
+                c.install_progress(forged)
+
     def _run_installer(self, pages):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
         fills = []
+        filled = set()
         channel_rows = []
 
         def ipc(_account, _environment, _pid, method, payload=None):
@@ -193,9 +386,14 @@ class GuestAutomation(unittest.TestCase):
                 page = pages[index["value"]]
                 return json.dumps({"page": page, "current": page, "ready": True,
                                    "connected": True, "busy": False, "failure": "",
-                                   "valid": True, "percent": 100 if page == "done" else 0})
+                                   # Reproduce the exact-image race: Welcome
+                                   # can be ready before its suggested locale
+                                   # makes the page valid.
+                                   "valid": page != "welcome" or page in filled,
+                                   "percent": 100 if page == "done" else 0})
             if method == "fill":
                 fills.append((pages[index["value"]], payload))
+                filled.add(pages[index["value"]])
                 return "ok"
             index["value"] += 1
             return "ok"
@@ -209,8 +407,10 @@ class GuestAutomation(unittest.TestCase):
         with mock.patch.object(unattended.os, "geteuid", return_value=0), \
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
-             mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_installer_endpoint", return_value=("123", 456)), \
              mock.patch.object(unattended, "_process_start_ticks", return_value=456), \
+             mock.patch.object(unattended, "_stable_installer_endpoint",
+                               return_value=("123", 456)), \
              mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
              mock.patch.object(unattended, "_run"), \
              mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
@@ -226,19 +426,6 @@ class GuestAutomation(unittest.TestCase):
                  "connected": True, "busy": False, "failure": "", "valid": True}
         value.update(changed)
         return json.dumps(value)
-
-    def test_unique_installer_ipc_rejects_ambiguous_targets(self):
-        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
-
-        def run(argv, **_kwargs):
-            self.assertEqual(argv[:5], ["/usr/bin/pgrep", "-u", "1000", "-x", "quickshell"])
-            return types.SimpleNamespace(returncode=0, stdout=b"101\n202\n")
-
-        with mock.patch.object(unattended, "_run", side_effect=run), \
-             mock.patch.object(unattended, "_as_user",
-                               return_value=types.SimpleNamespace(returncode=0, stdout=b"{}")):
-            with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
-                unattended._find_ipc(account, {}, "installer", "state")
 
     def test_installer_reacquires_a_replacement_before_first_input(self):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
@@ -313,6 +500,7 @@ class GuestAutomation(unittest.TestCase):
                       "account", "apps", "summary", "done"))
         fills, rows = self._run_installer(pages)
         choices = dict(fills)
+        self.assertEqual(choices["welcome"], {"language": "en_US.UTF-8"})
         self.assertEqual(choices["network"], {"offline": False})
         self.assertEqual(choices["disk"], {"disk": "/dev/vda", "mode": "erase"})
         self.assertEqual(choices["encryption"], {"enabled": False})
