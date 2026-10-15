@@ -118,13 +118,26 @@ def manifest(artifacts=None, ready=True):
 
 
 class ManifestControls(unittest.TestCase):
-    def test_repository_manifest_is_disabled_and_empty(self):
+    def test_repository_manifest_is_bound_to_current_successful_native_artifact(self):
         value = exporter.strict_json((ROOT / exporter.MANIFEST).read_text())
-        self.assertFalse(value['ready'])
-        self.assertEqual(value['artifacts'], [])
-        self.assertEqual(exporter.validate_manifest(value, require_ready=False), value)
-        with self.assertRaises(RuntimeError):
-            exporter.validate_manifest(value)
+        self.assertTrue(value['ready'])
+        self.assertEqual(exporter.validate_manifest(value), value)
+        self.assertEqual(len(value['artifacts']), 1)
+        artifact = value['artifacts'][0]
+        self.assertEqual((artifact['run_id'], artifact['artifact_id'], artifact['run_attempt']),
+                         (38816692479, 12012756194, 1))
+        self.assertEqual(artifact['head_sha'],
+                         'ecb077d3b8190c004c74c7b358796d8bd17bbd0d')
+        self.assertEqual((artifact['archive_bytes'], artifact['archive_sha256']),
+                         (79183036,
+                          '3e0beb1b78c9286027055389662e0b3967289c6b8c33d47f3d7dbe1c47ea84fc'))
+        sheets = [item for item in artifact['files'] if item['kind'] == 'png-contact-sheet']
+        audio = [item for item in artifact['files'] if item['kind'] == 'native-system-audio']
+        self.assertEqual((len(sheets), sum(len(item['members']) for item in sheets),
+                          sum(len(item['exact_frames']) for item in sheets)), (8, 480, 32))
+        self.assertEqual({item['audio_class'] for item in audio},
+                         {'native-virtual-output-boot', 'native-virtual-output-install'})
+        self.assertFalse((ROOT / exporter.MARKER).exists())
 
     def test_exact_pins_allowlist_privacy_classes_and_fixed_bounds_are_required(self):
         value = manifest()

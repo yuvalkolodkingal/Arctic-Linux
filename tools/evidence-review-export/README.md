@@ -4,7 +4,12 @@ This helper exists only to move a small, reviewed subset of already-screened qua
 evidence through GitHub itself when the artifact blob host is unreachable from the review
 environment. It cannot qualify or publish a release.
 
-The manifest starts disabled. To prepare one export:
+The current manifest is ready and pinned to native qualification run `38816692479`, artifact
+`12012756194`, at source `ecb077d3b8190c004c74c7b358796d8bd17bbd0d`. It selects all 480
+taskbar frames as eight contact sheets, 32 full-resolution frames and the two bounded native
+virtual-output WAV files. The activation marker is deliberately absent.
+
+To activate this one export after reviewing the preparation commit:
 
 1. Create `codex/evidence-review-export-20261015` from the reviewed source commit.
 2. Fill `manifest.json` with completed, successful qualification run and artifact identities.
@@ -20,10 +25,15 @@ The manifest starts disabled. To prepare one export:
    Use each sheet's `exact_frames` list for the small full-resolution selection. The exporter
    labels every sheet cell by index and writes the measured digest, byte count and source mapping
    into `REVIEW-MANIFEST.json`.
-4. Set `ready` to `true`, commit the preparation and run the local tests.
+4. Keep `ready` set to `true`, commit the preparation and run
+   `python3 -m unittest tools/tests/test_evidence_review_export.py -v` and
+   `python3 -B tools/evidence-review-export/export.py validate-manifest`.
 5. Confirm that `codex/evidence-review-artifacts-20261015` does not exist.
-6. In a child commit, add `.github/evidence-review-export-20261015.activate` containing only the
-   40-character preparation commit SHA and push that marker-only child.
+6. Push the reviewed preparation commit to `codex/evidence-review-export-20261015` first. Do not
+   create the marker before this push has completed.
+7. In a child commit, add `.github/evidence-review-export-20261015.activate` containing only the
+   40-character preparation commit SHA. Verify that the child changes only that marker, then push
+   the child in a separate push.
 
 The workflow verifies the marker, successful run identities, artifact API metadata, downloaded
 archive digests, zip bounds and every selected file. It creates a new orphan review branch with
