@@ -11,21 +11,21 @@ outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
 The preparation is bound to the reviewed candidate from producer run
-`38785714856`, attempt 1, source
-`3e16234b71ad64c27ab24871d51863b940ad2521`: ISO
-`Arctic-Linux-1.2-candidate-38785714856-1-x86_64.iso`, size `1936123904`,
+`38808271154`, attempt 1, source
+`10b94bf1f6aef4950889d4a498c9e1138cf7973d`: ISO
+`Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso`, size `1936328704`,
 SHA-256
-`aefd49d17bab66bbdec6144df7fc5403877b63e81d212a0c4a8abcdb435f4642`.
-The retained artifact is `12000837359`, archive size `1936311606`, archive
+`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`.
+The retained artifact is `12011000602`, archive size `1936516406`, archive
 SHA-256
-`cb69dc4f166679cce0925f67c134e75cdebdb8af04599527bf8962bc8de9c52d`,
+`4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`544c5bf365b04b1e011ccc8ff87f2305330f95dcffc936321ad15e0b08436377`.
+`85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6`.
 The execution manifest is ready for a later marker-only activation and remains
 `release_acceptance:false`.
 
 The producer ran from the reviewed marker-only source
-`3e16234b71ad64c27ab24871d51863b940ad2521` by `workflow_dispatch` and passed
+`10b94bf1f6aef4950889d4a498c9e1138cf7973d` by `workflow_dispatch` and passed
 UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
 absent from this preparation.
 

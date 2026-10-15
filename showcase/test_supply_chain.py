@@ -24,16 +24,16 @@ class SupplyChainTest(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text())
         self.assertTrue(manifest["ready"])
         self.assertEqual(manifest["image"], {
-            "name": "Arctic-Linux-1.2-candidate-38785714856-1-x86_64.iso",
-            "bytes": 1936123904,
-            "sha256": "aefd49d17bab66bbdec6144df7fc5403877b63e81d212a0c4a8abcdb435f4642",
-            "source_sha": "3e16234b71ad64c27ab24871d51863b940ad2521",
-            "run_id": 38785714856,
-            "artifact_id": 12000837359,
-            "archive_bytes": 1936311606,
-            "archive_sha256": "cb69dc4f166679cce0925f67c134e75cdebdb8af04599527bf8962bc8de9c52d",
+            "name": "Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso",
+            "bytes": 1936328704,
+            "sha256": "304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23",
+            "source_sha": "10b94bf1f6aef4950889d4a498c9e1138cf7973d",
+            "run_id": 38808271154,
+            "artifact_id": 12011000602,
+            "archive_bytes": 1936516406,
+            "archive_sha256": "4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6",
             "producer_mode": "frozen-external-paired-v1",
-            "producer_receipt_sha256": "544c5bf365b04b1e011ccc8ff87f2305330f95dcffc936321ad15e0b08436377",
+            "producer_receipt_sha256": "85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6",
         })
         self.assertFalse(manifest["release_acceptance"])
         expected_paths = {
