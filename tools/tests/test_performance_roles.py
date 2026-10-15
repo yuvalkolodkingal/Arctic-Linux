@@ -119,7 +119,8 @@ def role_run(image, number):
     result['identity']['sampler'] = comparison.ROLE_SAMPLER
     records = sorted(['kitty-0:1-1.x86_64', 'nautilus-0:1-1.x86_64'] if image == 'baseline'
                      else ['foot-0:1-1.x86_64', 'pcmanfm-0:1-1.x86_64',
-                           'epiphany-1:50.1-1.fc44.x86_64', 'epiphany-runtime-1:50.1-1.fc44.x86_64'])
+                           'epiphany-1:50.1-1.fc44.x86_64', 'epiphany-runtime-1:50.1-1.fc44.x86_64',
+                           'arctic-desktop-config-0:0.3.0-1.fc44.noarch'])
     result['rpm_inventory'] = dict(nevra=records,
         sha256=hashlib.sha256(('\n'.join(records)+'\n').encode()).hexdigest())
     roles, configured, programs = {}, {}, {}
@@ -134,9 +135,23 @@ def role_run(image, number):
             if 'desktop_rpm' in app:
                 package['desktop_owner'] = next(value for value in records
                     if value.startswith(app['desktop_rpm']+'-') and '-runtime-' not in value)
+            if 'product_launcher' in app:
+                product_owner = next(value for value in records
+                    if value.startswith(app['product_launcher_rpm']+'-'))
+                package.update(product_launcher_owner=product_owner,
+                               product_desktop_owner=product_owner)
         roles[role] = dict(id=ident, role=role, configured_command=configured[role],
             legacy_system_mime_fallback=False, program_path=programs[app['program']],
             appids=list(app['appids']), package=package)
+        if 'product_launcher' in app:
+            roles[role]['product_launcher'] = app['product_launcher']
+            roles[role]['effective_desktop'] = dict(
+                path='/usr/share/arctic/applications/org.gnome.Epiphany.desktop', sha256='9'*64,
+                values={'Desktop Entry.Exec': '/usr/libexec/arctic/arctic-epiphany %U',
+                        'Desktop Entry.TryExec': '/usr/bin/epiphany',
+                        'Desktop Entry.DBusActivatable': 'false',
+                        'Desktop Action new-window.Exec': '/usr/libexec/arctic/arctic-epiphany --new-window %U',
+                        'Desktop Action Incognito.Exec': '/usr/libexec/arctic/arctic-epiphany --incognito-mode %U'})
         for phase in ('cold', 'warm'):
             values = [.04] if phase == 'cold' else [.03, .029, .031]
             result['startup_role_'+role+'_'+phase+'_seconds'] = dict(first=values[0],
@@ -150,6 +165,8 @@ def role_run(image, number):
         configuration_sources=[dict(path='/etc/arctic/default-apps', sha256='c'*64)],
         default_browser_desktop=guest.ROLE_APPS[guest.EXPECTED_ROLES[image]['browser']]['desktop'],
         pristine_state=dict(uid=1000, configured=configured, programs=programs,
+                            desktop_entries=({'org.gnome.Epiphany.desktop': roles['browser']['effective_desktop']}
+                                             if image == 'candidate' else {}),
                             prior_role_state_paths=[], running_role_apps=[]),
         boot_context=dict(image=image, boot=number, fresh_installed_overlay=True, collector='console',
             installed_base_sha256=('b' if image == 'baseline' else 'c')*64,
@@ -274,8 +291,9 @@ class RoleQualificationTest(unittest.TestCase):
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 comparison.compare(runs)
 
-    def test_epiphany_runtime_and_desktop_launcher_have_distinct_exact_owners(self):
-        for fault in ('binary_owned_by_launcher', 'missing_runtime', 'missing_launcher', 'wrong_launcher'):
+    def test_epiphany_runtime_and_product_launchers_have_distinct_exact_owners(self):
+        for fault in ('binary_owned_by_launcher', 'missing_runtime', 'missing_launcher', 'wrong_launcher',
+                      'missing_product', 'wrong_product_desktop', 'bypassed_effective_desktop'):
             runs = paired_roles()
             run = runs['candidate'][0]
             package = run['app_roles']['roles']['browser']['package']
@@ -285,8 +303,15 @@ class RoleQualificationTest(unittest.TestCase):
                 run['rpm_inventory']['nevra'].remove(package['nevra'])
             elif fault == 'missing_launcher':
                 package.pop('desktop_owner')
-            else:
+            elif fault == 'wrong_launcher':
                 package['desktop_owner'] = 'chromium-0:1-1.x86_64'
+            elif fault == 'missing_product':
+                package.pop('product_launcher_owner')
+            elif fault == 'wrong_product_desktop':
+                package['product_desktop_owner'] = package['desktop_owner']
+            else:
+                run['app_roles']['roles']['browser']['effective_desktop']['path'] = \
+                    '/usr/share/applications/org.gnome.Epiphany.desktop'
             with self.subTest(fault=fault), self.assertRaises(ValueError):
                 comparison.compare(runs)
 
@@ -440,13 +465,16 @@ class RoleDeclarationTest(unittest.TestCase):
                 program = Path(argv[-1]).name
                 if owners and program in owners:
                     return owners[program]
+                if argv[-1].startswith('/usr/libexec/arctic/') or argv[-1].startswith('/usr/share/arctic/'):
+                    return fixture['app_roles']['roles']['browser']['package']['product_launcher_owner']
                 if program == 'org.gnome.Epiphany.desktop':
                     return fixture['app_roles']['roles']['browser']['package']['desktop_owner']
                 app = next(app for app in guest.ROLE_APPS.values() if app['program'] == program)
                 return next(value for value in fixture['rpm_inventory']['nevra']
                     if value.startswith(app['rpm']+'-') and (app['rpm'] != 'epiphany' or '-runtime-' not in value))
             raise AssertionError('Unexpected command: '+repr(argv))
-        with patch.object(guest, 'run', side_effect=run), \
+        with patch.object(guest, 'run', side_effect=run), patch.object(guest.os, 'access', return_value=True), \
+                patch.object(guest.Path, 'is_file', return_value=True), \
                 patch.object(guest.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)):
             result = guest.declare_roles(['runuser', '-u', 'ci', '--', 'env'],
                                          fixture['app_roles']['boot_context'], fixture['rpm_inventory'])
@@ -466,6 +494,7 @@ class RoleDeclarationTest(unittest.TestCase):
         browser = result['roles']['browser']['package']
         self.assertTrue(browser['binary_owner'].startswith('epiphany-runtime-1:'))
         self.assertTrue(browser['desktop_owner'].startswith('epiphany-1:'))
+        self.assertTrue(browser['product_launcher_owner'].startswith('arctic-desktop-config-0:'))
         for program, wrong in [('epiphany', browser['desktop_owner']),
                                ('org.gnome.Epiphany.desktop', browser['binary_owner'])]:
             with self.subTest(program=program), self.assertRaises(RuntimeError):
@@ -496,7 +525,7 @@ class RoleDeclarationTest(unittest.TestCase):
         self.assertEqual(order, ['cold:terminal','cold:files','cold:browser',
                                  'precondition:terminal','precondition:files','precondition:browser'])
         self.assertEqual(calls[1][0], ['pcmanfm','--new-win',workload['files']])
-        self.assertEqual(calls[2][0], ['epiphany','--new-window',workload['url']])
+        self.assertEqual(calls[2][0], ['gtk-launch','org.gnome.Epiphany',workload['url']])
         self.assertEqual(calls[:3], [(command,5) for command,_ in calls[3:]])
         self.assertTrue(all(emitted['startup_role_'+role+'_cold_seconds']['phase'].startswith('first_gui')
                             for role in guest.ROLE_ORDER))

@@ -20,7 +20,7 @@ download_mb = 5
 [defaults]
 desktop_id = "org.gnome.Epiphany.desktop"
 role = "browser"
-command = "epiphany"
+command = "gtk-launch org.gnome.Epiphany"
 mime = [
   "x-scheme-handler/http",
   "x-scheme-handler/https",

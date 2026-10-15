@@ -130,7 +130,19 @@ but it exercised the retired Arctic runtime controller. Its service, installer,
 cancellation, GPU recovery and privacy results cannot qualify the new direct
 integration.
 
-The new image remains unqualified until exact-image tests pass for online and
-offline setup, Hebrew and English, CPU recovery after a controlled Vulkan
-failure, missing models, microphone failure, cancellation, insertion, locking
-and transcript leakage.
+For v1.2.1, the final exact-image record remains deliberately blank until the
+retained image passes online and offline setup, Hebrew and English, CPU recovery
+after a controlled Vulkan failure, missing models, microphone failure,
+cancellation, insertion, locking and transcript-leakage checks:
+
+| Exact-image field | Result |
+|---|---|
+| Small profile run and artifact | **Pending final qualification** |
+| Turbo Q5 profile run and artifact | **Pending final qualification** |
+| Online setup and offline first-boot recovery | **Pending final qualification** |
+| English/Hebrew WER, CER and elapsed time | **Pending final measurement** |
+| Log, notification and status privacy audit | **Pending final qualification** |
+
+The published release notes will replace those fields with measured results and
+limitations. The historical table above remains background evidence and is not
+the acceptance result for the direct integration.

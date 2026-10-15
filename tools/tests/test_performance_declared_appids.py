@@ -45,6 +45,8 @@ class DeclaredAppidControls(unittest.TestCase):
                 return 'a'*64
             if argv[:2] == ['rpm', '-qf']:
                 program = Path(argv[-1]).name
+                if argv[-1].startswith('/usr/libexec/arctic/') or argv[-1].startswith('/usr/share/arctic/'):
+                    return fixture['app_roles']['roles']['browser']['package']['product_launcher_owner']
                 for app in fixture['app_roles']['roles'].values():
                     descriptor = G.ROLE_APPS[app['id']]
                     if program == descriptor.get('desktop'):
@@ -54,7 +56,9 @@ class DeclaredAppidControls(unittest.TestCase):
             raise AssertionError('Unexpected public fixture command')
 
         prefix = ['runuser', '-u', 'ci', '--', 'env']
-        with patch.object(G, 'run', side_effect=run), patch.object(G.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)):
+        with patch.object(G, 'run', side_effect=run), patch.object(G.os, 'access', return_value=True), \
+                patch.object(G.Path, 'is_file', return_value=True), \
+                patch.object(G.pwd, 'getpwnam', return_value=types.SimpleNamespace(pw_uid=1000)):
             if functional:
                 return G.functional_roles(prefix, fixture['rpm_inventory'])
             return G.declare_roles(prefix, fixture['app_roles']['boot_context'], fixture['rpm_inventory'])
@@ -132,7 +136,8 @@ class DeclaredAppidControls(unittest.TestCase):
                     self.assertEqual(order, ['warm:'+r for r in G.ROLE_ORDER])
 
     def test_original_whole_byte_declaration_reproduces_real_strict_guard_rejection(self):
-        raw = L.before_private_diagnostic_summary((ROOT/'tools/performance/guest.py').read_bytes())
+        raw = L.before_epiphany_product_launcher((ROOT/'tools/performance/guest.py').read_bytes())
+        raw = L.before_private_diagnostic_summary(raw)
         current = b"appids=tuple(app['appids'])"
         self.assertEqual(raw.count(current), 2)
         old = raw.replace(current, b"appids=list(app['appids'])")

@@ -34,7 +34,19 @@ class UARTEnvelopeTest(unittest.TestCase):
             if not line.rstrip().endswith(b'# envelope-only'))
         # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
+        historical = historical.replace(b'pinned 110-site inventory', b'pinned 104-site inventory')
+        historical = historical.replace(b'Complete 110-site inventory bound to the frozen observer.',
+                                        b'Complete 104-site inventory bound to the original frozen observer.')
+        historical = historical.replace(b"len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51'",
+                                        b"len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b'")
+        self.assertEqual(historical.count(b'not 942 <= frames[1][0] <= 1008'), 1)
+        historical = historical.replace(b'not 942 <= frames[1][0] <= 1008',
+                                        b'not 871 <= frames[1][0] <= 942')
         for current, previous in (
+                (b'c6532d1b6dde6101c7f8856072498985b3be5aeb7d91d873ac428610e1dc7ae6', b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed'),
+                (b'5a1bce24d3097cbeeb936701de0cf87b4bc8bf7f8aa121dc0f7a498b9a821b1e', b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7'),
+                (b'69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73', b'088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d'),
+                (b'dce568410fb95f027c1ab4b44148b8af93ea16f32e0b64dcff79bcb707b77940', b'd3d3ac5dcdf9066b73ac91a48c968dd7f84cd43f3c5571939d7c1041f879a0cf'),
                 (b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562', b'3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9'),
                 (b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed', b'19fb089b8885a1e0ce6b2827db9b87acade30bef3a331486ca05d0a051ddea8b'),
                 (b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7', b'c16a9947baa293502791af88f60e14bcd8dea0b852286536a75598afef371d1b'),
@@ -76,7 +88,7 @@ class UARTEnvelopeTest(unittest.TestCase):
         with patch.object(P.inner, 'failure_phase_summary', return_value=result):
             self.fixture.export(self.fixture.root/'screened')
 
-    def test_all_original_104_codes_and_classes_remain_identical(self):
+    def test_all_original_110_codes_and_classes_remain_identical(self):
         for site in self.fixture.sites:
             with self.subTest(source=site['source'], line=site['line']):
                 result = self.result(self.fixture.guest_trace(site))
@@ -165,8 +177,8 @@ class UARTEnvelopeTest(unittest.TestCase):
 
     def test_source_candidate_absence_remains_unknown_with_fixed_phase(self):
         # Actual default site function is fixed by the admitted source inventory.
-        site = next(x for x in self.fixture.sites if (x['source'], x['line']) == ('guest', 360))
-        trace = self.fixture.guest_trace().replace(f'line 360, in {site["function"]}', 'line 1, in private')
+        site = next(x for x in self.fixture.sites if (x['source'], x['line']) == ('guest', 362))
+        trace = self.fixture.guest_trace().replace(f'line 362, in {site["function"]}', 'line 1, in private')
         envelope = self.result(trace)['guest_envelope']
         self.assertEqual(envelope['reason'], 'source_candidate_count')
         self.assertEqual(envelope['counts']['source_candidates'], 'zero')

@@ -28,7 +28,9 @@ class LiveAppDefaultsTest(Home):
         # Same production body and real configuration paths, except /etc is our owned fixture.
         source = (DOTFILES / '.local/bin/arctic-open').read_text()
         self.opener = self.bin / 'arctic-open'
-        self.opener.write_text(source.replace('/etc/arctic/default-apps', str(self.etc / 'default-apps')))
+        source = source.replace('/etc/arctic/default-apps', str(self.etc / 'default-apps'))
+        source = source.replace('/usr/libexec/arctic/arctic-epiphany', str(self.bin / 'arctic-epiphany'))
+        self.opener.write_text(source)
         self.opener.chmod(0o755)
         (self.etc / 'xdg').mkdir()
         shutil.copy(LIVE_MIME, self.etc / 'xdg/mimeapps.list')
@@ -46,19 +48,21 @@ class LiveAppDefaultsTest(Home):
     def live_roles(self):
         shutil.copy(LIVE_ROLES, self.etc / 'default-apps')
 
-    def desktop(self, ident, command, categories, mimes):
+    def desktop(self, ident, command, categories, mimes, try_exec=None):
         path = self.data_dirs / 'applications' / (ident + '.desktop')
         path.write_text('[Desktop Entry]\nType=Application\nName=' + ident + '\nExec=' + command +
+                        ('\nTryExec=' + try_exec if try_exec else '') +
                         '\nCategories=' + categories + ';\nMimeType=' + mimes + ';\n')
 
     def test_live_roles_launch_selected_apps_even_when_older_apps_are_present(self):
         self.live_roles()
-        for name in ('foot', 'epiphany', 'featherpad', 'pcmanfm', 'kitty', 'nautilus', 'zed', 'firefox'):
+        for name in ('foot', 'gtk-launch', 'epiphany', 'featherpad', 'pcmanfm', 'kitty', 'nautilus', 'zed', 'firefox'):
             self.command(name)
-        for role, command in (('terminal', 'foot'), ('browser', 'epiphany'),
+        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'Network;WebBrowser', 'text/html')
+        for role, command in (('terminal', 'foot'), ('browser', 'gtk-launch org.gnome.Epiphany'),
                               ('editor', 'featherpad'), ('files', 'pcmanfm')):
             with self.subTest(role=role):
-                self.assertEqual(self.launch(role), [command])
+                self.assertEqual(self.launch(role), command.split())
         self.assertNotIn('files-tui=', LIVE_ROLES.read_text())
         self.assertNotIn('yazi', LIVE_ROLES.read_text())
 
@@ -89,9 +93,12 @@ class LiveAppDefaultsTest(Home):
         self.assertEqual(self.launch('editor'), ['featherpad'])
         self.assertEqual(self.launch('files'), ['pcmanfm'])
         self.command('gtk-launch')
-        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'WebBrowser', 'text/html')
-        (self.bin / 'epiphany').unlink()
+        epiphany = self.bin / 'epiphany'
+        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'WebBrowser', 'text/html', str(epiphany))
         self.assertEqual(self.launch('browser'), ['gtk-launch', 'org.gnome.Epiphany'])
+        (self.bin / 'epiphany').unlink()
+        self.command('firefox')
+        self.assertEqual(self.launch('browser'), ['firefox'])
 
     def test_foot_app_id_hold_and_command_argv(self):
         self.live_roles()
@@ -102,11 +109,12 @@ class LiveAppDefaultsTest(Home):
 
     def test_browser_urls_are_literal_for_native_and_desktop_choices(self):
         self.live_roles()
-        self.command('epiphany')
+        self.command('gtk-launch')
+        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'WebBrowser', 'text/html')
         sentinel = self.tmp / 'must-not-exist'
         urls = ['file:///tmp/offline%20page.html', 'https://example.invalid/?q=$(touch ' + str(sentinel) + ')',
                 'https://example.invalid/?q=literal;echo bad', 'https://example.invalid/with space']
-        self.assertEqual(self.launch('browser', *urls), ['epiphany', *urls])
+        self.assertEqual(self.launch('browser', *urls), ['gtk-launch', 'org.gnome.Epiphany', *urls])
         self.assertFalse(sentinel.exists())
         self.command('gtk-launch')
         self.desktop('app.zen_browser.zen', 'zen %U', 'WebBrowser', 'text/html')
@@ -114,6 +122,13 @@ class LiveAppDefaultsTest(Home):
         self.assertEqual(self.launch('browser', *urls), ['gtk-launch', 'app.zen_browser.zen', *urls])
         self.assertFalse(sentinel.exists())
         self.assertEqual(self.launch('browser', '--app-id', 'x', rc=2), [])
+
+    def test_legacy_epiphany_role_uses_product_launcher_after_stable_update(self):
+        self.command('epiphany')
+        self.command('arctic-epiphany')
+        (self.etc / 'default-apps').write_text('browser=epiphany\n')
+        urls = ['https://example.invalid/', 'file:///tmp/offline%20page.html']
+        self.assertEqual(self.launch('browser', *urls), ['arctic-epiphany', *urls])
 
     def test_missing_optional_tui_notifies_and_installed_tui_remains_available(self):
         self.live_roles()

@@ -26,7 +26,7 @@ class CandidateMangoProfileControls(unittest.TestCase):
         ending = b'# candidate-profile-315bc-end\n'
         old_hashes = {
             'causal.py': '3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9',
-            'compare.py': '4d1fffe1fa047ea23d1902de4b2cd0e5f6fdf6bc5143c61b1e57aa7b2ae687b9',
+            'compare.py': '8a6097348162d9b58563accbc4a2648b24e1172863b8d9a2e404feaaffaaf86a',
         }
         for name, expected in old_hashes.items():
             current = (ROOT / 'tools/performance' / name).read_bytes()

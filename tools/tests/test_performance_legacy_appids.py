@@ -10,6 +10,7 @@ import hashlib
 import importlib.util
 import os
 from pathlib import Path
+import re
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -28,6 +29,47 @@ G = load('legacy_appid_guest', ROOT / 'tools/performance/guest.py')
 C = load('legacy_appid_causal', ROOT / 'tools/performance/causal.py')
 R = load('legacy_appid_receipts', ROOT / 'tools/tests/test_performance_roles.py')
 PARENT_GUEST_SHA = '5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64bf92e'
+
+
+def before_epiphany_product_launcher(data):
+    """Invert the reviewed product-launch integration for the exact parent control."""
+    text = data.decode()
+    current = """    'gnome-web': dict(role='browser', configured=('gtk-launch org.gnome.Epiphany',),
+                     program='epiphany', rpm='epiphany-runtime', desktop_rpm='epiphany',
+                     desktop='org.gnome.Epiphany.desktop',
+                     product_launcher='/usr/libexec/arctic/arctic-epiphany',
+                     product_launcher_rpm='arctic-desktop-config',
+"""
+    previous = """    'gnome-web': dict(role='browser', configured=('epiphany', 'gtk-launch org.gnome.Epiphany'),
+                     program='epiphany', rpm='epiphany-runtime', desktop_rpm='epiphany',
+                     desktop='org.gnome.Epiphany.desktop',
+"""
+    assert text.count(current) == 1
+    text = text.replace(current, previous)
+    text, count = re.subn(r"(?ms)^desktop_entries=\{\}\n.*?(?=^paths=json\.loads)", '', text)
+    assert count == 1
+    current = 'print(json.dumps(dict(configured=configured,sources=sources,programs=programs,desktop_entries=desktop_entries,\n'
+    previous = 'print(json.dumps(dict(configured=configured,sources=sources,programs=programs,\n'
+    assert text.count(current) == 1
+    text = text.replace(current, previous)
+    text, count = re.subn(r"(?ms)^ {12}if 'product_launcher' in app:\n.*?(?=^ {8}else:\n)", '', text)
+    assert count == 2
+    current = """        if 'product_launcher' in app:
+            roles[role]['product_launcher'] = app['product_launcher']
+            roles[role]['effective_desktop'] = state['desktop_entries'][app['desktop']]
+"""
+    assert text.count(current) == 2
+    text = text.replace(current, '')
+    current = """    if ident == 'gnome-web':
+        if app.get('configured_command') != 'gtk-launch org.gnome.Epiphany':
+            raise RuntimeError('Epiphany measurement is not using the configured product launcher')
+        return ['gtk-launch', 'org.gnome.Epiphany', workload['url']]
+"""
+    previous = """    if ident == 'gnome-web':
+        return ['epiphany', '--new-window', workload['url']]
+"""
+    assert text.count(current) == 1
+    return text.replace(current, previous).encode()
 
 
 def before_private_diagnostic_summary(data):
@@ -138,7 +180,8 @@ class LegacyAppidControls(unittest.TestCase):
     def test_both_role_bound_branches_keep_exact_declared_tuple_aliases_and_order(self):
         for image in ('baseline', 'candidate'):
             with self.subTest(image=image):
-                declared = {'roles': {role: dict(G.ROLE_APPS[ident], id=ident)
+                declared = {'roles': {role: dict(G.ROLE_APPS[ident], id=ident,
+                    configured_command=G.ROLE_APPS[ident]['configured'][0])
                     for role, ident in G.EXPECTED_ROLES[image].items()}}
                 calls, events, order = self.measure_branch(declared=declared)
                 self.assertEqual(len(calls), 9)
@@ -149,7 +192,8 @@ class LegacyAppidControls(unittest.TestCase):
                 self.assertEqual(events[-1], ('done', True))
 
     def test_exact_parent_whole_byte_rollback_reproduces_string_predicate_rejection(self):
-        data = before_private_diagnostic_summary((ROOT / 'tools/performance/guest.py').read_bytes())
+        data = before_epiphany_product_launcher((ROOT / 'tools/performance/guest.py').read_bytes())
+        data = before_private_diagnostic_summary(data)
         declared_tuple = b"appids=tuple(app['appids'])"
         self.assertEqual(data.count(declared_tuple), 2)
         data = data.replace(declared_tuple, b"appids=list(app['appids'])")

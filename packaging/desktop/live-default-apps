@@ -1,6 +1,6 @@
 # Starting roles for fresh Arctic Linux live images and installs made from them.
 # The installer writes the apps you pick; ~/.config/arctic/default-apps overrides these.
 terminal=foot
-browser=epiphany
+browser=gtk-launch org.gnome.Epiphany
 editor=featherpad
 files=pcmanfm

@@ -14,8 +14,9 @@ downloads the apps you pick.
 **[Watch the published showcase](Showcase)** — a narrated 1080p walkthrough. Its October 3
 screens show earlier app choices; an updated English showcase is in preparation.
 
-These pages describe the package sources now on `main`. Their final signed stable-package
-publication is pending release qualification. The latest published OS image is
+These pages describe the package sources now on `main`. The signed packages are available from
+the stable `arctic` repository. The prepared v1.2.1 replacement image is pending aggregate release
+qualification; [Release notes](Release-Notes) lists the exact fields still open. The latest published OS image is
 [1.2.0](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.2.0). The replacement ISO
 is still being tested; it has no qualified download yet. Read the release page for the exact
 contents and test results of the image you download.
