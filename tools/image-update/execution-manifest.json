@@ -1,38 +1,7 @@
 {
-  "execution_files": {
-    ".github/workflows/image-update-20261008.yml": "5a9960ad4f039c680714ddc5c115dbdaf847954c0a082e7c900ec9859a79f8e3",
-    "tools/image-update/guard.py": "d92fb3a4c13543642bf018280721cbf7830ecdbf88779530a8db8242af87b2a1",
-    "tools/image-update/verify-records.py": "99f98f9760f6ddd98a9531b7bb05ce5e329badd29c038b0b384359ef0b8e143e",
-    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
-    "tools/nix-acceptance/guest.py": "f1aa4415e8e5e7f03e1270040db215503a3d6bf63c7f68679343d77cdcefcd0a",
-    "tools/performance/compose-nix-probe.py": "743788e3c2329c0916de26e02295af5af4f5f26d7eda42c81fc4097f652e5684",
-    "tools/performance/guest.py": "62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415",
-    "tools/performance/offline-update-boot.py": "9b16c14adbd1129a2bfe01a44c7157f695c68a30956d19c865e8dc66d5d01b09",
-    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
-  },
-  "image": {
-    "archive_bytes": 1936454966,
-    "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
-    "artifact_id": 11976239386,
-    "bytes": 1936267264,
-    "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
-    "run_id": 38735141923,
-    "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
-    "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a"
-  },
-  "ready": true,
+  "execution_files": {},
+  "image": null,
+  "ready": false,
   "release_acceptance": false,
-  "stable": {
-    "gpg_fingerprint": "80F75DE9A23B632246FD1FF1BD1A642B5436645A",
-    "live_manifest_sha256": "71b5931cff6018e14fc71e6cdec39be404038116b107768a6be7c2a47bd1e346",
-    "release_suffix": ".20261015120050.202610151205.git3545400",
-    "run_id": 38731467191,
-    "source_sha": "35454003fee95639c845040be0b3627bf12dfa47"
-  }
+  "stable": null
 }
