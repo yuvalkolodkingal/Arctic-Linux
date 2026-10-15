@@ -115,10 +115,41 @@ available() {   # available <command line> — is its program (or desktop entry)
   if [[ "$prog" == gtk-launch ]]; then
     local id="${cmd#gtk-launch }"
     local dirs="${XDG_DATA_HOME:-$HOME/.local/share}:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}:/var/lib/flatpak/exports/share:$HOME/.local/share/flatpak/exports/share"
-    local d
+    local d desktop="" try_exec
     IFS=: read -ra ds <<<"$dirs"
-    for d in "${ds[@]}"; do [[ -f "$d/applications/$id.desktop" ]] && return 0; done
-    return 1
+    for d in "${ds[@]}"; do
+      if [[ -f "$d/applications/$id.desktop" ]]; then
+        desktop="$d/applications/$id.desktop"
+        break
+      fi
+    done
+    [[ -n "$desktop" ]] || return 1
+    # The first same-ID desktop file wins by XDG precedence. Honor its optional
+    # TryExec so an override left behind after Remove Apps cannot swallow the
+    # launch and prevent the next installed fallback from being selected.
+    try_exec="$(python3 -c '
+import sys
+section = ""
+value = ""
+with open(sys.argv[1], encoding="utf-8") as source:
+    for raw in source:
+        line = raw.rstrip("\r\n")
+        if line.startswith("[") and line.endswith("]"):
+            section = line[1:-1]
+        elif section == "Desktop Entry" and line.startswith("TryExec="):
+            value = line.split("=", 1)[1].strip()
+            break
+if "\0" in value or "\n" in value or "\r" in value:
+    raise SystemExit(1)
+print(value)
+' "$desktop")" || return 1
+    [[ -n "$try_exec" ]] || return 0
+    if [[ "$try_exec" == /* ]]; then
+      [[ -f "$try_exec" && -x "$try_exec" ]]
+    else
+      [[ "$try_exec" =~ ^[A-Za-z0-9._+@%-]+$ ]] && command -v "$try_exec" >/dev/null 2>&1
+    fi
+    return
   fi
   # A terminal alone does not make an optional editor or file manager available. Parse
   # quoting without executing the configured command; the eventual launch keeps its argv.

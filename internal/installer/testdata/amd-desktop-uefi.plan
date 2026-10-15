@@ -141,7 +141,7 @@ write /mnt/etc/arctic/default-apps (0644)
     | # Written by the Arctic Linux installer: the apps you picked, as role=command.
     | # arctic-open reads this; override any line in ~/.config/arctic/default-apps.
     | terminal=foot
-    | browser=epiphany
+    | browser=gtk-launch org.gnome.Epiphany
     | editor=featherpad
     | files=pcmanfm
 write /mnt/etc/xdg/mimeapps.list (0644)

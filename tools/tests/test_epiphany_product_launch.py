@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 import configparser
 import hashlib
+import importlib.util
 import os
 from pathlib import Path
 import subprocess
 import tempfile
+import tomllib
 import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -21,6 +23,27 @@ PROVENANCE = (
 
 
 class EpiphanyProductLaunchTest(unittest.TestCase):
+    def test_installer_profiles_live_default_and_benchmark_use_product_route(self):
+        command = 'gtk-launch org.gnome.Epiphany'
+        module = tomllib.loads((ROOT / 'modules/browser/gnome-web/module.toml').read_text())
+        catalog = tomllib.loads((ROOT / 'modules/catalog.toml').read_text())
+        self.assertEqual(module['defaults']['command'], command)
+        browser = next(category for category in catalog['category'] if category['id'] == 'browser')
+        self.assertIn(module['id'], browser['modules'])
+        for relative in ('profiles/defaults.toml', 'profiles/ci/offline.toml',
+                         'tools/reliability/profiles/lightweight.toml'):
+            profile = tomllib.loads((ROOT / relative).read_text())
+            self.assertEqual(profile['apps']['browser'], [module['id']], relative)
+        defaults = dict(line.split('=', 1) for line in
+                        (ROOT / 'packaging/desktop/live-default-apps').read_text().splitlines()
+                        if line and not line.startswith('#'))
+        self.assertEqual(defaults['browser'], command)
+        spec = importlib.util.spec_from_file_location(
+            'epiphany_product_performance_guest', ROOT / 'tools/performance/guest.py')
+        guest = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(guest)
+        self.assertEqual(guest.ROLE_APPS[module['id']]['configured'], (command,))
+
     def test_wrapper_preserves_renderer_override_and_every_launch_mode(self):
         with tempfile.TemporaryDirectory() as name:
             root = Path(name)

@@ -48,9 +48,10 @@ class LiveAppDefaultsTest(Home):
     def live_roles(self):
         shutil.copy(LIVE_ROLES, self.etc / 'default-apps')
 
-    def desktop(self, ident, command, categories, mimes):
+    def desktop(self, ident, command, categories, mimes, try_exec=None):
         path = self.data_dirs / 'applications' / (ident + '.desktop')
         path.write_text('[Desktop Entry]\nType=Application\nName=' + ident + '\nExec=' + command +
+                        ('\nTryExec=' + try_exec if try_exec else '') +
                         '\nCategories=' + categories + ';\nMimeType=' + mimes + ';\n')
 
     def test_live_roles_launch_selected_apps_even_when_older_apps_are_present(self):
@@ -92,9 +93,12 @@ class LiveAppDefaultsTest(Home):
         self.assertEqual(self.launch('editor'), ['featherpad'])
         self.assertEqual(self.launch('files'), ['pcmanfm'])
         self.command('gtk-launch')
-        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'WebBrowser', 'text/html')
-        (self.bin / 'epiphany').unlink()
+        epiphany = self.bin / 'epiphany'
+        self.desktop('org.gnome.Epiphany', 'epiphany %U', 'WebBrowser', 'text/html', str(epiphany))
         self.assertEqual(self.launch('browser'), ['gtk-launch', 'org.gnome.Epiphany'])
+        (self.bin / 'epiphany').unlink()
+        self.command('firefox')
+        self.assertEqual(self.launch('browser'), ['firefox'])
 
     def test_foot_app_id_hold_and_command_argv(self):
         self.live_roles()
