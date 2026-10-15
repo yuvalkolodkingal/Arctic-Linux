@@ -187,7 +187,10 @@ jobs:
           print(json.dumps(receipt, sort_keys=True))
           timing = json.loads(Path("showcase/timing.json").read_text())
           wanted = {"intro", "files", "dictationsetup", "dictationrecord", "dictationrecovery", "winter", "updates", "outro"}
-          frames = [f"{min(float(scene['start']) + 0.5, expected_duration - 0.5):.3f}\t{scene['id']}"
+          # Crossfades end 0.6 seconds after a scene starts and the screen
+          # entrance ends at 0.92 seconds.  Sample the settled hero frame so
+          # human review sees the admitted capture rather than a transition.
+          frames = [f"{min(float(scene['start']) + 1.25, expected_duration - 0.5):.3f}\t{scene['id']}"
                     for scene in timing["scenes"] if scene["id"] in wanted]
           assert len(frames) == len(wanted), frames
           Path("showcase/renders/validation/frames.tsv").write_text("\n".join(frames) + "\n")
