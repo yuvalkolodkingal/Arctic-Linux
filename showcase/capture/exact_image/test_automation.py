@@ -442,7 +442,17 @@ class UnattendedController(unittest.TestCase):
 
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
-        self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
+        self.assertEqual(len(automation.Controller.SHELL_PROOF), 146)
+        rendered = subprocess.run(
+            ["/bin/sh", "-c", automation.Controller.SHELL_PROOF],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=5, check=True,
+        )
+        self.assertEqual(rendered.stderr, b"")
+        self.assertEqual(
+            rendered.stdout,
+            b"\x1b[2J\x1b[H\x1b[1mARCTIC-SHOWCASE-SHELL-READY\x1b[0m\n",
+        )
 
     def test_shell_proof_and_final_prompt_gate_precede_sudo_launcher(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))

@@ -431,9 +431,9 @@ class Controller:
     PASSWORD = "ArcticShowcase-Disposable-2026-Only!!!"
     # The typed command deliberately does not contain the OCR marker; only an
     # initialized shell executing printf can assemble the visible proof.
-    SHELL_PROOF = ("printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
+    SHELL_PROOF = ("printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
                    "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
-                   "\\105\\101\\104\\131\\n'")
+                   "\\105\\101\\104\\131\\033[0m\\n'")
     LIVE_STARTUP_PROBE = (
         "m=other; grep -qw arctic.mode=install /proc/cmdline && m=install; "
         "s=absent; pgrep -x mango >/dev/null 2>&1 && s=running; "
@@ -803,9 +803,12 @@ class Controller:
         # Three seconds is sixty times the renderer's 50 ms polling period and
         # gives Fish time to complete the empty command after the renderer has
         # exited.  The proof contains no secret and cannot mimic its fixed
-        # response.  This is the same readiness pattern used by the successful
-        # installed-image qualification: sudo remains forbidden until the
-        # fresh response and the exact final prompt are visible together.
+        # response.  The proof itself clears and homes the VT before drawing a
+        # bold marker, matching the successful installed-image identity
+        # challenge.  This removes the retained rich greeting from the OCR
+        # surface without relying on a separate Fish Ctrl-L redraw.  Sudo
+        # remains forbidden until the fresh response and the exact final
+        # prompt are visible together.
         shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
                         + c.CONTROLLER["account"]["hostname"])
         prompt_contract = c.CONTROLLER["account"]["prompt"]

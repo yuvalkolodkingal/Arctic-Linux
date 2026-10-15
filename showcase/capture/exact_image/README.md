@@ -97,7 +97,9 @@ candidate's animated greeting, the host sends one empty command terminator. Its
 which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
-The host then requires `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
+The proof clears and homes the VT itself before printing a bold marker, using
+the same pattern as the successful installed-image identity challenge. The host
+then requires `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
 1280x800 frame. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the
