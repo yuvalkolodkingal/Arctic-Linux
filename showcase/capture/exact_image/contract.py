@@ -220,7 +220,8 @@ def controller_trace(value) -> None:
         "installed-boot": {"installed-login-ready", "first-login-welcome",
                            "first-login-dismissed"},
         "installed-console": {"installed-console-login", "installed-password-prompt",
-                              "installed-fetch-greeting", "installed-shell-ready",
+                              "installed-fetch-greeting", "installed-fetch-cleared",
+                              "installed-shell-ready",
                               "installed-shell",
                               "installed-sudo-password"},
         "dictationsetup": {"dictation-ready-page"},
@@ -258,7 +259,7 @@ def controller_trace(value) -> None:
         if kind == "screen":
             exact_geometry = detail.get("expectation") in {
                 "installer-done", "first-login-welcome", "first-login-dismissed",
-                "installed-shell-ready", "installed-shell",
+                "installed-fetch-cleared", "installed-shell-ready", "installed-shell",
                 "dictation-ready-page", "wallpaper-page", "wallpaper-hide-dialog",
                 "whats-new-layer",
             }
@@ -362,6 +363,7 @@ def controller_trace(value) -> None:
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
         ("installed-console", "installed-fetch-greeting"),
+        ("installed-console", "installed-fetch-cleared"),
         ("installed-console", "installed-shell-ready"),
         ("installed-console", "installed-shell"),
         ("installed-console", "installed-sudo-password"),
@@ -383,7 +385,7 @@ def controller_trace(value) -> None:
                 if event["stage"] == "installed-console"
                 and event["kind"] == "screen"
                 and event["detail"].get("expectation") == "installed-fetch-greeting"]
-    require(len(greeting) == 1 and greeting[0] + 3 < len(events),
+    require(len(greeting) == 1 and greeting[0] + 5 < len(events),
             "installed fetch redraw sequence differs")
     at = greeting[0]
     require(events[at + 1]["stage"] == "installed-console"
@@ -391,10 +393,16 @@ def controller_trace(value) -> None:
             and events[at + 1]["detail"] == {"names": ["ctrl-l"]}
             and events[at + 2]["stage"] == "installed-console"
             and events[at + 2]["kind"] == "screen"
-            and events[at + 2]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 2]["detail"].get("expectation") == "installed-fetch-cleared"
             and events[at + 3]["stage"] == "installed-console"
-            and events[at + 3]["kind"] == "text"
-            and events[at + 3]["detail"].get("command") == "installed-shell-proof",
+            and events[at + 3]["kind"] == "keys"
+            and events[at + 3]["detail"] == {"names": ["ret"]}
+            and events[at + 4]["stage"] == "installed-console"
+            and events[at + 4]["kind"] == "screen"
+            and events[at + 4]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 5]["stage"] == "installed-console"
+            and events[at + 5]["kind"] == "text"
+            and events[at + 5]["detail"].get("command") == "installed-shell-proof",
             "installed fetch redraw sequence differs")
     require([event["detail"]["command"] for event in events if event["kind"] == "text"]
             == ["live-username", "live-install", "installed-username",
@@ -418,7 +426,7 @@ def controller_trace(value) -> None:
             and keys.count(("live-install", ("ret",))) == 1
             and 1 <= keys.count(("installed-console", ("ctrl-alt-f6",))) <= 70
             and keys.count(("installed-console", ("ctrl-l",))) == 1
-            and keys.count(("installed-console", ("ret",))) == 4
+            and keys.count(("installed-console", ("ret",))) == 5
             and keys.count(("installed-scenes", ("ret",))) == 1
             and keys.count(("installed-boot", ("esc",))) == 1,
             "controller exact key inventory differs")

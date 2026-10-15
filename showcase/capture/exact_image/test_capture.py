@@ -178,6 +178,8 @@ def controller_trace():
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-fetch-greeting")),
         ("installed-console", "keys", {"names": ["ctrl-l"]}),
+        ("installed-console", "screen", screen("installed-fetch-cleared")),
+        ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
                                          "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),

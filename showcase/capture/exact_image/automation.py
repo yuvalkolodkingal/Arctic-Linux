@@ -288,14 +288,17 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     """Reduce a private installed-console frame to one reviewed public enum."""
     if image.size != (1280, 800):
         return "geometry-mismatch"
+    # A cleared Linux text console is intentionally low-color.  Preserve the
+    # authoritative gate's exact final-line rule before reducing all other
+    # sparse surfaces to the privacy-safe blank-output enum.
+    if _fixed_fish_prompt_present(text, account, suffixes):
+        return "prompt-exact"
     colors = image.resize((32, 20)).getcolors(maxcolors=640)
     if colors is None or len(colors) < 16:
         return "blank-output"
     folded = text.casefold().strip()
     if not folded:
         return "ocr-empty"
-    if _fixed_fish_prompt_present(text, account, suffixes):
-        return "prompt-exact"
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
     accepted = {account + " " + suffix for suffix in suffixes}
     if any(line in accepted for line in lines):
@@ -593,6 +596,33 @@ class Controller:
                 f"controller screen expectation {expectation} absent")
         raise c.Invalid(f"controller screen expectation {expectation} absent")
 
+    def wait_installed_fetch_clear(self, seconds=30):
+        """Prove Fish consumed Ctrl-L before sending one empty command."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            path = None
+            try:
+                path, info, image, text = self._shot("installed-fetch-cleared")
+                colors = image.resize((32, 20)).getcolors(maxcolors=640)
+                if (image.size == (1280, 800) and colors is not None
+                        and len(colors) < 16):
+                    self.record("installed-console", "screen", {
+                        "bytes": info.st_size, "sha256": c.sha256(path),
+                        "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                        "expectation": "installed-fetch-cleared",
+                        "width": image.width, "height": image.height,
+                    })
+                    path.unlink(missing_ok=True)
+                    path = None
+                    return
+            except (c.Invalid, OSError):
+                pass
+            finally:
+                if path is not None and path.exists():
+                    path.unlink(missing_ok=True)
+            time.sleep(2)
+        raise c.Invalid("controller screen expectation installed-fetch-cleared absent")
+
     def pointer_click(self, stage: str, x: int, y: int):
         c.require(0 <= x < 1280 and 0 <= y < 800, "controller pointer is outside output")
         move = [{"type": "abs", "data": {"axis": "x", "value": x * 0x7fff // 1279}},
@@ -800,6 +830,13 @@ class Controller:
         # most the one ordinary byte its handoff contract requires.
         self.press_held("installed-console", "ctrl-l")
         self.installed_startup.dismissal_sent()
+        # arctic-fetch does not clear the VT when it exits.  An exact low-color
+        # frame after its rich greeting therefore proves that Fish consumed
+        # Ctrl-L and regained its line editor.  Submit one empty line only after
+        # that proof so Fish paints a second prompt for full-frame OCR.  No text
+        # or command is entered before the unchanged exact prompt gate passes.
+        self.wait_installed_fetch_clear()
+        self.press("installed-console", "ret")
         # The fetch renderer can remain visible after it has accepted the
         # dismissal key.  Do not type even the nonsecret proof command until a
         # later exact frame contains the fixed installed account's real Fish

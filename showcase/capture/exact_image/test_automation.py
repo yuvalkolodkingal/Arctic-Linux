@@ -129,6 +129,34 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(event["kind"], "screen")
         self.assertEqual(event["detail"]["expectation"], "installer-done")
 
+    def test_fetch_clear_proof_requires_exact_low_color_frame_and_deletes_probe(self):
+        self.controller.wait_installed_fetch_clear(seconds=1)
+        self.assertEqual(list(self.root.glob("controller-*.png")), [])
+        self.assertEqual(len(self.controller.events), 1)
+        event = self.controller.events[0]
+        self.assertEqual((event["stage"], event["kind"]),
+                         ("installed-console", "screen"))
+        self.assertEqual(event["detail"]["expectation"], "installed-fetch-cleared")
+        self.assertEqual((event["detail"]["width"], event["detail"]["height"]),
+                         (1280, 800))
+
+    def test_fetch_clear_proof_rejects_rich_frame(self):
+        def screendump(path):
+            image = Image.new("RGB", (1280, 800))
+            pixels = image.load()
+            for y in range(800):
+                for x in range(1280):
+                    pixels[x, y] = ((x // 40) % 32, (y // 40) % 20, (x + y) % 251)
+            image.save(path)
+
+        self.qmp.screendump = screendump
+        with mock.patch.object(automation.time, "monotonic", side_effect=(0, 0, 2)), \
+                mock.patch.object(automation.time, "sleep"), \
+                self.assertRaisesRegex(c.Invalid, "installed-fetch-cleared absent"):
+            self.controller.wait_installed_fetch_clear(seconds=1)
+        self.assertEqual(self.controller.events, [])
+        self.assertEqual(list(self.root.glob("controller-*.png")), [])
+
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
         order = []
         image = Image.new("RGB", (1920, 1080), "#101820")
@@ -369,6 +397,9 @@ class UnattendedController(unittest.TestCase):
             Image.new("RGB", (1280, 800), "black"), "private", account, suffixes),
             "blank-output")
         self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1280, 800), "black"), account + " ~>", account, suffixes),
+            "prompt-exact")
+        self.assertEqual(automation._installed_shell_surface_class(
             Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
             "geometry-mismatch")
 
@@ -417,6 +448,8 @@ class UnattendedController(unittest.TestCase):
             operations.append(("text", command_id))
 
         self.controller.wait_screen = wait
+        self.controller.wait_installed_fetch_clear = lambda: operations.append(
+            ("screen", "installed-fetch-cleared", (), {}))
         self.controller.press = press
         self.controller.press_held = press_held
         self.controller.type_text = text
@@ -441,6 +474,7 @@ class UnattendedController(unittest.TestCase):
 
     def test_shell_proof_waits_for_fixed_fish_prompt_before_proof_and_sudo_launcher(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.wait_installed_fetch_clear = mock.Mock()
         self.controller.press = mock.Mock()
         self.controller.type_text = mock.Mock()
         self.controller.type_secret = mock.Mock()
@@ -527,6 +561,7 @@ uptime   2 mins
                                   timeout=5, check=True)
         self.assertEqual(rendered.stdout.decode(), marker + ": ")
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.wait_installed_fetch_clear = mock.Mock()
         self.controller.press = mock.Mock()
         self.controller.type_text = mock.Mock()
         self.controller.type_secret = mock.Mock()
@@ -538,7 +573,7 @@ uptime   2 mins
         self.assertEqual(sudo[0].args[2], (marker, "password"))
         self.controller.type_secret.assert_called_with("installed-console")
 
-    def test_installed_shell_clears_fetch_without_submitting_before_prompt(self):
+    def test_installed_shell_proves_clear_then_submits_one_empty_redraw(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -558,6 +593,8 @@ uptime   2 mins
             operations.append(("secret",))
 
         self.controller.wait_screen = wait
+        self.controller.wait_installed_fetch_clear = lambda: operations.append(
+            ("screen", "installed-fetch-cleared", (), {}))
         self.controller.press = press
         self.controller.press_held = press_held
         self.controller.type_text = text
@@ -574,16 +611,19 @@ uptime   2 mins
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
         self.assertEqual(operations[at + 1], ("held-keys", ("ctrl-l",)))
-        self.assertEqual(operations[at + 2], ready)
-        self.assertEqual(operations[at + 3], proof)
-        self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
+        self.assertEqual(operations[at + 2],
+                         ("screen", "installed-fetch-cleared", (), {}))
+        self.assertEqual(operations[at + 3], ("keys", ("ret",)))
+        self.assertEqual(operations[at + 4], ready)
+        self.assertEqual(operations[at + 5], proof)
+        self.assertEqual(operations[at + 1:at + 4].count(("keys", ("ret",))), 1)
         self.assertLess(operations.index(("secret",)), at)
-        self.assertEqual(operations[at + 5],
+        self.assertEqual(operations[at + 7],
                          ("screen", "installed-shell",
                           ("ARCTIC-SHOWCASE-SHELL-READY",
                            "arcticshowcase@arctic-showcase"),
                           {"seconds": 90, "exact_output": True, "ordered": True}))
-        self.assertEqual(operations[at + 6], ("text", "installed-scenes"))
+        self.assertEqual(operations[at + 8], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):

@@ -95,8 +95,12 @@ drops permanently to UID 1000 for scene work. After observing the exact
 candidate's animated greeting, the host sends one Ctrl-L. Its 3D renderer
 deliberately leaves that single ordinary byte queued for Fish, where Ctrl-L can
 only clear the retained greeting and redraw the line editor; if the renderer
-has already returned, the same binding only clears and redraws. No command byte
-or command terminator is sent. The host then requires the fixed account's real
+has already returned, the same binding only clears and redraws. Because the
+renderer itself never clears on exit, the host next requires an exact 1280x800
+low-color cleared frame as pixel proof that Fish consumed Ctrl-L and regained
+its line editor. Only then does it send one empty command terminator so Fish
+paints a second prompt for the approved full-frame OCR. No command text is sent.
+The host then requires the fixed account's real
 `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
 typing even its nonsecret proof command. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the
