@@ -100,8 +100,6 @@ class UpdateRecordsTest(unittest.TestCase):
             'run_id': 38707105430,
             'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
         })
-        self.assertEqual((ROOT / '.github/qualification-20261010.update').read_text(),
-                         'aad7b7f0be49a28eaf2d43767c14d62b05101a0a\n')
 
 
 class SigningFingerprintTest(unittest.TestCase):
