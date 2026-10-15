@@ -88,8 +88,10 @@ only for the official acceleration outcome and does not save or display it.
 | Text is not inserted | Focus a writable field and retry; the app may reject Wayland virtual-keyboard input. |
 | VoxType service is stopped | Open Dictation settings and repair or restart setup. |
 
-Models load on demand when recording begins and unload after transcription.
-This saves idle RAM and VRAM, with a short delay when a recording starts.
+VoxType loads the selected model during daemon startup and keeps it resident
+until the service stops or restarts, matching the upstream default. Stop the
+service to release the model's RAM or VRAM; starting it again reloads the
+verified model before recording.
 
 ## Privacy
 

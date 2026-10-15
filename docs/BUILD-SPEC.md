@@ -403,10 +403,11 @@ hash validation leaves a durable rejection marker that both launcher and status
 honor until signed repair completes.
 
 The systemd user service runs official VoxType directly with local-only,
-error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and
-`voxtype record cancel`; the Arctic adapter handles only status, retry, language
-and CPU/Vulkan selection. GPU failure never implies automatic CPU fallback: the
-user selects CPU and makes a new recording. See [DICTATION.md](DICTATION.md) for
+error-only Whisper settings and upstream's resident-model default. Mango calls
+`voxtype record toggle` and `voxtype record cancel`; the Arctic adapter handles
+only status, retry, language and CPU/Vulkan selection. GPU failure never implies
+automatic CPU fallback: the user selects CPU and makes a new recording. See
+[DICTATION.md](DICTATION.md) for
 hashes, paths, privacy controls, commands, historical accuracy measurements and
 the exact-image release gate. Source and RPM checks do not qualify inference,
 privacy or the final image.

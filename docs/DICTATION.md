@@ -138,9 +138,12 @@ successful acceleration. CPU remains the explicit recovery path after a Vulkan
 failure. Arctic does not assume a failed inference was retried, retranscribe
 failed audio, or download a different model in response to a runtime error.
 
-The model is configured for on-demand loading. It loads when recording starts
-and unloads after transcription, avoiding a permanently resident Small or
-Turbo model at the cost of a short startup delay for each recording.
+VoxType loads the selected model during daemon startup and keeps it resident
+until the service stops or restarts, matching upstream's default and avoiding
+repeated model load/unload cycles between recordings.
+Stop the user service to release the model's RAM or VRAM. Exact-image
+qualification reports the resulting resource use rather than claiming that
+dictation is free at idle.
 
 ## Privacy
 

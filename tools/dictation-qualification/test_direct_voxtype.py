@@ -80,6 +80,7 @@ enabled = false
 mode = "local"
 model = "/opt/arctic/voxtype/models/ggml-small.bin"
 language = ["he", "en"]
+on_demand_loading = false
 [output]
 mode = "type"
 driver_order = ["wtype"]
@@ -90,6 +91,7 @@ on_transcription = false
             checker.config_path.chmod(0o600)
             self.assertEqual(checker.config_contract(), {'language_count': 2})
             for needle in ('mode = "remote"', 'enabled = true',
+                           'on_demand_loading = true',
                            'language = ["he", "fr"]', 'on_transcription = true'):
                 body = checker.config_path.read_text()
                 if needle.startswith('mode = "remote"'):
@@ -98,6 +100,8 @@ on_transcription = false
                     body = body.replace('enabled = false', needle)
                 elif needle.startswith('language'):
                     body = body.replace('language = ["he", "en"]', needle)
+                elif needle.startswith('on_demand_loading'):
+                    body = body.replace('on_demand_loading = false', needle)
                 else:
                     body = body.replace('on_transcription = false', needle)
                 checker.config_path.write_text(body)

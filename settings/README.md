@@ -116,9 +116,11 @@ Focus a text field and press **Super + Ctrl + X** to start; press it again to
 stop and insert. **Super + Ctrl + Backspace** invokes upstream cancellation.
 The taskbar pill exposes current state and opens Settings for recovery. QML
 consumes sanitized status only and never receives the transcript. The managed
-VoxType config is `~/.config/voxtype/config.toml`; models load on demand to avoid
-permanent idle RAM/VRAM use. Vulkan failure requires an explicit CPU selection
-and a new recording.
+VoxType config is `~/.config/voxtype/config.toml`. VoxType loads the selected
+model during daemon startup and keeps it resident until the service stops or
+restarts, matching the upstream default. Stop the service to release that
+memory.
+Vulkan failure requires an explicit CPU selection and a new recording.
 
 ## Developing
 

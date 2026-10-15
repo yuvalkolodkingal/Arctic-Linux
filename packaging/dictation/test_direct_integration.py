@@ -52,7 +52,7 @@ class DirectUpstreamIntegration(unittest.TestCase):
         ):
             self.assertIn(value, setup)
         for value in ('language = ["he", "en"]', 'driver_order = ["wtype"]',
-                      "fallback_to_clipboard = false", "on_demand_loading = true",
+                      "fallback_to_clipboard = false", "on_demand_loading = false",
                       "filter_filler_words = false"):
             self.assertIn(value, config)
         unit = (ROOT / "packaging/systemd/voxtype.service").read_text()

@@ -767,6 +767,7 @@ class Checker:
                 and whisper.get('mode') == 'local'
                 and whisper.get('model') == str(MODELS / self.names['model'])
                 and language == ['he', 'en']
+                and whisper.get('on_demand_loading') is False
                 and output.get('mode') == 'type'
                 and output.get('driver_order') == ['wtype']
                 and output.get('fallback_to_clipboard') is False
