@@ -52,13 +52,11 @@ status() {
                 receipt_backend=vulkan
             fi
         elif grep -Fq '"version":"1.1.0"' "$receipt" \
+                && [ ! -r /var/lib/arctic/dictation/previous-direct-rejected ] \
                 && grep -Fq '"source_commit":"e2638ca63f566f1682bcedc0abea8e4b25211c21"' "$receipt" \
                 && grep -Fq '"release_signing_fingerprint":"9CCF7915B750CAE8B095ED1AA3FC9F33FD209279"' "$receipt"; then
             runtime_version=1.1.0
-            # This package expects 1.1.1, so an otherwise healthy 1.1.0 receipt
-            # is always an update-pending state even if a crashed transaction
-            # has not yet republished the queue file.
-            upgrade_pending=true
+            [ ! -r /var/lib/arctic/dictation/pending ] || upgrade_pending=true
             if grep -Fq '"backend":"cpu"' "$receipt" \
                     && ! grep -Fq '"backend":"vulkan"' "$receipt" \
                     && ! grep -Fq '"vulkan_binary"' "$receipt"; then

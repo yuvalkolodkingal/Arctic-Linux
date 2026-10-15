@@ -676,15 +676,59 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
         self._json("verified.json", self._direct_receipt("small-v2"))
         self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
-        with (self.payload / "voxtype-baseline").open("ab") as damaged:
-            damaged.write(b"corrupt")
+        binary = self.payload / "voxtype-baseline"
+        damaged = binary.read_bytes().replace(b"idle", b"evil")
+        self.assertEqual(len(damaged), len(binary.read_bytes()))
+        self._write(binary, damaged, 0o755)
         failed = self._run(self._fixture_setup(), check=False)
         self.assertNotEqual(failed.returncode, 0)
         self.assertFalse((self.current_payload / "voxtype-baseline").exists())
+        self.assertEqual((self.state / "previous-direct-rejected").read_text(), "rejected\n")
         refused = subprocess.run([str(self._fixture_launcher()), "status"],
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
         self.assertEqual(refused.returncode, 69)
+        status = self._status()
+        self.assertEqual((status["ready"], status["state"]), (False, "error"))
         self.assertTrue((self.state / "pending").is_file())
+
+    def test_extra_receipt_field_is_rejected_by_migration_and_runtime(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        receipt = self._direct_receipt("small-v2")
+        receipt["unexpected"] = "field"
+        self._json("verified.json", receipt)
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        failed = self._run(self._fixture_setup(), check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertTrue((self.state / "previous-direct-rejected").is_file())
+        refused = subprocess.run([str(self._fixture_launcher()), "status"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(refused.returncode, 69)
+
+    def test_timer_reconstructs_missing_queue_from_previous_receipt(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        config = self.root / ".config/voxtype/config.toml"
+        config.parent.mkdir(parents=True, mode=0o700)
+        self._write(config, b'[whisper]\nlanguage = ["he", "en"]\n', 0o600)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        condition = self._run(self._fixture_setup(), verb="--needs-resume")
+        self.assertEqual(condition.returncode, 0)
+        self.assertFalse((self.state / "pending").exists())
+        before = self._status()
+        self.assertEqual((before["ready"], before["version"], before["upgrade_pending"]),
+                         (True, "1.1.0", False))
+
+        self._run(self._fixture_setup(), verb="--resume")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual(receipt["version"], "1.1.1")
+        self.assertFalse((self.state / "pending").exists())
+        self.assertFalse((self.state / "previous-direct-rejected").exists())
+        no_work = self._run(self._fixture_setup(), check=False, verb="--needs-resume")
+        self.assertEqual(no_work.returncode, 1)
+        self.assertEqual((self.state / "setup.state").read_text(), "ready\n")
+        self.assertFalse((self.state / "setup.error").exists())
 
     def test_online_resume_switches_atomically_to_current_and_cleans_old(self):
         self.models.mkdir(mode=0o755)

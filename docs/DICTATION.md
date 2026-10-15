@@ -70,6 +70,12 @@ there is no receipt. The pending queue, config, receipt and marker are published
 with file and directory fsyncs. Cleanup cannot run before the current receipt
 and marker are durable.
 
+If the package transaction stops before `%posttrans` can create the queue, the
+already-enabled setup timer recognizes the trusted 1.1.0 receipt, restores the
+root-owned queue for its receipt-bound account and performs the same verified
+resume. A strict receipt or payload hash failure publishes a durable rejection
+state, so the compatibility launcher cannot run bytes the migration refused.
+
 If the old root-owned receipt is malformed or no longer matches its exact
 schema, the transaction-time offline migration leaves it and the old payload
 untouched. The queued online resume quarantines that invalid state, retrieves

@@ -44,11 +44,13 @@ function selectionDetail(s) { return profileKnown(s) ? modelTitle(s) : 'Profile 
 function active(s) { return s.state === 'recording' || s.state === 'transcribing'; }
 function headline(s) {
     if (s.upgrade_pending && s.state === 'ready') return 'Dictation is ready; update queued';
+    if (s.version === '1.1.0' && s.state === 'ready') return 'Dictation is ready; update available';
     return ({ unavailable:'Dictation is not ready', queued:'Dictation setup is queued', downloading:'Downloading dictation', ready:'Dictation is ready', recording:'Dictation is recording', transcribing:'Transcribing on this computer', error:'Dictation needs attention' })[s.state] || 'Dictation is not ready';
 }
 function detail(s) {
     if (s.error) return s.error;
     if (s.upgrade_pending && s.state === 'ready') return 'VoxType 1.1.0 remains available. The signed 1.1.1 update will retry automatically when the network is ready.';
+    if (s.version === '1.1.0' && s.state === 'ready') return 'VoxType 1.1.0 remains available. Choose Update / retry to queue the signed 1.1.1 update.';
     return ({ unavailable:'VoxType and a local model must be installed before recording.', queued:'Connect to the internet and retry setup.', downloading:'Downloading and verifying VoxType and the local model.', ready:'Focus a text field, then press Super + Ctrl + X to start or stop.', recording:'Audio stays on this computer. Press Super + Ctrl + X to stop, or cancel.', transcribing:'The local model is processing audio. Cancel with Super + Ctrl + Backspace.', error:'Retry setup or switch back to CPU acceleration.' })[s.state] || '';
 }
 function size(bytes) { return (bytes / 1000000).toFixed(1) + ' MB'; }

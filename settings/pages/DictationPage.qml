@@ -53,7 +53,7 @@ Page {
                 Row {
                     spacing: Theme.space2
                     ArButton {
-                        text: page.status.upgrade_pending ? "Update / retry…" : page.status.ready ? "Verify / repair setup…" : page.status.state === 'downloading' ? "Setup running" : "Set up / retry…"
+                        text: page.status.version === '1.1.0' ? "Update / retry…" : page.status.ready ? "Verify / repair setup…" : page.status.state === 'downloading' ? "Setup running" : "Set up / retry…"
                         iconName: "download"
                         enabled: page.canConfigure && Status.profileKnown(page.status) && !page.downloading
                         gapColor: Theme.surfaceRaised

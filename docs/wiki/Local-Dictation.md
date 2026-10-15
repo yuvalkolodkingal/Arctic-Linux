@@ -37,6 +37,8 @@ receipt is published. A restart during the update resumes from that queue. Vulka
 re-enabled only after the 1.1.1 Vulkan binary passes its local model check.
 If the old receipt is damaged, the offline attempt preserves it and the payload;
 the next online retry quarantines that receipt and performs a signed repair.
+The setup timer also recreates a missing queue after an interrupted package
+transaction. An old payload that fails its strict hash check is never launched.
 
 ## Record and insert
 

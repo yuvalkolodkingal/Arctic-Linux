@@ -48,6 +48,7 @@ if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r "$receipt" ] \
         cpu_bytes=19415936
     fi
 elif [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r "$receipt" ] \
+        && [ ! -r /var/lib/arctic/dictation/previous-direct-rejected ] \
         && grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
         && grep -Fq '"version":"1.1.0"' "$receipt" \
         && grep -Fq '"source_commit":"e2638ca63f566f1682bcedc0abea8e4b25211c21"' "$receipt" \

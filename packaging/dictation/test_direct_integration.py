@@ -128,10 +128,16 @@ class DirectUpstreamIntegration(unittest.TestCase):
         ):
             self.assertIn(value, launcher)
         self.assertIn("backend=$receipt_backend", launcher)
+        self.assertIn("previous-direct-rejected", launcher)
         self.assertIn("upgrade_pending=true", adapter)
         self.assertIn('"upgrade_pending":%s', adapter)
         self.assertIn("def exact_file(path, mode, size, digest):", setup)
         self.assertIn("hashlib.sha256()", setup)
+        self.assertIn('durable_atomic_text "$PREVIOUS_REJECTED" 0644 rejected', setup)
+        self.assertIn('previous_direct_user >/dev/null', setup)
+        service = (ROOT / "packaging/systemd/arctic-dictation-setup.service").read_text()
+        self.assertIn("ExecCondition=/usr/libexec/arctic/arctic-voxtype-setup --needs-resume", service)
+        self.assertNotIn("ConditionPathExists=/var/lib/arctic/dictation/pending", service)
 
     def test_mutations_return_safe_status_and_persist_setup_errors(self):
         adapter = (D / "arctic-dictation").read_text()

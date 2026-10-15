@@ -396,6 +396,11 @@ transaction attempt closed, then the normal online resume quarantines it and use
 fresh signed metadata for repair. Current-session user-service activation is
 best effort after the commit point and cannot rewrite a completed migration as
 a pre-commit setup failure.
+The post-boot timer also recognizes an old direct receipt when a stopped RPM
+transaction never created `pending`; it reconstructs the queue for the bound
+account and safely no-ops on a current receipt. Failed strict receipt or payload
+hash validation leaves a durable rejection marker that both launcher and status
+honor until signed repair completes.
 
 The systemd user service runs official VoxType directly with local-only,
 error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and
