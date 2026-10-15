@@ -23,6 +23,8 @@ class DirectUpstreamIntegration(unittest.TestCase):
                             ("arctic-voxtype-configure", "sh"),
                             ("arctic-voxtype-host-profile", "sh")):
             subprocess.run([shell, "-n", str(D / name)], check=True)
+        subprocess.run(["python3", "-m", "py_compile",
+                        str(D / "arctic-voxtype-migrate-config")], check=True)
         for name in ("dictation.py", "child_exec.py", "arctic-dictation-install", "arctic-dictation-setup"):
             self.assertFalse((D / name).exists(), name)
 
@@ -90,6 +92,23 @@ class DirectUpstreamIntegration(unittest.TestCase):
         service = (ROOT / "packaging/systemd/voxtype.service").read_text()
         self.assertIn("ConditionPathExists=/var/lib/arctic/dictation/upstream-direct-v1", service)
         self.assertIn("ConditionPathExists=%h/.config/voxtype/config.toml", service)
+
+    def test_resident_config_migration_is_deferred_and_generation_tracked(self):
+        setup = (D / "arctic-voxtype-setup").read_text()
+        spec = (ROOT / "packaging/arctic-linux.spec").read_text()
+        unit = (ROOT / "packaging/systemd/arctic-voxtype-config-migration.service").read_text()
+        for value in ("config-resident-v1.pending", "config-generation-resident-v1.json",
+                      "arctic-voxtype-config-generation-v1", "resident-model-v1",
+                      "custom-preserved", "--migrate-config-resident-v1"):
+            self.assertIn(value, setup)
+        self.assertIn("arctic-voxtype-migrate-config", spec)
+        self.assertIn("multi-user.target.wants/arctic-voxtype-config-migration.service", spec)
+        self.assertIn("--queue-config-resident-v1", spec)
+        self.assertIn("Before=systemd-user-sessions.service user@.service", unit)
+        lowered = unit.lower()
+        for dependency in ("after=network", "wants=network", "requires=network"):
+            self.assertNotIn(dependency, lowered)
+        self.assertIn("PrivateNetwork=yes", unit)
 
     def test_status_protocol_has_no_transcript_field(self):
         adapter = (D / "arctic-dictation").read_text()

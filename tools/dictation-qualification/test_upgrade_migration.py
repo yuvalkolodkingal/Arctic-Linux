@@ -418,6 +418,24 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._write(self.state / "backend", b"vulkan\n", 0o644)
         self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
 
+    def test_current_1_1_1_receipt_queues_trusted_config_migration_once(self):
+        self._prepare_current_vulkan()
+        setup = self._fixture_setup()
+        self._run(setup, verb="--queue-config-resident-v1")
+        pending = self.state / "config-resident-v1.pending"
+        self.assertEqual(pending.read_bytes(), b"resident-model-v1\n")
+        self.assertEqual(pending.stat().st_mode & 0o777, 0o644)
+
+        generation = self.state / "config-generation-resident-v1.json"
+        self._json("config-generation-resident-v1.json", {
+            "schema": "arctic-voxtype-config-generation-v1",
+            "migration": "resident-model-v1", "user": self.user,
+            "generation": "resident-model-v1", "outcome": "already-current",
+        })
+        self._run(setup, verb="--queue-config-resident-v1")
+        self.assertFalse(pending.exists())
+        self.assertEqual(json.loads(generation.read_text())["outcome"], "already-current")
+
     def _assert_strict_cpu_receipt(self):
         receipt = json.loads((self.state / "verified.json").read_text())
         self.assertEqual(self.state.joinpath("verified.json").stat().st_mode & 0o777, 0o644)

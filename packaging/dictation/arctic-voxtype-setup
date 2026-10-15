@@ -21,6 +21,8 @@ readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0
 readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.1 MODELS=/opt/arctic/voxtype/models
 readonly PREVIOUS_DEST=/opt/arctic/voxtype/1.1.0
 readonly PREVIOUS_REJECTED=$STATE/previous-direct-rejected
+readonly CONFIG_MIGRATION_PENDING=$STATE/config-resident-v1.pending
+readonly CONFIG_GENERATION=$STATE/config-generation-resident-v1.json
 readonly STATE_ROOT=/var/lib STORAGE_ROOT=/opt
 readonly CACHE=/var/cache/arctic/voxtype
 readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
@@ -156,7 +158,7 @@ backend_fail() {
 trap cleanup EXIT
 trap fail ERR
 usage() {
-    echo 'usage: arctic-voxtype-setup --install USER [--offline] | --migrate-legacy USER | --resume | --retry | --backend cpu|vulkan | --disclosure' >&2
+    echo 'usage: arctic-voxtype-setup --install USER [--offline] | --migrate-legacy USER | --queue-config-resident-v1 | --migrate-config-resident-v1 | --resume | --retry | --backend cpu|vulkan | --disclosure' >&2
     exit 2
 }
 acquire_setup_lock() {
@@ -593,6 +595,153 @@ configure_user() {
     as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model" "$binary"
 }
 
+config_generation_done() {
+    python3 - "$CONFIG_GENERATION" <<'PY'
+import json, os, re, stat, sys
+path = sys.argv[1]
+try:
+    info = os.lstat(path)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+            or stat.S_IMODE(info.st_mode) != 0o644 or not 0 < info.st_size <= 4096):
+        raise SystemExit(1)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        raw = os.read(fd, info.st_size + 1)
+    finally:
+        os.close(fd)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
+    outcome = value.get('outcome') if type(value) is dict else None
+    generation = value.get('generation') if type(value) is dict else None
+    user = value.get('user') if type(value) is dict else None
+    if (type(value) is not dict
+            or set(value) != {'schema', 'migration', 'user', 'generation', 'outcome'}
+            or value.get('schema') != 'arctic-voxtype-config-generation-v1'
+            or value.get('migration') != 'resident-model-v1'
+            or type(user) is not str
+            or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None
+            or (outcome in ('created', 'migrated', 'already-current')
+                and generation != 'resident-model-v1')
+            or (outcome in ('custom-preserved', 'missing-preserved', 'unsafe-preserved')
+                and generation != 'custom')
+            or outcome not in ('created', 'migrated', 'already-current',
+                               'custom-preserved', 'missing-preserved',
+                               'unsafe-preserved')):
+        raise SystemExit(1)
+except (OSError, ValueError, TypeError):
+    raise SystemExit(1)
+PY
+}
+record_config_generation() {
+    local user=$1 outcome=$2 generation=resident-model-v1 value
+    case "$outcome" in
+        created|migrated|already-current) ;;
+        custom-preserved|missing-preserved|unsafe-preserved) generation=custom ;;
+        *) return 2 ;;
+    esac
+    printf -v value '{"schema":"arctic-voxtype-config-generation-v1","migration":"resident-model-v1","user":"%s","generation":"%s","outcome":"%s"}' \
+        "$user" "$generation" "$outcome"
+    durable_atomic_text "$CONFIG_GENERATION" 0644 "$value"
+}
+queue_config_migration() {
+    trap - ERR
+    prepare_state_dir
+    if config_generation_done; then
+        durable_remove "$CONFIG_MIGRATION_PENDING" || :
+        return 0
+    fi
+    # This release's first setup already writes the resident-model config.
+    # Queue only an existing, committed Arctic 1.1.1 installation; fresh and
+    # incomplete installs have no old generated config to migrate.
+    python3 - "$STATE/verified.json" "$STATE/upstream-direct-v1" <<'PY'
+import json, os, stat, sys
+receipt, marker = sys.argv[1:]
+try:
+    for path in (receipt, marker):
+        info = os.lstat(path)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or stat.S_IMODE(info.st_mode) != 0o644):
+            raise SystemExit(1)
+    with open(marker, encoding='ascii') as source:
+        if source.read() != 'upstream-direct-v1\n':
+            raise SystemExit(1)
+    with open(receipt, encoding='utf-8') as source:
+        value = json.load(source)
+    if (type(value) is not dict or value.get('integration') != 'upstream-direct-v1'
+            or value.get('version') != '1.1.1'
+            or value.get('source_commit') != '014c56105b2f071bb3457c51a95c38be380e5124'):
+        raise SystemExit(1)
+except (OSError, ValueError, TypeError):
+    raise SystemExit(1)
+PY
+    durable_atomic_text "$CONFIG_MIGRATION_PENDING" 0644 resident-model-v1
+}
+current_config_identity() {
+    local selection host_profile
+    host_profile=$(/usr/libexec/arctic/arctic-voxtype-host-profile)
+    selection=$(legacy_profile "$host_profile") || return 1
+    python3 - "$STATE/verified.json" <<'PY' >/dev/null
+import json, sys
+with open(sys.argv[1], encoding='utf-8') as source:
+    value = json.load(source)
+if value.get('version') != '1.1.1' or value.get('source_commit') != '014c56105b2f071bb3457c51a95c38be380e5124':
+    raise SystemExit(1)
+PY
+    printf '%s\n' "$selection"
+}
+migrate_config_resident_v1() {
+    local selection profile user home model validator rc outcome
+    # A failed or interrupted attempt leaves the pending marker for the next
+    # boot. It must not publish the general setup error or touch a user daemon.
+    trap - ERR
+    prepare_state_dir
+    if config_generation_done; then
+        durable_remove "$CONFIG_MIGRATION_PENDING" || :
+        return 0
+    fi
+    trusted_exact_file "$CONFIG_MIGRATION_PENDING" 644 18 \
+        fe83495851e717efc1bbc6bd04b7413598b1b27689ef0a6cfcd8112dec771762 || return 1
+    selection=$(current_config_identity) || return 1
+    IFS=$'\t' read -r profile user <<<"$selection"
+    valid_user "$user" || return 1
+    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]] || return 1
+    case "$profile" in
+        small-v2)
+            model=$MODELS/$SMALL_NAME
+            validator=$DEST/voxtype-baseline
+            ;;
+        turbo-q5-v3)
+            model=$MODELS/$TURBO_NAME
+            validator=$DEST/voxtype-avx2
+            ;;
+        *) return 1 ;;
+    esac
+    set +e
+    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-migrate-config "$model" "$validator" \
+        >/dev/null 2>&1
+    rc=$?
+    set -e
+    case "$rc" in
+        0) outcome=migrated ;;
+        20) outcome=already-current ;;
+        21) outcome=custom-preserved ;;
+        22) outcome=missing-preserved ;;
+        23) outcome=unsafe-preserved ;;
+        24) return 1 ;;
+        *) return 1 ;;
+    esac
+    # Commit the outcome before clearing pending. A crash in between repeats a
+    # harmless marker cleanup; a crash before here retries the atomic user edit.
+    record_config_generation "$user" "$outcome"
+    durable_remove "$CONFIG_MIGRATION_PENDING"
+}
+
 reuse_legacy_model() {
     local name=$1 bytes=$2 sha=$3 source="$PREVIOUS_DEST/$1" target="$MODELS/$1"
     trusted_exact_file "$target" 644 "$bytes" "$sha" && return 0
@@ -715,6 +864,8 @@ setup_user() {
     # The durable marker commits direct integration. No later housekeeping or
     # current-session activation failure may run the pre-commit error handler.
     trap - ERR
+    record_config_generation "$user" created || :
+    durable_remove "$CONFIG_MIGRATION_PENDING" || :
     cleanup_legacy_payload || :
     durable_remove "$STATE/pending" "$STATE/setup.error" "$PREVIOUS_REJECTED" || :
     durable_atomic_text "$STATE/setup.state" 0644 ready || :
@@ -859,6 +1010,15 @@ if [[ ${1:-} == --disclosure ]]; then
     exit 0
 fi
 [[ $EUID -eq 0 ]] || usage
+# Queueing owns separate durable marker files and must not be lost merely
+# because a long setup/download holds the runtime lock during RPM posttrans.
+# Its races with setup are benign: setup publishes the new generation before
+# removing pending, while a later queue observes that generation at boot.
+if [[ ${1:-} == --queue-config-resident-v1 ]]; then
+    [[ $# = 1 ]] || usage
+    queue_config_migration
+    exit 0
+fi
 acquire_setup_lock
 case ${1:-} in
     --install)
@@ -868,6 +1028,8 @@ case ${1:-} in
     --migrate-legacy)
         [[ $# = 2 ]] || usage; valid_user "$2" || usage; queue_user "$2"
         setup_user "$2" legacy-only ;;
+    --migrate-config-resident-v1)
+        [[ $# = 1 ]] || usage; migrate_config_resident_v1 ;;
     --needs-resume)
         [[ $# = 1 ]] || usage
         # ExecCondition exit 1 means a healthy current host is a no-op, not a

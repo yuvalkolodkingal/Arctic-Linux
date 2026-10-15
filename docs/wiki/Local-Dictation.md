@@ -126,6 +126,12 @@ is `$XDG_RUNTIME_DIR/voxtype/state`. Verified binaries and models are under
 `/opt/arctic/voxtype`, with setup state and a public verification receipt under
 `/var/lib/arctic/dictation`.
 
+An update from Arctic's earlier VoxType 1.1.1 config takes effect after the
+next reboot, before login. Arctic changes only the exact config it generated,
+keeps the chosen language and model, and leaves custom configs unchanged. The
+running recorder is never restarted for this migration; an interrupted attempt
+is retried at a later boot from root-owned state in `/var/lib/arctic/dictation`.
+
 See [the pinned files and implementation details](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/DICTATION.md)
 and the [official VoxType documentation](https://voxtype.io/docs/).
 

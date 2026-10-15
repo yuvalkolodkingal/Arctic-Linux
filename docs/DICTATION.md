@@ -100,6 +100,14 @@ one-time backup at `config.toml.pre-arctic-voxtype-v1`, then installs canonical
 local-only defaults. The systemd user service runs the official daemon with
 that file. VoxType writes its native state to `$XDG_RUNTIME_DIR/voxtype/state`.
 
+Systems updated from Arctic's first VoxType 1.1.1 package switch the managed
+config from per-recording model loading to upstream's resident-model default at
+the next reboot. A pre-login one-shot changes only a byte-exact Arctic-generated
+config, preserves its Hebrew/English selection and receipt-selected model, and
+does not restart the user service. Any custom config is left byte-for-byte
+unchanged. Root-owned pending and generation/outcome records under
+`/var/lib/arctic/dictation` make an interrupted migration retryable.
+
 ## Recording and recovery
 
 Mango uses a small, transcript-free readiness helper for activation and the
