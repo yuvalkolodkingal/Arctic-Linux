@@ -20,6 +20,7 @@ readonly TURBO_NAME=ggml-large-v3-turbo-q5_0.bin TURBO_BYTES=574041195 TURBO_SHA
 readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin
 readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.1 MODELS=/opt/arctic/voxtype/models
 readonly PREVIOUS_DEST=/opt/arctic/voxtype/1.1.0
+readonly PREVIOUS_REJECTED=$STATE/previous-direct-rejected
 readonly STATE_ROOT=/var/lib STORAGE_ROOT=/opt
 readonly CACHE=/var/cache/arctic/voxtype
 readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
@@ -203,6 +204,45 @@ read_queued_user() {
     valid_user "$user" || return 1
     printf '%s\n' "$user"
 }
+previous_direct_user() {
+    python3 - "$STATE/verified.json" <<'PY'
+import json, os, re, stat, sys
+path = sys.argv[1]
+try:
+    info = os.lstat(path)
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+            or stat.S_IMODE(info.st_mode) != 0o644 or not 0 < info.st_size <= 65536):
+        raise SystemExit(1)
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value:
+                raise ValueError
+            value[key] = item
+        return value
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        current = os.fstat(fd)
+        if (current.st_dev, current.st_ino, current.st_size) != (info.st_dev, info.st_ino, info.st_size):
+            raise SystemExit(1)
+        raw = os.read(fd, info.st_size + 1)
+    finally:
+        os.close(fd)
+    if len(raw) != info.st_size:
+        raise SystemExit(1)
+    value = json.loads(raw, object_pairs_hook=unique)
+    user = value.get('user') if type(value) is dict else None
+    if (value.get('integration') != 'upstream-direct-v1'
+            or value.get('version') != '1.1.0'
+            or value.get('source_commit') != 'e2638ca63f566f1682bcedc0abea8e4b25211c21'
+            or value.get('release_signing_fingerprint') != '9CCF7915B750CAE8B095ED1AA3FC9F33FD209279'
+            or type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None):
+        raise SystemExit(1)
+    print(user)
+except (OSError, UnicodeError, ValueError, TypeError):
+    raise SystemExit(1) from None
+PY
+}
 verify_file() {
     [[ $(stat -c %s "$1") = "$2" ]]
     printf '%s  %s\n' "$3" "$1" | sha256sum --check --status
@@ -293,7 +333,7 @@ legacy_binary_path() {
 legacy_profile() {
     local host_profile=$1
     python3 - "$STATE" "$PREVIOUS_DEST" "$DEST" "$host_profile" <<'PY'
-import json, os, re, stat, sys
+import hashlib, json, os, re, stat, sys
 
 state, previous_payload, current_payload, host_profile = sys.argv[1:]
 profiles = {
@@ -350,6 +390,29 @@ def root_json(path):
 
 def safe_for_host(profile):
     return profile == 'small-v2' or host_profile == 'turbo-q5-v3'
+
+def exact_file(path, mode, size, digest):
+    try:
+        info = os.lstat(path)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or stat.S_IMODE(info.st_mode) != mode or info.st_size != size):
+            return False
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            current = os.fstat(fd)
+            if (current.st_dev, current.st_ino, current.st_size) != (info.st_dev, info.st_ino, info.st_size):
+                return False
+            sha = hashlib.sha256()
+            while True:
+                chunk = os.read(fd, 1024 * 1024)
+                if not chunk:
+                    break
+                sha.update(chunk)
+            return sha.hexdigest() == digest
+        finally:
+            os.close(fd)
+    except OSError:
+        return False
 
 receipt, receipt_exists = root_json(os.path.join(state, 'verified.json'))
 if receipt_exists:
@@ -434,13 +497,15 @@ if receipt_exists:
         user = receipt.get('user')
         if type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None:
             raise SystemExit(1)
-        try:
-            info = os.lstat(os.path.join(payload, receipt['binary']))
-        except OSError:
-            raise SystemExit(1) from None
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
-                or stat.S_IMODE(info.st_mode) != 0o755
-                or info.st_size != receipt['binary_bytes']):
+        if not exact_file(os.path.join(payload, receipt['binary']), 0o755,
+                          receipt['binary_bytes'], receipt['binary_sha256']):
+            raise SystemExit(1)
+        if not exact_file(receipt['model_path'], 0o644, receipt['model_bytes'],
+                          receipt['model_sha256']):
+            raise SystemExit(1)
+        if receipt['backend'] == 'vulkan' and not exact_file(
+                os.path.join(payload, receipt['vulkan_binary']), 0o755,
+                receipt['vulkan_binary_bytes'], receipt['vulkan_binary_sha256']):
             raise SystemExit(1)
     else:
         raise SystemExit(1)
@@ -565,6 +630,7 @@ setup_user() {
     tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
     host_profile=$(/usr/libexec/arctic/arctic-voxtype-host-profile)
     if legacy_selection=$(legacy_profile "$host_profile"); then
+        durable_remove "$PREVIOUS_REJECTED"
         IFS=$'\t' read -r selected_profile receipt_user <<<"$legacy_selection"
         if [[ -n $receipt_user ]]; then
             # A strictly validated direct receipt owns the installed user's
@@ -584,7 +650,13 @@ setup_user() {
             # The synchronous RPM migration stays fail closed and leaves every
             # old byte. Its later online resume may quarantine structurally
             # trusted but invalid state and perform the ordinary signed repair.
-            [[ $mode != legacy-only ]] || return 1
+            if [[ $mode == legacy-only ]]; then
+                # A strict receipt/payload verifier rejected the old direct
+                # runtime. Publish that decision before returning so the new
+                # launcher cannot execute bytes this migration rejected.
+                durable_atomic_text "$PREVIOUS_REJECTED" 0644 rejected
+                return 1
+            fi
             quarantine_invalid_legacy_state
             legacy_state=quarantined
         fi
@@ -644,7 +716,7 @@ setup_user() {
     # current-session activation failure may run the pre-commit error handler.
     trap - ERR
     cleanup_legacy_payload || :
-    durable_remove "$STATE/pending" "$STATE/setup.error" || :
+    durable_remove "$STATE/pending" "$STATE/setup.error" "$PREVIOUS_REJECTED" || :
     durable_atomic_text "$STATE/setup.state" 0644 ready || :
     if [ -S "/run/user/$uid/bus" ]; then
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
@@ -723,9 +795,17 @@ for raw in kept.decode("utf-8", "replace").splitlines():
         negative = True
     if "whisper_backend_init_gpu:" in line and "no gpu found" in line:
         negative = True
+    if ("whisper_backend_init_gpu:" in line
+            and "failed to initialize" in line and "backend" in line):
+        negative = True
     if "ggml_vulkan" in line and "found 0" in line:
         negative = True
-    if "whisper_backend_init_gpu:" not in line or "vulkan" not in line:
+    # whisper.cpp names the selected device on this outcome line, but common
+    # Vulkan implementations (including lavapipe and vendor drivers) do not
+    # necessarily include the word "Vulkan" in the device name.  This parser
+    # is already scoped to the signed Vulkan binary after vulkaninfo succeeds,
+    # so requiring that unrelated substring rejects a real initialized GPU.
+    if "whisper_backend_init_gpu:" not in line:
         continue
     if "found gpu device" in line or ("using" in line and "backend" in line):
         positive = True
@@ -788,7 +868,24 @@ case ${1:-} in
     --migrate-legacy)
         [[ $# = 2 ]] || usage; valid_user "$2" || usage; queue_user "$2"
         setup_user "$2" legacy-only ;;
-    --resume) [[ $# = 1 ]] || usage; setup_user "$(read_queued_user)" ;;
+    --needs-resume)
+        [[ $# = 1 ]] || usage
+        # ExecCondition exit 1 means a healthy current host is a no-op, not a
+        # setup failure. Do not let the general ERR trap rewrite ready state.
+        trap - ERR
+        if [[ -r $STATE/pending ]] || previous_direct_user >/dev/null; then exit 0; fi
+        exit 1
+        ;;
+    --resume)
+        [[ $# = 1 ]] || usage
+        if resume_user=$(read_queued_user 2>/dev/null); then :
+        else
+            resume_user=$(previous_direct_user)
+            valid_user "$resume_user" || fail
+            queue_user "$resume_user"
+        fi
+        setup_user "$resume_user"
+        ;;
     --retry)
         [[ $# = 1 ]] || usage; retry_user=$(user_from_uid) || retry_user=$(read_queued_user)
         valid_user "$retry_user" || usage; queue_user "$retry_user"; setup_user "$retry_user" ;;

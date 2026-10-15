@@ -345,6 +345,7 @@ on_transcription = false
             'language': 'auto', 'backend': 'cpu', 'profile': 'small-v2',
             'model': 'small', 'model_download_bytes': 487601967,
             'download_bytes': 506440871, 'vulkan_download_bytes': 66575872,
+            'upgrade_pending': False,
         }
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
@@ -354,6 +355,13 @@ on_transcription = false
             stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
         with self.assertRaisesRegex(guest.Invalid, '^adapter-status-contract$'):
             checker.adapter('status')
+        value.pop('private')
+        for invalid in (True, None, 0, 'false'):
+            value['upgrade_pending'] = invalid
+            checker.cmd = Mock(return_value=SimpleNamespace(
+                stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
+            with self.assertRaisesRegex(guest.Invalid, '^adapter-status-contract$'):
+                checker.adapter('status')
 
     def test_payload_binds_split_paths_and_flat_receipt(self):
         checker = self.checker()
