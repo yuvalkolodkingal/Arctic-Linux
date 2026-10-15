@@ -52,6 +52,10 @@ RGB QMP PNGs, pass the same automated privacy rules as final captures, and are
 deleted. Their byte, pixel-source, and OCR hashes are recorded in the controller
 trace. The full QEMU argv hash, exact ISO/disk/channel topology, fixed scene
 commands, QMP events, input events, and final pixels are bound into each receipt.
+After selecting the Install boot entry, the controller requires copy unique to
+the real installer Welcome page (`Welcome to Arctic Linux`, `Keyboard`, `Time
+zone`, and `Summary`) before switching to the private console. The boot menu's
+own `Install Arctic Linux` label cannot satisfy that gate.
 
 The only guest transport is the owned
 `org.arctic.showcase.capture` virtio-serial channel. The live guest receives a

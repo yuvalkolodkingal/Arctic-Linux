@@ -308,8 +308,14 @@ class Controller:
     def boot_live_and_start(self):
         self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
         self.press("live-boot", "home", "down", "ret")
-        self.wait_screen("live-boot", "live-installer-visible", ("Install", "Arctic"), seconds=600,
-                         visible=True)
+        # "Install Arctic Linux" is also present in the boot menu.  Requiring
+        # that text here let the just-selected GRUB frame satisfy this gate and
+        # moved to VT6 before the graphical installer had actually started.
+        # Use copy unique to the real Welcome page so the following VT switch
+        # cannot race live-session's one-shot installer launch.
+        self.wait_screen("live-boot", "live-installer-visible",
+                         ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
+                         seconds=600, visible=True, exact_output=True)
         self.press("live-console", "ctrl-alt-f6")
         self.wait_screen("live-console", "live-console-login", ("login",), seconds=60)
         self.type_text("live-console", "live-username", "liveuser")

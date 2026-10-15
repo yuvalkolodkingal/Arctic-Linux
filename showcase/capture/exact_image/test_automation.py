@@ -122,6 +122,37 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
                          "first-login-dismissed")
 
+    def test_live_boot_proves_the_real_installer_before_switching_vt(self):
+        operations = []
+
+        def wait(stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", stage, expectation, phrases, kwargs))
+            return None, ""
+
+        def press(stage, *names, **_kwargs):
+            operations.append(("keys", stage, names))
+
+        def text(stage, command_id, _value, **_kwargs):
+            operations.append(("text", stage, command_id))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_live_and_start()
+
+        installer = operations[2]
+        self.assertEqual(installer[:4], (
+            "screen", "live-boot", "live-installer-visible",
+            ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
+        ))
+        self.assertEqual(installer[4], {
+            "seconds": 600, "visible": True, "exact_output": True,
+        })
+        self.assertFalse(all(phrase.casefold() in "Try Arctic Linux Install Arctic Linux".casefold()
+                             for phrase in installer[3]))
+        self.assertEqual(operations[3], ("keys", "live-console", ("ctrl-alt-f6",)))
+
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
