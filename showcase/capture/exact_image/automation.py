@@ -178,7 +178,10 @@ def _shell_ocr_focus(image):
     """Expose low-color VT glyphs in one ephemeral, deterministic OCR crop."""
     c.require(image.mode == "RGB" and image.size == (1280, 800),
               "controller shell OCR source geometry differs")
-    crop = image.crop((0, 0, 1280, 128))
+    # The proof clears and homes the fixed 80-column VT. Its 27-character
+    # marker and 33-character prompt necessarily fit in the left 40 columns;
+    # exclude the unused right half before enlarging each source pixel 8x.
+    crop = image.crop((0, 0, 640, 128))
     pixels = list(crop.getdata())
     foreground = [pixel != (0, 0, 0) for pixel in pixels]
     c.require(any(foreground) and not all(foreground),
@@ -186,7 +189,7 @@ def _shell_ocr_focus(image):
     normalized = Image.new("RGB", crop.size, "black")
     normalized.putdata([(255, 255, 255) if present else (0, 0, 0)
                         for present in foreground])
-    return normalized.resize((5120, 512), Image.Resampling.NEAREST)
+    return normalized.resize((5120, 1024), Image.Resampling.NEAREST)
 
 
 def _boot_entry_selected(image, entry: str) -> bool:

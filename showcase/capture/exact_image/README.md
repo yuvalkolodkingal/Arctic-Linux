@@ -104,8 +104,8 @@ marker, using the same pattern as the successful installed-image identity
 challenge. Fish itself invokes the session prompt function after the proof
 command returns. The host
 keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
-in the fixed top 128 pixels to white and reads that private mask through a 4x
-nearest-neighbour enlargement. The transformed crop is always deleted; the
+in the fixed left 640×128 pixels to white and reads that private mask through an
+8x nearest-neighbour enlargement. The transformed crop is always deleted; the
 original 1280x800 frame remains the sole screen evidence and geometry gate. It requires
 `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact

@@ -145,8 +145,8 @@ class UnattendedController(unittest.TestCase):
                     "name": path.name,
                     "size": image.size,
                     "background": image.getpixel((0, 0)),
-                    "blue_glyph": image.getpixel((40, 48)),
-                    "white_glyph": image.getpixel((44, 48)),
+                    "blue_glyph": image.getpixel((80, 96)),
+                    "white_glyph": image.getpixel((88, 96)),
                 })
             return ("ARCTIC - SHOWCASE - SHELL - READY\n"
                     "arcticshowcase@arctic-showcase ~>")
@@ -160,7 +160,7 @@ class UnattendedController(unittest.TestCase):
             {"name": "controller-001-installed-shell-ready.png", "size": (1280, 800),
              "background": (0, 0, 0), "blue_glyph": (0, 0, 0),
              "white_glyph": (0, 0, 0)},
-            {"name": "controller-001-installed-shell-ready-ocr.png", "size": (5120, 512),
+            {"name": "controller-001-installed-shell-ready-ocr.png", "size": (5120, 1024),
              "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
              "white_glyph": (255, 255, 255)},
         ])
@@ -222,18 +222,21 @@ class UnattendedController(unittest.TestCase):
         source = Image.new("RGB", (1280, 800), "black")
         source.putpixel((7, 9), (0, 1, 0))
         source.putpixel((8, 9), (12, 34, 56))
-        source.putpixel((7, 130), (255, 255, 255))
+        source.putpixel((639, 127), (1, 1, 1))
+        source.putpixel((640, 9), (255, 255, 255))
+        source.putpixel((7, 128), (255, 255, 255))
         unchanged = source.copy()
-        expected = Image.new("RGB", (1280, 128), "black")
+        expected = Image.new("RGB", (640, 128), "black")
         expected.putpixel((7, 9), (255, 255, 255))
         expected.putpixel((8, 9), (255, 255, 255))
-        expected = expected.resize((5120, 512), Image.Resampling.NEAREST)
+        expected.putpixel((639, 127), (255, 255, 255))
+        expected = expected.resize((5120, 1024), Image.Resampling.NEAREST)
 
         focused = automation._shell_ocr_focus(source)
 
         self.assertEqual(source.size, (1280, 800))
         self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
-        self.assertEqual(focused.size, (5120, 512))
+        self.assertEqual(focused.size, (5120, 1024))
         self.assertIsNone(ImageChops.difference(focused, expected).getbbox())
 
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
