@@ -418,6 +418,17 @@ def dictation_media_names(hardware_profile):
     return names
 
 
+def require_distinct_dictation_recovery_frames(stages):
+    require(isinstance(stages, dict) and set(stages) == {'gpu_failure', 'cpu_ready'},
+            'Missing dictation recovery screen stages')
+    require(all(isinstance(stages[stage], dict) for stage in ('gpu_failure', 'cpu_ready')),
+            'Missing dictation recovery screen stages')
+    hashes = [stages[stage].get('sha256') for stage in ('gpu_failure', 'cpu_ready')]
+    require(all(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value)
+                for value in hashes) and len(set(hashes)) == 2,
+            'Dictation recovery screens are byte-identical')
+
+
 def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
@@ -521,8 +532,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                 and set(recovery) == {'online-installed', 'recovered-offline'},
                 'Missing dictation recovery screen phases')
         for phase, stages in recovery.items():
-            require(isinstance(stages, dict) and set(stages) == {'gpu_failure', 'cpu_ready'},
-                    'Missing dictation recovery screen stages')
+            require_distinct_dictation_recovery_frames(stages)
             gate = next(row for row in reports[phase]['gates']
                         if row['id'] == contract.MODERN_GPU_GATE)
             for stage, info in stages.items():

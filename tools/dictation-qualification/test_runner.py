@@ -18,11 +18,11 @@ spec.loader.exec_module(runner)
 
 class RunnerGuards(unittest.TestCase):
     @staticmethod
-    def png(color=2):
+    def png(color=2, pixel=None):
         def chunk(kind, body):
             return (struct.pack('>I', len(body)) + kind + body
                     + struct.pack('>I', zlib.crc32(kind + body) & 0xffffffff))
-        pixel = b'\x12\x17\x1e' if color == 2 else b'\x12\x17\x1e\xff'
+        pixel = pixel or (b'\x12\x17\x1e' if color == 2 else b'\x12\x17\x1e\xff')
         raw = (b'\x00' + pixel * 1280) * 800
         return (b'\x89PNG\r\n\x1a\n'
                 + chunk(b'IHDR', struct.pack('>IIBBBBB', 1280, 800, 8, color, 0, 0, 0))
@@ -47,7 +47,8 @@ class RunnerGuards(unittest.TestCase):
             state, backend, language = (('error', 'vulkan', 'en') if stage == 'gpu_failure'
                                         else ('ready', 'cpu', 'he'))
             name = 'dictation-recovery-' + phase + '-' + stage.replace('_', '-') + '.png'
-            data = self.png()
+            data = self.png(pixel=(b'\x12\x17\x1e' if stage == 'gpu_failure'
+                                   else b'\xee\xf2\xf5'))
             (vm / name).write_bytes(data)
             request = dict(boot_id=boot, installation_id=installation, phase=phase,
                            desktop_uid=1000, receiver_empty=True, stage=stage, state=state,
@@ -76,7 +77,7 @@ class RunnerGuards(unittest.TestCase):
                     runner.recovery_screens(vm, ctx, evidence)
                 self.assertEqual(list(evidence.glob('*.png')), [])
 
-    def test_recovery_screens_reject_rgba_and_roll_back_partial_copy(self):
+    def test_recovery_screens_reject_rgba(self):
         with tempfile.TemporaryDirectory() as temp:
             vm, evidence, ctx = self.recovery_fixture(Path(temp))
             name = 'dictation-recovery-online-installed-cpu-ready.png'
@@ -88,6 +89,21 @@ class RunnerGuards(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'screenshot bytes differ'):
                 runner.recovery_screens(vm, ctx, evidence)
             self.assertEqual(list(evidence.glob('*.png')), [])
+
+    def test_recovery_screens_reject_byte_identical_stage_frames_before_copy(self):
+        with tempfile.TemporaryDirectory() as temp:
+            vm, evidence, ctx = self.recovery_fixture(Path(temp))
+            first = vm / 'dictation-recovery-online-installed-gpu-failure.png'
+            second = vm / 'dictation-recovery-online-installed-cpu-ready.png'
+            second.write_bytes(first.read_bytes())
+            receipts = json.loads((vm / 'dictation-recovery-screen-receipts.json').read_text())
+            receipts[1]['sha256'] = receipts[0]['sha256']
+            (vm / 'dictation-recovery-screen-receipts.json').write_text(json.dumps(receipts))
+            with self.assertRaisesRegex(RuntimeError, 'byte-identical'):
+                runner.recovery_screens(vm, ctx, evidence)
+            self.assertEqual(list(evidence.glob('*.png')), [])
+
+    def test_recovery_screens_roll_back_partial_copy(self):
         with tempfile.TemporaryDirectory() as temp:
             vm, evidence, ctx = self.recovery_fixture(Path(temp))
             original = shutil.copyfile

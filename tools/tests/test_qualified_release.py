@@ -33,6 +33,15 @@ class PublicationGuardTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'Unknown dictation media profile'):
             prepare.dictation_media_names('unreviewed')
 
+    def test_dictation_publication_rejects_byte_identical_recovery_frames(self):
+        distinct = {'gpu_failure': {'sha256': 'a' * 64},
+                    'cpu_ready': {'sha256': 'b' * 64}}
+        self.assertIsNone(prepare.require_distinct_dictation_recovery_frames(distinct))
+        duplicate = copy.deepcopy(distinct)
+        duplicate['cpu_ready']['sha256'] = duplicate['gpu_failure']['sha256']
+        with self.assertRaisesRegex(RuntimeError, 'byte-identical'):
+            prepare.require_distinct_dictation_recovery_frames(duplicate)
+
     def test_dictation_timing_scope_names_the_official_voxtype_path(self):
         sources = [
             (ROOT / 'tools/qualified-release/prepare.py').read_text(),

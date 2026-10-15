@@ -543,6 +543,8 @@ def recovery_screens(vm, ctx, evidence):
                 and len(data) > 25 and data[25] == 2,
                 'Recovery screen screenshot bytes differ')
         result[stage] = (proof, image)
+    require(len({proof['sha256'] for proof, _image in result.values()}) == 2,
+            'Recovery screen images are byte-identical')
     targets = [evidence / image.name for _proof, image in result.values()]
     require(not any(target.exists() for target in targets),
             'Recovery screen public destination already exists')
