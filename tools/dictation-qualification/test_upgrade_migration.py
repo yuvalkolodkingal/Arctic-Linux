@@ -159,6 +159,30 @@ class UpgradeMigrationExecution(unittest.TestCase):
                            vulkan_binary_sha256=digest(vulkan_data))
         return receipt
 
+    def _current_receipt(self, profile, backend="cpu"):
+        cpu = "baseline" if profile == "small-v2" else "avx2"
+        binary_key = "cpu" if cpu == "baseline" else "avx2"
+        model_key = "small" if profile == "small-v2" else "turbo"
+        model_name, model_data, _mode = ASSETS[model_key]
+        _binary_name, binary_data, _mode = CURRENT_ASSETS[binary_key]
+        receipt = {
+            "integration": "upstream-direct-v1", "version": "1.1.1",
+            "source_commit": "014c56105b2f071bb3457c51a95c38be380e5124",
+            "release_signing_fingerprint": "9CCF7915B750CAE8B095ED1AA3FC9F33FD209279",
+            "user": self.user, "profile": profile, "binary": "voxtype-" + cpu,
+            "binary_bytes": len(binary_data), "binary_sha256": digest(binary_data),
+            "model_path": str(self.models / model_name),
+            "model": model_name.removeprefix("ggml-"),
+            "model_bytes": len(model_data), "model_sha256": digest(model_data),
+            "backend": backend,
+        }
+        if backend == "vulkan":
+            vulkan_data = CURRENT_ASSETS["vulkan"][1]
+            receipt.update(vulkan_binary="voxtype-vulkan",
+                           vulkan_binary_bytes=len(vulkan_data),
+                           vulkan_binary_sha256=digest(vulkan_data))
+        return receipt
+
     def _fixture_setup(self, crash_before_marker=False, online_failure=False):
         text = SETUP.read_text()
         replacements = {}
@@ -271,6 +295,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
                    ARCTIC_CURRENT_ASSETS=str(self.current_assets), PKEXEC_UID=str(self.uid))
         if verb == "--install-offline":
             argv = [str(script), "--install", self.user, "--offline"]
+        elif verb in ("--backend-cpu", "--backend-vulkan"):
+            argv = [str(script), "--backend", verb.removeprefix("--backend-")]
         else:
             argv = [str(script), verb] + ([self.user] if verb == "--migrate-legacy" else [])
         return subprocess.run(argv, env=env,
@@ -284,6 +310,57 @@ class UpgradeMigrationExecution(unittest.TestCase):
     def _assert_legacy_removed(self):
         for name, _data, _mode in ASSETS.values():
             self.assertFalse((self.payload / name).exists(), name)
+
+    def _prepare_current_vulkan(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-large-v3-turbo-q5_0.bin", ASSETS["turbo"][1], 0o644)
+        for key in ("avx2", "vulkan"):
+            name, data, mode = CURRENT_ASSETS[key]
+            self._write(self.current_payload / name, data, mode)
+        self._json("verified.json", self._current_receipt("turbo-q5-v3", "vulkan"))
+        self._write(self.state / "backend", b"vulkan\n", 0o644)
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+
+    def _assert_strict_cpu_receipt(self):
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual(receipt["backend"], "cpu")
+        self.assertEqual(set(receipt), {
+            "integration", "version", "source_commit", "release_signing_fingerprint",
+            "user", "profile", "binary", "binary_bytes", "binary_sha256",
+            "model_path", "model", "model_bytes", "model_sha256", "backend",
+        })
+
+    def test_vulkan_to_cpu_removes_vulkan_only_attestation(self):
+        self._prepare_current_vulkan()
+        self._run(self._fixture_setup(), verb="--backend-cpu")
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self._assert_strict_cpu_receipt()
+
+    def test_failed_vulkan_reenable_leaves_reusable_cpu_receipt_across_crash(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 44\n")
+        failed = self._run(self._fixture_setup(), check=False, verb="--backend-vulkan")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self.assertEqual((self.state / "setup.error").read_text(), "backend-vulkan\n")
+        self._assert_strict_cpu_receipt()
+        network_count = self.trace.read_text().splitlines().count("network")
+
+        self._write(self.state / "user", (self.user + "\n").encode(), 0o600)
+        self._write(self.state / "pending", b"1.1.1\n", 0o644)
+        (self.state / "upstream-direct-v1").unlink()
+        crashed = self._run(self._fixture_setup(crash_before_marker=True), check=False,
+                            verb="--resume")
+        self.assertEqual(crashed.returncode, 91, crashed.stderr.decode())
+        self._assert_strict_cpu_receipt()
+        self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
+        self.assertEqual(self.trace.read_text().splitlines().count("network"), network_count)
+        self.assertIn("provenance:avx2", self.trace.read_text().splitlines())
+
+        self._run(self._fixture_setup(), verb="--resume")
+        self._assert_strict_cpu_receipt()
+        self.assertTrue((self.state / "upstream-direct-v1").is_file())
+        self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
 
     def test_old_stable_profile_wins_and_crash_retries_without_network(self):
         self._json("verified.json", self._legacy_receipt("small-v2"))

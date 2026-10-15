@@ -639,10 +639,29 @@ path, backend = sys.argv[1:]
 with open(path, encoding='utf-8') as src:
     data = json.load(src)
 data['backend'] = backend
+if backend == 'cpu':
+    # Vulkan attestation is valid only while Vulkan is selected. Keeping these
+    # fields on a CPU receipt violates the strict receipt schema used by the
+    # next package migration and can turn a safe fallback into a repair.
+    for key in ('vulkan_binary', 'vulkan_binary_bytes', 'vulkan_binary_sha256'):
+        data.pop(key, None)
 fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
-with os.fdopen(fd, 'w', encoding='utf-8') as out:
-    json.dump(data, out, separators=(',', ':')); out.write('\n')
-os.chmod(tmp, 0o644); os.replace(tmp, path)
+try:
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
+        json.dump(data, out, separators=(',', ':')); out.write('\n')
+        out.flush(); os.fsync(out.fileno())
+    os.chmod(tmp, 0o644); os.replace(tmp, path)
+    directory = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    raise
 PY
 }
 set_backend() {
