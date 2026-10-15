@@ -95,6 +95,7 @@ OBSERVATIONS = {
     'sha256', 'snapshot_sha256', 'file_count', 'drained', 'restored',
     'automatic_ready', 'gpu_supported', 'explicit_cpu_selected',
     'failed_attempt_inserted', 'audit_lost', 'audit_enabled',
+    'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
 }
@@ -283,6 +284,12 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             if gate['id'] == 'recording-status-published':
                 require(digest(observed.get('snapshot_sha256')) and digest(observed.get('sha256')),
                         'recording-indicator-evidence-missing')
+            if gate['id'] == MODERN_GPU_GATE:
+                require(digest(observed.get('gpu_failure_capture_ack_sha256'))
+                        and digest(observed.get('cpu_ready_capture_ack_sha256'))
+                        and observed['gpu_failure_capture_ack_sha256'] !=
+                            observed['cpu_ready_capture_ack_sha256'],
+                        'recovery-screen-evidence-missing')
             if gate['id'] == 'transcript-log-notification-leak-scan':
                 require(type(observed.get('count')) is int and observed['count'] >= 12,
                         'leak-scan-coverage')

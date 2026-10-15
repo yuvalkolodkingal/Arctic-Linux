@@ -55,14 +55,18 @@ HOST_STAGES = frozenset({
     'vm-acquire-enforce-host-unavailable', 'vm-acquire-enforce-only-spec-ctrl',
     'vm-acquire-enforce-floor-unavailable', 'vm-acquire-enforce-tcg-unavailable'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
-CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator'})
+CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator', 'recovery-screens'})
 TRUSTED_ERRORS = {
     'Private dictation harness command failed': 'command-failed',
     'Missing or oversized private dictation serial log': 'serial-missing-or-oversized',
     'Missing/duplicate/oversized dictation report': 'report-missing-duplicate-or-oversized',
     'Missing dictation indicator receipt': 'indicator-receipt-missing',
     'Indicator receipt/report binding differs': 'indicator-binding-differs',
-    'Indicator screenshot bytes differ': 'indicator-image-differs'}
+    'Indicator screenshot bytes differ': 'indicator-image-differs',
+    'Missing dictation recovery screen receipts': 'recovery-receipts-missing',
+    'Missing/extra dictation recovery screen receipts': 'recovery-receipt-count-differs',
+    'Recovery screen receipt/report binding differs': 'recovery-binding-differs',
+    'Recovery screen screenshot bytes differ': 'recovery-image-differs'}
 TRUSTED_CONTRACT_ERRORS = frozenset({
     'report-fields', 'report-schema-scope', 'report-context-boot', 'report-upstream-pin',
     'report-profile-descriptor', 'report-hardware-fields', 'report-hardware-profile',
@@ -495,6 +499,63 @@ def indicator(vm, ctx, evidence):
     return proof
 
 
+def recovery_screens(vm, ctx, evidence):
+    receipt = vm / 'dictation-recovery-screen-receipts.json'
+    require(receipt.is_file() and not receipt.is_symlink() and receipt.stat().st_size < 32 * 1024,
+            'Missing dictation recovery screen receipts')
+    proofs = json.loads(receipt.read_text())
+    report = json.loads((evidence / (ctx['phase'] + '.json')).read_text())
+    require(type(proofs) is list and len(proofs) == 2, 'Missing/extra dictation recovery screen receipts')
+    result = {}
+    for proof, stage in zip(proofs, ('gpu_failure', 'cpu_ready')):
+        request = proof['request']
+        expected_state, expected_backend = (('error', 'vulkan') if stage == 'gpu_failure'
+                                            else ('ready', 'cpu'))
+        name = 'dictation-recovery-' + ctx['phase'] + '-' + stage.replace('_', '-') + '.png'
+        ack_key = stage + '_capture_ack_sha256'
+        require(set(proof) == {'request', 'path', 'sha256', 'iso_sha256', 'installation_id'}
+                and set(request) == {'boot_id', 'installation_id', 'phase', 'desktop_uid',
+                                     'receiver_empty', 'stage', 'state', 'backend', 'language',
+                                     'capture_nonce'}
+                and request['stage'] == stage and request['state'] == expected_state
+                and request['backend'] == expected_backend
+                and request['language'] in ('en', 'he')
+                and (stage != 'cpu_ready' or request['language'] == 'he')
+                and re.fullmatch('[0-9a-f]{32}', request['capture_nonce'])
+                and request['phase'] == ctx['phase'] and request['installation_id'] == ctx['installation_id']
+                and request['boot_id'] == report['boot_id'] and request['receiver_empty'] is True
+                and type(request['desktop_uid']) is int and request['desktop_uid'] > 0
+                and proof['iso_sha256'] == ctx['iso_sha256']
+                and proof['installation_id'] == ctx['installation_id'] and proof['path'] == name
+                and any(gate['id'] == 'gpu-failure-explicit-cpu-fallback' and gate['status'] == 'passed'
+                        and gate['observations'].get(ack_key) ==
+                        hashlib.sha256(request['capture_nonce'].encode()).hexdigest()
+                        for gate in report['gates']), 'Recovery screen receipt/report binding differs')
+        image = vm / name
+        regular = image.is_file() and not image.is_symlink()
+        bounded = regular and image.stat().st_size < 4 * 1024 * 1024
+        data = image.read_bytes() if bounded else b''
+        try:
+            dimensions = launch_diagnostic_png(data)
+        except RuntimeError:
+            dimensions = None
+        require(bounded and sha(image) == proof['sha256'] and dimensions == (1280, 800)
+                and len(data) > 25 and data[25] == 2,
+                'Recovery screen screenshot bytes differ')
+        result[stage] = (proof, image)
+    targets = [evidence / image.name for _proof, image in result.values()]
+    require(not any(target.exists() for target in targets),
+            'Recovery screen public destination already exists')
+    try:
+        for (_proof, image), target in zip(result.values(), targets):
+            shutil.copyfile(image, target)
+    except BaseException:
+        for target in targets:
+            target.unlink(missing_ok=True)
+        raise
+    return {stage: proof for stage, (proof, _image) in result.items()}
+
+
 def run(args):
     manifest = verify(args)
     require(Path('/dev/kvm').is_char_device(), 'KVM unavailable')
@@ -506,7 +567,8 @@ def run(args):
     state = dict(schema='arctic-voxtype-execution-v3', hardware_profile=args.hardware_profile,
                  status='prepared', release_acceptance=False,
                  image=manifest['image'], execution_checker_head=os.environ['GITHUB_SHA'],
-                 fixture_manifest_sha256=manifest['fixture_manifest_sha256'], reports={}, installations={}, indicators={})
+                 fixture_manifest_sha256=manifest['fixture_manifest_sha256'], reports={}, installations={},
+                 indicators={}, recovery_screens={})
     prepared = None
     def save():
         state['recorded_at_utc'] = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -586,6 +648,12 @@ def run(args):
                 except BaseException as error:
                     errors.append(phase + '-indicator-failed-or-unrun')
                     diagnostic(phase, 'indicator', error, contract)
+                if args.hardware_profile == 'turbo-q5-v3':
+                    try:
+                        state['recovery_screens'][phase] = recovery_screens(vm, ctx, args.evidence)
+                    except BaseException as error:
+                        errors.append(phase + '-recovery-screens-failed-or-unrun')
+                        diagnostic(phase, 'recovery-screens', error, contract)
             save()
             require(not errors, 'Exact image dictation phase failed')
         contract.validate_execution(state, {name: json.loads((args.evidence / item['path']).read_text())

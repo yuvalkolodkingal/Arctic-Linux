@@ -842,6 +842,7 @@ def physical_poll(vm,name):
 
 
 dictation_indicator_seen = False
+dictation_recovery_seen = set()
 
 def dictation_indicator_poll(vm):
     """Capture only the owned receiver's empty pre-playback recording interval."""
@@ -880,6 +881,63 @@ def dictation_indicator_poll(vm):
     # nonce appears in its empty owned receiver, then clears it before speech.
     vm.type_text(request["capture_nonce"], gap=.05)
     dictation_indicator_seen = True
+
+
+def dictation_recovery_poll(vm):
+    """Capture the actionable Vulkan error and explicit CPU-ready Settings screens."""
+    global dictation_recovery_seen
+    if E.get("DICTATION_FIXTURE") != "1":
+        return
+    import hashlib, json, re
+    from pathlib import Path
+    prefix = "ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED "
+    path = serial("boot")
+    raw = Path(path).read_text(errors="strict") if Path(path).exists() else ""
+    rows = [json.loads(line[len(prefix):]) for line in raw.splitlines() if line.startswith(prefix)]
+    context = json.loads(Path(out, "data/dictation-context.json").read_text())
+    if len(rows) > 2 or len({row.get("stage") for row in rows}) != len(rows):
+        raise RuntimeError("Duplicate dictation recovery screen request")
+    expected_order = ("gpu_failure", "cpu_ready")
+    if tuple(row.get("stage") for row in rows) != expected_order[:len(rows)]:
+        raise RuntimeError("Out-of-order dictation recovery screen request")
+    for request in rows:
+        stage = request.get("stage")
+        if stage in dictation_recovery_seen:
+            continue
+        expected = (("error", "vulkan") if stage == "gpu_failure" else ("ready", "cpu"))
+        if (set(request) != {"boot_id", "installation_id", "phase", "desktop_uid", "receiver_empty",
+                            "stage", "state", "backend", "language", "capture_nonce"}
+            or request["phase"] not in ("online-installed", "recovered-offline")
+            or request["phase"] != context["phase"] or request["installation_id"] != context["installation_id"]
+            or request["receiver_empty"] is not True or type(request["desktop_uid"]) is not int
+            or request["desktop_uid"] <= 0 or (request["state"], request["backend"]) != expected
+            or request["language"] not in ("en", "he")
+            or (stage == "cpu_ready" and request["language"] != "he")
+            or not re.fullmatch(r"[0-9a-f]{32}", request["capture_nonce"])
+            or not re.fullmatch(r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}", request["boot_id"])):
+            raise RuntimeError("Invalid dictation recovery screen request")
+        name = "dictation-recovery-" + request["phase"] + "-" + stage.replace("_", "-")
+        image = vm.shot(name)
+        if not image or not Path(image).is_file() or Path(image).stat().st_size > 4 * 1024 * 1024:
+            raise RuntimeError("Missing/oversized dictation recovery screen capture")
+        data = Path(image).read_bytes()
+        if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise RuntimeError("Invalid dictation recovery screen PNG")
+        receipt_path = Path(out, "dictation-recovery-screen-receipts.json")
+        receipts = json.loads(receipt_path.read_text()) if receipt_path.exists() else []
+        receipts.append(dict(request=request, path=Path(image).name,
+                             sha256=hashlib.sha256(data).hexdigest(),
+                             iso_sha256=context["iso_sha256"],
+                             installation_id=context["installation_id"]))
+        temporary = receipt_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(receipts, sort_keys=True) + "\n")
+        temporary.replace(receipt_path)
+        # Settings owns focus. Close it only after QMP completed, then deliver
+        # the nonce to the already-open private receiver to release the guest.
+        vm.keys("alt-f4")
+        time.sleep(1)
+        vm.type_text(request["capture_nonce"], gap=.05)
+        dictation_recovery_seen.add(stage)
 
 
 taskbar_display_module = None
@@ -1652,6 +1710,7 @@ def stage_boot():
             while time.time() - t < collect_limit and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
                 dictation_indicator_poll(vm)
+                dictation_recovery_poll(vm)
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1

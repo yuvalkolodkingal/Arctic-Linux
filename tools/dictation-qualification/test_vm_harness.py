@@ -198,3 +198,61 @@ class HarnessControls(unittest.TestCase):
             self.assertEqual(receipt['request'], request)
             self.assertEqual(receipt['iso_sha256'], 'a' * 64)
             self.assertEqual(len(receipt['sha256']), 64)
+
+    def recovery_env(self, root, requests):
+        (root / 'data').mkdir()
+        (root / 'data/dictation-context.json').write_text(json.dumps(dict(phase='online-installed',
+            installation_id='11111111-1111-1111-1111-111111111111', iso_sha256='a' * 64)))
+        serial = root / 'serial-boot.log'
+        serial.write_text(''.join('ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED ' +
+                                  json.dumps(request) + '\n' for request in requests))
+        clock = type('Clock', (), {'sleep': staticmethod(lambda _seconds: None)})
+        return functions({'dictation_recovery_poll'}, dict(E={'DICTATION_FIXTURE': '1'}, out=str(root),
+                         dictation_recovery_seen=set(), serial=lambda stage: str(serial), time=clock))
+
+    @staticmethod
+    def recovery_request(stage):
+        state, backend, language, nonce = (('error', 'vulkan', 'en', 'a' * 32)
+                                            if stage == 'gpu_failure'
+                                            else ('ready', 'cpu', 'he', 'b' * 32))
+        return dict(phase='online-installed',
+                    installation_id='11111111-1111-1111-1111-111111111111',
+                    boot_id='22222222-2222-2222-2222-222222222222', desktop_uid=1000,
+                    receiver_empty=True, stage=stage, state=state, backend=backend,
+                    language=language, capture_nonce=nonce)
+
+    def test_recovery_screens_are_captured_closed_and_acknowledged_in_order_once(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            requests = [self.recovery_request('gpu_failure'), self.recovery_request('cpu_ready')]
+            env = self.recovery_env(root, requests[:1])
+            class VM:
+                def __init__(self): self.sequence = []
+                def shot(self, name):
+                    self.sequence.append(('capture', name))
+                    path = root / (name + '.png')
+                    path.write_bytes(b'\x89PNG\r\n\x1a\nrecovery-screen')
+                    return path
+                def keys(self, keys): self.sequence.append(('keys', keys))
+                def type_text(self, value, gap): self.sequence.append(('ack', value, gap))
+            vm = VM()
+            env['dictation_recovery_poll'](vm)
+            serial = root / 'serial-boot.log'
+            serial.write_text(serial.read_text() + 'ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED ' +
+                              json.dumps(requests[1]) + '\n')
+            env['dictation_recovery_poll'](vm)
+            env['dictation_recovery_poll'](vm)
+            self.assertEqual(vm.sequence, [
+                ('capture', 'dictation-recovery-online-installed-gpu-failure'),
+                ('keys', 'alt-f4'), ('ack', 'a' * 32, .05),
+                ('capture', 'dictation-recovery-online-installed-cpu-ready'),
+                ('keys', 'alt-f4'), ('ack', 'b' * 32, .05)])
+            receipts = json.loads((root / 'dictation-recovery-screen-receipts.json').read_text())
+            self.assertEqual([row['request']['stage'] for row in receipts], ['gpu_failure', 'cpu_ready'])
+            self.assertEqual(set(env['dictation_recovery_seen']), {'gpu_failure', 'cpu_ready'})
+
+    def test_recovery_screen_rejects_cpu_ready_before_gpu_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            env = self.recovery_env(Path(temp), [self.recovery_request('cpu_ready')])
+            with self.assertRaisesRegex(RuntimeError, 'Out-of-order'):
+                env['dictation_recovery_poll'](None)

@@ -21,6 +21,18 @@ spec.loader.exec_module(prepare)
 
 
 class PublicationGuardTest(unittest.TestCase):
+    def test_dictation_media_inventory_is_profile_specific_and_complete(self):
+        indicators = {'dictation-indicator-online-installed.png',
+                      'dictation-indicator-recovered-offline.png'}
+        self.assertEqual(prepare.dictation_media_names('small-v2'), indicators)
+        self.assertEqual(prepare.dictation_media_names('turbo-q5-v3'), indicators | {
+            'dictation-recovery-online-installed-gpu-failure.png',
+            'dictation-recovery-online-installed-cpu-ready.png',
+            'dictation-recovery-recovered-offline-gpu-failure.png',
+            'dictation-recovery-recovered-offline-cpu-ready.png'})
+        with self.assertRaisesRegex(RuntimeError, 'Unknown dictation media profile'):
+            prepare.dictation_media_names('unreviewed')
+
     def test_dictation_timing_scope_names_the_official_voxtype_path(self):
         sources = [
             (ROOT / 'tools/qualified-release/prepare.py').read_text(),

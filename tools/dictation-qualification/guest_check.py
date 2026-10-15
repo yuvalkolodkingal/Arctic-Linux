@@ -1063,6 +1063,8 @@ class Checker:
     def gpu_failure(self):
         require(self.profile_id == 'turbo-q5-v3', 'gpu-gate-requires-modern-profile')
         self.empty()
+        # Make the visible language selection deterministic for both recovery screens.
+        self.select(language='he')
         icd = self.root / 'bad-icd.json'
         missing = self.root / 'libarctic-missing-vulkan-driver.so'
         icd.write_text(json.dumps({'file_format_version': '1.0.0',
@@ -1101,6 +1103,8 @@ class Checker:
             require(status.get('state') == 'error'
                     and ('vulkan' in error or 'gpu' in error),
                     'gpu-failure-not-actionable')
+            gpu_failure_capture_ack_sha256 = self.recovery_screen(
+                'gpu_failure', status, expected_language='he')
         finally:
             self.record('cancel', check=False)
             self.cmd(['systemctl', '--user', 'unset-environment',
@@ -1110,10 +1114,66 @@ class Checker:
             sample = next(row for row in self.fixtures
                           if row['language'] == language and row['source_row'] == 0)
             self.transcribe(sample, 'cpu-retry')
+        status = self.adapter('status')
+        cpu_ready_capture_ack_sha256 = self.recovery_screen(
+            'cpu_ready', status, expected_language='he')
         return {'gpu_supported': True, 'explicit_cpu_selected': True,
                 'failed_attempt_inserted': False, 'count': 2,
                 'bytes': ASSETS['vulkan']['bytes'],
-                'sha256': ASSETS['vulkan']['sha256']}
+                'sha256': ASSETS['vulkan']['sha256'],
+                'gpu_failure_capture_ack_sha256': gpu_failure_capture_ack_sha256,
+                'cpu_ready_capture_ack_sha256': cpu_ready_capture_ack_sha256}
+
+    def recovery_screen(self, stage, status, expected_language):
+        """Bind an exact host screenshot to the visible, transcript-free Settings state."""
+        require(stage in ('gpu_failure', 'cpu_ready'), 'recovery-screen-stage')
+        require((status.get('state'), status.get('backend')) ==
+                (('error', 'vulkan') if stage == 'gpu_failure' else ('ready', 'cpu')),
+                'recovery-screen-status')
+        require(expected_language is None or status.get('language') == expected_language,
+                'recovery-screen-language')
+        require(stage != 'cpu_ready' or status.get('ready') is True,
+                'recovery-screen-not-ready')
+        self.empty()
+        self.cmd(['/usr/bin/arctic-settings', 'dictation'])
+
+        def visible():
+            page = self.cmd(['/usr/bin/quickshell', 'ipc', 'call', 'settings', 'page'],
+                            check=False)
+            ready = self.cmd(['/usr/bin/quickshell', 'ipc', 'call', 'settings', 'ready'],
+                             check=False)
+            clients = json.loads(self.cmd(['mmsg', 'get', 'all-clients']).stdout)['clients']
+            rows = [row for row in clients if row.get('title') == 'Arctic Settings']
+            require(len(rows) <= 1, 'recovery-settings-window-duplicate')
+            return (page.returncode == ready.returncode == 0
+                    and page.stdout.strip() == b'dictation'
+                    and ready.stdout.strip() == b'true'
+                    and len(rows) == 1 and rows[0].get('is_visible') is True
+                    and rows[0].get('is_focused') is True
+                    and Path('/proc', str(rows[0]['pid'])).stat().st_uid == self.account.pw_uid)
+        self.observe('recovery-settings-visible', visible, 30)
+        # DictationPage refreshes its service model asynchronously when shown.
+        time.sleep(2)
+        # Refresh after opening and bind the screen to the same checked state.
+        shown = self.adapter('status')
+        require(shown == status, 'recovery-screen-status-changed')
+        screenshot = self.root / ('dictation-recovery-' + stage + '.png')
+        self.cmd(['/usr/bin/grim', str(screenshot)])
+        require(screenshot.is_file() and screenshot.stat().st_size > 1000,
+                'recovery-screen-guest-screenshot-missing')
+        require((self.root / 'received.private').read_bytes() == b'',
+                'recovery-screen-receiver-not-empty')
+        nonce = os.urandom(16).hex()
+        print('ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED ' + json.dumps({
+            'boot_id': self.report['boot_id'],
+            'installation_id': self.context['installation_id'],
+            'phase': self.context['phase'], 'desktop_uid': self.account.pw_uid,
+            'receiver_empty': True, 'stage': stage, 'state': shown['state'],
+            'backend': shown['backend'], 'language': shown['language'],
+            'capture_nonce': nonce}), flush=True)
+        wait(lambda: (self.root / 'received.private').read_text() == nonce, 45)
+        self.empty()
+        return hashlib.sha256(nonce.encode()).hexdigest()
 
     def legacy_gpu(self):
         require(self.profile_id == 'small-v2' and 'vulkan' not in self.assets,
