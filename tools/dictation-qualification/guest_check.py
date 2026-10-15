@@ -883,14 +883,62 @@ class Checker:
                        start_new_session=True)
 
     def select(self, language=None, backend=None):
+        changed = False
         if language is not None:
             self.adapter('set-language', language)
+            changed = True
         if backend is not None:
             require(backend in ('cpu', 'vulkan'), 'unknown-backend-selection')
             run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
                  str(SETUP), '--backend', backend], 750)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.observe('daemon-restart', lambda: self.state(allow_absent=True) == 'idle', 20)
+            changed = True
+        if changed:
+            self.daemon_ready('daemon-restart', 30)
+
+    def daemon_ready(self, target, seconds=30):
+        """Wait beyond a restart until one unchanged official daemon is usable."""
+        previous, stable = None, 0
+        def ready():
+            nonlocal previous, stable
+            service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                               check=False)
+            engines = self.engines()
+            current = engines[0] if (service.stdout.strip() == b'active'
+                                      and len(engines) == 1
+                                      and self.state(allow_absent=True) == 'idle') else None
+            stable = stable + 1 if current is not None and current == previous else 0
+            previous = current
+            return current if stable >= 3 else None
+        return self.observe(target, ready, seconds)
+
+    def clear_fixture_error(self):
+        """Clear one already-proved fixture error before inducing another."""
+        path = self.runtime / 'arctic/voxtype-error'
+        try:
+            parent = path.parent.lstat()
+            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return
+        try:
+            info = os.fstat(fd)
+            require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == self.account.pw_uid
+                    and not parent.st_mode & 0o077
+                    and stat.S_ISREG(info.st_mode) and info.st_uid == self.account.pw_uid
+                    and not info.st_mode & 0o077 and 0 < info.st_size <= 32,
+                    'fixture-error-projection-unsafe')
+            raw = os.read(fd, 33)
+            require(len(raw) == info.st_size, 'fixture-error-projection-unsafe')
+        finally:
+            os.close(fd)
+        try:
+            value = raw.decode('ascii').strip()
+        except UnicodeError:
+            raise Invalid('fixture-error-projection-invalid') from None
+        require(value in ('microphone', 'model', 'gpu-fallback', 'transcription', 'output'),
+                'fixture-error-projection-invalid')
+        self.cmd(['/usr/bin/rm', '-f', '--', str(path)])
+        require(not path.exists(), 'fixture-error-projection-retained')
 
     def transcribe(self, sample, purpose='cpu-session'):
         self.empty()
@@ -995,7 +1043,12 @@ class Checker:
             self.player = None
             hidden.rename(target)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.observe('model-restored', lambda: self.state(allow_absent=True) == 'idle', 20)
+            self.daemon_ready('model-restored', 30)
+            # The fixture repaired the model without going through Arctic's
+            # user-facing retry command. Remove only the already-observed,
+            # private projection so the next independent fault must publish
+            # fresh evidence of its own.
+            self.clear_fixture_error()
         require(sha(target) == self.assets['model']['sha256'],
                 'missing-model-restore-integrity')
         return {'ready': False, 'restored': True}
@@ -1003,19 +1056,20 @@ class Checker:
     def microphone(self):
         self.empty()
         self.select(backend='cpu')
-        # Pin the owned source instead of relying on PipeWire's default. A
-        # virtual source which disappears while CPAL already has it open can
-        # leave the stream suspended without an error callback; that does not
-        # reproduce a device which is absent when VoxType opens it again.
-        self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name])
-        self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-        self.observe('microphone-pinned-daemon',
-                     lambda: self.state(allow_absent=True) == 'idle', 20)
-        self.record('start')
-        self.observe('recording-state', lambda: self.state() == 'recording', 10)
-        self.observe('capture-link', self.capture_link, 10)
-        self.destroy_route(restore=False)
         try:
+            # Pin the owned source instead of relying on PipeWire's default. A
+            # virtual source which disappears while CPAL already has it open
+            # can leave the stream suspended without an error callback; that
+            # does not reproduce a device absent when VoxType opens it again.
+            # All mutations are inside this cleanup boundary: a failed start
+            # or link assertion must not poison the following lock/GPU gates.
+            self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name])
+            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
+            self.daemon_ready('microphone-pinned-daemon', 30)
+            self.record('start')
+            self.observe('recording-state', lambda: self.state() == 'recording', 10)
+            self.observe('capture-link', self.capture_link, 10)
+            self.destroy_route(restore=False)
             objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
             remaining = [row for row in objects if row.get('type') == 'PipeWire:Interface:Node'
                          and row.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
@@ -1028,59 +1082,48 @@ class Checker:
             # into a CPAL hot-unplug callback.
             self.record('cancel', check=False)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.observe('microphone-disconnected-daemon',
-                         lambda: self.state(allow_absent=True) == 'idle', 20)
+            self.daemon_ready('microphone-disconnected-daemon', 30)
             self.record('start', check=False)
-            self.observe('microphone-idle', lambda: self.state() == 'idle', 30)
-            require((self.root / 'received.private').read_bytes() == b'',
-                    'microphone-failure-inserted-text')
             def actionable():
                 status = self.adapter('status')
                 error = str(status.get('error', '')).lower()
                 return status if (status.get('state') == 'error'
                     and any(word in error for word in ('microphone', 'audio', 'input device'))) else None
-            # VoxType publishes its idle state before journald necessarily
-            # makes the final capture error visible to Arctic's status
-            # projection. Require the same actionable error, but observe that
-            # asynchronous boundary instead of sampling it once.
-            self.observe('microphone-actionable-error', actionable, 10)
+            # Wait for the fresh actionable projection itself. Sampling the
+            # pre-signal idle state first can succeed before VoxType processes
+            # record start, leaving an earlier fixture's error to contaminate
+            # this gate.
+            self.observe('microphone-actionable-error', actionable, 30)
+            self.observe('microphone-idle', lambda: self.state() == 'idle', 10)
+            require((self.root / 'received.private').read_bytes() == b'',
+                    'microphone-failure-inserted-text')
         finally:
             self.record('cancel', check=False)
-            self.route()
+            if self.loop is None:
+                self.route()
             self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', 'default'],
                      check=False)
             # Removing a PipeWire source is intentionally destructive. A
             # daemon which still owns that dead CPAL stream must not influence
             # the independent lock, GPU and privacy gates which follow.
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            def restored():
-                service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
-                                   check=False)
-                return (service.stdout.strip() == b'active'
-                        and self.state(allow_absent=True) == 'idle'
-                        and len(self.engines()) == 1)
-            self.observe('microphone-daemon-restored', restored, 30)
+            self.daemon_ready('microphone-daemon-restored', 30)
+            self.clear_fixture_error()
         return {'count': 0, 'drained': True, 'restored': True}
 
     def locked(self):
         self.empty()
         self.select(backend='cpu')
-        self.record('start')
-        self.observe('recording-state', lambda: self.state() == 'recording', 10)
-        self.observe('capture-link', self.capture_link, 10)
-        self.play(self.fixtures[0])
-        time.sleep(.3)
         lock_command = False
         locked = False
         unlocked = False
         unlock_requested = False
-        def restarted():
-            service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
-                               check=False)
-            return (service.stdout.strip() == b'active'
-                    and self.state(allow_absent=True) == 'idle'
-                    and len(self.engines()) == 1)
         try:
+            self.record('start')
+            self.observe('recording-state', lambda: self.state() == 'recording', 10)
+            self.observe('capture-link', self.capture_link, 10)
+            self.play(self.fixtures[0])
+            time.sleep(.3)
             self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'lock'])
             lock_command = True
             self.observe('lock-state', lambda: self.cmd(
@@ -1101,8 +1144,9 @@ class Checker:
             self.observe('unlock-state', lambda: self.cmd(
                 ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
             unlocked = True
-            self.observe('unlock-daemon-restarted', restarted, 30)
+            self.daemon_ready('unlock-daemon-restarted', 30)
         finally:
+            self.record('cancel', check=False)
             self.kill(self.player)
             self.player = None
             # A failed assertion must not leave the disposable VM locked or
@@ -1118,7 +1162,7 @@ class Checker:
                 unlocked = True
             if lock_command:
                 self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
-                self.observe('unlock-cleanup-daemon', restarted, 30)
+                self.daemon_ready('unlock-cleanup-daemon', 30)
         return {'locked': True, 'count': 0, 'drained': True}
 
     def gpu_failure(self):
