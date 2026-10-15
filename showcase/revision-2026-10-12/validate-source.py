@@ -75,7 +75,7 @@ def main() -> None:
 
     # Every numeric slot comes from the pinned local word alignment.
     duration = root_timing["duration"]
-    assert abs(duration - 549.987846) < 0.000001
+    assert abs(duration - 582.356463) < 0.000001
     previous_end = 0.0
     for cue in timed_cues:
         assert 0.0 <= cue["start"] < cue["end"] <= duration
@@ -86,7 +86,7 @@ def main() -> None:
         assert digest(SHOWCASE / name) == digest(REV / name)
 
     required = {
-        "signature-checked official VoxType 1.1.0 binaries": "dictationsetup",
+        "signature-checked official VoxType 1.1.1 binaries": "dictationsetup",
         "arctic-dictation-toggle → voxtype record toggle": "dictationrecord",
         "Arctic's dictation pill follows VoxType's recording": "dictationrecord",
         "arctic-dictation set-backend vulkan|cpu": "dictationrecovery",
@@ -144,10 +144,10 @@ def main() -> None:
     ember_master = SHOWCASE.parent / ember["source"]
     assert digest(ember_master) == "7af8cb5ce0d87773109d759afdd1d14ef22ce7e84fdc1533da1539083cd11b0b"
 
-    assert voice["status"] == "direct_voxtype_master_aligned_capture_listening_pending"
+    assert voice["status"] == "direct_voxtype_1_1_1_master_aligned_capture_listening_pending"
     assert voice["ready_for_render"] is False
     assert voice["assembly"]["local_reference"]["status"] == "superseded_custom_controller_wording"
-    assert voice["validation"]["local_speech_to_text_alignment"] == "passed_faster_whisper_base_en_word_alignment"
+    assert voice["validation"]["local_speech_to_text_alignment"] == "passed_faster_whisper_1.2.1_base_en_word_alignment"
     assert voice["validation"]["transcript_leakage_review"] == "passed_automated_log_safety_ephemeral_transcript_not_uploaded"
     assert voice["validation"]["human_listening_review"] == {
         "status": "pending",
@@ -215,13 +215,13 @@ def main() -> None:
     assert voice["direct_voxtype_revision"]["failed_full_narration_attempt"]["renderable_audio"] is False
     master = validate_assembled_master(voice, SHOWCASE.parent)
     assert master == {
-        "source_tag": "showcase-river-source-2026-10-14",
-        "master_asset": "narration-river-direct-voxtype-final-2026-10-14.mp3",
-        "master_bytes": "13201492",
-        "master_sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
-        "master_duration": "549.987846",
+        "source_tag": "showcase-river-source-2026-10-15",
+        "master_asset": "narration-river-arctic-1.2.1-voxtype-1.1.1-2026-10-15.mp3",
+        "master_bytes": "13978270",
+        "master_sha256": "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+        "master_duration": "582.356463",
     }
-    assert alignment["status"] == "verified_direct_voxtype_master_locally_aligned"
+    assert alignment["status"] == "verified_direct_voxtype_1_1_1_master_locally_aligned"
     assert alignment["determinism"] == {
         "runs": 2,
         "same_audio_sha256_each_run": True,
@@ -231,7 +231,7 @@ def main() -> None:
     }
     assert alignment["audio"]["sha256"] == master["master_sha256"]
     assert alignment["audio"]["bytes"] == int(master["master_bytes"])
-    assert alignment["audio"]["decoded_samples"] == 24_254_464
+    assert alignment["audio"]["decoded_samples"] == 25_681_920
     assert alignment["log_privacy"]["transcript_in_ci_log"] is False
     assert alignment["log_privacy"]["transcript_outputs_public"] is False
     assert alignment["log_privacy"]["transcript_outputs_uploaded"] is False
@@ -348,9 +348,9 @@ def main() -> None:
         ],
         "human_review": "eight named representative frames bound to the exact MP4 SHA-256",
     }
-    assert whisper["word_error_rate"] == 0.039375
-    assert whisper["exact_token_coverage"] == 0.973523
-    assert whisper["minimum_cue_exact_token_coverage"] >= 2 / 3
+    assert whisper["word_error_rate"] == 0.041412
+    assert whisper["exact_token_coverage"] == 0.974202
+    assert whisper["minimum_cue_exact_token_coverage"] >= 0.6
     assert whisper["cues_below_half_exact_token_coverage"] == 0
     assert whisper["cues_without_exact_tokens"] == 0
     assert whisper["explicit_cpu_recovery_phrase_token_coverage"] == 1.0

@@ -408,7 +408,7 @@ def _dictation_ready(environment):
     profile = value.get("profile")
     descriptor = c.DICTATION_PROFILES.get(profile)
     if value.get("ok") is True and value.get("ready") is True \
-            and value.get("state") == "ready" and value.get("version") == "1.1.0" \
+            and value.get("state") == "ready" and value.get("version") == "1.1.1" \
             and descriptor is not None \
             and all(value.get(key) == expected for key, expected in descriptor.items()) \
             and value.get("compatibility_required") is False:

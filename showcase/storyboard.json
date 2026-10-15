@@ -1,7 +1,7 @@
 [
   {
     "id": "intro",
-    "chapter": "Meet Arctic Linux",
+    "chapter": "Meet Arctic Linux 1.2.1",
     "title": "A little calmer. A lot more yours.",
     "body": "A calm Fedora desktop, with useful defaults and room to make it yours.",
     "image": "installed-desktop",
@@ -245,10 +245,10 @@
     "body": "Signed official VoxType. Verified local multilingual Whisper. Ready only after setup.",
     "shortcut": "arctic-dictation status · Settings → Dictation",
     "capture_required": true,
-    "narration": "Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.",
+    "narration": "Arctic installs pinned, signature-checked official VoxType 1.1.1 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready.",
     "type": "evidence",
     "evidence": [
-      "Signature-checked official VoxType 1.1.0 binaries and verified local model",
+      "Signature-checked official VoxType 1.1.1 binaries and verified local model",
       "Automatic online setup finishes independently of OS installation",
       "Offline setup stays visibly not ready until retry succeeds"
     ],
@@ -408,7 +408,7 @@
   },
   {
     "id": "outro",
-    "chapter": "Arctic Linux",
+    "chapter": "Arctic Linux 1.2.1",
     "title": "Make room for your day.",
     "body": "Downloads, setup help, shortcuts and the full wiki on GitHub.",
     "image": "installed-desktop",

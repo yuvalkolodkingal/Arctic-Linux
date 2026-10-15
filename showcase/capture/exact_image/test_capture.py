@@ -75,7 +75,7 @@ def session(scene, facts, random=lambda size: b"\x55" * size):
 
 def dictation_facts():
     return {"phase": "online-installed",
-            "status": {"ok": True, "ready": True, "state": "ready", "version": "1.1.0",
+            "status": {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
                        "profile": "turbo-q5-v3", "model": "large-v3-turbo-q5_0",
                        "cpu_variant": "avx2", "model_download_bytes": 574041195,
                        "download_bytes": 678117115, "compatibility_required": False},
