@@ -121,6 +121,17 @@ def _phrases_present(text: str, phrases, *, ordered: bool) -> bool:
     return True
 
 
+def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
+    """Accept only a complete final OCR line for the fixed Fish prompt."""
+    if (type(text) is not str or type(account) is not str or not account
+            or type(suffixes) not in (tuple, list) or not suffixes
+            or any(type(item) is not str or not item for item in suffixes)):
+        return False
+    lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
+    accepted = {account + " " + suffix for suffix in suffixes}
+    return bool(lines) and lines[-1] in accepted
+
+
 class Controller:
     """Finite host state machine. Guest JSON and messages never choose actions."""
 
@@ -223,7 +234,8 @@ class Controller:
         return path, info, image, text
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
-                    visible=False, retain=False, exact_output=False, ordered=False):
+                    visible=False, retain=False, exact_output=False, ordered=False,
+                    prompt_contract=None):
         deadline = time.monotonic() + seconds
         last = None
         while time.monotonic() < deadline:
@@ -232,7 +244,10 @@ class Controller:
                 path, info, image, text = self._shot(expectation)
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
+                prompt_ok = (prompt_contract is None
+                             or _fixed_fish_prompt_present(text, *prompt_contract))
                 if ((not phrases or _phrases_present(text, phrases, ordered=ordered))
+                        and prompt_ok
                         and (not exact_output or image.size == (1280, 800))
                         and (not visible or nonblank)):
                     detail = {"bytes": info.st_size, "sha256": c.sha256(path),
@@ -366,9 +381,9 @@ class Controller:
         # prompt.  A command sent during that animation can be consumed as the
         # keypress that dismisses it.  First prove the exact installed greeting,
         # then send one newline: the fetch renderer leaves a single ordinary
-        # byte queued for Fish, where it is only an empty command.  Its 50 ms
-        # input loop and terminal restoration complete well inside this fixed
-        # bounded settling interval.
+        # byte queued for Fish, where it is only an empty command.  A later
+        # bounded exact-frame gate, rather than elapsed time, proves that its
+        # input loop and terminal restoration have completed.
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.press("installed-console", "ret")
@@ -379,9 +394,11 @@ class Controller:
         # settling delay.
         shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
                         + c.CONTROLLER["account"]["hostname"])
-        ready_prompt = shell_prompt + " " + c.CONTROLLER["account"]["prompt_token"]
+        prompt_contract = c.CONTROLLER["account"]["prompt"]
         self.wait_screen("installed-console", "installed-shell-ready",
-                         (ready_prompt,), seconds=90, exact_output=True)
+                         (), seconds=90, exact_output=True,
+                         prompt_contract=(shell_prompt,
+                                          tuple(prompt_contract["ocr_suffixes"])))
         self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
         self.press("installed-console", "ret")
         # The executed marker can reach the VT before Fish has drawn its next

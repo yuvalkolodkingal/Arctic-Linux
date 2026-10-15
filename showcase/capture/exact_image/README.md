@@ -69,9 +69,11 @@ the installed boot, the root wrapper activates the unique Wayland VT before it
 drops permanently to UID 1000 for scene work. After dismissing the animated
 greeting, the host requires the fixed account's real
 `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
-typing even its nonsecret proof command. The prompt's contracted `~>` token is
-required after the fixed account text, so the greeting's own `user@host` info
-row cannot satisfy this gate. It then proves the Fish session with the fixed
+typing even its nonsecret proof command. The host accepts only a complete final
+OCR line for that account with the two spellings already admitted by the
+successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
+suffix on separate rows, or the greeting's own `user@host` info row, cannot
+satisfy this gate. It then proves the Fish session with the fixed
 `ARCTIC-SHOWCASE-SHELL-READY` command and requires another fixed prompt in the
 same exact output after the marker before typing the sudo launcher. An earlier
 echoed prompt, a fixed settling delay or marker output alone cannot authorize

@@ -172,9 +172,10 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual((len(ready), len(shell)), (1, 1))
         prompt = (c.CONTROLLER["account"]["username"] + "@"
                   + c.CONTROLLER["account"]["hostname"])
-        self.assertEqual(ready[0].args[2], (prompt + " ~>",))
+        self.assertEqual(ready[0].args[2], ())
         self.assertEqual(ready[0].kwargs,
-                         {"seconds": 90, "exact_output": True})
+                         {"seconds": 90, "exact_output": True,
+                          "prompt_contract": (prompt, ("~>", "~ >"))})
         self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
         self.assertEqual(shell[0].kwargs,
                          {"seconds": 90, "exact_output": True, "ordered": True})
@@ -196,14 +197,30 @@ term     linux
 theme    Polar night
 uptime   2 mins
 """
-        prompt = account + " ~>"
-        self.assertFalse(automation._phrases_present(greeting, (prompt,), ordered=False))
-        # Account text and the token in different greeting rows still cannot
-        # mimic the one fixed prompt phrase.
-        self.assertFalse(automation._phrases_present(
-            greeting + "prompt token  ~>\n", (prompt,), ordered=False))
-        self.assertTrue(automation._phrases_present(
-            greeting + "\n" + prompt + "\n", (prompt,), ordered=False))
+        suffixes = ("~>", "~ >")
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting, account, suffixes))
+        # Account text and a valid suffix on different rows cannot mimic one
+        # complete final prompt line.
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting + account + "\n~ >\n", account, suffixes))
+        # A prompt-like row inside a still-active greeting is not the final OCR
+        # row and therefore cannot authorize input.
+        self.assertFalse(automation._fixed_fish_prompt_present(
+            greeting + account + " ~>\nos       Arctic Linux 1.2.1\n", account, suffixes))
+        for forged in ("other@arctic-showcase ~>", account + "~>",
+                       account + " ~>>", account + " ~> command",
+                       "prefix " + account + " ~>"):
+            with self.subTest(forged=forged):
+                self.assertFalse(automation._fixed_fish_prompt_present(
+                    forged + "\n", account, suffixes))
+        for spelling in suffixes:
+            with self.subTest(spelling=spelling):
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    greeting + "\n" + account + " " + spelling + "\n",
+                    account, suffixes))
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    account + " " + spelling + " _|\n", account, suffixes))
 
     def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
@@ -265,8 +282,9 @@ uptime   2 mins
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
                     {"seconds": 90})
         ready = ("screen", "installed-shell-ready",
-                 ("arcticshowcase@arctic-showcase ~>",),
-                 {"seconds": 90, "exact_output": True})
+                 (), {"seconds": 90, "exact_output": True,
+                      "prompt_contract": ("arcticshowcase@arctic-showcase",
+                                          ("~>", "~ >"))})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
         self.assertEqual(operations[at + 1], ("keys", ("ret",)))
