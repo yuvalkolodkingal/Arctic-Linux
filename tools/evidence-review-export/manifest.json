@@ -13,7 +13,13 @@
     "max_uncompressed_bytes_each": 750000000,
     "max_export_files": 320,
     "max_export_bytes_each": 32000000,
-    "max_total_export_bytes": 150000000
+    "max_total_export_bytes": 150000000,
+    "max_contact_sheets": 8,
+    "max_contact_sheet_members_each": 64,
+    "max_contact_sheet_source_images": 512,
+    "max_contact_sheet_exact_frames": 32,
+    "max_contact_sheet_pixels_each": 16777216,
+    "max_generated_png_bytes_each": 12000000
   },
   "artifacts": []
 }

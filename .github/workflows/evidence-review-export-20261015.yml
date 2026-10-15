@@ -28,6 +28,8 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
+      - name: Install the bounded contact-sheet decoder
+        run: sudo apt-get update && sudo apt-get install -y python3-pil
       - name: Verify pins and extract only the reviewed allowlist
         run: >-
           python3 -B tools/evidence-review-export/export.py export
