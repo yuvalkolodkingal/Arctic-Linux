@@ -586,7 +586,9 @@ class Checker:
                 if (type(error) is ReadinessStageFailure
                         and error.failure_stage == READINESS_FAILURE_STAGES['status-contract']):
                     observations.update(getattr(self, 'readiness_status_projection',
-                                                {key: False for key in READINESS_STATUS_FIELDS}))
+                                                {key: (1 if key == 'status_state_code' else 0
+                                                       if key.endswith('_code') else False)
+                                                 for key in READINESS_STATUS_FIELDS}))
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
             result['observations'] = observations
             if type(error) is MicrophoneIsolationUnavailable:
@@ -723,6 +725,26 @@ class Checker:
 
     def ready(self):
         value = self.readiness_stage('status-command', lambda: self.adapter('status'))
+        state_codes = {'unavailable': 1, 'queued': 2, 'downloading': 3, 'starting': 4,
+                       'ready': 5, 'recording': 6, 'transcribing': 7, 'error': 8}
+        def fixed_error_code(path, uid, choices):
+            try:
+                marker = owned_text(path, uid, 'bounded-status-marker-unsafe').strip()
+            except FileNotFoundError:
+                return 0
+            except (Invalid, OSError, UnicodeError):
+                return len(choices) + 2
+            return choices.get(marker, len(choices) + 1)
+        runtime = self.runtime / 'arctic'
+        try:
+            runtime_info = runtime.lstat()
+            runtime_safe = (stat.S_ISDIR(runtime_info.st_mode)
+                            and runtime_info.st_uid == self.account.pw_uid
+                            and not runtime_info.st_mode & 0o077)
+        except OSError:
+            runtime_safe = False
+        service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                           check=False)
         self.readiness_status_projection = {
             'status_ready': value.get('ready') is True,
             'status_state_ready': value.get('state') == 'ready',
@@ -731,6 +753,16 @@ class Checker:
             'status_pending_absent': not (SYSTEM / 'pending').exists(),
             'status_receipt_exists': (SYSTEM / 'verified.json').is_file(),
             'status_readiness_marker_exists': (SYSTEM / 'upstream-direct-v1').is_file(),
+            'status_state_code': state_codes[value.get('state')],
+            'status_service_active': service.stdout.strip() == b'active',
+            'status_starting_marker_exists': (runtime / 'voxtype-starting').is_dir(),
+            'status_runtime_safe': runtime_safe,
+            'status_runtime_error_code': fixed_error_code(
+                runtime / 'voxtype-error', self.account.pw_uid,
+                {'microphone': 1, 'model': 2, 'gpu-fallback': 3, 'transcription': 4,
+                 'output': 5, 'service-start': 6, 'service-timeout': 7}),
+            'status_setup_error_code': fixed_error_code(
+                SYSTEM / 'setup.error', 0, {'setup': 1, 'backend-vulkan': 2}),
         }
         self.readiness_stage('status-contract', lambda: require(
             all(self.readiness_status_projection[key] for key in (

@@ -101,12 +101,16 @@ OBSERVATIONS = {
     'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes',
     'status_ready', 'status_state_ready', 'status_profile_matches',
     'status_backend_valid', 'status_pending_absent', 'status_receipt_exists',
-    'status_readiness_marker_exists',
+    'status_readiness_marker_exists', 'status_state_code',
+    'status_service_active', 'status_starting_marker_exists',
+    'status_runtime_safe', 'status_runtime_error_code', 'status_setup_error_code',
 }
 READINESS_STATUS_FIELDS = {
     'status_ready', 'status_state_ready', 'status_profile_matches',
     'status_backend_valid', 'status_pending_absent', 'status_receipt_exists',
-    'status_readiness_marker_exists',
+    'status_readiness_marker_exists', 'status_state_code',
+    'status_service_active', 'status_starting_marker_exists',
+    'status_runtime_safe', 'status_runtime_error_code', 'status_setup_error_code',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 TRANSCRIPTION_FAILURE_STAGES = {
@@ -375,7 +379,15 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
         status_projection = set(observed) & READINESS_STATUS_FIELDS
         if observed.get('failure_stage') == READINESS_FAILURE_STAGES['status-contract']:
             require(status_projection == READINESS_STATUS_FIELDS
-                    and all(type(observed[key]) is bool for key in READINESS_STATUS_FIELDS),
+                    and all(type(observed[key]) is bool for key in READINESS_STATUS_FIELDS
+                            if key not in {'status_state_code', 'status_runtime_error_code',
+                                           'status_setup_error_code'})
+                    and type(observed['status_state_code']) is int
+                    and 1 <= observed['status_state_code'] <= 8
+                    and type(observed['status_runtime_error_code']) is int
+                    and 0 <= observed['status_runtime_error_code'] <= 10
+                    and type(observed['status_setup_error_code']) is int
+                    and 0 <= observed['status_setup_error_code'] <= 4,
                     'gate-readiness-status-projection')
         else:
             require(not status_projection, 'gate-readiness-status-projection-scope')

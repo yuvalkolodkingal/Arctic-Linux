@@ -196,7 +196,9 @@ class GateDiagnosticControls(unittest.TestCase):
                     self.assertEqual(result['code'], 'gate-' + gate + '-' + label)
                     expected = {'failure_stage': number}
                     if stage == 'status-contract':
-                        expected.update({key: False for key in guest.READINESS_STATUS_FIELDS})
+                        expected.update({key: (1 if key == 'status_state_code' else 0
+                                              if key.endswith('_code') else False)
+                                         for key in guest.READINESS_STATUS_FIELDS})
                     self.assertEqual(result['observations'], expected)
                     self.assertNotIn('sensitive-canary', json.dumps(result))
 
@@ -220,6 +222,9 @@ class GateDiagnosticControls(unittest.TestCase):
             'status_profile_matches': True, 'status_backend_valid': True,
             'status_pending_absent': True, 'status_receipt_exists': True,
             'status_readiness_marker_exists': True,
+            'status_state_code': 8, 'status_service_active': False,
+            'status_starting_marker_exists': False, 'status_runtime_safe': True,
+            'status_runtime_error_code': 0, 'status_setup_error_code': 0,
         }
         action = lambda: checker.readiness_stage(
             'status-contract', self.raising(PrivateInvalid('sensitive-canary')))
