@@ -194,27 +194,54 @@ def _as_user(account, environment, argv, *, timeout=30, check=True):
     return _run(command, timeout=timeout, check=check)
 
 
-def _find_ipc(account, environment, target: str, method: str):
-    pids = _run(["/usr/bin/pgrep", "-u", str(account.pw_uid), "-x", "quickshell"],
-                check=False, maximum=16_384).stdout.decode().split()
-    matches = []
-    for pid in pids:
-        if not re.fullmatch(r"[1-9][0-9]{0,9}", pid):
+def _find_ipc(account, environment, target: str, method: str, proc_root=Path("/proc")):
+    """Call only the one exact packaged Quickshell process.
+
+    Probing every Quickshell PID makes readiness depend on unrelated shell IPC
+    servers and lets one slow server consume most of the outer wait budget.
+    Exact argv and executable matching gives each bounded readiness sample one
+    candidate and still fails closed if two installer instances exist.
+    """
+    packaged_argv = {
+        "installer": ["-p", "/usr/share/arctic/installer-ui"],
+        "settings": ["-n", "-d", "-p", "/usr/share/arctic/settings"],
+    }
+    c.require(target in packaged_argv and re.fullmatch(r"[a-z]+", method),
+              "IPC target or method differs")
+    candidates = []
+    for process in proc_root.glob("[0-9]*"):
+        try:
+            if (not re.fullmatch(r"[1-9][0-9]{0,9}", process.name)
+                    or process.stat().st_uid != account.pw_uid
+                    or (process / "comm").read_text().strip() != "quickshell"
+                    or os.readlink(process / "exe") != "/usr/bin/quickshell"):
+                continue
+            raw = (process / "cmdline").read_bytes()
+            c.require(0 < len(raw) <= 16_384, "Quickshell command line is oversized")
+            argv = [value.decode("utf-8", "strict")
+                    for value in raw.rstrip(b"\0").split(b"\0")]
+            if argv and Path(argv[0]).name == "quickshell" \
+                    and argv[1:] == packaged_argv[target]:
+                candidates.append(process.name)
+        except (FileNotFoundError, ProcessLookupError, OSError, UnicodeError):
             continue
-        result = _as_user(account, environment,
-                          ["/usr/bin/quickshell", "ipc", "--pid", pid, "call", target, method],
-                          check=False)
-        if result.returncode == 0:
-            matches.append((pid, result.stdout.decode("utf-8", "strict").strip()))
-    c.require(len(matches) == 1, "IPC target is absent or ambiguous")
-    return matches[0]
+    c.require(len(candidates) == 1, "packaged IPC process is absent or ambiguous")
+    pid = candidates[0]
+    before = _process_start_ticks(account, pid, proc_root)
+    result = _as_user(account, environment,
+                      ["/usr/bin/quickshell", "ipc", "--pid", pid,
+                       "call", target, method], timeout=15, check=False)
+    c.require(result.returncode == 0
+              and _process_start_ticks(account, pid, proc_root) == before,
+              "packaged IPC call failed or changed process")
+    return pid, result.stdout.decode("utf-8", "strict").strip()
 
 
-def _process_start_ticks(account, pid: str):
+def _process_start_ticks(account, pid: str, proc_root=Path("/proc")):
     """Return a PID-reuse-safe identity component for one owned process."""
     c.require(re.fullmatch(r"[1-9][0-9]{0,9}", pid) is not None,
               "installer process identity differs")
-    process = Path("/proc") / pid
+    process = proc_root / pid
     info = process.stat()
     c.require(info.st_uid == account.pw_uid, "installer process owner differs")
     raw = (process / "stat").read_text(encoding="utf-8")
@@ -228,8 +255,33 @@ def _process_start_ticks(account, pid: str):
 
 def _installer_endpoint(account, environment):
     """Find the one live installer IPC target and bind it to process start time."""
-    pid, _ = _find_ipc(account, environment, "installer", "state")
+    pid, raw = _find_ipc(account, environment, "installer", "state")
+    value = c.strict_json(raw)
+    c.require(type(value) is dict
+              and {"page", "current", "ready", "connected", "busy", "failure"} <= set(value),
+              "installer IPC readiness response differs")
     return pid, _process_start_ticks(account, pid)
+
+
+def _stable_installer_endpoint(account, environment):
+    """Require two consecutive ready observations of the same owned endpoint."""
+    previous = None
+
+    def stable():
+        nonlocal previous
+        endpoint, value = _installer_state(account, environment)
+        ready = value.get("page") == value.get("current") == "welcome" \
+            and value.get("ready") is True and value.get("connected") is True \
+            and not value.get("busy") and not value.get("failure")
+        if not ready:
+            previous = None
+            return None
+        if endpoint != previous:
+            previous = endpoint
+            return None
+        return endpoint
+
+    return _wait(stable, 180, "stable real installer IPC unavailable")
 
 
 def _installer_call(account, environment, pid: str, method: str, payload=None):
@@ -330,8 +382,7 @@ def live_install(timeout: int):
         _run(["/usr/bin/chvt", str(vt)])
         progress.pass_stage("graphical-session")
         progress.start("installer-ipc")
-        _wait(lambda: _installer_endpoint(account, environment), 180,
-              "real installer IPC unavailable")
+        _stable_installer_endpoint(account, environment)
         progress.pass_stage("installer-ipc")
         # The first IPC reply can race Quickshell/output settling after the
         # private-VT transition. Do not pin that early probe. Before the first

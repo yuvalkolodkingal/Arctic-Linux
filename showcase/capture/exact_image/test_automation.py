@@ -151,6 +151,68 @@ class TraceContract(unittest.TestCase):
 
 
 class GuestAutomation(unittest.TestCase):
+    @staticmethod
+    def _ipc_process(root, pid, *, argv, executable="/usr/bin/quickshell",
+                     comm="quickshell"):
+        process = root / str(pid)
+        process.mkdir()
+        (process / "comm").write_text(comm + "\n")
+        (process / "exe").symlink_to(executable)
+        (process / "cmdline").write_bytes(
+            b"/usr/bin/quickshell\0" + b"\0".join(value.encode() for value in argv) + b"\0")
+        # proc_pid_stat fields 3..22; index 19 below is starttime.
+        (process / "stat").write_text(
+            f"{pid} (quickshell) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 {1000 + int(pid)}\n")
+        return process
+
+    def test_ipc_discovery_selects_one_stable_exact_packaged_process(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._ipc_process(root, 101, argv=["-p", "/usr/share/arctic/installer-ui"])
+            self._ipc_process(root, 102, argv=["-p", "/usr/share/arctic/shell"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+            result = types.SimpleNamespace(returncode=0, stdout=b'{"page":"welcome"}\n')
+            with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
+                self.assertEqual(unattended._find_ipc(
+                    account, {}, "installer", "state", root),
+                    ("101", '{"page":"welcome"}'))
+            self.assertEqual(invoke.call_args.kwargs["timeout"], 15)
+            self.assertEqual(invoke.call_args.args[2][3:5], ["101", "call"])
+
+            self._ipc_process(root, 103, argv=["-p", "/usr/share/arctic/installer-ui"])
+            with mock.patch.object(unattended, "_as_user") as ambiguous:
+                with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+                ambiguous.assert_not_called()
+
+    def test_ipc_discovery_rejects_identity_change_during_bounded_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            process = self._ipc_process(
+                root, 201, argv=["-p", "/usr/share/arctic/installer-ui"])
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+
+            def replace(*_args, **_kwargs):
+                stat_path = process / "stat"
+                stat_path.write_text(stat_path.read_text().replace("1201\n", "1202\n"))
+                return types.SimpleNamespace(returncode=0, stdout=b'{}\n')
+
+            with mock.patch.object(unattended, "_as_user", side_effect=replace):
+                with self.assertRaisesRegex(c.Invalid, "changed process"):
+                    unattended._find_ipc(account, {}, "installer", "state", root)
+
+    def test_installer_readiness_requires_same_endpoint_twice(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        ready = {"page": "welcome", "current": "welcome", "ready": True,
+                 "connected": True, "busy": False, "failure": ""}
+        samples = iter([(("101", 10), ready), (("202", 20), ready),
+                        (("202", 20), ready)])
+        with mock.patch.object(unattended, "_installer_state",
+                               side_effect=lambda *_args: next(samples)), \
+             mock.patch.object(unattended.time, "sleep"):
+            self.assertEqual(unattended._stable_installer_endpoint(account, {}),
+                             ("202", 20))
+
     def _run_installer(self, pages):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
@@ -184,8 +246,10 @@ class GuestAutomation(unittest.TestCase):
         with mock.patch.object(unattended.os, "geteuid", return_value=0), \
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
-             mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_installer_endpoint", return_value=("123", 456)), \
              mock.patch.object(unattended, "_process_start_ticks", return_value=456), \
+             mock.patch.object(unattended, "_stable_installer_endpoint",
+                               return_value=("123", 456)), \
              mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
              mock.patch.object(unattended, "_run"), \
              mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
@@ -201,19 +265,6 @@ class GuestAutomation(unittest.TestCase):
                  "connected": True, "busy": False, "failure": "", "valid": True}
         value.update(changed)
         return json.dumps(value)
-
-    def test_unique_installer_ipc_rejects_ambiguous_targets(self):
-        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
-
-        def run(argv, **_kwargs):
-            self.assertEqual(argv[:5], ["/usr/bin/pgrep", "-u", "1000", "-x", "quickshell"])
-            return types.SimpleNamespace(returncode=0, stdout=b"101\n202\n")
-
-        with mock.patch.object(unattended, "_run", side_effect=run), \
-             mock.patch.object(unattended, "_as_user",
-                               return_value=types.SimpleNamespace(returncode=0, stdout=b"{}")):
-            with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
-                unattended._find_ipc(account, {}, "installer", "state")
 
     def test_installer_reacquires_a_replacement_before_first_input(self):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
