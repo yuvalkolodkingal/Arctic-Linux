@@ -403,9 +403,15 @@ hash validation leaves a durable rejection marker that both launcher and status
 honor until signed repair completes.
 
 The systemd user service runs official VoxType directly with local-only,
-error-only Whisper settings and upstream's resident-model default. Mango calls
-`voxtype record toggle` and `voxtype record cancel`; the Arctic adapter handles
-only status, retry, language and CPU/Vulkan selection. GPU failure never implies
+error-only Whisper settings and upstream's resident-model default. It is not
+enabled at login. Mango's transcript-free activation guard starts it on the
+first explicit recording, publishes a fixed loading state, waits at most 60
+seconds for official `idle`, and then calls `voxtype record toggle`; cancellation
+calls `voxtype record cancel` directly. The daemon and model remain resident for
+the rest of the graphical session, while setup/language/backend changes leave an
+inactive service inactive and apply on the next start. Lock stops the service and
+restarts it after unlock only if that session had activated dictation. The Arctic
+adapter handles only status, retry, language and CPU/Vulkan selection. GPU failure never implies
 automatic CPU fallback: the user selects CPU and makes a new recording. See
 [DICTATION.md](DICTATION.md) for
 hashes, paths, privacy controls, commands, historical accuracy measurements and

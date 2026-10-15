@@ -80,9 +80,9 @@ If the old root-owned receipt is malformed or no longer matches its exact
 schema, the transaction-time offline migration leaves it and the old payload
 untouched. The queued online resume quarantines that invalid state, retrieves
 and verifies current signed metadata, and repairs the host's supported profile.
-A current-session systemd activation failure after the durable marker does not
-roll the completed migration back; readiness reports the stopped service and it
-starts through the globally enabled unit at the next graphical session.
+A current-session systemd reload or restart failure after the durable marker does
+not roll the completed migration back. Setup never starts an inactive daemon.
+The first explicit recording activation starts it in the graphical session.
 
 Installed binaries are under `/opt/arctic/voxtype/1.1.1`; models are under
 `/opt/arctic/voxtype/models`. `/usr/bin/voxtype` selects the CPU binary attested
@@ -113,16 +113,17 @@ unchanged. Root-owned pending and generation/outcome records under
 Mango uses a small, transcript-free readiness helper for activation and the
 official VoxType command for cancellation:
 
-- `Super + Ctrl + X` runs `arctic-dictation-toggle`, which checks the
-  sanitized status and then runs `voxtype record toggle`;
+- `Super + Ctrl + X` runs `arctic-dictation-toggle`, which checks sanitized
+  readiness, starts the user service when needed, waits at most 60 seconds for
+  official `idle`, and then runs `voxtype record toggle`;
 - `Super + Ctrl + Backspace` runs `voxtype record cancel`.
 
 Focus a writable text field before starting. The first shortcut begins
 recording; pressing it again stops, transcribes and inserts through `wtype`.
 Cancel discards an active recording or transcription without inserting. The
 recording/transcribing indicator remains visible while the taskbar hides.
-Locking cancels work and stops `voxtype.service`; a successful unlock starts the
-service again.
+Locking cancels work and stops `voxtype.service`. Unlock restarts it only when it
+was explicitly activated earlier in that graphical session.
 
 VoxType's configured 60-second recording limit **stops and transcribes the
 captured audio**. The direct integration does not add the former Arctic
@@ -136,7 +137,7 @@ fixed, transcript-free messages:
 | Vulkan cannot start | VoxType's Vulkan build may start on CPU. Arctic reports that fallback as an error; explicitly select CPU, or fix the driver and enable Vulkan again. |
 | Vulkan inference fails | The phrase is not retried automatically. Select CPU in Dictation settings, then make a new recording. |
 | Text insertion fails | Focus a writable field and try again; some apps can reject Wayland virtual-keyboard input. |
-| Service is stopped | Start or repair VoxType from Dictation settings. |
+| First activation cannot start or times out | Open Dictation settings, verify/repair the signed payload and model, then retry. |
 
 The official 1.1.1 Vulkan binary has no setting that requires GPU execution or
 disables whisper.cpp's model-start fallback. When a render node is still absent
@@ -146,12 +147,16 @@ successful acceleration. CPU remains the explicit recovery path after a Vulkan
 failure. Arctic does not assume a failed inference was retried, retranscribe
 failed audio, or download a different model in response to a runtime error.
 
-VoxType loads the selected model during daemon startup and keeps it resident
-until the service stops or restarts, matching upstream's default and avoiding
-repeated model load/unload cycles between recordings.
+VoxType is not enabled at login. The first explicit recording shortcut starts it,
+shows a fixed loading state, and loads the selected model. Upstream keeps that
+model resident for the rest of the graphical session (apart from the safe lock
+stop/restart), avoiding repeated model load/unload cycles between recordings.
+Changing setup, language or backend restarts an already active service but leaves
+an inactive one stopped; the new choice applies on its next explicit start.
 Stop the user service to release the model's RAM or VRAM. Exact-image
-qualification reports the resulting resource use rather than claiming that
-dictation is free at idle.
+qualification verifies that no VoxType engine exists before activation and reports
+the daemon's `/proc` resident-set bytes after the first load. That process RSS
+does not include GPU VRAM, so Vulkan memory still needs separate observation.
 
 ## Privacy
 

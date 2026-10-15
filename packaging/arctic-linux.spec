@@ -1385,6 +1385,16 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# VoxType now loads only after explicit recording activation. Remove the old
+# global wants link without stopping a possibly active recording in this
+# transaction. The unit's per-session condition makes any leftover per-user
+# wants link inert at the next login without erasing an administrator's intent.
+if [ ! -e %{_sharedstatedir}/arctic/dictation/lazy-session-start-v1 ]; then
+  if systemctl --global --no-reload disable voxtype.service >/dev/null 2>&1; then
+    install -d -m 0755 %{_sharedstatedir}/arctic/dictation
+    install -m 0644 /dev/null %{_sharedstatedir}/arctic/dictation/lazy-session-start-v1 || :
+  fi
+fi
 # Direct-upstream dictation replaced the old Arctic runtime controller. A new
 # pinned upstream release also enters this queue: the model and user choice are
 # reused, while the new signed executable is fetched in the background. The

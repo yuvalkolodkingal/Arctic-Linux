@@ -9,6 +9,7 @@ Singleton {
     id: dictation
     property var status: Status.parse('')
     readonly property bool active: Status.active(status)
+    readonly property bool starting: status.state === 'starting'
     readonly property bool recording: status.state === 'recording'
     readonly property string headline: Status.headline(status)
     readonly property string detail: Status.detail(status)
@@ -16,7 +17,7 @@ Singleton {
     property int probeRevision: 0
 
     function refresh() { snapshot.reload(); }
-    function toggle() { Quickshell.execDetached(['voxtype', 'record', 'toggle']); }
+    function toggle() { Quickshell.execDetached(['arctic-dictation-toggle']); }
     function cancel() { Quickshell.execDetached(['voxtype', 'record', 'cancel']); }
     function openSettings() { Quickshell.execDetached(['arctic-settings', 'dictation']); }
     function probeStatus() {

@@ -59,6 +59,8 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
         report['payload'] = c.pinned(profile)
     for name in sorted(c.gates(phase, profile)):
         observed = dict(c.REQUIRED_OBSERVATIONS.get(name, {}))
+        if name in ('online-installer-ready', 'recovered-ready'):
+            observed['resident_rss_bytes'] = 600_000_000
         if name == 'installed-payload-integrity':
             observed['file_count'] = len(c.PROFILE_ASSETS[profile])
         if name == 'local-offline-transcription':
@@ -94,6 +96,14 @@ class ContractControls(unittest.TestCase):
         result = c.validate_report(report, report['context'], FIXTURES)
         self.assertTrue(result['contract_valid'])
         self.assertFalse(result['release_acceptance'])
+
+    def test_lazy_readiness_requires_zero_login_engine_and_measured_resident_rss(self):
+        for key, code in (("pre_activation_engine_count", "gate-contradictory-or-missing-observations"),
+                          ("resident_rss_bytes", "gate-resident-rss-missing")):
+            report = synthetic("online-installed")
+            gate = next(row for row in report["gates"] if row["id"] == "online-installer-ready")
+            gate["observations"].pop(key)
+            self.rejects(report, code)
 
     def test_upstream_version_commit_and_signing_fingerprint_are_fixed(self):
         for key, value in (('version', '1.0.0'), ('source_commit', '0' * 40),

@@ -87,22 +87,28 @@ GridLayout {
     }
     Indicator {
         id: dictation
-        visible: DictationService.active || (!row.urgentOnly && ['unavailable', 'queued', 'downloading', 'ready', 'error'].includes(DictationService.status.state))
+        visible: DictationService.active || (!row.urgentOnly && ['unavailable', 'queued', 'downloading', 'starting', 'ready', 'error'].includes(DictationService.status.state))
         color: DictationService.recording ? Theme.errorSoft : DictationService.active ? Theme.infoSoft : 'transparent'
         iconName: DictationService.recording ? 'mic' : DictationService.active ? 'refresh' : DictationService.status.state === 'error' ? 'alert' : 'mic'
         iconColor: DictationService.recording ? Theme.error : DictationService.status.state === 'error' ? Theme.warning : Theme.inkMuted
-        text: row.vertical ? '' : DictationService.recording ? 'Dictating' : DictationService.active ? 'Transcribing' : ''
+        text: row.vertical ? '' : DictationService.recording ? 'Dictating' : DictationService.starting ? 'Loading' : DictationService.active ? 'Transcribing' : ''
         textColor: DictationService.recording ? Theme.error : Theme.inkMuted
         textWeight: Font.DemiBold
         tooltip: DictationService.headline + (DictationService.recording ? ' · click to stop; right-click to cancel'
+            : DictationService.starting ? ' · loading the local Whisper model'
             : DictationService.active ? ' · click or right-click to cancel'
             : DictationService.status.ready ? ' · click to start (Super + Ctrl + X); right-click for Settings' : ' · click for Settings')
         onClicked: {
             if (!DictationService.status.ready || DictationService.status.state === 'error') DictationService.openSettings();
+            else if (DictationService.starting) return;
             else if (DictationService.active && !DictationService.recording) DictationService.cancel();
             else DictationService.toggle();
         }
-        onRightClicked: DictationService.active ? DictationService.cancel() : DictationService.openSettings()
+        onRightClicked: {
+            if (DictationService.starting) return;
+            if (DictationService.active) DictationService.cancel();
+            else DictationService.openSettings();
+        }
         onHoverChanged: h => { if (row.bar) h ? row.bar.hint(dictation, tooltip) : row.bar.unhint(dictation); }
     }
     Indicator {

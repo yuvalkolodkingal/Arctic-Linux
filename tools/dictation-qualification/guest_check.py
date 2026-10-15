@@ -594,8 +594,8 @@ class Checker:
                         'profile', 'model', 'model_download_bytes', 'download_bytes',
                         'vulkan_download_bytes', 'upgrade_pending'}
                     and value.get('state') in {
-                        'unavailable', 'queued', 'downloading', 'ready', 'recording',
-                        'transcribing', 'error'}
+                        'unavailable', 'queued', 'downloading', 'starting', 'ready',
+                        'recording', 'transcribing', 'error'}
                     and type(value.get('ready')) is bool
                     and type(value.get('error')) is str
                     and len(value.get('error')) <= 512
@@ -705,17 +705,44 @@ class Checker:
 
     def ready(self):
         value = self.adapter('status')
-        require(value.get('ready') is True and value.get('profile') == self.profile_id
+        require(value.get('ready') is True and value.get('state') == 'ready'
+                and value.get('profile') == self.profile_id
                 and value.get('backend') in ('cpu', 'vulkan')
                 and not (SYSTEM / 'pending').exists(), 'upstream-not-ready')
         marker = SYSTEM / 'upstream-direct-v1'
         owned_file(marker)
         require(marker.read_text() == 'upstream-direct-v1\n',
                 'upstream-readiness-marker-invalid')
-        require(self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service']).stdout.strip() == b'active',
-                'upstream-user-service-inactive')
-        require(self.state() == 'idle', 'upstream-daemon-not-idle')
-        return {'ready': True, 'pending': False}
+        service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                           check=False)
+        require(service.stdout.strip() != b'active' and not self.state_path.exists()
+                and self.engines() == [], 'upstream-lazy-login-resident')
+        session_marker = self.runtime / 'arctic/voxtype-session-started-v1'
+        require(not session_marker.exists(), 'upstream-lazy-session-marker-present')
+
+        # Establish the deterministic PipeWire route before exercising the same
+        # first guarded activation that Mango exposes. This is the only start;
+        # later gates reuse the resident official daemon.
+        self.route()
+        activation = self.cmd([str(TOGGLE)], timeout=75, check=False)
+        require(activation.returncode == 0 and len(activation.stdout) <= 16384
+                and len(activation.stderr) <= 16384,
+                'upstream-first-activation-failed')
+        self.observe('upstream-first-activation-recording',
+                     lambda: self.state(allow_absent=True) == 'recording', 20)
+        require(session_marker.is_dir() and not session_marker.is_symlink(),
+                'upstream-lazy-session-marker-missing')
+        self.record('cancel')
+        self.daemon_ready('upstream-first-activation-resident', 60)
+        engines = self.engines()
+        require(len(engines) == 1, 'upstream-daemon-not-unique')
+        status = (Path('/proc') / str(engines[0][0]) / 'status').read_text()
+        rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
+        require(rss is not None and int(rss.group(1)) > 0,
+                'upstream-resident-rss-unavailable')
+        return {'ready': True, 'pending': False,
+                'pre_activation_engine_count': 0,
+                'resident_rss_bytes': int(rss.group(1)) * 1024}
 
     def command_contract(self):
         help_result = self.cmd([str(VOXTYPE), 'record', '--help'])
@@ -744,6 +771,7 @@ class Checker:
                  for word in line.partition('=')[2].split()]
         require('ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon' in unit
                 and 'ConditionPathExists=%h/.config/voxtype/config.toml' in unit
+                and 'ConditionPathExists=%t/arctic/voxtype-session-started-v1' in unit
                 and 'UMask=0077' in unit
                 and 'RestrictAddressFamilies=AF_UNIX' in unit
                 and len(unset) == len(set(unset))
@@ -1629,7 +1657,8 @@ class Checker:
             raise Invalid('fixture-bundle-validation-failed') from None
         self.record('cancel', check=False)
         self.select(backend='cpu')
-        self.route()
+        if not self.loop:
+            self.route()
         self.window_start()
         require(self.gate('local-offline-transcription', self.offline),
                 'session-network-not-isolated')

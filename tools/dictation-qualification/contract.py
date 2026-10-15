@@ -98,7 +98,7 @@ OBSERVATIONS = {
     'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
-    'failure_stage',
+    'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 TRANSCRIPTION_FAILURE_STAGES = {
@@ -182,8 +182,10 @@ EXPECTED_KINDS[LEGACY_GPU_GATE] = 'actual-session'
 REQUIRED_OBSERVATIONS = {
     'selinux-enforcing': {'ready': True}, 'encrypted-installed-boot': {'ready': True},
     'live-payload-model-absent': {'file_count': 0}, 'live-voxtype-unavailable': {'ready': False},
-    'online-installer-ready': {'ready': True, 'pending': False},
-    'recovered-ready': {'ready': True, 'pending': False},
+    'online-installer-ready': {'ready': True, 'pending': False,
+                               'pre_activation_engine_count': 0},
+    'recovered-ready': {'ready': True, 'pending': False,
+                        'pre_activation_engine_count': 0},
     'explicit-service-recovery-ready': {'ready': True, 'pending': False},
     'offline-setup-pending': {'ready': False, 'pending': True},
     'offline-os-healthy': {'ready': True},
@@ -348,6 +350,10 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value
                         for key, value in required.items()),
                     'gate-contradictory-or-missing-observations')
+            if gate['id'] in ('online-installer-ready', 'recovered-ready'):
+                require(type(observed.get('resident_rss_bytes')) is int
+                        and observed['resident_rss_bytes'] > 0,
+                        'gate-resident-rss-missing')
             if gate['id'] == 'installed-payload-integrity':
                 require(observed.get('file_count') == len(PROFILE_ASSETS[profile])
                         and type(observed.get('file_count')) is int

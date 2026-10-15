@@ -47,12 +47,13 @@ transaction. An old payload that fails its strict hash check is never launched.
 3. Speak, then press the same keys to stop, transcribe and insert.
 4. Press **`Super + Ctrl + Backspace`** to cancel without inserting.
 
-Mango runs the transcript-free `arctic-dictation-toggle` readiness helper,
-which invokes `voxtype record toggle` only when setup is ready. Cancel invokes
-`voxtype record cancel` directly.
+Mango runs the transcript-free `arctic-dictation-toggle` readiness helper.
+On the first activation in a graphical session it starts VoxType, shows a fixed
+loading state, waits up to 60 seconds for official `idle`, and then invokes
+`voxtype record toggle`. Cancel invokes `voxtype record cancel` directly.
 VoxType inserts through `wtype`; Arctic does not enable VoxType's input-device
 hotkey listener. The recording/transcribing indicator remains visible while the
-taskbar hides. Locking cancels active work and stops the daemon until unlock.
+taskbar hides. Locking cancels active work and stops the daemon. Unlock restarts it only if you had explicitly activated dictation in that graphical session.
 
 The 60-second recording limit stops and transcribes what was captured. There is
 no Arctic 240-second transcription timeout in the direct integration.
@@ -86,12 +87,15 @@ only for the official acceleration outcome and does not save or display it.
 | Microphone cannot open | Select and unmute the input in **Settings → Sound**, then try again. |
 | Vulkan fails | Select **CPU**, then make a new recording. |
 | Text is not inserted | Focus a writable field and retry; the app may reject Wayland virtual-keyboard input. |
-| VoxType service is stopped | Open Dictation settings and repair or restart setup. |
+| First activation cannot start or times out | Open Dictation settings, verify/repair setup, then retry. |
 
-VoxType loads the selected model during daemon startup and keeps it resident
-until the service stops or restarts, matching the upstream default. Stop the
-service to release the model's RAM or VRAM; starting it again reloads the
-verified model before recording.
+VoxType is not enabled at login, so the model uses no login RAM or VRAM. The first
+explicit recording activation loads it; upstream then keeps it resident for the
+session to avoid unreliable load/unload cycles between recordings. Stop the
+service to release that memory. Setup, language and backend changes do not start
+an inactive service and apply on its next activation. Exact-image qualification
+checks that no VoxType engine exists before activation and records process RSS
+after loading; Vulkan VRAM is outside that RSS measurement.
 
 ## Privacy
 

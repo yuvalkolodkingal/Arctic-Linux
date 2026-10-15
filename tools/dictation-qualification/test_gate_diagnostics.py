@@ -180,6 +180,7 @@ class GateDiagnosticControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             unit = Path(temp) / 'voxtype.service'
             unit.write_text('ConditionPathExists=%h/.config/voxtype/config.toml\n'
+                            'ConditionPathExists=%t/arctic/voxtype-session-started-v1\n'
                             'UMask=0077\nRestrictAddressFamilies=AF_UNIX\n'
                             'UnsetEnvironment=' + ' '.join(sorted(guest.SERVICE_UNSET_ENV)) + '\n'
                             'ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon\n')

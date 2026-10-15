@@ -1029,7 +1029,9 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertFalse((self.state / "pending").exists())
         trace = self.trace.read_text()
         self.assertIn("systemctl:--user daemon-reload", trace)
-        self.assertIn("systemctl:--user enable --now voxtype.service", trace)
+        self.assertIn("systemctl:--user try-restart voxtype.service", trace)
+        self.assertNotIn("systemctl:--user disable voxtype.service", trace)
+        self.assertNotIn("enable --now voxtype.service", trace)
 
     def test_invalid_receipt_explicit_retry_repairs_online(self):
         self._json("verified.json", {"profile": "turbo-q5-v3", "files": {}})

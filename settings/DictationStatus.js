@@ -7,7 +7,7 @@ function parse(text) {
                   profile: '', model: '', model_download_bytes: 0, download_bytes: 0,
                   vulkan_download_bytes: 66575872, upgrade_pending: false, version: '' };
     if (!data || typeof data !== 'object' || Array.isArray(data)) return out;
-    if (['unavailable', 'queued', 'downloading', 'ready', 'recording', 'transcribing', 'error'].includes(data.state)) out.state = data.state;
+    if (['unavailable', 'queued', 'downloading', 'starting', 'ready', 'recording', 'transcribing', 'error'].includes(data.state)) out.state = data.state;
     if (typeof data.error === 'string') out.error = data.error.slice(0, 500);
     if (['auto', 'he', 'en'].includes(data.language)) out.language = data.language;
     if (['cpu', 'vulkan'].includes(data.backend)) out.backend = data.backend;
@@ -18,7 +18,7 @@ function parse(text) {
     for (const key of ['model_download_bytes', 'download_bytes', 'vulkan_download_bytes']) {
         if (Number.isSafeInteger(data[key]) && data[key] > 0) out[key] = data[key];
     }
-    out.ready = data.ready === true && ['ready', 'recording', 'transcribing', 'error'].includes(out.state);
+    out.ready = data.ready === true && ['starting', 'ready', 'recording', 'transcribing', 'error'].includes(out.state);
     return out;
 }
 function profileKnown(s) {
@@ -41,16 +41,16 @@ function accelerationDetail(s) {
 }
 function backends(_) { return [{ value: 'cpu', label: 'CPU' }, { value: 'vulkan', label: 'Vulkan GPU' }]; }
 function selectionDetail(s) { return profileKnown(s) ? modelTitle(s) : 'Profile unavailable'; }
-function active(s) { return s.state === 'recording' || s.state === 'transcribing'; }
+function active(s) { return s.state === 'starting' || s.state === 'recording' || s.state === 'transcribing'; }
 function headline(s) {
     if (s.upgrade_pending && s.state === 'ready') return 'Dictation is ready; update queued';
     if (s.version === '1.1.0' && s.state === 'ready') return 'Dictation is ready; update available';
-    return ({ unavailable:'Dictation is not ready', queued:'Dictation setup is queued', downloading:'Downloading dictation', ready:'Dictation is ready', recording:'Dictation is recording', transcribing:'Transcribing on this computer', error:'Dictation needs attention' })[s.state] || 'Dictation is not ready';
+    return ({ unavailable:'Dictation is not ready', queued:'Dictation setup is queued', downloading:'Downloading dictation', starting:'Loading local dictation', ready:'Dictation is ready', recording:'Dictation is recording', transcribing:'Transcribing on this computer', error:'Dictation needs attention' })[s.state] || 'Dictation is not ready';
 }
 function detail(s) {
     if (s.error) return s.error;
     if (s.upgrade_pending && s.state === 'ready') return 'VoxType 1.1.0 remains available. The signed 1.1.1 update will retry automatically when the network is ready.';
     if (s.version === '1.1.0' && s.state === 'ready') return 'VoxType 1.1.0 remains available. Choose Update / retry to queue the signed 1.1.1 update.';
-    return ({ unavailable:'VoxType and a local model must be installed before recording.', queued:'Connect to the internet and retry setup.', downloading:'Downloading and verifying VoxType and the local model.', ready:'Focus a text field, then press Super + Ctrl + X to start or stop.', recording:'Audio stays on this computer. Press Super + Ctrl + X to stop, or cancel.', transcribing:'The local model is processing audio. Cancel with Super + Ctrl + Backspace.', error:'Retry setup or switch back to CPU acceleration.' })[s.state] || '';
+    return ({ unavailable:'VoxType and a local model must be installed before recording.', queued:'Connect to the internet and retry setup.', downloading:'Downloading and verifying VoxType and the local model.', starting:'VoxType is loading the local Whisper model for this session.', ready:'Focus a text field, then press Super + Ctrl + X to start or stop.', recording:'Audio stays on this computer. Press Super + Ctrl + X to stop, or cancel.', transcribing:'The local model is processing audio. Cancel with Super + Ctrl + Backspace.', error:'Retry setup or switch back to CPU acceleration.' })[s.state] || '';
 }
 function size(bytes) { return (bytes / 1000000).toFixed(1) + ' MB'; }

@@ -852,7 +852,6 @@ setup_user() {
     # Validate the temporary config with the exact signed CPU binary whose
     # bytes were just checked and synced instead of weakening that guard.
     configure_user "$user" "$home" "$model_path" "$DEST/voxtype-$cpu"
-    systemctl --global enable voxtype.service >/dev/null
     uid=$(id -u "$user")
     durable_atomic_text "$STATE/backend" 0644 cpu
     printf -v receipt_json '{"integration":"upstream-direct-v1","version":"%s","source_commit":"%s","release_signing_fingerprint":"%s","user":"%s","profile":"%s","binary":"voxtype-%s","binary_bytes":%s,"binary_sha256":"%s","model_path":"%s","model":"%s","model_bytes":%s,"model_sha256":"%s","backend":"cpu"}' \
@@ -872,10 +871,10 @@ setup_user() {
     if [ -S "/run/user/$uid/bus" ]; then
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user daemon-reload >/dev/null 2>&1 || :
+        # Apply verified payload/config changes to a daemon that this user
+        # already activated. try-restart leaves an inactive service inactive.
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user try-restart voxtype.service >/dev/null 2>&1 || :
-        runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-            systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :
     fi
     return 0
 }
