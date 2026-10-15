@@ -154,13 +154,15 @@ class GuestAutomation(unittest.TestCase):
     def test_ipc_discovery_selects_only_the_exact_packaged_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for pid, profile in (("101", "/usr/share/arctic/installer-ui"),
-                                 ("102", "/usr/share/arctic/shell")):
+            fixtures = (("101", ["-p", "/usr/share/arctic/installer-ui"], "/usr/bin/quickshell"),
+                        ("102", ["-p", "/usr/share/arctic/shell"], "/usr/bin/quickshell"))
+            for pid, arguments, executable in fixtures:
                 process = root / pid
                 process.mkdir()
                 (process / "comm").write_text("quickshell\n")
-                (process / "cmdline").write_bytes(
-                    b"quickshell\0-p\0" + profile.encode() + b"\0")
+                (process / "exe").symlink_to(executable)
+                (process / "cmdline").write_bytes(b"quickshell\0" +
+                    b"\0".join(value.encode() for value in arguments) + b"\0")
             account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
             result = types.SimpleNamespace(returncode=0, stdout=b'{"page":"welcome"}\n')
             with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
@@ -172,10 +174,43 @@ class GuestAutomation(unittest.TestCase):
             duplicate = root / "103"
             duplicate.mkdir()
             (duplicate / "comm").write_text("quickshell\n")
+            (duplicate / "exe").symlink_to("/usr/bin/quickshell")
             (duplicate / "cmdline").write_bytes(
                 b"quickshell\0-p\0/usr/share/arctic/installer-ui\0")
             with self.assertRaises(c.Invalid):
                 unattended._find_ipc(account, {}, "installer", "state", root)
+
+    def test_ipc_discovery_rejects_foreign_identity_and_accepts_exact_settings_argv(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixtures = (
+                ("201", "quickshell", "/usr/bin/quickshell",
+                 ["-p", "/usr/share/arctic/installer-ui", "-p", "/tmp/foreign"]),
+                ("202", "quickshell", "/bin/false",
+                 ["-p", "/usr/share/arctic/installer-ui"]),
+                ("203", "foreign", "/usr/bin/quickshell",
+                 ["-p", "/usr/share/arctic/installer-ui"]),
+                ("204", "quickshell", "/usr/bin/quickshell",
+                 ["-n", "-d", "-p", "/usr/share/arctic/settings"]),
+            )
+            for pid, comm, executable, arguments in fixtures:
+                process = root / pid
+                process.mkdir()
+                (process / "comm").write_text(comm + "\n")
+                (process / "exe").symlink_to(executable)
+                (process / "cmdline").write_bytes(b"/usr/bin/quickshell\0" +
+                    b"\0".join(value.encode() for value in arguments) + b"\0")
+            account = types.SimpleNamespace(pw_uid=os.getuid(), pw_name="fixture")
+            result = types.SimpleNamespace(returncode=0, stdout=b"appearance\n")
+            with mock.patch.object(unattended, "_as_user", return_value=result) as invoke:
+                self.assertEqual(unattended._find_ipc(
+                    account, {}, "settings", "page", root), ("204", "appearance"))
+            self.assertEqual(invoke.call_args.args[2][3:5], ["204", "call"])
+            with self.assertRaises(c.Invalid):
+                unattended._find_ipc(account, {}, "installer", "state", root)
+            wrong_uid = types.SimpleNamespace(pw_uid=os.getuid() + 1, pw_name="foreign")
+            with self.assertRaises(c.Invalid):
+                unattended._find_ipc(wrong_uid, {}, "settings", "page", root)
 
     def _run_installer(self, pages):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")

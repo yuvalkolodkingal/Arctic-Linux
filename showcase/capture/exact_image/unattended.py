@@ -192,23 +192,24 @@ def _as_user(account, environment, argv, *, timeout=30, check=True):
 
 def _find_ipc(account, environment, target: str, method: str, proc_root=Path("/proc")):
     """Address the one packaged app process, not every Quickshell IPC server."""
-    profiles = {"installer": "/usr/share/arctic/installer-ui",
-                "settings": "/usr/share/arctic/settings"}
-    c.require(target in profiles and re.fullmatch(r"[a-z]+", method),
+    packaged_argv = {
+        "installer": ["-p", "/usr/share/arctic/installer-ui"],
+        "settings": ["-n", "-d", "-p", "/usr/share/arctic/settings"],
+    }
+    c.require(target in packaged_argv and re.fullmatch(r"[a-z]+", method),
               "IPC target or method differs")
-    profile = profiles[target]
     pids = []
     for process in proc_root.glob("[0-9]*"):
         try:
             if (not re.fullmatch(r"[1-9][0-9]{0,9}", process.name)
                     or process.stat().st_uid != account.pw_uid
-                    or (process / "comm").read_text().strip() != "quickshell"):
+                    or (process / "comm").read_text().strip() != "quickshell"
+                    or os.readlink(process / "exe") != "/usr/bin/quickshell"):
                 continue
             raw = (process / "cmdline").read_bytes()
             c.require(len(raw) <= 16_384, "Quickshell command line is oversized")
             argv = [value.decode("utf-8", "strict") for value in raw.rstrip(b"\0").split(b"\0")]
-            if sum(1 for index, value in enumerate(argv[:-1])
-                   if value == "-p" and argv[index + 1] == profile) == 1:
+            if argv and Path(argv[0]).name == "quickshell" and argv[1:] == packaged_argv[target]:
                 pids.append(process.name)
         except (FileNotFoundError, ProcessLookupError, OSError, UnicodeError):
             continue
