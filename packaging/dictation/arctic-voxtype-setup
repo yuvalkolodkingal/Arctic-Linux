@@ -293,7 +293,7 @@ legacy_binary_path() {
 legacy_profile() {
     local host_profile=$1
     python3 - "$STATE" "$PREVIOUS_DEST" "$DEST" "$host_profile" <<'PY'
-import json, os, re, stat, sys
+import hashlib, json, os, re, stat, sys
 
 state, previous_payload, current_payload, host_profile = sys.argv[1:]
 profiles = {
@@ -350,6 +350,29 @@ def root_json(path):
 
 def safe_for_host(profile):
     return profile == 'small-v2' or host_profile == 'turbo-q5-v3'
+
+def exact_file(path, mode, size, digest):
+    try:
+        info = os.lstat(path)
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or stat.S_IMODE(info.st_mode) != mode or info.st_size != size):
+            return False
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            current = os.fstat(fd)
+            if (current.st_dev, current.st_ino, current.st_size) != (info.st_dev, info.st_ino, info.st_size):
+                return False
+            sha = hashlib.sha256()
+            while True:
+                chunk = os.read(fd, 1024 * 1024)
+                if not chunk:
+                    break
+                sha.update(chunk)
+            return sha.hexdigest() == digest
+        finally:
+            os.close(fd)
+    except OSError:
+        return False
 
 receipt, receipt_exists = root_json(os.path.join(state, 'verified.json'))
 if receipt_exists:
@@ -434,13 +457,15 @@ if receipt_exists:
         user = receipt.get('user')
         if type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None:
             raise SystemExit(1)
-        try:
-            info = os.lstat(os.path.join(payload, receipt['binary']))
-        except OSError:
-            raise SystemExit(1) from None
-        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
-                or stat.S_IMODE(info.st_mode) != 0o755
-                or info.st_size != receipt['binary_bytes']):
+        if not exact_file(os.path.join(payload, receipt['binary']), 0o755,
+                          receipt['binary_bytes'], receipt['binary_sha256']):
+            raise SystemExit(1)
+        if not exact_file(receipt['model_path'], 0o644, receipt['model_bytes'],
+                          receipt['model_sha256']):
+            raise SystemExit(1)
+        if receipt['backend'] == 'vulkan' and not exact_file(
+                os.path.join(payload, receipt['vulkan_binary']), 0o755,
+                receipt['vulkan_binary_bytes'], receipt['vulkan_binary_sha256']):
             raise SystemExit(1)
     else:
         raise SystemExit(1)

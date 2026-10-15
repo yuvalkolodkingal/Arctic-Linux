@@ -20,6 +20,7 @@ clear_runtime_error() {
 }
 status() {
     state=unavailable error= language=auto backend= backend_state_valid=false integrity_ready=false
+    runtime_version=1.1.1 upgrade_pending=false
     if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ]; then
         profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
     else
@@ -30,8 +31,7 @@ status() {
     if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r /var/lib/arctic/dictation/verified.json ]; then
         receipt=/var/lib/arctic/dictation/verified.json
         binary_path= model_path= binary_bytes= receipt_backend=
-        if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
-                || ! grep -Fq '"version":"1.1.1"' "$receipt"; then
+        if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt"; then
             state=error
             if [ -r /var/lib/arctic/dictation/pending ]; then
                 state=queued
@@ -39,21 +39,45 @@ status() {
             else
                 error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
             fi
-        elif grep -Fq '"backend":"cpu"' "$receipt" \
-                && ! grep -Fq '"backend":"vulkan"' "$receipt" \
-                && ! grep -Fq '"vulkan_binary"' "$receipt"; then
-            receipt_backend=cpu
-        elif grep -Fq '"backend":"vulkan"' "$receipt" \
-                && ! grep -Fq '"backend":"cpu"' "$receipt" \
-                && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
-                && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
-                && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
-            receipt_backend=vulkan
+        elif grep -Fq '"version":"1.1.1"' "$receipt"; then
+            if grep -Fq '"backend":"cpu"' "$receipt" \
+                    && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+                    && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+                receipt_backend=cpu
+            elif grep -Fq '"backend":"vulkan"' "$receipt" \
+                    && ! grep -Fq '"backend":"cpu"' "$receipt" \
+                    && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+                    && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
+                    && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
+                receipt_backend=vulkan
+            fi
+        elif grep -Fq '"version":"1.1.0"' "$receipt" \
+                && grep -Fq '"source_commit":"e2638ca63f566f1682bcedc0abea8e4b25211c21"' "$receipt" \
+                && grep -Fq '"release_signing_fingerprint":"9CCF7915B750CAE8B095ED1AA3FC9F33FD209279"' "$receipt"; then
+            runtime_version=1.1.0
+            # This package expects 1.1.1, so an otherwise healthy 1.1.0 receipt
+            # is always an update-pending state even if a crashed transaction
+            # has not yet republished the queue file.
+            upgrade_pending=true
+            if grep -Fq '"backend":"cpu"' "$receipt" \
+                    && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+                    && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+                receipt_backend=cpu
+            elif grep -Fq '"backend":"vulkan"' "$receipt" \
+                    && ! grep -Fq '"backend":"cpu"' "$receipt" \
+                    && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+                    && grep -Fq '"vulkan_binary_bytes":66342968' "$receipt" \
+                    && grep -Fq '"vulkan_binary_sha256":"db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2"' "$receipt"; then
+                receipt_backend=vulkan
+            fi
+            # The new setup stages CPU before its receipt commit. The old
+            # receipt remains authoritative until that atomic switch.
+            backend=$receipt_backend
         else
             state=error
             error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
         fi
-        if [ -n "$receipt_backend" ] && [ "$backend_state_valid" != true ]; then
+        if [ -n "$receipt_backend" ] && [ "$runtime_version" = 1.1.1 ] && [ "$backend_state_valid" != true ]; then
             state=error
             error='The VoxType backend update was interrupted. Select CPU or Vulkan again to finish it.'
             receipt_backend=
@@ -63,11 +87,19 @@ status() {
             receipt_backend=
         elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"small-v2"' "$receipt"; then
             profile=small-v2; model=small; model_bytes=487601967; download_bytes=506440871
-            binary_path=/opt/arctic/voxtype/1.1.1/voxtype-baseline; binary_bytes=18838904
+            if [ "$runtime_version" = 1.1.0 ]; then
+                binary_path=/opt/arctic/voxtype/1.1.0/voxtype-baseline; binary_bytes=18579224
+            else
+                binary_path=/opt/arctic/voxtype/1.1.1/voxtype-baseline; binary_bytes=18838904
+            fi
             model_path=/opt/arctic/voxtype/models/ggml-small.bin
         elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
             profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
-            binary_path=/opt/arctic/voxtype/1.1.1/voxtype-avx2; binary_bytes=19415936
+            if [ "$runtime_version" = 1.1.0 ]; then
+                binary_path=/opt/arctic/voxtype/1.1.0/voxtype-avx2; binary_bytes=19153728
+            else
+                binary_path=/opt/arctic/voxtype/1.1.1/voxtype-avx2; binary_bytes=19415936
+            fi
             model_path=/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin
         elif [ -n "$receipt_backend" ]; then
             state=error
@@ -84,7 +116,9 @@ status() {
             elif [ ! -r "$user_config" ]; then
                 state=error
                 error='Dictation is not prepared for this account. Retry setup to create its private VoxType configuration.'
-            elif [ "$backend" = vulkan ] && { [ ! -x /opt/arctic/voxtype/1.1.1/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.1/voxtype-vulkan 2>/dev/null || true)" != 66575872 ]; }; then
+            elif [ "$backend" = vulkan ] && { \
+                    [ "$runtime_version" = 1.1.1 ] && { [ ! -x /opt/arctic/voxtype/1.1.1/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.1/voxtype-vulkan 2>/dev/null || true)" != 66575872 ]; } \
+                    || [ "$runtime_version" = 1.1.0 ] && { [ ! -x /opt/arctic/voxtype/1.1.0/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.0/voxtype-vulkan 2>/dev/null || true)" != 66342968 ]; }; }; then
                 state=error
                 error='The verified Vulkan VoxType app is missing or damaged. Select CPU or retry Vulkan setup.'
             else
@@ -130,7 +164,7 @@ status() {
                 esac
             fi
         fi
-        if [ -r /var/lib/arctic/dictation/setup.error ]; then
+        if [ "$upgrade_pending" != true ] && [ -r /var/lib/arctic/dictation/setup.error ]; then
             setup_error=; IFS= read -r setup_error </var/lib/arctic/dictation/setup.error || :
             case "$setup_error" in
                 backend-vulkan) state=error; error='Vulkan setup failed its local model check. CPU remains selected; check the Vulkan driver before retrying.' ;;
@@ -146,8 +180,8 @@ status() {
         esac
     fi
     ready=$integrity_ready
-    printf '{"state":"%s","ready":%s,"error":"%s","version":"1.1.1","language":"%s","backend":"%s","profile":"%s","model":"%s","model_download_bytes":%s,"download_bytes":%s,"vulkan_download_bytes":66575872}\n' \
-        "$state" "$ready" "$error" "$language" "$backend" "$profile" "$model" "$model_bytes" "$download_bytes"
+    printf '{"state":"%s","ready":%s,"error":"%s","version":"%s","upgrade_pending":%s,"language":"%s","backend":"%s","profile":"%s","model":"%s","model_download_bytes":%s,"download_bytes":%s,"vulkan_download_bytes":66575872}\n' \
+        "$state" "$ready" "$error" "$runtime_version" "$upgrade_pending" "$language" "$backend" "$profile" "$model" "$model_bytes" "$download_bytes"
 }
 case ${1:-} in
     status) [ $# = 1 ] || exit 2; status ;;

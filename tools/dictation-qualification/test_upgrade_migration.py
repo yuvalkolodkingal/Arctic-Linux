@@ -30,9 +30,9 @@ PROFILE_SHA = {
     "turbo-q5-v3": "dfc1e2252ca033888fd0262f73fd4643066c736b9d696e4b7481875e76ed4191",
 }
 ASSETS = {
-    "cpu": ("voxtype-cpu", b"baseline-fixture\n", 0o755),
-    "avx2": ("voxtype-cpu-avx2", b"avx2-fixture\n", 0o755),
-    "vulkan": ("voxtype-vulkan", b"vulkan-fixture\n", 0o755),
+    "cpu": ("voxtype-cpu", b"#!/bin/sh\nprintf 'idle\\n'\n", 0o755),
+    "avx2": ("voxtype-cpu-avx2", b"#!/bin/sh\nprintf 'idle\\n'\n", 0o755),
+    "vulkan": ("voxtype-vulkan", b"#!/bin/sh\nprintf 'idle\\n'\n", 0o755),
     "small": ("ggml-small.bin", b"small-model-fixture\n", 0o644),
     "turbo": ("ggml-large-v3-turbo-q5_0.bin", b"turbo-model-fixture\n", 0o644),
 }
@@ -44,9 +44,9 @@ PRODUCTION = {
     "turbo": (574041195, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
 }
 CURRENT_ASSETS = {
-    "cpu": ("voxtype-baseline", b"baseline-1.1.1-fixture\n", 0o755),
-    "avx2": ("voxtype-avx2", b"avx2-1.1.1-fixture\n", 0o755),
-    "vulkan": ("voxtype-vulkan", b"vulkan-1.1.1-fixture\n", 0o755),
+    "cpu": ("voxtype-baseline", b"#!/bin/sh\nprintf 'baseline\\n'\n", 0o755),
+    "avx2": ("voxtype-avx2", b"#!/bin/sh\nprintf 'avx2\\n'\n", 0o755),
+    "vulkan": ("voxtype-vulkan", b"#!/bin/sh\nprintf 'vulkan\\n'\n", 0o755),
 }
 CURRENT_PRODUCTION = {
     "cpu": (18838904, "cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af"),
@@ -322,19 +322,31 @@ class UpgradeMigrationExecution(unittest.TestCase):
         ).replace(
             "/opt/arctic/voxtype/1.1.1", str(self.current_payload)
         ).replace(
+            "/opt/arctic/voxtype/1.1.0", str(self.payload)
+        ).replace(
             "/opt/arctic/voxtype/models", str(self.models)
         ).replace(
             str(CURRENT_PRODUCTION["vulkan"][0]), str(len(CURRENT_ASSETS["vulkan"][1]))
         ).replace(
             CURRENT_PRODUCTION["vulkan"][1], digest(CURRENT_ASSETS["vulkan"][1])
         )
+        for key in ("cpu", "avx2", "vulkan"):
+            size, sha = PRODUCTION[key]
+            text = text.replace(str(size), str(len(ASSETS[key][1])))
+            text = text.replace(sha, digest(ASSETS[key][1]))
+        for key in ("small", "turbo"):
+            size, sha = PRODUCTION[key]
+            text = text.replace(str(size), str(len(ASSETS[key][1])))
+            text = text.replace(sha, digest(ASSETS[key][1]))
         path = self.root / "status"
         self._write_executable(path, text)
         return path
 
     def _fixture_launcher(self):
         text = LAUNCHER.read_text().replace(
-            "lib=/opt/arctic/voxtype/1.1.1", "lib=" + str(self.current_payload)
+            "current_lib=/opt/arctic/voxtype/1.1.1", "current_lib=" + str(self.current_payload)
+        ).replace(
+            "previous_lib=/opt/arctic/voxtype/1.1.0", "previous_lib=" + str(self.payload)
         ).replace(
             "/var/lib/arctic/dictation", str(self.state)
         ).replace(
@@ -344,6 +356,9 @@ class UpgradeMigrationExecution(unittest.TestCase):
             size, sha = CURRENT_PRODUCTION[key]
             text = text.replace(str(size), str(len(CURRENT_ASSETS[key][1])))
             text = text.replace(sha, digest(CURRENT_ASSETS[key][1]))
+            old_size, old_sha = PRODUCTION[key]
+            text = text.replace(str(old_size), str(len(ASSETS[key][1])))
+            text = text.replace(old_sha, digest(ASSETS[key][1]))
         path = self.root / "launcher"
         self._write_executable(path, text)
         return path
@@ -361,6 +376,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
     def _status(self):
         runtime = self.root / "runtime"
         runtime.mkdir(mode=0o700, exist_ok=True)
+        shutil.copy2(self._fixture_launcher(), self.bin / "voxtype")
         result = subprocess.run(
             [str(self._fixture_status()), "status"],
             env=dict(os.environ, PATH=str(self.bin) + ":/usr/bin:/bin",
@@ -439,10 +455,9 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.models.mkdir(mode=0o755)
         self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
         self._write(self.models / "ggml-large-v3-turbo-q5_0.bin", ASSETS["turbo"][1], 0o644)
-        self._write_executable(self.current_payload / "voxtype-baseline",
-                               "#!/bin/sh\nprintf '%s\\n' baseline\n")
-        self._write_executable(self.current_payload / "voxtype-avx2",
-                               "#!/bin/sh\nprintf '%s\\n' avx2\n")
+        for key in ("cpu", "avx2"):
+            name, data, mode = CURRENT_ASSETS[key]
+            self._write(self.current_payload / name, data, mode)
         self._write(self.state / "backend", b"cpu\n", 0o644)
         self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
         launcher = self._fixture_launcher()
@@ -611,9 +626,12 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._run(self._fixture_setup(), verb="--backend-cpu")
         self._assert_strict_cpu_receipt()
 
-    def test_failed_migration_offline_deferral_reports_queued(self):
+    def test_offline_update_keeps_verified_old_service_and_shortcut_ready(self):
         self.models.mkdir(mode=0o755)
         self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        config = self.root / ".config/voxtype/config.toml"
+        config.parent.mkdir(parents=True, mode=0o700)
+        self._write(config, b'[whisper]\nlanguage = ["he", "en"]\n', 0o600)
         self._json("verified.json", self._direct_receipt("small-v2"))
         self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
         migrated = self._run(self._fixture_setup(), check=False)
@@ -623,8 +641,92 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertFalse((self.state / "setup.error").exists())
         self.assertEqual((self.state / "setup.state").read_text(), "queued\n")
         status = self._status()
-        self.assertEqual((status["state"], status["ready"], status["error"]),
-                         ("queued", False, ""))
+        self.assertEqual((status["state"], status["ready"], status["error"],
+                          status["version"], status["upgrade_pending"]),
+                         ("ready", True, "", "1.1.0", True))
+        launched = subprocess.run([str(self._fixture_launcher()), "record", "toggle"],
+                                  text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  check=True, timeout=10)
+        self.assertEqual(launched.stdout, "idle\n")
+        unit = (ROOT / "packaging/systemd/voxtype.service").read_text()
+        self.assertIn("ExecStart=/usr/bin/voxtype", unit)
+
+    def test_old_vulkan_receipt_survives_staged_cpu_selector_and_host_is_safe(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-large-v3-turbo-q5_0.bin", ASSETS["turbo"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("turbo-q5-v3", "vulkan"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        self._write(self.state / "pending", b"1.1.1\n", 0o644)
+        # Simulate the crash boundary after 1.1.1 staged its CPU selector but
+        # before the current receipt was atomically published.
+        self._write(self.state / "backend", b"cpu\n", 0o644)
+        launched = subprocess.run([str(self._fixture_launcher()), "status"], text=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                  check=True, timeout=10)
+        self.assertEqual(launched.stdout, "idle\n")
+
+        self._write_executable(self.bin / "host-profile",
+                               "#!/bin/sh\nprintf '%s\\n' small-v2\n")
+        unsafe = subprocess.run([str(self._fixture_launcher()), "status"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(unsafe.returncode, 69)
+
+    def test_corrupt_old_payload_fails_closed_and_is_not_migrated(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        with (self.payload / "voxtype-baseline").open("ab") as damaged:
+            damaged.write(b"corrupt")
+        failed = self._run(self._fixture_setup(), check=False)
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertFalse((self.current_payload / "voxtype-baseline").exists())
+        refused = subprocess.run([str(self._fixture_launcher()), "status"],
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(refused.returncode, 69)
+        self.assertTrue((self.state / "pending").is_file())
+
+    def test_online_resume_switches_atomically_to_current_and_cleans_old(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        config = self.root / ".config/voxtype/config.toml"
+        config.parent.mkdir(parents=True, mode=0o700)
+        self._write(config, b'[whisper]\nlanguage = ["he", "en"]\n', 0o600)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        self._run(self._fixture_setup(), verb="--install-offline")
+        old = subprocess.run([str(self._fixture_launcher()), "status"], text=True,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             check=True, timeout=10)
+        self.assertEqual(old.stdout, "idle\n")
+
+        self._run(self._fixture_setup(), verb="--resume")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual((receipt["version"], receipt["backend"]), ("1.1.1", "cpu"))
+        current = subprocess.run([str(self._fixture_launcher()), "status"], text=True,
+                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                 check=True, timeout=10)
+        self.assertEqual(current.stdout, "baseline\n")
+        self.assertFalse((self.state / "pending").exists())
+        self.assertFalse((self.payload / "voxtype-baseline").exists())
+        status = self._status()
+        self.assertEqual((status["version"], status["upgrade_pending"]), ("1.1.1", False))
+
+    def test_pending_old_runtime_does_not_project_unrecognized_journal_text(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        config = self.root / ".config/voxtype/config.toml"
+        config.parent.mkdir(parents=True, mode=0o700)
+        self._write(config, b'[whisper]\nlanguage = ["he", "en"]\n', 0o600)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        self._write(self.state / "pending", b"1.1.1\n", 0o644)
+        secret = "PRIVATE-TRANSCRIPT-SHOULD-NOT-LEAK"
+        self._write_executable(self.bin / "journalctl",
+                               "#!/bin/sh\nprintf '%s\\n' '" + secret + "'\n")
+        status = self._status()
+        self.assertNotIn(secret, json.dumps(status))
+        self.assertEqual((status["ready"], status["upgrade_pending"]), (True, True))
 
     def test_precommit_config_validation_uses_exact_verified_binary_fresh_and_upgrade(self):
         self.models.mkdir(mode=0o755)
