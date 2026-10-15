@@ -35,17 +35,17 @@ SETUP = Path('/usr/libexec/arctic/arctic-voxtype-setup')
 HOST_PROFILE = Path('/usr/libexec/arctic/arctic-voxtype-host-profile')
 CONFIGURE = Path('/usr/libexec/arctic/arctic-voxtype-configure')
 KEY = Path('/usr/share/arctic/dictation/voxtype-release-key.asc')
-PROVENANCE_SUMS = Path('/usr/share/arctic/dictation/provenance/1.1.0/SHA256SUMS.txt')
-PROVENANCE_SUMS_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/SHA256SUMS.txt.asc')
-PROVENANCE_BASELINE_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc')
-PROVENANCE_AVX2_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc')
+PROVENANCE_SUMS = Path('/usr/share/arctic/dictation/provenance/1.1.1/SHA256SUMS.txt')
+PROVENANCE_SUMS_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.1/SHA256SUMS.txt.asc')
+PROVENANCE_BASELINE_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.1/voxtype-1.1.1-linux-x86_64-baseline.asc')
+PROVENANCE_AVX2_SIG = Path('/usr/share/arctic/dictation/provenance/1.1.1/voxtype-1.1.1-linux-x86_64-avx2.asc')
 POLICY = Path('/usr/share/polkit-1/actions/org.arcticlinux.dictation.policy')
 UNIT = Path('/usr/lib/systemd/user/voxtype.service')
 SETUP_SERVICE = Path('/usr/lib/systemd/system/arctic-dictation-setup.service')
 SETUP_TIMER = Path('/usr/lib/systemd/system/arctic-dictation-setup.timer')
 SKEL_BINDINGS = Path('/etc/skel/.config/mango/arctic/binds.conf')
 PACKAGED_BINDINGS = Path('/usr/share/arctic/mango/binds.conf')
-PAYLOAD = Path('/opt/arctic/voxtype/1.1.0')
+PAYLOAD = Path('/opt/arctic/voxtype/1.1.1')
 MODELS = Path('/opt/arctic/voxtype/models')
 SYSTEM = Path('/var/lib/arctic/dictation')
 COLLECTOR_SETUP_STAGES = ('resource-limits', 'arguments', 'environment', 'context',
@@ -432,10 +432,10 @@ def installed_integration_sha():
         ('packaging/dictation/arctic-voxtype-host-profile', HOST_PROFILE),
         ('packaging/dictation/arctic-voxtype-configure', CONFIGURE),
         ('packaging/dictation/voxtype-release-key.asc', KEY),
-        ('packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt', PROVENANCE_SUMS),
-        ('packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc', PROVENANCE_SUMS_SIG),
-        ('packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc', PROVENANCE_BASELINE_SIG),
-        ('packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc', PROVENANCE_AVX2_SIG),
+        ('packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt', PROVENANCE_SUMS),
+        ('packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt.asc', PROVENANCE_SUMS_SIG),
+        ('packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-baseline.asc', PROVENANCE_BASELINE_SIG),
+        ('packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-avx2.asc', PROVENANCE_AVX2_SIG),
         ('packaging/dictation/org.arcticlinux.dictation.policy', POLICY),
         ('packaging/systemd/voxtype.service', UNIT),
         ('packaging/systemd/arctic-dictation-setup.service', SETUP_SERVICE),
@@ -566,7 +566,7 @@ class Checker:
                     and type(value.get('ready')) is bool
                     and type(value.get('error')) is str
                     and len(value.get('error')) <= 512
-                    and value.get('version') == '1.1.0'
+                    and value.get('version') == '1.1.1'
                     and value.get('language') in ('auto', 'he', 'en')
                     and value.get('backend') in ('cpu', 'vulkan')
                     and value.get('profile') in PROFILES

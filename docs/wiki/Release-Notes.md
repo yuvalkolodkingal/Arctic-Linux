@@ -1,14 +1,18 @@
 # Release notes
 
-## Current main packages and replacement ISO
+## Arctic Linux 1.2.1 — prepared release
 
-The completed desktop, installer and setup changes described here are on `main`. Their final
-signed **stable arctic** publication is pending release qualification. Keep the stable channel
-selected; after publication, existing systems can use `arctic-update now`, then
-`arctic-update apply` (save your work; this asks before restarting). **The testing channel is
-not required.** Existing app and wallpaper choices are preserved.
+The completed desktop, installer and setup changes described here are on `main`. The v1.2.1
+release notes are prepared, while the replacement ISO and its final measurements still require
+aggregate qualification. Until the public release exists, [v1.2.0](#arctic-linux-120) remains
+the latest downloadable image.
 
-The pending stable package set includes:
+Keep the signed **stable arctic** channel selected. The packages are published there now;
+existing systems can use `arctic-update now`, then `arctic-update apply` (save your work; this
+asks before restarting). **The testing channel is not required.** Existing app and wallpaper
+choices are preserved.
+
+The stable package set includes:
 
 - New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
   Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
@@ -20,14 +24,24 @@ The pending stable package set includes:
   explicitly selected Tor/Tailscale/VPN support.
 - Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
   status, the lock-screen clock, and installer restoration after a console/output change.
-- Local Voxtype 1.1.0 dictation for Hebrew and English: verified online-install downloads,
+- Local VoxType 1.1.1 dictation for Hebrew and English: verified online-install downloads,
   nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
   selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
 - A **What's New** card keyed by a unique packaged update ID, shown once per account after every
-  Arctic update; it can be reopened manually from the shell IPC command.
+  Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
+  reopens the current notes.
 
-The **replacement ISO remains unqualified and unpublished**. Its final download links,
-byte size, checksum, performance results and release notes are pending actual image tests.
+The **replacement ISO remains unqualified and unpublished**. The prepared repository note is
+[`docs/releases/v1.2.1.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
+Its final record intentionally leaves these values pending:
+
+| Release field | Status |
+|---|---|
+| ISO byte size and SHA-256 | **Pending final qualified image** |
+| Build and qualification run links | **Pending aggregate qualification** |
+| Startup, installed size, RAM and app-launch measurements | **Pending final measurement** |
+| Torrent checksum and verified release web seed | **Pending publication verification** |
+
 Source checks or a successful artifact build alone do not establish release readiness.
 
 ## Arctic Linux 1.2.0

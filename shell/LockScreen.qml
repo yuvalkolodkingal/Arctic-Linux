@@ -44,7 +44,7 @@ Scope {
     }
     Process {
         id: dictationGuard
-        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 1s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; fi']
+        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 3s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; fi']
         // Optional dictation must never prevent the screen from locking.
         onExited: root.acquireLock()
     }

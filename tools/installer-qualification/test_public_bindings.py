@@ -315,7 +315,7 @@ class Controls(unittest.TestCase):
                     return copy.deepcopy(self.state['host']['password_prompt_evidence'][key])
                 def identity(vm, startup, out, nonce, password):
                     value = copy.deepcopy(self.state['host']['password_prompt_evidence']['login_shell'])
-                    value.update(nonce=nonce, observed_line_sha256=A.digest(A.installed_identity_record(nonce).encode()))
+                    value.update(nonce=nonce, observed_line_sha256=A.digest(A.installed_identity_records(nonce).encode()))
                     return value
                 with patch.object(D, 'console_prompt', side_effect=prompt), patch.object(D, 'console_user_identity', side_effect=identity), patch.object(D, 'ocr_provenance', return_value=self.state['build']['ocr_host']), \
                         patch.object(D, 'load', return_value=G), patch.object(D.time, 'sleep'):

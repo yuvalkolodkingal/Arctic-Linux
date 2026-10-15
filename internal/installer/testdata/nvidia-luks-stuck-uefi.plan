@@ -155,7 +155,7 @@ write /mnt/etc/arctic/default-apps (0644)
     | # Written by the Arctic Linux installer: the apps you picked, as role=command.
     | # arctic-open reads this; override any line in ~/.config/arctic/default-apps.
     | terminal=foot
-    | browser=epiphany
+    | browser=gtk-launch org.gnome.Epiphany
     | editor=featherpad
     | files=pcmanfm
 write /mnt/etc/xdg/mimeapps.list (0644)
@@ -209,7 +209,7 @@ write /mnt/etc/xdg/mimeapps.list (0644)
     | application/x-zstd-compressed-tar=xarchiver.desktop
     | application/x-cpio=xarchiver.desktop
 write /mnt/var/lib/arctic/dictation/pending (0644)
-    | 1.1.0
+    | 1.1.1
 write /mnt/var/lib/arctic/dictation/setup.state (0644)
     | queued
 write /mnt/var/lib/arctic/dictation/user (0600)

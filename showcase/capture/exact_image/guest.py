@@ -31,7 +31,7 @@ def dictation(facts):
     descriptor = c.DICTATION_PROFILES.get(profile)
     c.require(facts["phase"] == "online-installed" and status.get("ok") is True
               and status.get("ready") is True and status.get("state") == "ready"
-              and status.get("version") == "1.1.0" and descriptor is not None
+              and status.get("version") == "1.1.1" and descriptor is not None
               and {key: status.get(key) for key in descriptor} == descriptor
               and all(type(status.get(key)) is type(expected) for key, expected in descriptor.items())
               and status.get("compatibility_required") is False
@@ -42,7 +42,7 @@ def dictation(facts):
               and type(facts["transcript_files"]) is int and facts["transcript_files"] == 0,
               "dictation diagnostic check failed")
     return {"phase": facts["phase"], "status_ok": True, "ready": True, "state": "ready",
-            "version": "1.1.0", "profile": profile,
+            "version": "1.1.1", "profile": profile,
             "model": descriptor["model"], "cpu_variant": descriptor["cpu_variant"],
             "model_download_bytes": descriptor["model_download_bytes"],
             "download_bytes": descriptor["download_bytes"], "compatibility_required": False,

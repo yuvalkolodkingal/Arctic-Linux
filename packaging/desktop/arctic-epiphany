@@ -1,0 +1,11 @@
+#!/bin/sh
+# Keep an explicit administrator or user renderer choice. Arctic defaults only
+# Epiphany's GTK chrome; WebKit retains its separately accelerated web process.
+if [ "${GSK_RENDERER+x}" != x ]; then
+    GSK_RENDERER=gl
+    export GSK_RENDERER
+fi
+# Preserve Epiphany's normal, new-window and incognito command lines. Its own
+# application uniqueness forwards a request to an existing instance; never
+# probe, terminate or replace a browser that is already running.
+exec /usr/bin/epiphany "$@"

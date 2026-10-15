@@ -6,8 +6,14 @@ import tempfile
 import unittest
 
 LOCK = Path(__file__).resolve().parents[2] / 'dotfiles/.local/bin/arctic-lock'
+QML = Path(__file__).resolve().parents[1] / 'LockScreen.qml'
 
 class DictationLockTests(unittest.TestCase):
+    def test_cancel_outer_guards_exceed_upstream_acknowledgement_timeout(self):
+        for source in (LOCK.read_text(), QML.read_text()):
+            self.assertIn('timeout 3s voxtype record cancel', source)
+            self.assertNotIn('timeout 1s voxtype record cancel', source)
+
     def test_cancel_and_stop_precede_shell_or_fallback_lock(self):
         for shell_works in (True, False):
             with self.subTest(shell_works=shell_works), tempfile.TemporaryDirectory() as folder:

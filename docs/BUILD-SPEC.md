@@ -166,7 +166,7 @@ every theme folder: `templates/<path>.tmpl` → `<theme>/<path>`.
 | What | Mechanism | Files |
 |---|---|---|
 | GTK 3 apps (Thunar, Zen's menus, Inkscape, …) | Theme `adw-gtk3` / `adw-gtk3-dark` (package `adw-gtk3-theme`), which uses libadwaita's named colours, so the theme's `gtk.css` recolours it | `~/.config/gtk-3.0/gtk.css` imports `arctic-colors.css` (dotfiles: link to `../arctic/current/gtk.css`; the 10-gtk hook replaces it with a copy); `settings.ini` (`gtk-theme-name=adw-gtk3`, dark variant via `gtk-application-prefer-dark-theme`) |
-| GTK 4 / libadwaita apps (Nautilus, Celluloid, GNOME apps) | `color-scheme` through the settings portal; colours from `~/.config/gtk-4.0/gtk.css` | `~/.config/gtk-4.0/{gtk.css,arctic-colors.css,settings.ini}` (no `gtk-application-prefer-dark-theme`: libadwaita rejects it) |
+| GTK 4 / libadwaita apps (Nautilus, Celluloid, GNOME apps) | `color-scheme` through the settings portal; colours from `~/.config/gtk-4.0/gtk.css`. Arctic's Celluloid and Epiphany launchers default their GTK renderer to stable GL while preserving an explicit administrator/user `GSK_RENDERER`; Epiphany's WebKit process retains its separate acceleration | `~/.config/gtk-4.0/{gtk.css,arctic-colors.css,settings.ini}` (no `gtk-application-prefer-dark-theme`: libadwaita rejects it); `/usr/libexec/arctic/arctic-{celluloid,epiphany}` and same-ID desktop overrides in `/usr/share/arctic/applications/` |
 | gsettings defaults | dconf **distro** database (Fedora's `/etc/dconf/profile/user` reads user → local → site → distro; `local.d` stays the administrator's) | `packaging/dconf/10-arctic` → `/etc/dconf/db/distro.d/10-arctic`, `dconf update` in `%posttrans`: `org.gnome.desktop.interface` gtk-theme `adw-gtk3-dark`, color-scheme `prefer-dark`, accent-color `yellow`, icon-theme `Adwaita`, cursor-theme `Adwaita`, cursor-size 24, font-name `Figtree 11`, document-font-name `Figtree 11`, monospace-font-name `JetBrains Mono 10` |
 | Portals | Mango's `/usr/share/xdg-desktop-portal/mango-portals.conf` (`default=gtk`): xdg-desktop-portal-gtk implements `org.freedesktop.impl.portal.Settings` (color-scheme, contrast, and the `org.gnome.desktop.interface` keys). It has no `accent-color`: libadwaita's accent comes from `gtk.css` | — |
 | Qt 5 and Qt 6 apps (VLC, OBS, …) | `QT_QPA_PLATFORMTHEME=qt6ct` (qt5ct and qt6ct both register the keys `qt5ct` and `qt6ct`): Fusion, the theme's palette, Figtree 11 / JetBrains Mono 10, Adwaita icons, portal file dialogs. qt5ct/qt6ct watch their config folder and re-read the palette ~3 s after it changes (20-qt hook). Kvantum is not used: Fedora's build pulls the same KDE Frameworks, and its themes are SVGs, not a palette | `templates/qt6ct/colors/arctic.conf.tmpl` (22 roles), `templates/qt5ct/colors/arctic.conf.tmpl` (21); `~/.config/qt6ct/qt6ct.conf`, `~/.config/qt5ct/qt5ct.conf` (`color_scheme_path=~/.config/arctic/current/qt*ct/colors/arctic.conf`, `custom_palette=true`); `env=QT_QPA_PLATFORMTHEME,qt6ct` in `~/.config/mango/arctic/look.conf` (apps started from the desktop) and `~/.config/environment.d/10-arctic.conf` plus the package's `/usr/lib/environment.d/50-arctic-qt.conf` (D-Bus/systemd activated apps; read after, so it also replaces the `xdgdesktopportal` of copies made by 0.1). The Arctic shell and the installer keep `qt6ct` too: the launcher's apps inherit the shell's environment, and the shell's controls take colours and fonts from `Theme.qml` |
@@ -368,23 +368,28 @@ Installer finalization writes a target queue, enables the background timer and
 makes a bounded, nonfatal online setup attempt. Offline installations retain an
 explicit unready first-boot queue. The timer first runs about 90–120 seconds
 after boot and retries about every 15 minutes. Setup verifies the signed official
-VoxType 1.1.0 release, exact bytes and SHA-256, then installs one CPU binary and
-one multilingual model atomically: baseline/Small is 506,181,191 bytes; the
-conservatively selected AVX2/Turbo Q5 path is 593,194,923 bytes. Optional Vulkan
-is an explicit later 66,342,968-byte download and must pass real local model
-initialization before selection.
+VoxType 1.1.1 release, exact bytes and SHA-256, then installs one CPU binary and
+one multilingual model atomically: baseline/Small is 506,440,871 bytes; the
+conservatively selected AVX2/Turbo Q5 path is 593,457,131 bytes. Optional Vulkan
+is an explicit later 66,575,872-byte download and must pass real local model
+initialization with a positive observed Vulkan outcome before selection. Exit
+zero, intent-only, fallback, contradictory, unknown, oversized and timed-out
+proofs retain CPU. The silence transcript is discarded and the bounded private
+stderr proof is never persisted.
 
-Upgrades from the retired Arctic controller first attempt an offline migration
-from its exact pinned payload. The RPM ships the signed upstream 1.1.0 manifest
-and detached CPU signatures for that purpose. It verifies the reused binary and
-model, writes the new user configuration, then publishes the direct receipt and
-marker before deleting legacy payload names. If any check fails, every legacy
-payload byte is retained and the ordinary online retry queue is enabled. The
+Upgrades from VoxType 1.1.0 preserve the verified model, hardware profile and
+strictly validated receipt user,
+then queue the new signed executable without blocking the RPM transaction. The
+RPM ships the upstream 1.1.1 manifest and detached CPU signatures for
+verification and crash recovery. It verifies the new binary and retained model,
+writes the user configuration, then publishes the direct receipt and marker
+before deleting exact previous payloads. If any check fails, the previous
+payload remains and the ordinary online retry queue stays enabled. The
 root-owned verified receipt is authoritative over a conflicting pending profile
 choice. File and parent-directory fsyncs make the queue-to-marker transition
 crash durable; the marker is committed before cleanup and the queue is removed
 afterward. A malformed but structurally trusted legacy receipt fails the first
-offline attempt closed, then the normal online resume quarantines it and uses
+transaction attempt closed, then the normal online resume quarantines it and uses
 fresh signed metadata for repair. Current-session user-service activation is
 best effort after the commit point and cannot rewrite a completed migration as
 a pre-commit setup failure.
@@ -599,6 +604,9 @@ after a size miss. The default is `--zen no`; GNOME Web is always included.
 The native browser shares required WebKitGTK 6.0 with Arctic web apps. Its web-process
 sandbox is mandatory; it does not have the Flatpak outer UI sandbox or full Firefox
 extension/Zen workspace compatibility, and paid DRM streaming has not been qualified.
+The same-ID Epiphany desktop override covers normal, new-window, incognito, MIME and Gio
+launches and disables desktop-file D-Bus activation so its product launcher cannot be bypassed.
+Epiphany itself retains its normal existing-instance routing.
 The release path can split larger images; workflow artifacts retain the complete ISO.
 Enforcing VM acceptance launches the configured browser as the desktop user in the live
 session and both installed boots, requiring a mapped window to persist five seconds and

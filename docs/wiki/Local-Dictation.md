@@ -1,7 +1,7 @@
 # Local dictation
 
 Arctic integrates the official [VoxType](https://github.com/peteonrails/voxtype)
-**1.1.0** daemon with a local multilingual Whisper model. It supports Hebrew and
+**1.1.1** daemon with a local multilingual Whisper model. It supports Hebrew and
 English. Audio is processed on your computer.
 
 ## Installation and readiness
@@ -19,21 +19,20 @@ VoxType executable and model weights stay out of the ISO.
 
 | Selected CPU path | Fixed app + model download |
 |---|---:|
-| Baseline + Whisper Small | 506,181,191 bytes (506.2 MB) |
-| AVX2 + Whisper Large v3 Turbo Q5 | 593,194,923 bytes (593.2 MB) |
+| Baseline + Whisper Small | 506,440,871 bytes (506.4 MB) |
+| AVX2 + Whisper Large v3 Turbo Q5 | 593,457,131 bytes (593.5 MB) |
 
 The modern path is used only after a conservative CPU capability check. Missing
 system packages add to these totals. Optional Vulkan acceleration is a separate
-**66,342,968-byte (66.3 MB)** download. Setup verifies upstream signatures,
+**66,575,872-byte (66.6 MB)** download. Setup verifies upstream signatures,
 exact sizes and SHA-256 hashes before publishing any file as ready.
 
-When an existing Arctic system updates from the retired controller, exact
-already-installed VoxType and model bytes are migrated locally. Signed release
-provenance included in the RPM lets that transition finish while offline; the
-old payload is removed only after the direct setup receipt and marker are
-durable. The last verified profile remains selected if a later profile change
-was interrupted. A mismatch keeps the old bytes and queues the normal repair
-path, and a restart during migration resumes from the durable queue.
+When an existing Arctic system updates from VoxType 1.1.0, its verified model,
+selected profile and receipt-bound user are retained. The new 1.1.1 executable downloads through
+the same retryable queue; the previous payload remains intact until the new
+binary, model and configuration verify and the direct receipt and marker are
+durable. A restart during the update resumes from that queue. Vulkan is
+re-enabled only after the 1.1.1 Vulkan binary passes its local model check.
 If the old receipt is damaged, the offline attempt preserves it and the payload;
 the next online retry quarantines that receipt and performs a signed repair.
 
@@ -64,6 +63,18 @@ supported hardware; setup first runs a real local model check. If Vulkan later
 fails during inference, VoxType does not guarantee an automatic CPU retry. The
 failed phrase is not retranscribed: open **Settings → Dictation**, select
 **CPU**, and record again.
+
+The official Vulkan binary can load its model on CPU when no render node is
+available after its startup wait; upstream has no option to require GPU use.
+Arctic reports that fallback as an error instead of accepting it as Vulkan
+acceleration. Select CPU explicitly, or repair the driver and enable Vulkan
+again.
+
+The setup check requires VoxType's observed post-initialization Vulkan marker.
+An exit code of zero or a message saying GPU use was requested is insufficient;
+fallback, contradictory and unknown results keep CPU selected. The generated
+silence transcript is discarded. Setup parses a bounded private stderr stream
+only for the official acceleration outcome and does not save or display it.
 
 | Problem | What to do |
 |---|---|
@@ -130,7 +141,19 @@ but it exercised the retired Arctic runtime controller. Its service, installer,
 cancellation, GPU recovery and privacy results cannot qualify the new direct
 integration.
 
-The new image remains unqualified until exact-image tests pass for online and
-offline setup, Hebrew and English, CPU recovery after a controlled Vulkan
-failure, missing models, microphone failure, cancellation, insertion, locking
-and transcript leakage.
+For v1.2.1, the final exact-image record remains deliberately blank until the
+retained image passes online and offline setup, Hebrew and English, CPU recovery
+after a controlled Vulkan failure, missing models, microphone failure,
+cancellation, insertion, locking and transcript-leakage checks:
+
+| Exact-image field | Result |
+|---|---|
+| Small profile run and artifact | **Pending final qualification** |
+| Turbo Q5 profile run and artifact | **Pending final qualification** |
+| Online setup and offline first-boot recovery | **Pending final qualification** |
+| English/Hebrew WER, CER and elapsed time | **Pending final measurement** |
+| Log, notification and status privacy audit | **Pending final qualification** |
+
+The published release notes will replace those fields with measured results and
+limitations. The historical table above remains background evidence and is not
+the acceptance result for the direct integration.

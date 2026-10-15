@@ -210,7 +210,7 @@ func TestGoldenDefaultUEFILUKS(t *testing.T) {
 		"$ cryptsetup luksFormat --batch-mode --type luks2 --pbkdf argon2id --label arctic-root --key-file - /dev/nvme0n1p4 < [secret: disk passphrase]",
 		"$ efibootmgr --create --disk /dev/nvme0n1 --part 2 --label 'Arctic Linux' --loader '\\EFI\\fedora\\shimx64.efi'",
 		"FLATPAK_SYSTEM_DIR=/mnt/var/lib/flatpak",
-		"browser=epiphany",
+		"browser=gtk-launch org.gnome.Epiphany",
 		"editor=featherpad",
 		"terminal=foot",
 		"files=pcmanfm",
@@ -306,7 +306,7 @@ func TestFreshDefaultsCompleteOffline(t *testing.T) {
 				}
 			}
 			for _, want := range []string{
-				"browser=epiphany", "editor=featherpad", "terminal=foot", "files=pcmanfm",
+				"browser=gtk-launch org.gnome.Epiphany", "editor=featherpad", "terminal=foot", "files=pcmanfm",
 				"x-scheme-handler/https=org.gnome.Epiphany.desktop", "inode/directory=pcmanfm.desktop",
 				"application/zip=xarchiver.desktop", "application/x-7z-compressed=xarchiver.desktop",
 				"video/mp4=io.github.celluloid_player.Celluloid.desktop",

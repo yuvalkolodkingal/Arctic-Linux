@@ -99,7 +99,7 @@ update with dnf; the older `arctic-theme` → only Winter and Polar night; no `w
 rotation and position only (plus wdisplays if installed); no NetworkManager, BlueZ or PipeWire →
 a note.
 
-Dictation runs the official VoxType 1.1.0 daemon. `arctic-dictation` is a
+Dictation runs the official VoxType 1.1.1 daemon. `arctic-dictation` is a
 setup/readiness adapter only; recording, transcription and insertion remain
 upstream VoxType operations. Settings shows setup, download, recording,
 transcription and fixed error states; language and CPU/Vulkan selection can
@@ -108,8 +108,8 @@ change while idle.
 The online installer downloads one signed VoxType binary and one multilingual
 Whisper model after the OS copy. Offline installation queues retryable setup.
 Recording stays unavailable until the binary and model are verified. Setup
-discloses 506,181,191 bytes for baseline/Small or 593,194,923 bytes for
-AVX2/Turbo Q5; optional Vulkan adds 66,342,968 bytes. The live ISO contains the
+discloses 506,440,871 bytes for baseline/Small or 593,457,131 bytes for
+AVX2/Turbo Q5; optional Vulkan adds 66,575,872 bytes. The live ISO contains the
 adapter and frontend, not the executable payload or model.
 
 Focus a text field and press **Super + Ctrl + X** to start; press it again to

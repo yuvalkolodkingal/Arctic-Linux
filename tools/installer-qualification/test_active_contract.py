@@ -19,6 +19,7 @@ def load(name, path):
 
 
 A = load('active_contract_controls', HERE / 'active-contract.py')
+D = load('active_contract_producer_controls', HERE / 'driver.py')
 F = load('active_contract_idle_fixture', HERE / 'test_contract.py')
 T = load('active_contract_protected_transport_fixture', HERE / 'test_evidence.py')
 
@@ -169,7 +170,7 @@ def fixture():
     prompts = dict(schema='arctic-active-password-prompts-v1', engine=ocr_engine,
         login_shell=dict(prompt_kind='installed-user-sha256-decimal-identity', nonce=installed_report['authentication']['nonce'],
             username='arcticqual', uid=1000,
-            observed_line_sha256=A.digest(A.installed_identity_record(installed_report['authentication']['nonce']).encode()), observed_ns=2),
+            observed_line_sha256=A.digest(A.installed_identity_records(installed_report['authentication']['nonce']).encode()), observed_ns=2),
         private_input_policy='Only after exact last console line; no secret-bearing screenshots or command text')
     for number, (key, text) in enumerate((('getty', 'Password:'), ('sudo', '[sudo] password for arcticqual:'))):
         image = Image.new('RGB', (1280, 720), 'black'); ImageDraw.Draw(image).text((20, 20), text, fill='white')
@@ -251,19 +252,17 @@ class Controls(unittest.TestCase):
         self.assertFalse(result['release_acceptance'])
         self.assertEqual(len(result['images']), 7)
 
-    def test_active_run_identity_receipt_matches_current_three_record_challenge(self):
-        # Run 38670006479 reached a real installed shell and emitted this fresh
-        # nonce/hash pair.  Keep the independent contract bound to the exact
-        # three marked rows the driver hashed, rather than the retired single
-        # unmarked record representation.
-        nonce = '5aa37715cf634f978f56629efa1fd185'
-        record = A.installed_identity_record(nonce)
-        self.assertEqual(record.splitlines(), [
-            '20983566310134451885',
-            '40983566310134451885',
-            '60983566310134451885'])
-        self.assertEqual(A.digest(record.encode('ascii')),
-                         '960c72f08bf7f9a1d418c47a28a120679cd508a3227238c8eb8e464c77d322ef')
+    def test_installed_identity_receipt_exactly_matches_the_real_producer(self):
+        nonce = 'd' * 32
+        produced = '\n'.join(D.installed_user_records(nonce))
+        self.assertEqual(A.installed_identity_records(nonce), produced)
+        self.assertEqual(A.digest(produced.encode('ascii')),
+                         '7799d3f7e961c0396784b702c2ae897ae7de80a5d566c2dd38889a4d1ec5ea65')
+        report, state, files, media, serial = fixture()
+        old = '731904' + D.installed_user_token(nonce)
+        state['host']['password_prompt_evidence']['login_shell']['observed_line_sha256'] = A.digest(old.encode('ascii'))
+        with self.assertRaises(RuntimeError):
+            A.validate_execution(state, state['image'], state['context']['execution_sha'], serial, media.__getitem__)
 
     def test_all_active_export_wrappers_reject_unknown_private_keys(self):
         report, original, files, media, serial = fixture()

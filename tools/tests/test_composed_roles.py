@@ -30,11 +30,18 @@ class ComposedRoleControls(unittest.TestCase):
                     inventory['nevra'].append(app['desktop_rpm'] + '-0:1-1.x86_64')
                     owners['/usr/share/applications/' + app['desktop']] = app['desktop_rpm'] + '-0:1-1.x86_64'
                 if 'product_launcher' in app:
-                    inventory['nevra'].append(app['product_launcher_rpm'] + '-0:1-1.x86_64')
-                    owners[app['product_launcher']] = app['product_launcher_rpm'] + '-0:1-1.x86_64'
-                    product_desktop = '/usr/share/arctic/applications/' + app['desktop']
-                    owners[product_desktop] = app['product_launcher_rpm'] + '-0:1-1.x86_64'
-                    state['desktop_entries'][app['desktop']] = {'path': product_desktop}
+                    product = app['product_launcher_rpm'] + '-0:1-1.x86_64'
+                    desktop = '/usr/share/arctic/applications/' + app['desktop']
+                    inventory['nevra'].append(product)
+                    owners[app['product_launcher']] = product
+                    owners[desktop] = product
+                    state['desktop_entries'][app['desktop']] = dict(
+                        path=desktop, sha256='b' * 64, values={
+                            'Desktop Entry.Exec': app['product_launcher'] + ' %U',
+                            'Desktop Entry.TryExec': '/usr/bin/epiphany',
+                            'Desktop Entry.DBusActivatable': 'false',
+                            'Desktop Action new-window.Exec': app['product_launcher'] + ' --new-window %U',
+                            'Desktop Action Incognito.Exec': app['product_launcher'] + ' --incognito-mode %U'})
         browser = G.ROLE_APPS[expected['browser']]['desktop']
         if mutate:
             mutate(state, inventory)
@@ -50,9 +57,9 @@ class ComposedRoleControls(unittest.TestCase):
                 return 'a' * 64
             raise AssertionError(argv)
 
-        with patch.object(G, 'run', side_effect=run), patch.object(G.os, 'access', return_value=True), \
-                patch.object(G.Path, 'is_file', return_value=True), \
-                patch.object(G.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=1000)):
+        with patch.object(G, 'run', side_effect=run), \
+             patch.object(G.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=1000)), \
+             patch.object(G.Path, 'is_file', return_value=True), patch.object(G.os, 'access', return_value=True):
             return G.functional_roles(['runuser', '-u', 'ci', '--', 'env'], inventory)
 
     def test_actual_lightweight_and_legacy_role_identities(self):
@@ -65,6 +72,10 @@ class ComposedRoleControls(unittest.TestCase):
                     package = result['roles']['browser']['package']
                     self.assertEqual(package['binary_owner'], 'epiphany-runtime-0:1-1.x86_64')
                     self.assertEqual(package['desktop_owner'], 'epiphany-0:1-1.x86_64')
+                    self.assertEqual(package['product_launcher_owner'],
+                                     'arctic-desktop-config-0:1-1.x86_64')
+                    self.assertEqual(result['roles']['browser']['effective_desktop']['path'],
+                                     '/usr/share/arctic/applications/org.gnome.Epiphany.desktop')
 
     def test_wrong_uid_mixed_configuration_missing_binary_and_owner_refused(self):
         mutations = [lambda s, i: s.update(uid=0),

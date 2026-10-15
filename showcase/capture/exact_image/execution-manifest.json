@@ -23,19 +23,7 @@
     "release_acceptance": false,
     "schema": "arctic-showcase-unattended-controller-v1"
   },
-  "execution_files": {
-    ".github/workflows/showcase-exact-capture-20261014.yml": "cc02509dec2bee874b559e8161dadd69b72669959750e8ffa64027488136b155",
-    "showcase/capture/exact_image/automation.py": "85cdbe5b021d7f97aad843c4c1c6ec09faf3455e0536c5c813502eef55ca71a9",
-    "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
-    "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
-    "showcase/capture/exact_image/capture_vm.py": "6c606e5406f5ecadbff2da7d2f4728c26dc2cd0cd6864da3930d4ea6ae1041d8",
-    "showcase/capture/exact_image/contract.py": "f997aaa41ab20c62c9ac2bed61ba68cd763a76da1a95f62e23cdeb513fb3d5bb",
-    "showcase/capture/exact_image/guest.py": "07f8f3000de782724db05b575b2e47a934a36114915523ad637486e53adb024f",
-    "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
-    "showcase/capture/exact_image/unattended.py": "a9fabcf03baae2222ae118dcf359e5d0b06979c074156db0c8fd58a2c718ec4e",
-    "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
-  },
+  "execution_files": {},
   "image": null,
   "ready": false,
   "release_acceptance": false,

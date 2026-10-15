@@ -19,29 +19,57 @@ clear_runtime_error() {
     rm -f "$runtime/voxtype-error"
 }
 status() {
-    state=unavailable error= language=auto backend=cpu integrity_ready=false
+    state=unavailable error= language=auto backend= backend_state_valid=false integrity_ready=false
     if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ]; then
-        profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593194923
+        profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
     else
-        profile=small-v2; model=small; model_bytes=487601967; download_bytes=506181191
+        profile=small-v2; model=small; model_bytes=487601967; download_bytes=506440871
     fi
     [ -r /var/lib/arctic/dictation/backend ] && IFS= read -r backend </var/lib/arctic/dictation/backend || :
-    case "$backend" in cpu|vulkan) ;; *) backend=cpu ;; esac
+    case "$backend" in cpu|vulkan) backend_state_valid=true ;; *) backend=cpu ;; esac
     if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r /var/lib/arctic/dictation/verified.json ]; then
         receipt=/var/lib/arctic/dictation/verified.json
-        binary_path= model_path= binary_bytes=
-        if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt"; then
+        binary_path= model_path= binary_bytes= receipt_backend=
+        if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
+                || ! grep -Fq '"version":"1.1.1"' "$receipt"; then
+            state=error
+            if [ -r /var/lib/arctic/dictation/pending ]; then
+                state=queued
+                error=''
+            else
+                error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
+            fi
+        elif grep -Fq '"backend":"cpu"' "$receipt" \
+                && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+                && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+            receipt_backend=cpu
+        elif grep -Fq '"backend":"vulkan"' "$receipt" \
+                && ! grep -Fq '"backend":"cpu"' "$receipt" \
+                && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+                && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
+                && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
+            receipt_backend=vulkan
+        else
             state=error
             error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
-        elif grep -Fq '"profile":"small-v2"' "$receipt"; then
-            profile=small-v2; model=small; model_bytes=487601967; download_bytes=506181191
-            binary_path=/opt/arctic/voxtype/1.1.0/voxtype-baseline; binary_bytes=18579224
+        fi
+        if [ -n "$receipt_backend" ] && [ "$backend_state_valid" != true ]; then
+            state=error
+            error='The VoxType backend update was interrupted. Select CPU or Vulkan again to finish it.'
+            receipt_backend=
+        elif [ -n "$receipt_backend" ] && [ "$receipt_backend" != "$backend" ]; then
+            state=error
+            error='The VoxType backend update was interrupted. Select CPU or Vulkan again to finish it.'
+            receipt_backend=
+        elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"small-v2"' "$receipt"; then
+            profile=small-v2; model=small; model_bytes=487601967; download_bytes=506440871
+            binary_path=/opt/arctic/voxtype/1.1.1/voxtype-baseline; binary_bytes=18838904
             model_path=/opt/arctic/voxtype/models/ggml-small.bin
-        elif grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
-            profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593194923
-            binary_path=/opt/arctic/voxtype/1.1.0/voxtype-avx2; binary_bytes=19153728
+        elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
+            profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
+            binary_path=/opt/arctic/voxtype/1.1.1/voxtype-avx2; binary_bytes=19415936
             model_path=/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin
-        else
+        elif [ -n "$receipt_backend" ]; then
             state=error
             error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
         fi
@@ -56,7 +84,7 @@ status() {
             elif [ ! -r "$user_config" ]; then
                 state=error
                 error='Dictation is not prepared for this account. Retry setup to create its private VoxType configuration.'
-            elif [ "$backend" = vulkan ] && { [ ! -x /opt/arctic/voxtype/1.1.0/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.0/voxtype-vulkan 2>/dev/null || true)" != 66342968 ]; }; then
+            elif [ "$backend" = vulkan ] && { [ ! -x /opt/arctic/voxtype/1.1.1/voxtype-vulkan ] || [ "$(stat -c %s /opt/arctic/voxtype/1.1.1/voxtype-vulkan 2>/dev/null || true)" != 66575872 ]; }; then
                 state=error
                 error='The verified Vulkan VoxType app is missing or damaged. Select CPU or retry Vulkan setup.'
             else
@@ -85,8 +113,9 @@ status() {
                 recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
                     --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
                 case "$recent" in
-                    *'Failed to start audio:'*|*'Failed to create audio capture:'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
+                    *'Failed to start audio:'*|*'Failed to create audio capture:'*|*'Audio stream error, capture is now dead:'*|*'failed during this recording; the transcript will be short or empty.'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
                     *'Transcription failed: Model not found:'*|*'Transcription failed: Failed to load model:'*) printf '%s\n' model >"$runtime/voxtype-error" ;;
+                    *'This build has Vulkan support, so transcription will fall back to CPU'*|*'ggml_vulkan: Found 0 Vulkan devices'*) printf '%s\n' gpu-fallback >"$runtime/voxtype-error" ;;
                     *'Transcription failed:'*) printf '%s\n' transcription >"$runtime/voxtype-error" ;;
                     *'Output failed:'*) printf '%s\n' output >"$runtime/voxtype-error" ;;
                 esac
@@ -94,6 +123,7 @@ status() {
                 case "$projected:$backend" in
                     microphone:*) state=error; error='VoxType could not open the microphone. Check the selected input and microphone permission, then try again.' ;;
                     model:*) state=error; error='The local Whisper model could not be loaded. Retry setup to verify and repair it.' ;;
+                    gpu-fallback:vulkan) state=error; error='VoxType could not start on Vulkan and is using CPU. Select CPU acceleration, or fix the Vulkan driver and enable Vulkan again.' ;;
                     transcription:vulkan) state=error; error='Vulkan transcription failed. Select CPU acceleration in Dictation settings, then try again.' ;;
                     transcription:*) state=error; error='Local transcription failed. Try a shorter recording; if it repeats, retry setup.' ;;
                     output:*) state=error; error='VoxType could not insert text. Focus a writable text field; the app may reject Wayland text insertion.' ;;
@@ -116,7 +146,7 @@ status() {
         esac
     fi
     ready=$integrity_ready
-    printf '{"state":"%s","ready":%s,"error":"%s","version":"1.1.0","language":"%s","backend":"%s","profile":"%s","model":"%s","model_download_bytes":%s,"download_bytes":%s,"vulkan_download_bytes":66342968}\n' \
+    printf '{"state":"%s","ready":%s,"error":"%s","version":"1.1.1","language":"%s","backend":"%s","profile":"%s","model":"%s","model_download_bytes":%s,"download_bytes":%s,"vulkan_download_bytes":66575872}\n' \
         "$state" "$ready" "$error" "$language" "$backend" "$profile" "$model" "$model_bytes" "$download_bytes"
 }
 case ${1:-} in

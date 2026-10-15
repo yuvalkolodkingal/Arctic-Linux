@@ -14,6 +14,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 HERE=Path(__file__).resolve().parent
@@ -363,7 +364,11 @@ class NewControls(unittest.TestCase):
                             if case=='oracle-failed' else contextlib.nullcontext())
             with socket.socket(socket.AF_UNIX) as peer:
                 peer.bind(str(root/'visual-reference-ipc.sock'))
-                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                # Rebind only this tested module. Patching time.sleep on the
+                # shared stdlib module also records unrelated background sleeps.
+                sleep=Mock()
+                tested_time=SimpleNamespace(sleep=sleep,monotonic=N.time.monotonic)
+                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N,'time',tested_time):
                     if case=='positive':
                         value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
                     else:

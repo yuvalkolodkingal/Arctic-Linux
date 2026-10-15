@@ -14,13 +14,13 @@ SPEC.loader.exec_module(PROBE)
 class DirectRuntimeProbeControls(unittest.TestCase):
     def test_exact_official_pins_and_split_production_paths(self):
         self.assertEqual(PROBE.PINS["small-v2"]["binary"], (
-            "voxtype-baseline", 18579224,
-            "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a"))
+            "voxtype-baseline", 18838904,
+            "cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af"))
         self.assertEqual(PROBE.PINS["turbo-q5-v3"]["binary"], (
-            "voxtype-avx2", 19153728,
-            "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28"))
+            "voxtype-avx2", 19415936,
+            "3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770"))
         source = PATH.read_text()
-        self.assertIn('/opt/arctic/voxtype/1.1.0', source)
+        self.assertIn('/opt/arctic/voxtype/1.1.1', source)
         self.assertIn('/opt/arctic/voxtype/models', source)
         self.assertNotIn('dictation.py', source)
         self.assertNotIn('child_exec.py', source)

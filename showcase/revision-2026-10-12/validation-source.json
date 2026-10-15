@@ -1,12 +1,12 @@
 {
   "status": "PASSED_DIRECT_VOXTYPE_ALIGNED_SOURCE_ONLY",
-  "base_commit": "455327f4c7eee31d4058ba2b02e2cfe489439ac0",
-  "base_tree": "aa2b7f7870625a51ec306bb65c4f56ec71ae55ad",
-  "source_branch": "codex/final-showcase-integration-prep-20261014",
+  "base_commit": "b5d8585d34e4356c6bbc659a837dbbdd7f98dff7",
+  "base_tree": "5e76efd762cc7d785bb154787a244e29c34905c4",
+  "source_branch": "codex/prepare-showcase-video-121-20261015",
   "scene_ids": 38,
   "unique_scene_ids": 38,
   "sentence_cues": 130,
-  "duration_seconds": 549.987846,
+  "duration_seconds": 582.356463,
   "narration_parity": true,
   "caption_text_parity": true,
   "root_revision_timing_parity": true,
@@ -14,16 +14,16 @@
     "wallpaper_hide_restore": 1.0,
     "whats_new": 1.0
   },
-  "voxtype_version": "1.1.0",
+  "voxtype_version": "1.1.1",
   "obsolete_voxtype_0_5_1_absent": true,
   "local_whisper_alignment": {
     "status": "passed_twice_byte_identical",
     "model": "base.en",
     "verifier": "faster-whisper 1.2.1",
-    "word_error_rate": 0.039375,
-    "sequence_ratio": 0.969246,
-    "exact_token_coverage": 0.973523,
-    "minimum_cue_exact_token_coverage": 0.666667,
+    "word_error_rate": 0.041412,
+    "sequence_ratio": 0.96894,
+    "exact_token_coverage": 0.974202,
+    "minimum_cue_exact_token_coverage": 0.6,
     "caption_cues": 130,
     "scenes": 38,
     "transcript_in_ci_log": false,
@@ -40,10 +40,10 @@
     "lint_errors": 0,
     "runtime_errors": 0,
     "motion_errors": 0,
-    "contrast_checks_passed": 43,
+    "contrast_checks_passed": 48,
     "warnings": 0,
-    "info_findings": 18,
-    "info_note": "All 18 informational findings occur during intentional 0.6-second crossfade overlap; strict validation passed with no errors or warnings.",
+    "info_findings": 30,
+    "info_note": "All 30 informational findings occur during intentional scene crossfade overlap; strict validation passed with no errors or warnings.",
     "audio_attached": false,
     "audio_note": "Source composition omits audio while render_ready is false pending human listening, qualified captures and release binding.",
     "preparation": "python3 showcase/prepare-assets.py regenerated local derivatives before the strict check; generated derivatives were not added to this source-only commit.",
@@ -71,8 +71,8 @@
   },
   "exact_capture_execution_manifest": {
     "path": "showcase/capture/exact_image/execution-manifest.json",
-    "sha256": "6d24f863138508c5e5ed7d5c4fc36c064c6268865cb49c16faec7b64d040ad88",
-    "execution_files": 11,
+    "sha256": "486b60e30e1b10755c2c3b166bce2be6d901abf57a147eeff469f353919f6043",
+    "execution_files": 0,
     "all_hashes_recomputed": true
   },
   "syntax_checks": {
@@ -161,17 +161,17 @@
   "render_checks_run": false,
   "iso_release_qualification": false,
   "pending": [
-    "Run human listening review of both source segments, the join, and the full assembled master.",
-    "Capture and manually review direct-VoxType setup and recording, the two-frame GPU-failure/CPU-ready recovery pair, wallpaper management and What’s New on the qualified ISO.",
-    "Run strict render/full decode/subtitle/frame checks, bind the matching ISO, and verify public downloads before replacing the public video."
+    "Run human listening review of both fresh 1.1.1 source segments, the join, and the full assembled master.",
+    "Capture and manually review direct-VoxType 1.1.1 setup and recording, the two-frame GPU-failure/CPU-ready recovery pair, wallpaper management and What’s New on the qualified ISO.",
+    "Run strict final render/full decode/subtitle/frame checks, bind the matching qualified ISO, confirm the connected ElevenLabs plan permits publication, and verify public downloads before replacing the public video."
   ],
   "validation_receipt_path": "showcase/revision-2026-10-12/validation-source.json",
   "validation_receipt_self_hash_excluded": true,
-  "execution_environment_limit": "Source, local audio-receipt, objective audio and deterministic alignment validation only; audio remains outside Git, transcript-bearing verifier outputs are not uploaded, and no human listening, qualified captures, render or publication is claimed.",
+  "execution_environment_limit": "Source, local audio-receipt, objective audio, deterministic alignment and eight-frame source snapshot validation only; audio remains outside Git, transcript-bearing verifier outputs are not uploaded, and no human listening, qualified captures, full render or publication is claimed.",
   "timing_status": "verified_direct_voxtype_river_alignment",
   "render_ready": false,
   "direct_voxtype_source": {
-    "official_version": "1.1.0",
+    "official_version": "1.1.1",
     "online_setup": "automatic and verified",
     "offline_setup": "visibly not ready with retry",
     "languages": [
@@ -209,7 +209,7 @@
     ],
     "segment_text_sha256s": [
       "27e84fb55bef8b81bccff227974c8a6f2c4bd71c42f4adfd540b762225707389",
-      "c2c53a05ee9d33f63c109fcbf1d3d0e460c778983055207e69e562f8fef4a79d"
+      "e79e8942876b604c8de7dc13634e90712b2dbccb4fe7b4376910701f45873aa7"
     ],
     "assembly": "44.1 kHz mono decoded samples concatenate in index order with zero inserted samples or crossfade",
     "parameterized_fields": [
@@ -225,29 +225,29 @@
     ],
     "workflow_download_requires_byte_size_and_sha256_match": true,
     "segment_audio_bytes": [
-      4491422,
-      4344718
+      4562057,
+      4792352
     ],
     "segment_audio_sha256s": [
-      "312930f1b1d759bb42271be4437b968c5053371c7c75cbe96483011a52e49fa6",
-      "d9da67e9db12cc9866a689accc7a7257137de90f9c6ccf3c026c6feee4e8231a"
+      "6603a56e76d191a5a88b78030a39f96a1884f61001bba7c99cda990aea5c68e9",
+      "df3daf95762904230013a0435f8c58c3f42c097595dd34bbc715dcd2e4342d7b"
     ],
     "segment_pyav_duration_seconds": [
-      279.568254,
-      270.419592
+      283.980045,
+      298.376417
     ],
     "segment_decoded_samples": [
-      12328960,
-      11925504
+      12523520,
+      13158400
     ],
     "assembled_master": {
-      "asset": "narration-river-direct-voxtype-final-2026-10-14.mp3",
-      "bytes": 13201492,
-      "sha256": "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5",
-      "pyav_duration_seconds": 549.987846,
+      "asset": "narration-river-arctic-1.2.1-voxtype-1.1.1-2026-10-15.mp3",
+      "bytes": 13978270,
+      "sha256": "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+      "pyav_duration_seconds": 582.356463,
       "decoded_sample_rate_hz": 44100,
       "decoded_channels": 1,
-      "decoded_samples": 24254464,
+      "decoded_samples": 25681920,
       "inserted_join_samples": 0,
       "published": false
     },
@@ -256,28 +256,28 @@
       "codec": "mp3float",
       "sample_rate_hz": 44100,
       "channels": 1,
-      "decoded_samples": 24254464,
-      "decoded_duration_seconds": 549.987846,
-      "integrated_loudness_lufs": -24.5,
-      "loudness_range_lu": 2.3,
-      "true_peak_dbfs": -1.9,
-      "sample_peak_dbfs": -1.919,
-      "rms_dbfs": -25.267,
-      "dc_offset": 1.599279e-06,
+      "decoded_samples": 25681920,
+      "decoded_duration_seconds": 582.356463,
+      "integrated_loudness_lufs": -24.6,
+      "loudness_range_lu": 2.5,
+      "true_peak_dbfs": -2.2,
+      "sample_peak_dbfs": -2.161,
+      "rms_dbfs": -25.335,
+      "dc_offset": 2.275078e-06,
       "hard_clipped_samples_ge_0_999": 0,
       "join": {
-        "join_sample_index": 12328960,
-        "join_seconds": 279.568254,
-        "join_boundary_sample_delta": 0.000141357,
-        "join_window_max_adjacent_delta": 0.103272557,
-        "join_boundary_delta_fraction_of_window_max": 0.001369,
-        "join_pre_250ms_rms_dbfs": -73.617,
-        "join_post_250ms_rms_dbfs": -19.419,
-        "join_contiguous_below_minus_60_dbfs_seconds": 0.38229,
-        "join_contiguous_below_minus_60_dbfs_start_seconds": 279.211633,
-        "join_contiguous_below_minus_60_dbfs_end_seconds": 279.593923
+        "join_sample_index": 12523520,
+        "join_seconds": 283.980045,
+        "join_boundary_sample_delta": 3.051758e-05,
+        "join_window_max_adjacent_delta": 0.127960206,
+        "join_boundary_delta_fraction_of_window_max": 0.000238,
+        "join_pre_250ms_rms_dbfs": -85.732,
+        "join_post_250ms_rms_dbfs": -19.928,
+        "join_contiguous_below_minus_60_dbfs_seconds": 0.431905,
+        "join_contiguous_below_minus_60_dbfs_start_seconds": 283.574172,
+        "join_contiguous_below_minus_60_dbfs_end_seconds": 284.006077
       },
-      "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval and its sample step is below the largest adjacent step in the surrounding 500 ms. Human listening remains pending."
+      "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval. Human listening remains pending."
     },
     "admission_contract": {
       "private_render": "requires the verified private draft source, exact-master human listening, actual qualified-release manifest, reviewed captures and aligned render-ready timing; does not grant publication",

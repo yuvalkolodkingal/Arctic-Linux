@@ -179,6 +179,7 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, {"PATH": "/usr/bin:/bin"})), \
              mock.patch.object(unattended, "_find_ipc", return_value=("123", "{}")), \
+             mock.patch.object(unattended, "_process_start_ticks", return_value=456), \
              mock.patch.object(unattended, "_installer_call", side_effect=ipc), \
              mock.patch.object(unattended, "_run"), \
              mock.patch.object(unattended, "_mount_installed_target", return_value=Path("/mnt/sysroot")), \
@@ -187,6 +188,94 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended, "Channel", Channel):
             unattended.live_install(600)
         return fills, channel_rows
+
+    @staticmethod
+    def _ready_state(**changed):
+        value = {"page": "welcome", "current": "welcome", "ready": True,
+                 "connected": True, "busy": False, "failure": "", "valid": True}
+        value.update(changed)
+        return json.dumps(value)
+
+    def test_unique_installer_ipc_rejects_ambiguous_targets(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+
+        def run(argv, **_kwargs):
+            self.assertEqual(argv[:5], ["/usr/bin/pgrep", "-u", "1000", "-x", "quickshell"])
+            return types.SimpleNamespace(returncode=0, stdout=b"101\n202\n")
+
+        with mock.patch.object(unattended, "_run", side_effect=run), \
+             mock.patch.object(unattended, "_as_user",
+                               return_value=types.SimpleNamespace(returncode=0, stdout=b"{}")):
+            with self.assertRaisesRegex(c.Invalid, "absent or ambiguous"):
+                unattended._find_ipc(account, {}, "installer", "state")
+
+    def test_installer_reacquires_a_replacement_before_first_input(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        calls = []
+
+        def call(_account, _environment, pid, method, payload=None):
+            calls.append((pid, method, payload))
+            if method == "state":
+                return self._ready_state(ready=pid == "303")
+            return "ok"
+
+        with mock.patch.object(unattended, "_installer_endpoint",
+                               side_effect=[("101", 10), ("202", 20), ("303", 30)]), \
+             mock.patch.object(unattended, "_process_start_ticks",
+                               side_effect=lambda _account, pid: {"202": 20, "303": 30}[pid]), \
+             mock.patch.object(unattended.time, "sleep"), \
+             mock.patch.object(unattended, "_installer_call", side_effect=call):
+            early = unattended._installer_endpoint(account, {})
+            endpoint, result = unattended._installer_input(
+                account, {}, None, "welcome", "next", require_valid=True)
+        self.assertEqual(early, ("101", 10))
+        self.assertEqual(endpoint, ("303", 30))
+        self.assertEqual(result, "ok")
+        self.assertEqual(calls, [("202", "state", None), ("303", "state", None),
+                                 ("303", "next", None)])
+
+    def test_installer_rejects_pid_or_start_time_swap_after_input(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        for replacement in (("202", 20), ("101", 20)):
+            with self.subTest(replacement=replacement), \
+                 mock.patch.object(unattended, "_installer_endpoint",
+                                   return_value=replacement), \
+                 mock.patch.object(unattended, "_installer_call") as call:
+                with self.assertRaisesRegex(unattended.InstallerIdentityChanged,
+                                            "changed after input"):
+                    unattended._installer_input(
+                        account, {}, ("101", 10), "welcome", "next",
+                        require_valid=True)
+                call.assert_not_called()
+
+    def test_installer_input_rechecks_every_existing_page_gate(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser")
+        def once(function, _seconds, message):
+            value = function()
+            if value:
+                return value
+            raise c.Invalid(message)
+        invalid = (
+            {"page": "keyboard"}, {"current": "keyboard"}, {"ready": False},
+            {"connected": False}, {"busy": True}, {"failure": "failed"},
+            {"valid": False},
+        )
+        for changed in invalid:
+            calls = []
+            def call(_account, _environment, pid, method, payload=None):
+                calls.append((pid, method, payload))
+                return self._ready_state(**changed) if method == "state" else "ok"
+            with self.subTest(changed=changed), \
+                 mock.patch.object(unattended, "_installer_endpoint",
+                                   return_value=("101", 10)), \
+                 mock.patch.object(unattended, "_process_start_ticks", return_value=10), \
+                 mock.patch.object(unattended, "_wait", side_effect=once), \
+                 mock.patch.object(unattended, "_installer_call", side_effect=call):
+                with self.assertRaisesRegex(c.Invalid, "changed before input"):
+                    unattended._installer_input(
+                        account, {}, ("101", 10), "welcome", "next",
+                        require_valid=True)
+            self.assertEqual(calls, [("101", "state", None)])
 
     def test_live_installer_uses_fixed_online_real_gui_choices(self):
         pages = list(("welcome", "keyboard", "network", "timezone", "disk", "encryption",
@@ -444,9 +533,9 @@ class GuestAutomation(unittest.TestCase):
                        "/dev/vda3", str(target)], calls)
 
     def test_dictation_readiness_is_exact_and_never_substituted(self):
-        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.0",
+        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
                 "profile": "small-v2", "model": "small", "cpu_variant": "baseline",
-                "model_download_bytes": 487601967, "download_bytes": 506181191,
+                "model_download_bytes": 487601967, "download_bytes": 506440871,
                 "compatibility_required": False}
         result = types.SimpleNamespace(returncode=0, stdout=json.dumps(good).encode())
         with mock.patch.object(unattended, "_run", return_value=result):

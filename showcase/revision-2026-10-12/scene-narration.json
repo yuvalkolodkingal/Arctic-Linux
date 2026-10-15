@@ -93,7 +93,7 @@
   },
   {
     "id": "dictationsetup",
-    "text": "Arctic installs pinned, signature-checked official VoxType 1.1.0 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready."
+    "text": "Arctic installs pinned, signature-checked official VoxType 1.1.1 binaries and a verified multilingual Whisper model. During an online installation, Arctic automatically downloads and verifies the compatible CPU engine and model. An offline installation leaves a clear retry for first boot and reports that dictation is not ready. The local multilingual model supports Hebrew and English without sending audio to a service. Recording remains unavailable until the engine, model, and per-user VoxType configuration are ready."
   },
   {
     "id": "dictationrecord",

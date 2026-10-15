@@ -231,7 +231,7 @@ commands.
 - **arctic-firstboot** (in `arctic-desktop-config`, because the installer is removed from the new
   system) retries selected app downloads deferred by offline or unattended installation, after
   login through its timer when `/var/lib/arctic/pending.json` exists.
-- **Dictation** runs the official VoxType 1.1.0 user service. The ISO ships only setup/status,
+- **Dictation** runs the official VoxType 1.1.1 user service. The ISO ships only setup/status,
   Settings, a verified-binary selector and Mango shortcuts; online installation downloads one
   signed upstream binary and one pinned multilingual model. Offline or failed setup is queued for
   `arctic-dictation-setup.timer`. Recording stays unready until verification succeeds. Audio

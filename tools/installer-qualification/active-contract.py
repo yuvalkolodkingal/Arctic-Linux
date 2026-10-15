@@ -53,8 +53,8 @@ def exact(value, keys, message):
     require(type(value) is dict and set(value) == set(keys), message)
 
 
-def installed_identity_record(nonce):
-    """Reproduce the driver's three-record installed-user challenge."""
+def installed_identity_records(nonce):
+    """Rebuild the producer's three newline-separated physical responses."""
     data = (nonce + '\x00arcticqual\x001000\x00arcticqual\x00').encode()
     token = format(int(digest(data)[:15], 16), '019d')
     return '\n'.join(marker + token for marker in ('2', '4', '6'))
@@ -527,7 +527,7 @@ def password_prompts_check(value, build, required_images, image_loader, authenti
             shell['nonce'] == authentication['nonce'] and shell['username'] == 'arcticqual' and
             type(shell['uid']) is int and shell['uid'] == 1000 and
             shell['observed_line_sha256'] == digest(
-                installed_identity_record(authentication['nonce']).encode('ascii')) and
+                installed_identity_records(authentication['nonce']).encode('ascii')) and
             type(shell['observed_ns']) is int and shell['observed_ns'] > 0,
             'active authenticated shell observed-line proof differs')
     require(value['schema'] == 'arctic-active-password-prompts-v1' and

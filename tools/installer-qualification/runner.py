@@ -262,6 +262,48 @@ def execute(argv, log, seconds, cwd, env):
             raise
 
 
+SUCCESS_LOG_RECEIPTS = {
+    'provision': b'ARCTIC-INSTALLER-LOG=provision-succeeded-output-withheld\n',
+    'capture-build': b'ARCTIC-INSTALLER-LOG=capture-build-succeeded-output-withheld\n',
+    'installer-harness': b'ARCTIC-INSTALLER-LOG=installer-harness-succeeded-output-withheld\n',
+}
+
+
+def seal_success_log(path, stage):
+    """Replace successful free-form command output with a fixed public receipt.
+
+    The command's exit status and structured provenance are the evidence used by
+    the contract.  Package-manager output can contain transient queried URLs,
+    so it is not part of the public evidence surface after a successful stage.
+    """
+    C.require(type(stage) is str and stage in SUCCESS_LOG_RECEIPTS,
+              'Unknown successful installer log stage')
+    path = Path(path)
+    fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        before = os.fstat(fd)
+        C.require(stat.S_ISREG(before.st_mode) and before.st_uid == os.geteuid() and
+                  before.st_nlink == 1 and not (before.st_mode & 0o022) and
+                  0 <= before.st_size <= 128 * 1024 * 1024,
+                  'Successful installer log ownership differs')
+        receipt = SUCCESS_LOG_RECEIPTS[stage]
+        os.ftruncate(fd, 0)
+        view = memoryview(receipt)
+        while view:
+            written = os.write(fd, view)
+            C.require(written > 0, 'Successful installer log receipt write failed')
+            view = view[written:]
+        os.fsync(fd)
+        after = os.fstat(fd)
+        C.require((after.st_dev, after.st_ino, after.st_uid, after.st_nlink) ==
+                  (before.st_dev, before.st_ino, before.st_uid, before.st_nlink) and
+                  stat.S_ISREG(after.st_mode) and not (after.st_mode & 0o022) and
+                  after.st_size == len(receipt),
+                  'Successful installer log receipt identity differs')
+    finally:
+        os.close(fd)
+
+
 def verify(args, execution):
     active_profile = getattr(args, 'active_profile', False)
     contract = E.active_contract() if active_profile else C
@@ -442,7 +484,9 @@ def main():
                 payload.mkdir(); env['ARCTIC_FEDORA_IMAGE'] = prepared
                 argv = ['bash', str(execution / script), str(execution), str(payload)]
             else: argv = ['bash', str(execution / script), str(argument)]
-            execute(argv, args.evidence / (name + '.log'), seconds, execution, env)
+            log = args.evidence / (name + '.log')
+            execute(argv, log, seconds, execution, env)
+            seal_success_log(log, name)
             receipt = (args.evidence / 'vm-prepared-image-id.txt' if argument is not None else payload / 'taskbar-vm-prepared-image-id.txt')
             prepared = receipt.read_text().strip()
             C.require(re.fullmatch(r'(sha256:)?[0-9a-f]{64}', prepared), 'Immutable owned prepared image missing')
@@ -481,6 +525,7 @@ def main():
             execute(['bash', str(HERE / 'run-live.sh'), str(args.source), str(execution), str(iso), str(payload),
                      str(context_file), 'uefi', str(vm)], args.evidence / 'installer-harness.log',
                     (80 if args.active_profile else 35) * 60, execution, env)
+            seal_success_log(args.evidence / 'installer-harness.log', 'installer-harness')
             harness_succeeded = True
         except BaseException as error:
             diagnose(diagnostic_stage, error)

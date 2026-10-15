@@ -17,17 +17,17 @@ CONTEXT_KEYS = {
 PHASES = {'live', 'online-installed', 'offline-installed', 'recovery', 'recovered-offline'}
 
 UPSTREAM = {
-    'version': '1.1.0',
-    'source_commit': 'e2638ca63f566f1682bcedc0abea8e4b25211c21',
+    'version': '1.1.1',
+    'source_commit': '014c56105b2f071bb3457c51a95c38be380e5124',
     'signed_sums_fingerprint': '9CCF7915B750CAE8B095ED1AA3FC9F33FD209279',
 }
 ASSETS = {
-    'cpu': {'name': 'voxtype-baseline', 'bytes': 18579224,
-            'sha256': '1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'},
-    'avx2': {'name': 'voxtype-avx2', 'bytes': 19153728,
-             'sha256': 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28'},
-    'vulkan': {'name': 'voxtype-vulkan', 'bytes': 66342968,
-               'sha256': 'db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2'},
+    'cpu': {'name': 'voxtype-baseline', 'bytes': 18838904,
+            'sha256': 'cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af'},
+    'avx2': {'name': 'voxtype-avx2', 'bytes': 19415936,
+             'sha256': '3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770'},
+    'vulkan': {'name': 'voxtype-vulkan', 'bytes': 66575872,
+               'sha256': '102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863'},
     'small': {'name': 'ggml-small.bin', 'bytes': 487601967,
               'sha256': '1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b'},
     'turbo': {'name': 'ggml-large-v3-turbo-q5_0.bin', 'bytes': 574041195,
@@ -39,10 +39,10 @@ PROFILE_ASSETS = {
 }
 PROFILES = {
     'small-v2': {'profile': 'small-v2', 'model': 'small', 'cpu_variant': 'baseline',
-                 'model_download_bytes': 487601967, 'download_bytes': 506181191},
+                 'model_download_bytes': 487601967, 'download_bytes': 506440871},
     'turbo-q5-v3': {'profile': 'turbo-q5-v3', 'model': 'large-v3-turbo-q5_0',
                     'cpu_variant': 'avx2', 'model_download_bytes': 574041195,
-                    'download_bytes': 593194923},
+                    'download_bytes': 593457131},
 }
 
 COMMON = {'selinux-enforcing', 'no-new-avcs'}

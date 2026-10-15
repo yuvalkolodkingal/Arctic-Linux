@@ -894,9 +894,9 @@ install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexe
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
 install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
 install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
-install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0
-install -pm 0644 packaging/dictation/provenance/v1.1.0/* \
-  %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.0/
+install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.1
+install -pm 0644 packaging/dictation/provenance/v1.1.1/* \
+  %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.1/
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
@@ -974,6 +974,9 @@ install -Dpm 0644 packaging/desktop/live-mimeapps.list %{buildroot}%{_datadir}/a
 install -Dpm 0755 packaging/desktop/arctic-celluloid %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
 install -Dpm 0644 packaging/desktop/io.github.celluloid_player.Celluloid.desktop \
   %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+install -Dpm 0755 packaging/desktop/arctic-epiphany %{buildroot}%{_libexecdir}/arctic/arctic-epiphany
+install -Dpm 0644 packaging/desktop/org.gnome.Epiphany.desktop \
+  %{buildroot}%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
@@ -1165,7 +1168,9 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
 desktop-file-validate %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+desktop-file-validate %{buildroot}%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 sh -n %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
+sh -n %{buildroot}%{_libexecdir}/arctic/arctic-epiphany
 # arctic-release: the key and enabled repositories go together; never secret key material;
 # the testing channel is always off by default.
 key=%{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
@@ -1371,12 +1376,37 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
-# Direct-upstream dictation replaced the old Arctic runtime controller. Exact
-# legacy payloads migrate synchronously and without a network, using signed
-# provenance shipped in this RPM. The direct marker is published only after
-# the binary, model and user config verify; failures keep every legacy byte and
-# fall back to the ordinary retryable online queue.
-if [ ! -e %{_sharedstatedir}/arctic/dictation/upstream-direct-v1 ]; then
+# Direct-upstream dictation replaced the old Arctic runtime controller. A new
+# pinned upstream release also enters this queue: the model and user choice are
+# reused, while the new signed executable is fetched in the background. The
+# direct marker is published only after the binary, model and user config
+# verify; failures keep the last payload and remain retryable.
+dictation_current=false
+python3 - <<'PY' && dictation_current=true || :
+import json, os, stat
+path = '/var/lib/arctic/dictation/verified.json'
+marker = '/var/lib/arctic/dictation/upstream-direct-v1'
+try:
+    info = os.lstat(path)
+    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644:
+        raise SystemExit(1)
+    mark = os.lstat(marker)
+    if (not stat.S_ISREG(mark.st_mode) or mark.st_uid != 0
+            or stat.S_IMODE(mark.st_mode) != 0o644):
+        raise SystemExit(1)
+    with open(marker, encoding='ascii') as source:
+        if source.read() != 'upstream-direct-v1\n':
+            raise SystemExit(1)
+    with open(path, encoding='utf-8') as source:
+        value = json.load(source)
+    if (type(value) is not dict or value.get('integration') != 'upstream-direct-v1'
+            or value.get('version') != '1.1.1'
+            or value.get('source_commit') != '014c56105b2f071bb3457c51a95c38be380e5124'):
+        raise SystemExit(1)
+except (OSError, ValueError, TypeError):
+    raise SystemExit(1)
+PY
+if [ "$dictation_current" != true ]; then
   user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $6 ~ /^\/home\// { print $1; exit }')
   if [ -n "$user" ]; then
     if ! %{_libexecdir}/arctic/arctic-voxtype-setup --migrate-legacy "$user" >/dev/null 2>&1; then
@@ -1558,8 +1588,10 @@ fi
 %{_datadir}/arctic/live-default-apps
 %{_datadir}/arctic/live-mimeapps.list
 %{_libexecdir}/arctic/arctic-celluloid
+%{_libexecdir}/arctic/arctic-epiphany
 %dir %{_datadir}/arctic/applications
 %{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_libexecdir}/arctic-nix-system
 %{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
