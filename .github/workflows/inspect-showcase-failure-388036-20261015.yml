@@ -1,0 +1,155 @@
+name: Inspect showcase failure 38803649634
+
+on:
+  push:
+    branches: [codex/inspect-showcase-failure-388036-20261015]
+    paths: [.github/workflows/inspect-showcase-failure-388036-20261015.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Verify and inspect bounded showcase failure projection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import stat
+          import subprocess
+          import sys
+          import tempfile
+          import zipfile
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          BRANCH = 'codex/inspect-showcase-failure-388036-20261015'
+          WORKFLOW = '.github/workflows/inspect-showcase-failure-388036-20261015.yml'
+          PARENT = 'e363c27377028d45c25dd2b6d470089a6d826d5a'
+          PRODUCER = {
+              'run': 38803649634,
+              'workflow_id': 383869632,
+              'workflow_name': 'Exact-image unattended showcase capture',
+              'workflow_path': '.github/workflows/showcase-exact-capture-20261014.yml',
+              'branch': 'codex/showcase-exact-capture-20261014',
+              'head': PARENT,
+              'artifact': 12005253210,
+              'name': 'exact-image-showcase-failure-projection',
+              'bytes': 6_655,
+              'sha256': '081864057b4807eb7212fd17e0a0e0b1537a975f140dbdc435f3544b64d046bb',
+          }
+          SECRET = re.compile(
+              r'gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|'
+              r'(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|'
+              r'(?i:(?:password|passwd|secret|authorization|access_token|refresh_token|api_key|client_secret)\s*[:=]\s*\S+)')
+          CONTROL = re.compile(r'\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x1b\x07\r\n]*(?:\x07|\x1b\\)')
+
+          def unique(rows):
+              value = {}
+              for key, item in rows:
+                  assert key not in value, 'duplicate JSON field'
+                  value[key] = item
+              return value
+
+          def api(endpoint):
+              return json.loads(subprocess.check_output(
+                  ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}'], timeout=60),
+                  object_pairs_hook=unique)
+
+          def safe_strings(value):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      safe_strings(key)
+                      safe_strings(item)
+              elif isinstance(value, list):
+                  for item in value:
+                      safe_strings(item)
+              elif isinstance(value, str):
+                  assert not SECRET.search(value) and not CONTROL.search(value)
+                  assert all(character in '\n\r\t' or ord(character) >= 32 for character in value)
+
+          assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+          assert os.environ['GITHUB_REF'] == 'refs/heads/' + BRANCH
+          assert os.environ['GITHUB_EVENT_NAME'] == 'push'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          assert subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip() == PARENT
+          assert subprocess.check_output(
+              ['git', 'diff', '--name-only', PARENT, head], text=True).splitlines() == [WORKFLOW]
+          assert subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip() == ''
+
+          ref = api('git/ref/heads/' + BRANCH)
+          assert ref['ref'] == 'refs/heads/' + BRANCH and ref['object']['sha'] == head
+          run = api(f'actions/runs/{PRODUCER["run"]}')
+          assert run['id'] == PRODUCER['run']
+          assert run['workflow_id'] == PRODUCER['workflow_id']
+          assert run['name'] == PRODUCER['workflow_name'] and run['path'] == PRODUCER['workflow_path']
+          assert run['head_branch'] == PRODUCER['branch'] and run['head_sha'] == PRODUCER['head']
+          assert run['event'] == 'push' and run['run_attempt'] == 1
+          assert run['status'] == 'completed' and run['conclusion'] == 'failure'
+          assert run['repository']['full_name'] == REPOSITORY
+          assert run['head_repository']['full_name'] == REPOSITORY
+
+          artifact = api(f'actions/artifacts/{PRODUCER["artifact"]}')
+          assert artifact['id'] == PRODUCER['artifact'] and artifact['name'] == PRODUCER['name']
+          assert artifact['expired'] is False and artifact['size_in_bytes'] == PRODUCER['bytes']
+          assert artifact['digest'] == 'sha256:' + PRODUCER['sha256']
+          assert artifact['workflow_run']['id'] == PRODUCER['run']
+          assert artifact['workflow_run']['head_branch'] == PRODUCER['branch']
+          assert artifact['workflow_run']['head_sha'] == PRODUCER['head']
+
+          with tempfile.TemporaryDirectory(prefix='arctic-showcase-failure-') as folder:
+              archive_path = Path(folder) / 'failure.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh', 'api',
+                      f'repos/{REPOSITORY}/actions/artifacts/{PRODUCER["artifact"]}/zip'],
+                      stdout=output, check=True, timeout=180)
+              info = archive_path.lstat()
+              assert stat.S_ISREG(info.st_mode) and not archive_path.is_symlink()
+              assert info.st_size == PRODUCER['bytes']
+              assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == PRODUCER['sha256']
+
+              with zipfile.ZipFile(archive_path) as archive:
+                  items = archive.infolist()
+                  assert len(items) == 1 and items[0].filename == 'failure-projection.json'
+                  item = items[0]
+                  member = PurePosixPath(item.filename)
+                  mode = item.external_attr >> 16
+                  assert not member.is_absolute() and all(part not in ('', '.', '..') for part in member.parts)
+                  assert stat.S_IFMT(mode) in (0, stat.S_IFREG)
+                  assert not item.flag_bits & 0x1 and not item.is_dir()
+                  assert 0 < item.file_size <= 32_768 and 0 <= item.compress_size <= PRODUCER['bytes']
+                  assert archive.testzip() is None
+                  raw = archive.read(item)
+
+          assert 0 < len(raw) <= 32_768 and b'\x00' not in raw
+          value = json.loads(raw.decode('utf-8', errors='strict'), object_pairs_hook=unique,
+              parse_constant=lambda item: (_ for _ in ()).throw(ValueError(item)))
+          sys.path.insert(0, 'showcase/capture/exact_image')
+          import contract
+          contract.capture_failure(value)
+          assert value['image'] == contract.IMAGE
+          assert value['status'] == 'failed' and value['release_acceptance'] is False
+          assert value['private_runtime_removed'] is True
+          assert value['screens_exported'] is False and value['logs_exported'] is False
+          assert value['pixels_exported'] is False
+          safe_strings(value)
+          print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-SHA256', hashlib.sha256(raw).hexdigest())
+          print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-BEGIN')
+          print(json.dumps(value, sort_keys=True, indent=2))
+          print('ARCTIC-SHOWCASE-FAILURE-PROJECTION-END')
+          PY
