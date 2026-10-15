@@ -72,13 +72,9 @@ class UpdateRecordsTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             guard.verify(manifest, ROOT)
 
-    def test_checked_in_manifest_is_disabled_or_exactly_pinned(self):
+    def test_checked_in_manifest_stages_known_identity_without_guessing_missing_pins(self):
         manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
-        if manifest['ready'] is False:
-            self.assertIsNone(manifest['image'])
-            self.assertIsNone(manifest['stable'])
-            self.assertEqual(manifest['execution_files'], {})
-            return
+        self.assertIs(manifest['ready'], False)
         self.assertFalse(manifest['release_acceptance'])
         self.assertEqual(set(manifest['execution_files']), guard.FILES)
         self.assertEqual(manifest['execution_files'], {
@@ -86,22 +82,26 @@ class UpdateRecordsTest(unittest.TestCase):
             for name in guard.FILES
         })
         self.assertEqual(manifest['image'], {
-            'archive_bytes': 1936360758,
-            'archive_sha256': 'b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182',
-            'artifact_id': 11951877248,
-            'bytes': 1936173056,
-            'name': 'Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso',
+            'archive_bytes': None,
+            'archive_sha256': None,
+            'artifact_id': None,
+            'bytes': 1936185344,
+            'name': 'Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso',
             'producer_mode': 'frozen-external-paired-v1',
-            'producer_receipt_sha256': '73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59',
-            'run_id': 38684683083,
-            'sha256': '55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4',
-            'source_sha': '3152dbfd7a1844117dfb15aa8dd160bb811e8b54',
+            'producer_receipt_sha256': None,
+            'run_id': 38707130991,
+            'sha256': '92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66',
+            'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
         })
         self.assertEqual(manifest['stable'], {
-            'run_id': 38684491385,
-            'source_sha': '3152dbfd7a1844117dfb15aa8dd160bb811e8b54',
             'gpg_fingerprint': '80F75DE9A23B632246FD1FF1BD1A642B5436645A',
+            'live_manifest_sha256': 'd25f18507283cf8878e8d01c8046942c2c18b88560b59509912d972399e40fad',
+            'release_suffix': '.20261015083822.202610150838.gitfc501fd',
+            'run_id': 38707105430,
+            'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
         })
+        self.assertEqual((ROOT / '.github/qualification-20261010.update').read_text(),
+                         'aad7b7f0be49a28eaf2d43767c14d62b05101a0a\n')
 
 
 class SigningFingerprintTest(unittest.TestCase):
