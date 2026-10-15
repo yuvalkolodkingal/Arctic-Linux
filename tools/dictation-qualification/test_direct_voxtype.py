@@ -193,7 +193,7 @@ on_transcription = false
         self.assertTrue(any(call.args == (configure + [checker.source_name],)
                             for call in checker.cmd.call_args_list))
         self.assertTrue(any(call.args == (configure + ['default'],)
-                            and call.kwargs == {'check': False}
+                            and call.kwargs == {}
                             for call in checker.cmd.call_args_list))
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
@@ -230,8 +230,11 @@ on_transcription = false
                         b'active\n' if argv == ['systemctl', '--user', 'is-active',
                                                 'voxtype.service'] else b''),
                 stderr=b'', returncode=0))
-            with self.assertRaisesRegex(guest.Invalid, '^observation-timeout$'):
+            with self.assertRaises(guest.MicrophoneStageFailure) as failure:
                 checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['actionable-error'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
         checker.route.assert_called_once_with()
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
@@ -256,17 +259,52 @@ on_transcription = false
             if target == 'capture-link' else fn()))
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=b'', stderr=b'', returncode=0))
-        with self.assertRaisesRegex(guest.Invalid, '^observation-timeout$'):
+        with self.assertRaises(guest.MicrophoneStageFailure) as failure:
             checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['capture-link'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
         checker.destroy_route.assert_not_called()
         checker.route.assert_not_called()
         configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
         self.assertTrue(any(call.args == (configure + ['default'],)
-                            and call.kwargs == {'check': False}
+                            and call.kwargs == {}
                             for call in checker.cmd.call_args_list))
         self.assertEqual([call.args[0] for call in checker.record.call_args_list],
                          ['start', 'cancel'])
         checker.select.assert_called_with(language='he')
+
+    def test_microphone_cleanup_attempts_later_restoration_after_route_failure(self):
+        checker = self.checker()
+        checker.empty = Mock()
+        checker.select = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.capture_link = Mock(return_value=False)
+        checker.destroy_route = Mock()
+        checker.route = Mock(side_effect=guest.Invalid('private-route-failure'))
+        checker.loop = None
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.state = Mock(return_value='recording')
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'en'})
+        checker.observe = Mock(side_effect=lambda target, fn, _seconds=20: (
+            (_ for _ in ()).throw(guest.Invalid('private-capture-failure'))
+            if target == 'capture-link' else fn()))
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        with tempfile.TemporaryDirectory() as temp:
+            checker.root = Path(temp)
+            checker.runtime = checker.root
+            (checker.root / 'received.private').write_bytes(b'')
+            with self.assertRaises(guest.MicrophoneStageFailure) as failure:
+                checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['route-restore'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
+        checker.select.assert_called_with(language='en')
+        configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device', 'default']
+        self.assertTrue(any(call.args == (configure,) for call in checker.cmd.call_args_list))
 
     def test_failed_lock_assertion_unlocks_and_restores_service_for_later_gates(self):
         checker = self.checker()
@@ -318,6 +356,83 @@ on_transcription = false
         checker.select(language='en')
         checker.adapter.assert_called_once_with('set-language', 'en')
         checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        checker.select(language='en')
+        checker.adapter.assert_called_once_with('set-language', 'en')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        checker.select(language='he')
+        self.assertEqual(checker.adapter.call_args_list,
+                         [unittest.mock.call('set-language', 'en'),
+                          unittest.mock.call('set-language', 'he')])
+        self.assertEqual(checker.daemon_ready.call_count, 2)
+        self.assertEqual(checker.selected_language, 'he')
+
+    def test_backend_setup_invalidates_cached_language_before_explicit_selection(self):
+        checker = self.checker()
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        with patch.object(guest, 'run', return_value=SimpleNamespace(
+                stdout=b'', stderr=b'', returncode=0)):
+            checker.select(language='he', backend='cpu')
+        checker.adapter.assert_called_once_with('set-language', 'he')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        self.assertEqual(checker.selected_language, 'he')
+
+    def test_failed_backend_restart_cannot_leave_a_stale_language_cache(self):
+        checker = self.checker()
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock(side_effect=guest.Invalid('private-restart-failure'))
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        with patch.object(guest, 'run', return_value=SimpleNamespace(
+                stdout=b'', stderr=b'', returncode=0)), \
+                self.assertRaisesRegex(guest.Invalid, '^private-restart-failure$'):
+            checker.select(backend='cpu')
+        self.assertIsNone(checker.selected_language)
+
+        checker.cmd = Mock()
+        checker.select(language='he')
+        checker.adapter.assert_called_once_with('set-language', 'he')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+
+    def test_failed_language_readiness_cannot_leave_a_stale_language_cache(self):
+        checker = self.checker()
+        checker.selected_language = 'en'
+        checker.adapter = Mock()
+        checker.daemon_ready = Mock(side_effect=[
+            guest.Invalid('private-readiness-failure'),
+            (123, 456, Path('/usr/bin/voxtype')),
+        ])
+        with self.assertRaisesRegex(guest.Invalid, '^private-readiness-failure$'):
+            checker.select(language='he')
+        self.assertIsNone(checker.selected_language)
+
+        checker.select(language='en')
+        self.assertEqual(checker.adapter.call_args_list,
+                         [unittest.mock.call('set-language', 'he'),
+                          unittest.mock.call('set-language', 'en')])
+        self.assertEqual(checker.selected_language, 'en')
+
+    def test_every_transcription_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'transcription_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.TRANSCRIPTION_FAILURE_STAGES))
+
+    def test_every_microphone_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and ((isinstance(node.func, ast.Attribute)
+                       and node.func.attr == 'microphone_stage')
+                      or (isinstance(node.func, ast.Name)
+                          and node.func.id == 'cleanup'))
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.MICROPHONE_FAILURE_STAGES))
 
     def test_daemon_readiness_rejects_stale_and_changing_process_identity(self):
         checker = self.checker()

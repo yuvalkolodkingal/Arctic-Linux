@@ -98,8 +98,70 @@ OBSERVATIONS = {
     'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
+    'failure_stage',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
+TRANSCRIPTION_FAILURE_STAGES = {
+    'fixture-selection': 1,
+    'receiver-clear': 2,
+    'focus-before': 3,
+    'language-selection': 4,
+    'record-start': 5,
+    'recording-state': 6,
+    'engine-profile': 7,
+    'capture-link': 8,
+    'fixture-play-start': 9,
+    'fixture-playback': 10,
+    'record-stop': 11,
+    'transcribing-state': 12,
+    'terminal-state': 13,
+    'text-delivery': 14,
+    'text-shape': 15,
+    'focus-after': 16,
+    'language-script': 17,
+    'accuracy-metrics': 18,
+    'sample-record': 19,
+}
+MICROPHONE_FAILURE_STAGES = {
+    'receiver-clear': 101,
+    'cpu-backend': 102,
+    'initial-status': 103,
+    'source-selection': 104,
+    'pinned-daemon-restart': 105,
+    'pinned-daemon-ready': 106,
+    'record-start': 107,
+    'recording-state': 108,
+    'capture-link': 109,
+    'route-destroy': 110,
+    'source-isolation': 111,
+    'interrupted-cancel': 112,
+    'disconnected-daemon-restart': 113,
+    'disconnected-daemon-ready': 114,
+    'failed-record-start': 115,
+    'actionable-error': 116,
+    'idle-state': 117,
+    'receiver-empty': 118,
+    'cleanup-cancel': 119,
+    'route-restore': 120,
+    'default-source-restore': 121,
+    'language-restore': 122,
+    'error-clear': 123,
+}
+TRANSCRIPTION_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+    MODERN_GPU_GATE,
+    LEGACY_GPU_GATE,
+}
+FAILURE_STAGE_GATES = {
+    **{gate: frozenset(TRANSCRIPTION_FAILURE_STAGES.values())
+       for gate in TRANSCRIPTION_GATES},
+    'microphone-disconnect-error': frozenset(MICROPHONE_FAILURE_STAGES.values()),
+}
+TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
@@ -271,6 +333,16 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             else:
                 require(type(value) in (int, bool) and (type(value) is bool or value >= 0),
                         'gate-observation-scalar')
+        if 'failure_stage' in observed:
+            require(gate['status'] == 'failed' and gate['id'] in FAILURE_STAGE_GATES,
+                    'gate-failure-stage-scope')
+            require(type(observed['failure_stage']) is int
+                    and observed['failure_stage'] in FAILURE_STAGE_GATES.get(gate['id'], ()),
+                    'gate-failure-stage-value')
+        elif (gate['status'] == 'failed'
+              and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
+                                 | {'microphone-disconnect-error'})):
+            require(False, 'gate-failure-stage-missing')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value

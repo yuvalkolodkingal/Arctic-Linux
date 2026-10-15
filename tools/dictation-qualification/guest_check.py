@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -86,6 +86,32 @@ SERVICE_UNSET_ENV = frozenset({
 
 class MicrophoneIsolationUnavailable(Invalid):
     """Exact source-owned signal for a fixture the guest cannot isolate."""
+
+
+class TranscriptionStageFailure(Invalid):
+    """Transcript-free projection of one fixed transcription operation."""
+
+    def __init__(self, stage, label):
+        require(type(stage) is str and stage in TRANSCRIPTION_FAILURE_STAGES,
+                'unknown-transcription-failure-stage')
+        require(type(label) is str and label in ERROR_LABELS,
+                'unknown-transcription-failure-family')
+        super().__init__()
+        self.failure_stage = TRANSCRIPTION_FAILURE_STAGES[stage]
+        self.error_label = label
+
+
+class MicrophoneStageFailure(Invalid):
+    """Transcript-free projection of one fixed microphone operation."""
+
+    def __init__(self, stage, label):
+        require(type(stage) is str and stage in MICROPHONE_FAILURE_STAGES,
+                'unknown-microphone-failure-stage')
+        require(type(label) is str and label in ERROR_LABELS,
+                'unknown-microphone-failure-family')
+        super().__init__()
+        self.failure_stage = MICROPHONE_FAILURE_STAGES[stage]
+        self.error_label = label
 
 def mark_collector_setup(stage):
     """Record only one source-owned setup stage; never retain failure material."""
@@ -509,6 +535,7 @@ class Checker:
         self.config_path = Path(self.account.pw_dir) / '.config/voxtype/config.toml'
         self.user_bindings = Path(self.account.pw_dir) / '.config/mango/arctic/binds.conf'
         self.phrases, self.snapshots = [], []
+        self.selected_language = None
         self.loop = self.window = self.player = None
         self.old_source = self.source = None
         self.initial_processes = {path.name for path in Path('/proc').glob('[0-9]*')}
@@ -537,7 +564,12 @@ class Checker:
             result.update(status='passed', code='observed', observations=fn() or {})
         except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
             label = caught_error_label(error)
+            observations = {}
+            if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure):
+                label = error.error_label
+                observations = {'failure_stage': error.failure_stage}
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
+            result['observations'] = observations
             if type(error) is MicrophoneIsolationUnavailable:
                 result['code'] = 'gate-microphone-disconnect-error-isolation-unavailable'
                 result['status'] = 'unrun'
@@ -885,17 +917,50 @@ class Checker:
 
     def select(self, language=None, backend=None):
         changed = False
-        if language is not None:
-            self.adapter('set-language', language)
-            changed = True
         if backend is not None:
             require(backend in ('cpu', 'vulkan'), 'unknown-backend-selection')
+            # Setup may regenerate the canonical multilingual config before a
+            # later restart or readiness check fails. Invalidate first so a
+            # following selection cannot trust a stale single-language cache.
+            self.selected_language = None
             run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
                  str(SETUP), '--backend', backend], 750)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
             changed = True
+        selected = None
+        if language is not None and language != getattr(self, 'selected_language', None):
+            # The adapter writes config before its restart/readiness boundary.
+            # Invalidate before mutation for the same reason as backend setup.
+            self.selected_language = None
+            self.adapter('set-language', language)
+            selected = language
+            changed = True
         if changed:
             self.daemon_ready('daemon-restart', 30)
+            if selected is not None:
+                self.selected_language = selected
+
+    def transcription_stage(self, stage, fn):
+        """Run one fixed operation and retain only its numeric stage/family."""
+        require(type(stage) is str and stage in TRANSCRIPTION_FAILURE_STAGES,
+                'unknown-transcription-failure-stage')
+        try:
+            return fn()
+        except TranscriptionStageFailure:
+            raise
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            raise TranscriptionStageFailure(stage, caught_error_label(error)) from None
+
+    def microphone_stage(self, stage, fn):
+        """Run one fixed microphone operation without retaining private output."""
+        require(type(stage) is str and stage in MICROPHONE_FAILURE_STAGES,
+                'unknown-microphone-failure-stage')
+        try:
+            return fn()
+        except (MicrophoneIsolationUnavailable, MicrophoneStageFailure):
+            raise
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            raise MicrophoneStageFailure(stage, caught_error_label(error)) from None
 
     def daemon_ready(self, target, seconds=30):
         """Wait beyond a restart until one unchanged official daemon is usable."""
@@ -914,25 +979,41 @@ class Checker:
         return self.observe(target, ready, seconds)
 
     def transcribe(self, sample, purpose='cpu-session'):
-        self.empty()
-        require(self.focused(), 'receiver-focus-lost')
-        self.select(language=sample['language'])
+        self.transcription_stage('receiver-clear', self.empty)
+        self.transcription_stage(
+            'focus-before', lambda: require(self.focused(), 'receiver-focus-lost'))
+        def choose_language():
+            language = sample['language']
+            require(language in ('en', 'he'), 'fixture-language-invalid')
+            self.select(language=language)
+            return language
+        language = self.transcription_stage('language-selection', choose_language)
         before = time.monotonic_ns()
-        self.record('start')
-        self.observe('recording-state', lambda: self.state() == 'recording', 10)
-        _pid, _ticks, binary = self.engine()
-        cpu_key = 'avx2' if self.profile_id == 'turbo-q5-v3' else 'cpu'
-        require(binary == PAYLOAD / self.names[cpu_key]
-                and sha(binary) == self.assets[cpu_key]['sha256'],
-                'cpu-upstream-daemon-profile-pin')
-        self.observe('capture-link', self.capture_link, 10)
-        self.play(sample)
-        require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
-                'fixture-playback-failed')
-        self.record('stop')
-        self.observe('transcribing-state',
-                     lambda: self.state() in ('transcribing', 'idle'), 10)
-        self.observe('terminal-state', lambda: self.state() == 'idle', 240)
+        self.transcription_stage('record-start', lambda: self.record('start'))
+        self.transcription_stage(
+            'recording-state', lambda: self.observe(
+                'recording-state', lambda: self.state() == 'recording', 10))
+        def engine_profile():
+            _pid, _ticks, binary = self.engine()
+            cpu_key = 'avx2' if self.profile_id == 'turbo-q5-v3' else 'cpu'
+            require(binary == PAYLOAD / self.names[cpu_key]
+                    and sha(binary) == self.assets[cpu_key]['sha256'],
+                    'cpu-upstream-daemon-profile-pin')
+            return cpu_key
+        cpu_key = self.transcription_stage('engine-profile', engine_profile)
+        self.transcription_stage(
+            'capture-link', lambda: self.observe('capture-link', self.capture_link, 10))
+        self.transcription_stage('fixture-play-start', lambda: self.play(sample))
+        self.transcription_stage('fixture-playback', lambda: require(
+            self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
+            'fixture-playback-failed'))
+        self.transcription_stage('record-stop', lambda: self.record('stop'))
+        self.transcription_stage(
+            'transcribing-state', lambda: self.observe(
+                'transcribing-state', lambda: self.state() in ('transcribing', 'idle'), 10))
+        self.transcription_stage(
+            'terminal-state', lambda: self.observe(
+                'terminal-state', lambda: self.state() == 'idle', 240))
         elapsed = time.monotonic_ns() - before
         previous, stable = None, 0
         def received():
@@ -941,34 +1022,44 @@ class Checker:
             stable = stable + 1 if value and value == previous else 0
             previous = value
             return value if stable >= 3 else None
-        hypothesis = self.observe('text-delivery', received, 5)
-        require(hypothesis and '\n' not in hypothesis, 'empty-or-unintended-enter')
-        require(self.focused(), 'insertion-focus-lost')
-        if sample['language'] == 'he':
-            require(any('\u05d0' <= char <= '\u05ea' for char in hypothesis),
-                    'hebrew-script-not-inserted')
-        self.phrases.append(hypothesis)
-        metric = self.accuracy.metrics(
-            (DATA / 'dictation-fixtures' / sample['reference']).read_text(), hypothesis)
-        item = {'language': sample['language'], 'source_row': sample['source_row'],
-                'purpose': purpose, 'wav_sha256': sample['wav_sha256'],
-                'reference_sha256': sample['reference_sha256'],
-                'hypothesis_sha256': hashlib.sha256(hypothesis.encode()).hexdigest(),
-                'elapsed_ns': elapsed, 'audio_frames': sample['audio_frames'],
-                'sample_rate': 16000, 'reference_words': metric['reference_words'],
-                'word_edits': metric['word_edits'],
-                'reference_chars': metric['reference_characters'],
-                'char_edits': metric['character_edits'], 'backend': 'cpu',
-                'cpu_variant': self.profile['cpu_variant'],
-                'binary_sha256': self.assets[cpu_key]['sha256'],
-                'model_sha256': self.assets['model']['sha256']}
-        self.report['samples'].append(item)
+        hypothesis = self.transcription_stage(
+            'text-delivery', lambda: self.observe('text-delivery', received, 5))
+        self.transcription_stage('text-shape', lambda: require(
+            hypothesis and '\n' not in hypothesis, 'empty-or-unintended-enter'))
+        self.transcription_stage(
+            'focus-after', lambda: require(self.focused(), 'insertion-focus-lost'))
+        if language == 'he':
+            self.transcription_stage('language-script', lambda: require(
+                any('\u05d0' <= char <= '\u05ea' for char in hypothesis),
+                'hebrew-script-not-inserted'))
+        metric = self.transcription_stage('accuracy-metrics', lambda: self.accuracy.metrics(
+            (DATA / 'dictation-fixtures' / sample['reference']).read_text(), hypothesis))
+        def record_sample():
+            item = {'language': language, 'source_row': sample['source_row'],
+                    'purpose': purpose, 'wav_sha256': sample['wav_sha256'],
+                    'reference_sha256': sample['reference_sha256'],
+                    'hypothesis_sha256': hashlib.sha256(hypothesis.encode()).hexdigest(),
+                    'elapsed_ns': elapsed, 'audio_frames': sample['audio_frames'],
+                    'sample_rate': 16000, 'reference_words': metric['reference_words'],
+                    'word_edits': metric['word_edits'],
+                    'reference_chars': metric['reference_characters'],
+                    'char_edits': metric['character_edits'], 'backend': 'cpu',
+                    'cpu_variant': self.profile['cpu_variant'],
+                    'binary_sha256': self.assets[cpu_key]['sha256'],
+                    'model_sha256': self.assets['model']['sha256']}
+            self.report['samples'].append(item)
+            self.phrases.append(hypothesis)
+            return item
+        item = self.transcription_stage('sample-record', record_sample)
         return item
 
     def samples(self, language):
-        rows = [sample for sample in self.fixtures if sample['language'] == language]
-        require([sample['source_row'] for sample in rows] == list(range(5)),
-                'fixture-language-rows')
+        def selected_rows():
+            rows = [sample for sample in self.fixtures if sample['language'] == language]
+            require([sample['source_row'] for sample in rows] == list(range(5)),
+                    'fixture-language-rows')
+            return rows
+        rows = self.transcription_stage('fixture-selection', selected_rows)
         for sample in rows:
             self.transcribe(sample)
         return {'count': 5}
@@ -1023,12 +1114,15 @@ class Checker:
         return {'ready': False, 'restored': True}
 
     def microphone(self):
-        self.empty()
-        self.select(backend='cpu')
-        initial = self.adapter('status')
-        restore_language = initial.get('language')
-        require(initial.get('ready') is True and restore_language in ('auto', 'he', 'en'),
-                'microphone-initial-state-invalid')
+        self.microphone_stage('receiver-clear', self.empty)
+        self.microphone_stage('cpu-backend', lambda: self.select(backend='cpu'))
+        def initial_status():
+            initial = self.adapter('status')
+            restore_language = initial.get('language')
+            require(initial.get('ready') is True and restore_language in ('auto', 'he', 'en'),
+                    'microphone-initial-state-invalid')
+            return restore_language
+        restore_language = self.microphone_stage('initial-status', initial_status)
         try:
             # Pin the owned source instead of relying on PipeWire's default. A
             # virtual source which disappears while CPAL already has it open
@@ -1036,27 +1130,41 @@ class Checker:
             # does not reproduce a device absent when VoxType opens it again.
             # All mutations are inside this cleanup boundary: a failed start
             # or link assertion must not poison the following lock/GPU gates.
-            self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name])
-            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.daemon_ready('microphone-pinned-daemon', 30)
-            self.record('start')
-            self.observe('recording-state', lambda: self.state() == 'recording', 10)
-            self.observe('capture-link', self.capture_link, 10)
-            self.destroy_route(restore=False)
-            objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
-            remaining = [row for row in objects if row.get('type') == 'PipeWire:Interface:Node'
-                         and row.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
-            if remaining:
-                raise MicrophoneIsolationUnavailable()
+            self.microphone_stage('source-selection', lambda: self.cmd(
+                [str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name]))
+            self.microphone_stage('pinned-daemon-restart', lambda: self.cmd(
+                ['systemctl', '--user', 'restart', 'voxtype.service']))
+            self.microphone_stage('pinned-daemon-ready', lambda: self.daemon_ready(
+                'microphone-pinned-daemon', 30))
+            self.microphone_stage('record-start', lambda: self.record('start'))
+            self.microphone_stage('recording-state', lambda: self.observe(
+                'recording-state', lambda: self.state() == 'recording', 10))
+            self.microphone_stage('capture-link', lambda: self.observe(
+                'capture-link', self.capture_link, 10))
+            self.microphone_stage('route-destroy', lambda: self.destroy_route(restore=False))
+            def isolated():
+                objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
+                remaining = [
+                    row for row in objects
+                    if row.get('type') == 'PipeWire:Interface:Node'
+                    and row.get('info', {}).get('props', {}).get(
+                        'media.class', '').startswith('Audio/Source')]
+                if remaining:
+                    raise MicrophoneIsolationUnavailable()
+            self.microphone_stage('source-isolation', isolated)
             # Discard the interrupted session, then make the official daemon
             # reopen the same selected microphone while it is still absent.
             # That produces VoxType's supported, deterministic device-open
             # error instead of assuming PipeWire turns a removed virtual node
             # into a CPAL hot-unplug callback.
-            self.record('cancel', check=False)
-            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.daemon_ready('microphone-disconnected-daemon', 30)
-            self.record('start', check=False)
+            self.microphone_stage(
+                'interrupted-cancel', lambda: self.record('cancel', check=False))
+            self.microphone_stage('disconnected-daemon-restart', lambda: self.cmd(
+                ['systemctl', '--user', 'restart', 'voxtype.service']))
+            self.microphone_stage('disconnected-daemon-ready', lambda: self.daemon_ready(
+                'microphone-disconnected-daemon', 30))
+            self.microphone_stage(
+                'failed-record-start', lambda: self.record('start', check=False))
             def actionable():
                 status = self.adapter('status')
                 error = str(status.get('error', '')).lower()
@@ -1066,26 +1174,38 @@ class Checker:
             # pre-signal idle state first can succeed before VoxType processes
             # record start, leaving an earlier fixture's error to contaminate
             # this gate.
-            self.observe('microphone-actionable-error', actionable, 30)
-            self.observe('microphone-idle', lambda: self.state() == 'idle', 10)
-            require((self.root / 'received.private').read_bytes() == b'',
-                    'microphone-failure-inserted-text')
+            self.microphone_stage('actionable-error', lambda: self.observe(
+                'microphone-actionable-error', actionable, 30))
+            self.microphone_stage('idle-state', lambda: self.observe(
+                'microphone-idle', lambda: self.state() == 'idle', 10))
+            self.microphone_stage('receiver-empty', lambda: require(
+                (self.root / 'received.private').read_bytes() == b'',
+                'microphone-failure-inserted-text'))
         finally:
-            self.record('cancel', check=False)
+            cleanup_failures = []
+            def cleanup(stage, operation):
+                try:
+                    self.microphone_stage(stage, operation)
+                except MicrophoneStageFailure as error:
+                    cleanup_failures.append(error)
+            cleanup('cleanup-cancel', lambda: self.record('cancel', check=False))
             if self.loop is None:
-                self.route()
-            self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', 'default'],
-                     check=False)
+                cleanup('route-restore', self.route)
+            cleanup('default-source-restore', lambda: self.cmd(
+                [str(VOXTYPE), 'config', 'set', 'audio.device', 'default']))
             # Removing a PipeWire source is intentionally destructive. A
             # daemon which still owns that dead CPAL stream must not influence
             # the independent lock, GPU and privacy gates which follow. Use
             # Arctic's supported settings operation to restart the daemon and
             # clear the already-observed error, rather than mutating its
             # private runtime projection from the qualification client.
-            self.select(language=restore_language)
+            cleanup('language-restore', lambda: self.select(language=restore_language))
             error_path = self.runtime / 'arctic/voxtype-error'
-            require(not error_path.exists() and not error_path.is_symlink(),
-                    'microphone-error-not-cleared')
+            cleanup('error-clear', lambda: require(
+                not error_path.exists() and not error_path.is_symlink(),
+                'microphone-error-not-cleared'))
+            if cleanup_failures:
+                raise cleanup_failures[0]
         return {'count': 0, 'drained': True, 'restored': True}
 
     def locked(self):

@@ -166,6 +166,80 @@ class ContractControls(unittest.TestCase):
         gate.update(status='unrun', code='gate-' + gate['id'] + '-invalid')
         self.rejects(report, 'gate-code-status')
 
+    def test_failed_cpu_transcription_requires_bounded_numeric_stage(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates']
+                    if gate['id'] == 'cpu-hebrew-transcription-insertion')
+        gate.update(status='failed', code='gate-' + gate['id'] + '-timeout',
+                    observations={'failure_stage':
+                                  c.TRANSCRIPTION_FAILURE_STAGES['terminal-state']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+        missing = copy.deepcopy(report)
+        next(g for g in missing['gates'] if g['id'] == gate['id'])['observations'] = {}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
+            c.validate(missing, missing['context'], fixture_manifest=FIXTURES)
+
+        for value in (True, 0, max(c.TRANSCRIPTION_FAILURE_STAGES.values()) + 1):
+            changed = copy.deepcopy(report)
+            next(g for g in changed['gates'] if g['id'] == gate['id'])[
+                'observations']['failure_stage'] = value
+            with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+                c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
+
+    def test_failure_stage_is_rejected_outside_failed_transcription_gate(self):
+        report = synthetic('online-installed')
+        cpu = next(gate for gate in report['gates']
+                   if gate['id'] == 'cpu-english-transcription-insertion')
+        cpu['observations']['failure_stage'] = 1
+        self.rejects(report, 'gate-failure-stage-scope')
+
+        report = synthetic('online-installed')
+        unrelated = next(gate for gate in report['gates']
+                         if gate['id'] == 'cancel-discards')
+        unrelated.update(status='failed', code='gate-cancel-discards-invalid',
+                         observations={'failure_stage': 1})
+        report['status'] = 'failed'
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-scope$'):
+            c.validate(report, report['context'], fixture_manifest=FIXTURES)
+
+    def test_gpu_gate_allows_stage_only_for_a_transcription_substep(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+        gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                    observations={'failure_stage':
+                                  c.TRANSCRIPTION_FAILURE_STAGES['text-delivery']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        gate['observations'] = {}
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+    def test_failed_microphone_gate_requires_its_own_bounded_stage(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates']
+                    if gate['id'] == 'microphone-disconnect-error')
+        gate.update(status='failed', code='gate-' + gate['id'] + '-timeout',
+                    observations={'failure_stage':
+                                  c.MICROPHONE_FAILURE_STAGES['actionable-error']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+        missing = copy.deepcopy(report)
+        next(g for g in missing['gates'] if g['id'] == gate['id'])['observations'] = {}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
+            c.validate(missing, missing['context'], fixture_manifest=FIXTURES)
+
+        wrong_inventory = copy.deepcopy(report)
+        next(g for g in wrong_inventory['gates'] if g['id'] == gate['id'])[
+            'observations']['failure_stage'] = c.TRANSCRIPTION_FAILURE_STAGES['record-start']
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+            c.validate(wrong_inventory, wrong_inventory['context'], fixture_manifest=FIXTURES)
+
     def test_dependent_unrun_gates_require_a_concrete_source_owned_failure(self):
         report = synthetic('online-installed')
         failed, dependent = report['gates'][:2]
