@@ -226,6 +226,29 @@ class Controls(unittest.TestCase):
         self.assertEqual(observed,[dict(command=['set_property','pause',True],request_id=44),
                                    dict(command=['frame-step'],request_id=45)])
 
+    def test_static_fixture_replaces_exact_file_on_same_owned_player(self):
+        path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
+        target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')
+        observed=[]
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            def accept():
+                peer,_=server.accept()
+                with peer:
+                    data=b''
+                    while b'\n' not in data:data+=peer.recv(4096)
+                    observed.append(json.loads(data.splitlines()[0]))
+                    peer.sendall(b'{"data":null,"error":"success","request_id":48}\n')
+            thread=threading.Thread(target=accept);thread.start()
+            receipt=s.mpv_replace_fixture(path,os.getpid(),os.getuid(),source,target)
+            thread.join(3);self.assertFalse(thread.is_alive())
+        command=['loadfile',str(target),'replace']
+        self.assertEqual(observed,[dict(command=command,request_id=48)])
+        self.assertEqual(receipt,dict(schema='arctic-native-fixture-transition-v1',
+            transport='owned mpv IPC SO_PEERCRED',source=str(source),target=str(target),command=command,
+            request_id=48,acknowledgement=dict(data=None,error='success',request_id=48),
+            same_process_renderer_required=True,release_acceptance=False))
+
     def test_nonzero_command_fails_without_shell(self):
         with self.assertRaisesRegex(RuntimeError,'command failed'):
             s.execute(['python3','-c','raise SystemExit(4)'])

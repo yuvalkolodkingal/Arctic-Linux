@@ -277,7 +277,8 @@ class DrainAndExportControls(unittest.TestCase):
             with patch.object(N,'NativeProtocolDrain',side_effect=drain_factory) as factory,\
                  patch.object(N.threading.Thread,'start',side_effect=RuntimeError('private optional setup text')),\
                  patch.object(N.subprocess,'Popen',return_value=Mock()) as popen:
-                self.assertIsNone(smoke.gate('open-codec-content-and-player-state',smoke.visual_media))
+                argv=['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',str(fixture)]
+                self.assertIsNone(smoke.gate('open-codec-content-and-player-state',lambda:smoke.launch_protocol_player(argv)))
             self.assertEqual(factory.call_count,1);popen.assert_not_called()
             self.assertIn('product renderer attestation setup unavailable',smoke.gates[-1]['detail'])
             self.assertNotIn('private optional',json.dumps(smoke.gates))
@@ -346,18 +347,19 @@ class DrainAndExportControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=Path(t);smoke.gui_v6=True;smoke.uid=os.getuid();smoke.stage='live';smoke.owned=[]
             fixture=smoke.root/'visual-reference.mkv';fixture.write_bytes(b'host-only')
+            moving=smoke.root/'open-codec-fixture.mkv';moving.write_bytes(b'moving-host-only')
             expected=smoke.root/'visual-reference-frame.rgb';expected.write_bytes(N.visual_reference_frame())
             proofs=[dict(pid=100,start_ticks=10,client_id='7',executable='/usr/bin/celluloid',
                          executable_sha256='a'*64)]
+            fullscreen={'value':False}
             def client(proof):return dict(id=int(proof['client_id']),pid=proof['pid'],x=0,y=0,width=160,height=120,
-                is_focused=True,is_visible=True,is_fullscreen=True,monitor='fixture')
+                is_focused=True,is_visible=True,is_fullscreen=fullscreen['value'],monitor='fixture')
             monitor=dict(name='fixture',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
-            fresh_index=[0]
-            def fresh(*args):
-                proof=proofs[fresh_index[0]];fresh_index[0]+=1;smoke.owned.append(proof);return proof
-            smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock(side_effect=fresh)
+            smoke.owned=list(proofs)
+            smoke.visual_fixture=Mock(return_value=(fixture,expected,'a'*64));smoke.fresh_window=Mock()
             smoke.alive=Mock(side_effect=lambda proof:client(proof));smoke.wait=Mock(side_effect=lambda fn,*args,**kwargs:fn());smoke.trace=Mock()
-            smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock()
+            smoke.player_fullscreen=Mock(side_effect=lambda proof,enabled,ipc:fullscreen.update(value=enabled))
+            smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_drain=Mock();smoke.finish_native_protocol=Mock()
             smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.native_protocol_drain.snapshot.return_value=dict(status='unknown',ownership_verified=False)
@@ -370,22 +372,35 @@ class DrainAndExportControls(unittest.TestCase):
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
             time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
+            path_values=iter((str(moving),str(fixture),str(fixture)))
             def prop(path,key,pid,uid):
                 if key=='pause':return next(pause_values)
-                if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
+                if key=='path':return next(path_values)
+                if key!='time-pos':return {'video-params':{'w':160,'h':120},
                     'current-vo':'libmpv'}[key]
                 return next(time_values)
+            renderer=smoke.product_renderer_contract.return_value
+            transition=dict(schema='arctic-native-fixture-transition-v1',transport='owned mpv IPC SO_PEERCRED',
+                source=str(moving),target=str(fixture),command=['loadfile',str(fixture),'replace'],request_id=48,
+                acknowledgement={'data':None,'error':'success','request_id':48},
+                same_process_renderer_required=True,release_acceptance=False)
+            reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=proofs[0],
+                ipc=str(smoke.root/'celluloid-ipc.sock'),moving_fixture=str(moving),
+                moving_screenshot_sha256='9'*64,product_renderer=renderer,
+                same_process_renderer_required=True,release_acceptance=False)
             with socket.socket(socket.AF_UNIX) as endpoint:
-                endpoint.bind(str(smoke.root/'visual-reference-ipc.sock'))
+                endpoint.bind(str(smoke.root/'celluloid-ipc.sock'))
                 with patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N.time,'sleep') as sleep:
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'mpv_replace_fixture',return_value=transition) as replace,patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
-                        smoke.visual_media()
+                        smoke.visual_media(reuse)
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
-            pause.assert_called_once_with(smoke.root/'visual-reference-ipc.sock',proofs[0]['pid'],smoke.uid)
+            replace.assert_called_once_with(smoke.root/'celluloid-ipc.sock',proofs[0]['pid'],smoke.uid,moving,fixture)
+            pause.assert_called_once_with(smoke.root/'celluloid-ipc.sock',proofs[0]['pid'],smoke.uid)
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
-            self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True,smoke.root/'visual-reference-ipc.sock'))
-            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False,smoke.root/'visual-reference-ipc.sock'))
+            self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True,smoke.root/'celluloid-ipc.sock'))
+            self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False,smoke.root/'celluloid-ipc.sock'))
+            smoke.fresh_window.assert_not_called()
             oracle=json.loads((smoke.root/'visual-oracle.json').read_bytes());self.assertEqual(oracle['oracle']['status'],'unmatched')
             self.assertEqual((oracle['player_attempt_limit'],oracle['capture_attempt_limit']),(1,1))
             diagnostic=json.loads((smoke.root/'0-native-protocol-viewport.json').read_bytes())
