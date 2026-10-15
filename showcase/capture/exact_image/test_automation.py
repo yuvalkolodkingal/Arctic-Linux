@@ -645,13 +645,20 @@ class UnattendedController(unittest.TestCase):
 
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
-        prefix, rendered_command = automation.Controller.SHELL_PROOF.split("printf ", 1)
+        prefix, rendered_command = automation.Controller.SHELL_PROOF.rsplit("printf ", 1)
         self.assertEqual(prefix, (
-            "set -g fish_color_user brwhite; set -g fish_color_host brwhite; "
-            "set -g fish_color_cwd brwhite; set -g fish_color_cwd_root brwhite; "
+            "function fish_prompt; set_color brwhite; "
+            "printf 'arcticshowcase@arctic-showcase ~> '; "
+            "set_color normal; end; "
         ))
         self.assertNotIn("set -U", prefix)
-        self.assertNotIn(">", prefix)
+        self.assertNotIn("funcsave", prefix)
+        self.assertNotIn("functions --copy", prefix)
+        account = (c.CONTROLLER["account"]["username"] + "@"
+                   + c.CONTROLLER["account"]["hostname"])
+        self.assertEqual(prefix.count(account), 1)
+        self.assertIn(account + " " + c.CONTROLLER["account"]["prompt"]["rendered"],
+                      prefix)
         rendered = subprocess.run(
             ["/bin/sh", "-c", "printf " + rendered_command],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,

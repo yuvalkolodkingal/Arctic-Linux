@@ -97,11 +97,12 @@ candidate's animated greeting, the host sends one empty command terminator. Its
 which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
-The proof first changes only the disposable Fish session's user, host and
-working-directory prompt colours to bright white. It then clears and homes the
-VT before printing a bold marker, using the same pattern as the successful
-installed-image identity challenge. Fish itself renders the real prompt after
-the proof command returns. The host
+The proof defines a `fish_prompt` function only in the disposable Fish session.
+That function renders the fixed contiguous account token and `~>` suffix in
+bright white. The proof then clears and homes the VT before printing a bold
+marker, using the same pattern as the successful installed-image identity
+challenge. Fish itself invokes the session prompt function after the proof
+command returns. The host
 keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
 in the fixed top 128 pixels to white and reads that private mask through a 4x
 nearest-neighbour enlargement. The transformed crop is always deleted; the
