@@ -1017,14 +1017,30 @@ class Checker:
             self.observe('microphone-idle', lambda: self.state() == 'idle', 30)
             require((self.root / 'received.private').read_bytes() == b'',
                     'microphone-failure-inserted-text')
-            status = self.adapter('status')
-            error = str(status.get('error', '')).lower()
-            require(status.get('state') == 'error'
-                    and any(word in error for word in ('microphone', 'audio', 'input device')),
-                    'microphone-failure-not-actionable')
+            def actionable():
+                status = self.adapter('status')
+                error = str(status.get('error', '')).lower()
+                return status if (status.get('state') == 'error'
+                    and any(word in error for word in ('microphone', 'audio', 'input device'))) else None
+            # VoxType publishes its idle state before journald necessarily
+            # makes the final capture error visible to Arctic's status
+            # projection. Require the same actionable error, but observe that
+            # asynchronous boundary instead of sampling it once.
+            self.observe('microphone-actionable-error', actionable, 10)
         finally:
             self.record('cancel', check=False)
             self.route()
+            # Removing a PipeWire source is intentionally destructive. A
+            # daemon which still owns that dead CPAL stream must not influence
+            # the independent lock, GPU and privacy gates which follow.
+            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
+            def restored():
+                service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                                   check=False)
+                return (service.stdout.strip() == b'active'
+                        and self.state(allow_absent=True) == 'idle'
+                        and len(self.engines()) == 1)
+            self.observe('microphone-daemon-restored', restored, 30)
         return {'count': 0, 'drained': True, 'restored': True}
 
     def locked(self):
@@ -1035,29 +1051,55 @@ class Checker:
         self.observe('capture-link', self.capture_link, 10)
         self.play(self.fixtures[0])
         time.sleep(.3)
-        self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'lock'])
-        self.observe('lock-state', lambda: self.cmd(
-            ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
-        self.kill(self.player)
-        self.player = None
-        def stopped():
-            service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
-                               check=False)
-            return (service.stdout.strip() == b'inactive' and not self.engines()
-                    and self.state(allow_absent=True) == 'stopped')
-        self.observe('lock-daemon-stopped', stopped, 10)
-        require((self.root / 'received.private').read_bytes() == b'',
-                'lock-inserted-text')
-        print('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
-        self.observe('unlock-state', lambda: self.cmd(
-            ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
+        lock_command = False
+        locked = False
+        unlocked = False
+        unlock_requested = False
         def restarted():
             service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
                                check=False)
             return (service.stdout.strip() == b'active'
                     and self.state(allow_absent=True) == 'idle'
                     and len(self.engines()) == 1)
-        self.observe('unlock-daemon-restarted', restarted, 20)
+        try:
+            self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'lock'])
+            lock_command = True
+            self.observe('lock-state', lambda: self.cmd(
+                ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'true')
+            locked = True
+            self.kill(self.player)
+            self.player = None
+            def stopped():
+                service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                                   check=False)
+                return (service.stdout.strip() == b'inactive' and not self.engines()
+                        and self.state(allow_absent=True) == 'stopped')
+            self.observe('lock-daemon-stopped', stopped, 10)
+            require((self.root / 'received.private').read_bytes() == b'',
+                    'lock-inserted-text')
+            print('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
+            unlock_requested = True
+            self.observe('unlock-state', lambda: self.cmd(
+                ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
+            unlocked = True
+            self.observe('unlock-daemon-restarted', restarted, 30)
+        finally:
+            self.kill(self.player)
+            self.player = None
+            # A failed assertion must not leave the disposable VM locked or
+            # VoxType stopped and contaminate later independent gates.
+            if lock_command and not locked:
+                locked = self.cmd(['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked'],
+                                  check=False).stdout.strip() == b'true'
+            if locked and not unlocked:
+                if not unlock_requested:
+                    print('ARCTIC-DESKTOP-UNLOCK-REQUESTED', flush=True)
+                self.observe('unlock-cleanup', lambda: self.cmd(
+                    ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']).stdout.strip() == b'false', 90)
+                unlocked = True
+            if lock_command:
+                self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
+                self.observe('unlock-cleanup-daemon', restarted, 30)
         return {'locked': True, 'count': 0, 'drained': True}
 
     def gpu_failure(self):
@@ -1098,11 +1140,12 @@ class Checker:
             self.observe('gpu-failure-idle', lambda: self.state(allow_absent=True) == 'idle', 60)
             require((self.root / 'received.private').read_bytes() == b'',
                     'gpu-failure-inserted-text')
-            status = self.adapter('status')
-            error = str(status.get('error', '')).lower()
-            require(status.get('state') == 'error'
-                    and ('vulkan' in error or 'gpu' in error),
-                    'gpu-failure-not-actionable')
+            def actionable():
+                status = self.adapter('status')
+                error = str(status.get('error', '')).lower()
+                return status if (status.get('state') == 'error'
+                    and ('vulkan' in error or 'gpu' in error)) else None
+            status = self.observe('gpu-failure-actionable-error', actionable, 10)
             gpu_failure_capture_ack_sha256 = self.recovery_screen(
                 'gpu_failure', status, expected_language='he')
         finally:
