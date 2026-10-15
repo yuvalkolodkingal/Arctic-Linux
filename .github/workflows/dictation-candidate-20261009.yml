@@ -2,7 +2,7 @@ name: Candidate direct VoxType image qualification
 
 on:
   push:
-    branches: [codex/qualification-dispatch-20261010]
+    branches: [codex/diagnose-voxtype-readiness-387951]
     paths: [.github/qualification-20261010.dictation]
 
 permissions:
