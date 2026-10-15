@@ -1,14 +1,14 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "281052260d9809d2bf2ac46b74f9b5f6e28c63fb3215b8a4b2da2755559a2185",
+    "test_controls_state_trials.py": "5837a22e7a2f3e2a4cffb7d905ba2e62ee934bb5d5c5b7f21acaf5369d4a9f2c",
     "test_native_bulk_transport.py": "fa558657aa710bbd8d7edea9cf9bb686cfbf89276d2bd8488dead2ad6b19f9ad",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_protocol_diagnostics.py": "19fb163677c5f413863d35abf98c30d7607afda2fefa8fd93b2f0f7e5ca65d01",
+    "test_native_protocol_diagnostics.py": "ef4c1fb6e3f89a400aca3b6de852ef8b6512a539ccbd1ed808a12ba744202b1f",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "59c4e28c9c960c5330c81e2b900ce1564bc16654beb628e7aeb2b03dc8f78ad0",
-    "test_native_v6.py": "c05c9f66d6a02b0028d1c07334afc2b77c4049e1952b6dbf41022d15b3da2d63",
+    "test_native_smoke.py": "3243823c0cf35e8976724e482f79424f677211942ad9eeee829ba64e39676b8e",
+    "test_native_v6.py": "960878317845337f35f45e5231eb6290720923dd54f3edbc5f8a9e31367d8c96",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
@@ -165,10 +165,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "b261a8486b8c0c2270930edfe6c9c7ee632e284bce199270b4c40bf754203ab5",
+    "guest-check-native-v6.py": "7154e69f513c0c447da8fb19ab3b4820c96a62ed87b9cf0cabc4fc889601993d",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e",
-    "native_smoke.py": "4edcef1bc852f8ca91b9a555875d981a7f31259131a385bdca8e5e1bb8b88c73"
+    "native_smoke.py": "e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -236,7 +236,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "4edcef1bc852f8ca91b9a555875d981a7f31259131a385bdca8e5e1bb8b88c73",
+  "native_source_sha256": "e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -340,5 +340,21 @@
     "validate_harness_serial"
   ],
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
-  "validators_source_sha256": "da5648fd6f962ae2ce81ee72270e7203747da97e486183ba2e6fed58e3dad8f0"
+  "validators_source_sha256": "da5648fd6f962ae2ce81ee72270e7203747da97e486183ba2e6fed58e3dad8f0",
+  "paused_visual_capture": {
+    "failure_run": 38715355526,
+    "failure_artifact_id": 11962563734,
+    "failure_artifact_sha256": "576c30d0db0a5c729573fede30a048bef2d54d52b3019c45589960b5079262af",
+    "diagnosis": "the exact owned Celluloid GL player decoded and advanced the pulsed 16-color fixture, but its sole screencopy observed a transient per-source-pixel black tile grid while the continuously damaged texture was updating",
+    "same_owned_player": true,
+    "pause_transport": "fixed set_property pause=true command over the existing SO_PEERCRED-authenticated owned mpv IPC socket",
+    "post_fullscreen_playback_advance_seconds": 0.5,
+    "paused_clock_settle_seconds": 0.5,
+    "maximum_paused_clock_drift_seconds": 0.05,
+    "single_player_single_capture_policy_unchanged": true,
+    "oracle_thresholds_unchanged": true,
+    "renderer_launcher_fixture_and_geometry_unchanged": true,
+    "release_acceptance": false,
+    "scope": "prove post-fullscreen playback first, then capture one complete settled frame; no retry, restart, alternate renderer or failed-frame acceptance path"
+  }
 }

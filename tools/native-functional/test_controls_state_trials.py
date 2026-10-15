@@ -33,8 +33,59 @@ TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd6
 PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
 
 
+def restore_paused_visual_capture(source):
+    """Reverse only the one-player paused-frame capture stabilization."""
+    helper_start='def mpv_pause_reference(path, expected_pid, expected_uid):\n'
+    helper_end='def mpv_property(path, key, expected_pid, expected_uid):\n'
+    if source.count(helper_start)!=1 or source.count(helper_end)!=1:
+        raise AssertionError('Paused capture helper inverse occurrence differs')
+    first=source.index(helper_start);last=source.index(helper_end,first)
+    source=source[:first]+source[last:]
+    current="""        # The pulsed fixture above proves post-fullscreen presentation work, but
+        # capturing while the software GL path is replacing that texture can
+        # expose a transient tiled buffer rather than one complete frame. Pause
+        # this same proved player, require the clock to settle, and keep the
+        # sole screenshot/oracle and every acceptance threshold unchanged.
+        mpv_pause_reference(ipc,player['pid'],self.uid)
+        def paused_reference():
+            value=mpv_property(ipc,'pause',player['pid'],self.uid)
+            require(type(value) is bool, 'visual pause state is not Boolean')
+            return value
+        self.wait(paused_reference,3,'owned visual playback pause')
+        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
+                and math.isfinite(paused_time) and 0<=paused_time<=2,
+                'paused visual playback clock is invalid')
+        time.sleep(.5)
+        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
+                and math.isfinite(settled_time) and 0<=settled_time<=2
+                and abs(settled_time-paused_time)<=.05,
+                'paused visual playback clock did not settle')
+"""
+    previous="""        time.sleep(.5)
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture sequence inverse occurrence differs')
+    source=source.replace(current,previous,1)
+    current="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
+                                      settled_seconds=settled_time,capture_paused=True,
+                                      maximum_settled_drift_seconds=.05,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    previous="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture receipt inverse occurrence differs')
+    return source.replace(current,previous,1)
+
+
 def restore_pulsed_visual_native(source):
     """Reverse only the continuous-damage visual fixture correction."""
+    source=restore_paused_visual_capture(source)
     current="""def visual_reference_frame():
     \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
     palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
@@ -827,18 +878,20 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_calls={71:0}
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
             def prop(path,key,pid,uid):
+                if key=='pause':return next(pause_values)
                 if key!='time-pos':return media[key]
-                time_calls[pid]+=1
-                return 0 if time_calls[pid]==1 else .2
+                return next(time_values)
             endpoints=[socket.socket(socket.AF_UNIX)]
             endpoints[0].bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                with patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+                pause.assert_called_once_with(root/'visual-reference-ipc.sock',smoke.owned[0]['pid'],smoke.uid)
                 smoke.controlled_controls_trials.assert_not_called()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())

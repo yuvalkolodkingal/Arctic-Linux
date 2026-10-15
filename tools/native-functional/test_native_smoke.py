@@ -185,6 +185,22 @@ class Controls(unittest.TestCase):
                 s.mpv_property(path,'path',os.getpid()+1,os.getuid())
             thread.join(3);self.assertFalse(thread.is_alive())
 
+    def test_reference_pause_uses_exact_owned_ipc_command(self):
+        path=self.root/'pause.sock'; observed=[]
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            def accept():
+                peer,_=server.accept()
+                with peer:
+                    data=b''
+                    while b'\n' not in data:data+=peer.recv(4096)
+                    observed.append(json.loads(data.split(b'\n',1)[0]))
+                    peer.sendall(b'{"data":null,"error":"success","request_id":44}\n')
+            thread=threading.Thread(target=accept);thread.start()
+            s.mpv_pause_reference(path,os.getpid(),os.getuid())
+            thread.join(3);self.assertFalse(thread.is_alive())
+        self.assertEqual(observed,[dict(command=['set_property','pause',True],request_id=44)])
+
     def test_nonzero_command_fails_without_shell(self):
         with self.assertRaisesRegex(RuntimeError,'command failed'):
             s.execute(['python3','-c','raise SystemExit(4)'])
