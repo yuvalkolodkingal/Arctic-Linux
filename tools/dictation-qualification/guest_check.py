@@ -509,7 +509,7 @@ class Checker:
             require(type(value) is dict and set(value) == {
                         'state', 'ready', 'error', 'version', 'language', 'backend',
                         'profile', 'model', 'model_download_bytes', 'download_bytes',
-                        'vulkan_download_bytes'}
+                        'vulkan_download_bytes', 'upgrade_pending'}
                     and value.get('state') in {
                         'unavailable', 'queued', 'downloading', 'ready', 'recording',
                         'transcribing', 'error'}
@@ -517,6 +517,7 @@ class Checker:
                     and type(value.get('error')) is str
                     and len(value.get('error')) <= 512
                     and value.get('version') == '1.1.1'
+                    and value.get('upgrade_pending') is False
                     and value.get('language') in ('auto', 'he', 'en')
                     and value.get('backend') in ('cpu', 'vulkan')
                     and value.get('profile') in PROFILES
