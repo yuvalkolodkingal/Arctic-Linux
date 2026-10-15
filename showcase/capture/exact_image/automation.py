@@ -334,7 +334,17 @@ class Controller:
         self.wait_screen("installed-console", "installed-password-prompt", ("Password",), seconds=45)
         self.type_secret("installed-console")
         self.press("installed-console", "ret")
-        time.sleep(2)
+        # Fish starts the packaged animated arctic-fetch before presenting its
+        # prompt.  A command sent during that animation can be consumed as the
+        # keypress that dismisses it.  First prove the exact installed greeting,
+        # then send one newline: the fetch renderer leaves a single ordinary
+        # byte queued for Fish, where it is only an empty command.  Its 50 ms
+        # input loop and terminal restoration complete well inside this fixed
+        # bounded settling interval.
+        self.wait_screen("installed-console", "installed-fetch-greeting",
+                         ("Arctic Linux", "fish 4.6"), seconds=90)
+        self.press("installed-console", "ret")
+        time.sleep(1)
         self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
         self.press("installed-console", "ret")
         self.wait_screen("installed-console", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",),
