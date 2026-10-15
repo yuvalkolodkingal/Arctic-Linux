@@ -157,7 +157,7 @@ class UnattendedController(unittest.TestCase):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
 
-    def test_shell_proof_waits_for_fixed_fish_prompt_before_sudo_launcher(self):
+    def test_shell_proof_waits_for_fixed_fish_prompt_before_proof_and_sudo_launcher(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
         self.controller.press = mock.Mock()
         self.controller.type_text = mock.Mock()
@@ -165,17 +165,45 @@ class UnattendedController(unittest.TestCase):
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_installed_and_start()
 
+        ready = [call for call in self.controller.wait_screen.call_args_list
+                 if call.args[1] == "installed-shell-ready"]
         shell = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell"]
-        self.assertEqual(len(shell), 1)
+        self.assertEqual((len(ready), len(shell)), (1, 1))
         prompt = (c.CONTROLLER["account"]["username"] + "@"
                   + c.CONTROLLER["account"]["hostname"])
+        self.assertEqual(ready[0].args[2], (prompt + " ~>",))
+        self.assertEqual(ready[0].kwargs,
+                         {"seconds": 90, "exact_output": True})
         self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
         self.assertEqual(shell[0].kwargs,
                          {"seconds": 90, "exact_output": True, "ordered": True})
         self.assertFalse(all(phrase.casefold()
                              in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
                              for phrase in shell[0].args[2]))
+
+    def test_preproof_prompt_gate_rejects_realistic_full_fetch_greeting(self):
+        account = "arcticshowcase@arctic-showcase"
+        greeting = """\
+arcticshowcase@arctic-showcase
+------------------------------
+os       Arctic Linux 1.2.1
+base     Fedora 44
+kernel   Linux 7.2.10
+wm       Mango
+shell    fish 4.6
+term     linux
+theme    Polar night
+uptime   2 mins
+"""
+        prompt = account + " ~>"
+        self.assertFalse(automation._phrases_present(greeting, (prompt,), ordered=False))
+        # Account text and the token in different greeting rows still cannot
+        # mimic the one fixed prompt phrase.
+        self.assertFalse(automation._phrases_present(
+            greeting + "prompt token  ~>\n", (prompt,), ordered=False))
+        self.assertTrue(automation._phrases_present(
+            greeting + "\n" + prompt + "\n", (prompt,), ordered=False))
 
     def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
@@ -236,17 +264,21 @@ class UnattendedController(unittest.TestCase):
 
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
                     {"seconds": 90})
+        ready = ("screen", "installed-shell-ready",
+                 ("arcticshowcase@arctic-showcase ~>",),
+                 {"seconds": 90, "exact_output": True})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
         self.assertEqual(operations[at + 1], ("keys", ("ret",)))
-        self.assertEqual(operations[at + 2], proof)
+        self.assertEqual(operations[at + 2], ready)
+        self.assertEqual(operations[at + 3], proof)
         self.assertLess(operations.index(("secret",)), at)
-        self.assertEqual(operations[at + 4],
+        self.assertEqual(operations[at + 5],
                          ("screen", "installed-shell",
                           ("ARCTIC-SHOWCASE-SHELL-READY",
                            "arcticshowcase@arctic-showcase"),
                           {"seconds": 90, "exact_output": True, "ordered": True}))
-        self.assertEqual(operations[at + 5], ("text", "installed-scenes"))
+        self.assertEqual(operations[at + 6], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):

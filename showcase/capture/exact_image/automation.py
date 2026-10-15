@@ -372,15 +372,22 @@ class Controller:
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.press("installed-console", "ret")
-        time.sleep(1)
+        # The fetch renderer can remain visible after it has accepted the
+        # dismissal key.  Do not type even the nonsecret proof command until a
+        # later exact frame contains the fixed installed account's real Fish
+        # prompt.  This makes readiness a pixel observation instead of a fixed
+        # settling delay.
+        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
+                        + c.CONTROLLER["account"]["hostname"])
+        ready_prompt = shell_prompt + " " + c.CONTROLLER["account"]["prompt_token"]
+        self.wait_screen("installed-console", "installed-shell-ready",
+                         (ready_prompt,), seconds=90, exact_output=True)
         self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
         self.press("installed-console", "ret")
         # The executed marker can reach the VT before Fish has drawn its next
         # prompt and resumed its line editor.  Do not type the longer sudo
         # launcher into that interval: require the fixed account's real prompt
         # in the same exact output after the marker.
-        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
-                        + c.CONTROLLER["account"]["hostname"])
         self.wait_screen("installed-console", "installed-shell",
                          ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
                          seconds=90, exact_output=True, ordered=True)

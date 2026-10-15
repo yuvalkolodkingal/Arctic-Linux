@@ -164,7 +164,7 @@ CONTROLLER = {
     "accelerator": "kvm",
     "output": {"width": 1280, "height": 800, "scale": 1, "count": 1},
     "account": {"username": "arcticshowcase", "uid": 1000, "hostname": "arctic-showcase",
-                "autologin": True, "disposable": True},
+                "prompt_token": "~>", "autologin": True, "disposable": True},
     "network_control": "none; QEMU user networking has no host forwarding",
     "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
     "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
@@ -218,7 +218,8 @@ def controller_trace(value) -> None:
         "installed-boot": {"installed-login-ready", "first-login-welcome",
                            "first-login-dismissed"},
         "installed-console": {"installed-console-login", "installed-password-prompt",
-                              "installed-fetch-greeting", "installed-shell",
+                              "installed-fetch-greeting", "installed-shell-ready",
+                              "installed-shell",
                               "installed-sudo-password"},
         "dictationsetup": {"dictation-ready-page"},
         "winter": {"wallpaper-page", "wallpaper-hide-dialog"},
@@ -255,6 +256,7 @@ def controller_trace(value) -> None:
         if kind == "screen":
             exact_geometry = detail.get("expectation") in {
                 "installer-done", "first-login-welcome", "first-login-dismissed",
+                "installed-shell-ready", "installed-shell",
                 "dictation-ready-page", "wallpaper-page", "wallpaper-hide-dialog",
                 "whats-new-layer",
             }
@@ -335,6 +337,7 @@ def controller_trace(value) -> None:
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
         ("installed-console", "installed-fetch-greeting"),
+        ("installed-console", "installed-shell-ready"),
         ("installed-console", "installed-shell"),
         ("installed-console", "installed-sudo-password"),
         ("installed-boot", "first-login-welcome"),

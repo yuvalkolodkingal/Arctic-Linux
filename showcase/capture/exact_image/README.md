@@ -66,11 +66,16 @@ the isolated VM. After the installer's normal cleanup unmounts its target, the
 reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
-drops permanently to UID 1000 for scene work. The host proves the Fish session
-with its fixed `ARCTIC-SHOWCASE-SHELL-READY` command and waits for the fixed
-account's real `arcticshowcase@arctic-showcase` Fish prompt in the same exact
-output after the marker before typing the sudo launcher. An earlier echoed
-prompt or marker output alone cannot authorize that input.
+drops permanently to UID 1000 for scene work. After dismissing the animated
+greeting, the host requires the fixed account's real
+`arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
+typing even its nonsecret proof command. The prompt's contracted `~>` token is
+required after the fixed account text, so the greeting's own `user@host` info
+row cannot satisfy this gate. It then proves the Fish session with the fixed
+`ARCTIC-SHOWCASE-SHELL-READY` command and requires another fixed prompt in the
+same exact output after the marker before typing the sudo launcher. An earlier
+echoed prompt, a fixed settling delay or marker output alone cannot authorize
+that input.
 The installed helper must prove local dictation is fully ready
 with one supported multilingual profile before the host will observe the
 Dictation scene. A missing model, failed online setup, GPU/CPU mismatch, or timeout
