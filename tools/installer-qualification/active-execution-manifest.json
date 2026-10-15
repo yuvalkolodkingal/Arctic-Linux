@@ -3,7 +3,7 @@
     ".github/workflows/installer-active-candidate-20261009.yml": "83e9cd1346c09c6cc6377087c3e6359bb81f706f6e72d3b5660fe44d42990791",
     "shell/dev/virtual-pointer.c": "f1f87b41de5c7ff550477835078642a47d97eab6c5d02a8bec511a494d436127",
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
-    "tools/installer-qualification/active-contract.py": "059f5744f526ad7df51149619a048b33abfa0c6e6456aaf62f1d378c1cf9ec76",
+    "tools/installer-qualification/active-contract.py": "e7fa7f5e1ad4c1448a161f5daeb2399b445cca85ff3be35d60ebebc69b8eab9f",
     "tools/installer-qualification/active-guest.py": "20392b5fd07cf14d46cf3d97480b7b720a31f4d5081f99aea82b12d48b9417eb",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",

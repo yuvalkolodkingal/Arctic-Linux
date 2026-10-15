@@ -54,8 +54,10 @@ def exact(value, keys, message):
 
 
 def installed_identity_record(nonce):
+    """Reproduce the driver's three-record installed-user challenge."""
     data = (nonce + '\x00arcticqual\x001000\x00arcticqual\x00').encode()
-    return '731904' + format(int(digest(data)[:15], 16), '019d')
+    token = format(int(digest(data)[:15], 16), '019d')
+    return '\n'.join(marker + token for marker in ('2', '4', '6'))
 
 
 def packaged_source_hashes(tree):
