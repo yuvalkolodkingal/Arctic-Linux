@@ -429,6 +429,13 @@ def require_distinct_dictation_recovery_frames(stages):
             'Dictation recovery screens are byte-identical')
 
 
+def dictation_recovery_status(stage):
+    require(stage in ('gpu_failure', 'cpu_ready'), 'Unknown dictation recovery stage')
+    # The guarded Vulkan preflight fails before recording and preserves the
+    # selected CPU backend while surfacing an actionable error.
+    return ('error', 'cpu') if stage == 'gpu_failure' else ('ready', 'cpu')
+
+
 def dictation_lane_proof(archive, manifest, hardware_profile):
     """Check one complete hardware lane without substituting another profile."""
     state = read_json(archive, 'execution.json')
@@ -537,8 +544,7 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
                         if row['id'] == contract.MODERN_GPU_GATE)
             for stage, info in stages.items():
                 request = info['request']
-                state_name, backend = (('error', 'vulkan') if stage == 'gpu_failure'
-                                       else ('ready', 'cpu'))
+                state_name, backend = dictation_recovery_status(stage)
                 name = 'dictation-recovery-' + phase + '-' + stage.replace('_', '-') + '.png'
                 ack = stage + '_capture_ack_sha256'
                 require(set(info) == {'request', 'path', 'sha256', 'iso_sha256', 'installation_id'}

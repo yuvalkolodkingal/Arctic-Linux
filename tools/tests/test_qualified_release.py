@@ -42,6 +42,12 @@ class PublicationGuardTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'byte-identical'):
             prepare.require_distinct_dictation_recovery_frames(duplicate)
 
+    def test_dictation_publication_requires_preserved_cpu_after_gpu_failure(self):
+        self.assertEqual(prepare.dictation_recovery_status('gpu_failure'), ('error', 'cpu'))
+        self.assertEqual(prepare.dictation_recovery_status('cpu_ready'), ('ready', 'cpu'))
+        with self.assertRaisesRegex(RuntimeError, 'Unknown dictation recovery stage'):
+            prepare.dictation_recovery_status('vulkan_ready')
+
     def test_dictation_timing_scope_names_the_official_voxtype_path(self):
         sources = [
             (ROOT / 'tools/qualified-release/prepare.py').read_text(),
