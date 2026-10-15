@@ -743,6 +743,7 @@ def parser():
 def main(argv=None) -> int:
     try:
         args = parser().parse_args(argv)
+        c.require_active()
         c.require(1 <= args.timeout <= 7200, "capture timeout invalid")
         if args.mode == "host":
             c.require(1 <= args.ocr_timeout <= 300, "OCR timeout invalid")

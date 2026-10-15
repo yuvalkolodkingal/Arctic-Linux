@@ -39,6 +39,7 @@ jobs:
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           sys.path.insert(0,'showcase/capture/exact_image')
           import contract
+          contract.require_active()
           assert manifest['image']==contract.IMAGE
           assert manifest['controller']==contract.CONTROLLER
           assert manifest['branch']=='codex/showcase-exact-capture-20261014'

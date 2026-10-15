@@ -8,6 +8,7 @@ import tempfile
 import unittest
 import zlib
 from pathlib import Path
+from unittest import mock
 
 from PIL import Image, PngImagePlugin
 
@@ -16,6 +17,37 @@ sys.path.insert(0, str(HERE))
 import contract as c
 import guest
 import host
+
+
+SHIPPED_IMAGE = c.IMAGE
+SHIPPED_EXECUTION = c.REVIEWED_EXECUTION
+TEST_IMAGE = {
+    "name": "Arctic-Linux-test.iso",
+    "bytes": 4,
+    "sha256": "a" * 64,
+    "source_sha": "b" * 40,
+    "run_id": 1,
+    "artifact_id": 2,
+    "archive_bytes": 5,
+    "archive_sha256": "c" * 64,
+    "producer_mode": "test-only",
+    "producer_receipt_sha256": "d" * 64,
+}
+TEST_EXECUTION = {
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "workflow": ".github/workflows/iso.yml",
+    "run_id": 1,
+    "source_sha": "b" * 40,
+    "artifact_id": 2,
+    "artifact_digest": "sha256:" + "c" * 64,
+    "evidence": "test-only reviewed candidate evidence",
+}
+
+# All exact-capture test modules import these shared fixtures.  Bind a wholly
+# synthetic identity in this test process while retaining the shipped values
+# above so the fail-closed source state remains asserted.
+c.IMAGE = copy.deepcopy(TEST_IMAGE)
+c.REVIEWED_EXECUTION = copy.deepcopy(TEST_EXECUTION)
 
 
 
@@ -301,6 +333,15 @@ class Protocol(unittest.TestCase):
                                             "--identity", "/tmp/i.json"])
 
     def test_self_asserted_actions_execution_is_rejected(self):
+        self.assertIsNone(SHIPPED_IMAGE)
+        self.assertIsNone(SHIPPED_EXECUTION)
+        with mock.patch.object(c, "IMAGE", None), mock.patch.object(c, "REVIEWED_EXECUTION", None):
+            with self.assertRaisesRegex(c.Invalid, "not activated"):
+                c.require_active()
+            with self.assertRaisesRegex(c.Invalid, "not activated"):
+                c.image_identity(TEST_IMAGE)
+            with self.assertRaisesRegex(c.Invalid, "not activated"):
+                c.execution(TEST_EXECUTION)
         claimed = copy.deepcopy(c.REVIEWED_EXECUTION)
         claimed.update(run_id=999, artifact_id=888, source_sha="a" * 40,
                        artifact_digest="sha256:" + "b" * 64)

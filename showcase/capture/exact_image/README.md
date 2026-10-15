@@ -10,30 +10,15 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-The reviewed candidate is fixed in `contract.IMAGE` and
-`execution-manifest.json`:
+No candidate is currently bound. `contract.IMAGE`, `contract.REVIEWED_EXECUTION`
+and the image in `execution-manifest.json` are null, the manifest is not ready,
+and there is no activation marker. The lane therefore fails closed until a
+reviewed replacement ISO is bound atomically in a new preparation commit.
 
-* producer run `38662946177`, attempt 1, source
-  `36ae2e8e1627a39f12ab5afee036721e91f97788`;
-* artifact `11942517584`, archive size `1936577846`, archive SHA-256
-  `da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145`;
-* ISO `Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso`, size
-  `1936390144`, SHA-256
-  `5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a`;
-* producer receipt SHA-256
-  `8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae`.
-
-The producer ran directly from final `main`
-`36ae2e8e1627a39f12ab5afee036721e91f97788` by `workflow_dispatch`. The later
-qualification activations are marker-only children of this reviewed
-preparation. GitHub records producer run
-`38662946177` as a successful attempt 1. The ISO artifact is retained through
-29 October 2026; that retention window is not capture or release acceptance.
-
-The workflow downloads that retained artifact with the existing strict
-`fetch-image.py` verifier. It checks the producer workflow, first attempt, source,
-startup lanes, artifact archive, ISO, BUILD-INFO, checksum, and producer receipt
-before QEMU starts.
+When activated, the workflow downloads the newly bound artifact with the
+existing strict `fetch-image.py` verifier. It checks the producer workflow,
+first attempt, source, startup lanes, artifact archive, ISO, BUILD-INFO,
+checksum, and producer receipt before QEMU starts.
 
 ## Unattended trust boundary
 
@@ -151,7 +136,7 @@ The host invocation is:
 
 ```sh
 showcase/capture/exact_image/capture_vm.py host \
-  --candidate-iso /private/Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso \
+  --candidate-iso /private/Arctic-Linux-1.2-candidate-${RUN_ID}-1-x86_64.iso \
   --output /private/arctic-showcase-captures \
   --failure-report /private/showcase-failure-projection.json \
   --display none --accel kvm --unattended --timeout 7200

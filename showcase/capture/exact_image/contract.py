@@ -13,18 +13,10 @@ class Invalid(RuntimeError):
     pass
 
 
-IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso",
-    "bytes": 1_936_390_144,
-    "sha256": "5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a",
-    "source_sha": "36ae2e8e1627a39f12ab5afee036721e91f97788",
-    "run_id": 38_662_946_177,
-    "artifact_id": 11_942_517_584,
-    "archive_bytes": 1_936_577_846,
-    "archive_sha256": "da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae",
-}
+# Qualification preparation is deliberately unbound.  A reviewed replacement
+# ISO activation must set both values atomically with the execution manifest.
+IMAGE = None
+REVIEWED_EXECUTION = None
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",
@@ -89,6 +81,12 @@ def require(condition: object, message: str) -> None:
         raise Invalid(message)
 
 
+def require_active() -> None:
+    require(type(IMAGE) is dict and bool(IMAGE)
+            and type(REVIEWED_EXECUTION) is dict and bool(REVIEWED_EXECUTION),
+            "exact image contract is not activated")
+
+
 def fullmatch(pattern, value) -> bool:
     return type(value) is str and pattern.fullmatch(value) is not None
 
@@ -122,20 +120,10 @@ def hashed(value: str) -> str:
 
 
 def image_identity(value) -> None:
+    require_active()
     require(type(value) is dict and set(value) == set(IMAGE)
             and all(type(value[key]) is type(expected) and value[key] == expected
                     for key, expected in IMAGE.items()), "exact image identity differs")
-
-
-REVIEWED_EXECUTION = {
-    "repository": "yuvalkolodkingal/Arctic-Linux",
-    "workflow": ".github/workflows/iso.yml",
-    "run_id": IMAGE["run_id"],
-    "source_sha": IMAGE["source_sha"],
-    "artifact_id": IMAGE["artifact_id"],
-    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
-    "evidence": "reviewed exact candidate build; capture remains human-review pending",
-}
 
 CONTROLLER = {
     "schema": "arctic-showcase-unattended-controller-v1",
@@ -355,6 +343,7 @@ def controller_trace(value) -> None:
 
 
 def execution(value) -> None:
+    require_active()
     require(type(value) is dict and value == REVIEWED_EXECUTION
             and all(type(value[key]) is type(expected)
                     for key, expected in REVIEWED_EXECUTION.items()),
