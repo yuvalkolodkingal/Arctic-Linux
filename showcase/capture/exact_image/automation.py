@@ -128,8 +128,27 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
             or any(type(item) is not str or not item for item in suffixes)):
         return False
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
-    accepted = {account + " " + suffix for suffix in suffixes}
-    return bool(lines) and lines[-1] in accepted
+    if not lines:
+        return False
+
+    # Tesseract can insert horizontal space around punctuation in the enlarged
+    # Linux-VT glyphs.  Keep every alphanumeric account/host byte exact and
+    # admit spacing only around the fixed separators and inside an approved
+    # suffix.  The complete prompt must still be the final OCR line.
+    account_pattern = "".join(
+        r"[ \t]*" + re.escape(character) + r"[ \t]*"
+        if character in "@-" else re.escape(character)
+        for character in account
+    )
+    suffix_patterns = {
+        "".join(r"[ \t]*" + re.escape(character) + r"[ \t]*"
+                if character in "~>" else re.escape(character)
+                for character in suffix.replace(" ", ""))
+        for suffix in suffixes
+    }
+    pattern = (r"^[ \t]*" + account_pattern + r"[ \t]+(?:"
+               + "|".join(sorted(suffix_patterns)) + r")[ \t]*$")
+    return re.fullmatch(pattern, lines[-1]) is not None
 
 
 def _fixed_shell_marker_match(text: str):
@@ -141,13 +160,13 @@ def _fixed_shell_marker_match(text: str):
         r"[ \t]*-[ \t]*READY[ \t]*$", text)
 
 
-def _fixed_shell_proof_present(text: str, account: str) -> bool:
-    """Require the fixed marker before the real account text."""
+def _fixed_shell_proof_present(text: str, account: str, suffixes) -> bool:
+    """Require the fixed marker before the complete final Fish prompt."""
     if type(account) is not str or not account:
         return False
     marker = _fixed_shell_marker_match(text)
-    return marker is not None and text.casefold().find(
-        account.casefold(), marker.end()) >= 0
+    return marker is not None and _fixed_fish_prompt_present(
+        text[marker.end():], account, suffixes)
 
 
 def _boot_entry_selected(image, entry: str) -> bool:
@@ -602,7 +621,7 @@ class Controller:
                     text, phrases, ordered=ordered))
                 if (expectation in {"installed-shell-ready", "installed-shell"}
                         and prompt_contract is not None):
-                    phrase_ok = _fixed_shell_proof_present(text, prompt_contract[0])
+                    phrase_ok = _fixed_shell_proof_present(text, *prompt_contract)
                 if (phrase_ok
                         and prompt_ok
                         and (not exact_output or image.size == (1280, 800))

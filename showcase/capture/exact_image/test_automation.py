@@ -562,36 +562,69 @@ uptime   2 mins
                     account, suffixes))
                 self.assertTrue(automation._fixed_fish_prompt_present(
                     account + " " + spelling + " _|\n", account, suffixes))
+        for observed in (
+            "arcticshowcase @ arctic-showcase ~>",
+            "arcticshowcase@arctic - showcase ~ >",
+            "arcticshowcase  @  arctic  -  showcase   ~  >",
+        ):
+            with self.subTest(observed=observed):
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    observed + "\n", account, suffixes))
+        for rejected in (
+            "arctic show case@arctic-showcase ~>",
+            "arcticshowcase@arct1c-showcase ~>",
+            "arcticshowcase@arctic-showcas3 ~>",
+            "other@arctic-showcase ~>",
+            "arcticshowcase@arctic-showcase $>",
+            "ARCTIC-SHOWCASE-PROBE-READY updates",
+            account + " ~>\nARCTIC-SHOWCASE-PROBE-READY updates",
+        ):
+            with self.subTest(rejected=rejected):
+                self.assertFalse(automation._fixed_fish_prompt_present(
+                    rejected + "\n", account, suffixes))
 
     def test_fixed_shell_proof_accepts_only_marker_before_real_account(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
         prompt = "arcticshowcase@arctic-showcase"
+        suffixes = ("~>", "~ >")
         old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
         returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
         spaced = "ARCTIC - SHOWCASE- SHELL -READY\n" + prompt + " ~>"
-        self.assertFalse(automation._fixed_shell_proof_present(old_prompt_only, prompt))
-        self.assertTrue(automation._fixed_shell_proof_present(returned_prompt, prompt))
-        self.assertTrue(automation._fixed_shell_proof_present(spaced, prompt))
+        punctuation_spaced = ("ARCTIC - SHOWCASE- SHELL -READY\n"
+                              "arcticshowcase @ arctic - showcase ~ >")
+        self.assertFalse(automation._fixed_shell_proof_present(
+            old_prompt_only, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            returned_prompt, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            spaced, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            punctuation_spaced, prompt, suffixes))
         for forged in (
             "ARCTIC SHOWCASE SHELL READY\n" + prompt,
             "ARCTIC-SHOWCASE-SHELL-READY extra\n" + prompt,
             "ARCTIC-SHOWCASE-SHELL-WRONG\n" + prompt,
             marker + "\nother@arctic-showcase ~>",
+            marker + "\n" + prompt + " ~>\ntrailing guest signal",
+            marker + "\nARCTIC-SHOWCASE-PROBE-READY updates",
         ):
             with self.subTest(forged=forged):
-                self.assertFalse(automation._fixed_shell_proof_present(forged, prompt))
+                self.assertFalse(automation._fixed_shell_proof_present(
+                    forged, prompt, suffixes))
 
     def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
         prompt = "arcticshowcase@arctic-showcase"
         self.controller.ocr = lambda _path: (
-            "ARCTIC - SHOWCASE - SHELL - READY\n" + prompt + " ~>")
+            "ARCTIC - SHOWCASE - SHELL - READY\n"
+            "arcticshowcase @ arctic - showcase ~ >")
         path, text = self.controller.wait_screen(
             "installed-console", "installed-shell-ready",
             ("ARCTIC-SHOWCASE-SHELL-READY", prompt), seconds=1,
             exact_output=True, ordered=True,
             prompt_contract=(prompt, ("~>", "~ >")))
         self.assertIsNone(path)
-        self.assertEqual(text.splitlines()[-1], prompt + " ~>")
+        self.assertEqual(text.splitlines()[-1],
+                         "arcticshowcase @ arctic - showcase ~ >")
         self.assertEqual(list(self.root.glob("controller-*.png")), [])
 
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):

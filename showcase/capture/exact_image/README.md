@@ -105,13 +105,12 @@ remains the screen evidence and geometry gate. It requires
 `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
 1280x800 frame. Spaces that Tesseract inserts immediately around the marker's
-hyphens are admitted, while its four words and hyphens remain exact. The host
-accepts only a complete final OCR line for that account with the two spellings
-already admitted by the
-successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
-suffix on separate rows, or the greeting's own `user@host` info row, cannot
-satisfy this gate. It requires a second unchanged exact frame with the response
-and final prompt before typing the sudo launcher. An earlier
+hyphens, the fixed account's `@` and hostname hyphen, or between `~` and `>` are
+admitted; every alphanumeric account and host byte remains exact. The host
+accepts only a complete final OCR line for that account. Account text and a
+suffix on separate rows, a trailing line, or the greeting's own `user@host`
+info row cannot satisfy this gate. It requires a second unchanged exact frame
+with the response and final prompt before typing the sudo launcher. An earlier
 echoed prompt, a fixed settling delay or marker output alone cannot authorize
 that input.
 

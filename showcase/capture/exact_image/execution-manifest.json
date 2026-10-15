@@ -32,7 +32,7 @@
   },
   "execution_files": {
     ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
-    "showcase/capture/exact_image/automation.py": "f1f481bdf403b453246d03557035102d10a71f3b3c098d76ec4e80316eb993b3",
+    "showcase/capture/exact_image/automation.py": "d2b35f705e4669de9b414b68f9b11c69f6041bff5e760bc3a56bcbec7859baed",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "2629e63663d3c7573b76f64f3a8de0eec238a213439e4ddad85666e8ba15845a",
