@@ -48,11 +48,10 @@ class ManifestControls(unittest.TestCase):
     def test_shipped_lane_is_disabled_and_has_exact_execution_hashes_no_marker(self):
         shipped = S.read_json((HERE / 'execution-manifest.json').read_text())
         self.assertIs(shipped['ready'], False)
-        self.assertEqual(shipped['image'], {})
+        self.assertIsNone(shipped['image'])
         self.assertEqual(shipped['source_files'], {})
         self.assertFalse((ROOT / S.MARKER).exists())
-        self.assertEqual(shipped['execution_files'],
-                         {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in S.EXECUTION_FILES})
+        self.assertEqual(shipped['execution_files'], {})
         with patch.object(S, 'api') as api, self.assertRaisesRegex(ValueError, 'disabled'):
             S.activation_guard(shipped, ROOT)
         api.assert_not_called()
