@@ -597,7 +597,7 @@ class Controller:
         raise c.Invalid(f"controller screen expectation {expectation} absent")
 
     def wait_installed_fetch_clear(self, seconds=30):
-        """Prove Fish consumed Ctrl-L before sending one empty command."""
+        """Prove Fish consumed a fresh Ctrl-L before the prompt gate."""
         deadline = time.monotonic() + seconds
         while time.monotonic() < deadline:
             path = None
@@ -812,36 +812,33 @@ class Controller:
         # Fish starts the packaged animated arctic-fetch before presenting its
         # prompt.  A command sent during that animation can be consumed as the
         # keypress that dismisses it.  First prove the exact installed greeting,
-        # then send one Ctrl-L.  The exact candidate's renderer deliberately
-        # leaves a single ordinary byte queued for Fish; Ctrl-L cannot submit a
-        # command and makes Fish clear the retained greeting before redrawing
-        # its prompt.  If the renderer has already returned, the same Fish
-        # binding only clears and redraws.  A later bounded exact-frame gate,
-        # rather than elapsed time, proves that its input loop and terminal
-        # restoration have completed.
+        # then hand one empty Return through the renderer to Fish.  After a
+        # fixed settling interval, send a fresh Ctrl-L to the established line
+        # editor and prove its clear before applying the exact prompt gate.
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.installed_startup.fetch_observed()
-        # The exact run reached the greeting but produced only low-color frames
-        # after the zero-duration Ctrl-L batch, without an OCR-visible prompt.
-        # Keep this modifier chord asserted long enough for QEMU's input path to
-        # deliver one bounded guest-visible keypress.  The 100 ms QEMU timer is
-        # below keyboard repeat delay, so the fetch renderer still receives at
-        # most the one ordinary byte its handoff contract requires.
-        self.press_held("installed-console", "ctrl-l")
+        # Dismiss arctic-fetch with one empty line.  The renderer deliberately
+        # leaves that single byte queued, so Fish completes an empty command and
+        # establishes its line editor while the rich greeting remains visible.
+        # Do not queue Ctrl-L across that external-process/termios handoff: two
+        # exact runs showed that early clear left a stable low-color surface
+        # that neither a later Return nor Ctrl-C repainted for full-frame OCR.
+        self.press_held("installed-console", "ret")
         self.installed_startup.dismissal_sent()
-        # arctic-fetch does not clear the VT when it exits.  An exact low-color
-        # frame after its rich greeting therefore proves that Fish consumed
-        # Ctrl-L and regained its line editor.  Submit one empty line only after
-        # that proof so Fish paints a second prompt for full-frame OCR.  No text
-        # or command is entered before the unchanged exact prompt gate passes.
+        time.sleep(3)
+        # Three seconds is sixty times the renderer's 50 ms polling period and
+        # gives Fish time to complete the empty command after the renderer has
+        # exited.  The bounded QEMU hold remains below keyboard repeat delay.
+        # arctic-fetch never clears the VT on exit, so the exact low-color
+        # transition proves this fresh Ctrl-L reached Fish before the unchanged
+        # prompt gate begins.
+        self.press_held("installed-console", "ctrl-l")
         self.wait_installed_fetch_clear()
-        self.press("installed-console", "ret")
-        # The fetch renderer can remain visible after it has accepted the
-        # dismissal key.  Do not type even the nonsecret proof command until a
-        # later exact frame contains the fixed installed account's real Fish
-        # prompt.  This makes readiness a pixel observation instead of a fixed
-        # settling delay.
+        # Do not type even the nonsecret proof command until a later exact frame
+        # contains the fixed installed account's real Fish prompt.  The fixed
+        # interval orders the controls; only this pixel observation authorizes
+        # subsequent text.
         shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
                         + c.CONTROLLER["account"]["hostname"])
         prompt_contract = c.CONTROLLER["account"]["prompt"]

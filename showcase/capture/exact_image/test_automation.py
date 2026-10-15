@@ -573,7 +573,7 @@ uptime   2 mins
         self.assertEqual(sudo[0].args[2], (marker, "password"))
         self.controller.type_secret.assert_called_with("installed-console")
 
-    def test_installed_shell_proves_clear_then_submits_one_empty_redraw(self):
+    def test_installed_shell_completes_empty_handoff_before_fresh_clear(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -599,7 +599,9 @@ uptime   2 mins
         self.controller.press_held = press_held
         self.controller.type_text = text
         self.controller.type_secret = secret
-        with mock.patch.object(automation.time, "sleep"):
+        with mock.patch.object(automation.time, "sleep",
+                               side_effect=lambda seconds: operations.append(
+                                   ("sleep", seconds))):
             self.controller.boot_installed_and_start()
 
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
@@ -610,20 +612,21 @@ uptime   2 mins
                                           ("~>", "~ >"))})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
-        self.assertEqual(operations[at + 1], ("held-keys", ("ctrl-l",)))
-        self.assertEqual(operations[at + 2],
+        self.assertEqual(operations[at + 1], ("held-keys", ("ret",)))
+        self.assertEqual(operations[at + 2], ("sleep", 3))
+        self.assertEqual(operations[at + 3], ("held-keys", ("ctrl-l",)))
+        self.assertEqual(operations[at + 4],
                          ("screen", "installed-fetch-cleared", (), {}))
-        self.assertEqual(operations[at + 3], ("keys", ("ret",)))
-        self.assertEqual(operations[at + 4], ready)
-        self.assertEqual(operations[at + 5], proof)
-        self.assertEqual(operations[at + 1:at + 4].count(("keys", ("ret",))), 1)
+        self.assertEqual(operations[at + 5], ready)
+        self.assertEqual(operations[at + 6], proof)
+        self.assertEqual(operations[at + 1:at + 5].count(("held-keys", ("ret",))), 1)
         self.assertLess(operations.index(("secret",)), at)
-        self.assertEqual(operations[at + 7],
+        self.assertEqual(operations[at + 8],
                          ("screen", "installed-shell",
                           ("ARCTIC-SHOWCASE-SHELL-READY",
                            "arcticshowcase@arctic-showcase"),
                           {"seconds": 90, "exact_output": True, "ordered": True}))
-        self.assertEqual(operations[at + 8], ("text", "installed-scenes"))
+        self.assertEqual(operations[at + 9], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):

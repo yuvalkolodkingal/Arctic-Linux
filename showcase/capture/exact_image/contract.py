@@ -390,13 +390,13 @@ def controller_trace(value) -> None:
     at = greeting[0]
     require(events[at + 1]["stage"] == "installed-console"
             and events[at + 1]["kind"] == "keys"
-            and events[at + 1]["detail"] == {"names": ["ctrl-l"]}
+            and events[at + 1]["detail"] == {"names": ["ret"]}
             and events[at + 2]["stage"] == "installed-console"
-            and events[at + 2]["kind"] == "screen"
-            and events[at + 2]["detail"].get("expectation") == "installed-fetch-cleared"
+            and events[at + 2]["kind"] == "keys"
+            and events[at + 2]["detail"] == {"names": ["ctrl-l"]}
             and events[at + 3]["stage"] == "installed-console"
-            and events[at + 3]["kind"] == "keys"
-            and events[at + 3]["detail"] == {"names": ["ret"]}
+            and events[at + 3]["kind"] == "screen"
+            and events[at + 3]["detail"].get("expectation") == "installed-fetch-cleared"
             and events[at + 4]["stage"] == "installed-console"
             and events[at + 4]["kind"] == "screen"
             and events[at + 4]["detail"].get("expectation") == "installed-shell-ready"

@@ -92,15 +92,13 @@ reviewed live helper remounts only the unique Btrfs `Arctic root` partition belo
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
 drops permanently to UID 1000 for scene work. After observing the exact
-candidate's animated greeting, the host sends one Ctrl-L. Its 3D renderer
-deliberately leaves that single ordinary byte queued for Fish, where Ctrl-L can
-only clear the retained greeting and redraw the line editor; if the renderer
-has already returned, the same binding only clears and redraws. Because the
-renderer itself never clears on exit, the host next requires an exact 1280x800
-low-color cleared frame as pixel proof that Fish consumed Ctrl-L and regained
-its line editor. Only then does it send one empty command terminator so Fish
-paints a second prompt for the approved full-frame OCR. No command text is sent.
-The host then requires the fixed account's real
+candidate's animated greeting, the host sends one empty command terminator. Its
+3D renderer deliberately leaves that single ordinary byte queued for Fish,
+which completes the empty command and establishes its line editor while the
+rich greeting remains visible. After a fixed three-second handoff interval, the
+host sends one bounded Ctrl-L as a fresh Fish control. Because the renderer
+itself never clears on exit, an exact 1280x800 low-color frame then proves Fish
+consumed Ctrl-L. No command text is sent. The host then requires the fixed account's real
 `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
 typing even its nonsecret proof command. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the
