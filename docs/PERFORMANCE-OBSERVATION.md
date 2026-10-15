@@ -437,5 +437,6 @@ numbers, reruns, omitted boots or redacted/truncated inputs cannot qualify.
 The legacy in-producer paired mode continues requiring its successful paired
 step and same producer/source binding. The external mode is an explicit
 alternative evidence contract; it does not weaken the legacy contract or claim
-optimization from a regression pass. The prepared manifest is disabled until
-actual images, admitted executable profiles and reviewed source are available.
+optimization from a regression pass. The final candidate manifest is byte-bound
+and ready for a separate marker-only activation; the marker remains absent and
+every receipt remains `release_acceptance:false`.

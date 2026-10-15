@@ -18,7 +18,6 @@ import guest
 import host
 
 
-
 def installed_proof():
     marker = {"schema": "arctic-installed-image-provenance-v1", "image": copy.deepcopy(c.IMAGE),
               "disk_serial": c.VM_DISK_SERIAL, "installation_id": "1" * 32,
@@ -171,12 +170,15 @@ def controller_trace():
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "screen", screen("installed-fetch-greeting")),
+        ("installed-console", "keys", {"names": ["ctrl-l"]}),
+        ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
                                          "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-shell")),
-        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 417,
-                                        "sha256": "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"}),
+        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 548,
+                                        "sha256": "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"}),
         ("installed-scenes", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-sudo-password")),
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
@@ -306,6 +308,15 @@ class Protocol(unittest.TestCase):
                        artifact_digest="sha256:" + "b" * 64)
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
+
+    def test_fetch_redraw_is_one_control_l_before_the_prompt_gate(self):
+        value = controller_trace()
+        redraw = next(event for event in value["events"]
+                      if event["kind"] == "keys"
+                      and event["detail"] == {"names": ["ctrl-l"]})
+        redraw["detail"] = {"names": ["ret"]}
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw|key inventory"):
+            c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):
         value = installed_snapshot()

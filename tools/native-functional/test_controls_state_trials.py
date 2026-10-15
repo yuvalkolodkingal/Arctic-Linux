@@ -30,6 +30,112 @@ PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb851
 FRESH_PLAYER_RESTART_NATIVE_SHA = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
 PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
+PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
+
+
+def restore_paused_visual_capture(source):
+    """Reverse only the one-player paused-frame capture stabilization."""
+    helper_start='def mpv_pause_reference(path, expected_pid, expected_uid):\n'
+    helper_end='def mpv_property(path, key, expected_pid, expected_uid):\n'
+    if source.count(helper_start)!=1 or source.count(helper_end)!=1:
+        raise AssertionError('Paused capture helper inverse occurrence differs')
+    first=source.index(helper_start);last=source.index(helper_end,first)
+    source=source[:first]+source[last:]
+    current="""        # The pulsed fixture above proves post-fullscreen presentation work, but
+        # capturing while the software GL path is replacing that texture can
+        # expose a transient tiled buffer rather than one complete frame. Pause
+        # this same proved player, require the clock to settle, and keep the
+        # sole screenshot/oracle and every acceptance threshold unchanged.
+        mpv_pause_reference(ipc,player['pid'],self.uid)
+        def paused_reference():
+            value=mpv_property(ipc,'pause',player['pid'],self.uid)
+            require(type(value) is bool, 'visual pause state is not Boolean')
+            return value
+        self.wait(paused_reference,3,'owned visual playback pause')
+        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
+                and math.isfinite(paused_time) and 0<=paused_time<=2,
+                'paused visual playback clock is invalid')
+        time.sleep(.5)
+        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
+                and math.isfinite(settled_time) and 0<=settled_time<=2
+                and abs(settled_time-paused_time)<=.05,
+                'paused visual playback clock did not settle')
+"""
+    previous="""        time.sleep(.5)
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture sequence inverse occurrence differs')
+    source=source.replace(current,previous,1)
+    current="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
+                                      settled_seconds=settled_time,capture_paused=True,
+                                      maximum_settled_drift_seconds=.05,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    previous="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture receipt inverse occurrence differs')
+    return source.replace(current,previous,1)
+
+
+def restore_pulsed_visual_native(source):
+    """Reverse only the continuous-damage visual fixture correction."""
+    source=restore_paused_visual_capture(source)
+    current="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+
+
+def visual_reference_stream():
+    \"\"\"Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    \"\"\"
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+"""
+    previous="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+"""
+    replacements=((current,previous),
+                  ("        source=self.write('visual-reference-input.raw',visual_reference_stream())\n",
+                   "        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)\n"),
+                  ("                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')\n",
+                   "                  product_renderer=renderer,\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')\n"))
+    for index,(new,old) in enumerate(replacements):
+        if source.count(new)!=1:raise AssertionError(f'Pulsed visual inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=PRE_PULSE_NATIVE_SHA:
+        raise AssertionError('Pre-pulsed visual Native source differs')
+    return source
 
 
 def restore_epiphany_product_route(source):
@@ -106,8 +212,46 @@ def restore_runtime_failure_fix(source):
     return source
 
 
+def restore_post_geometry_readiness(source):
+    """Remove only the post-fullscreen playback readiness correction."""
+    replacements=(("""        pre_geometry_time=state['time-pos']
+        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
+                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
+                'pre-geometry visual playback clock is invalid')
+        # Anchor readiness after the fullscreen and controls transitions.  A
+        # clock sampled before those transitions can satisfy the old delta as
+        # soon as the window enters fullscreen, while its GL content is still
+        # unpainted.  The exact same owned player must advance for a bounded
+        # interval in its final capture geometry before the sole screenshot.
+        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'post-geometry visual playback clock is invalid')
+        minimum_post_geometry_advance=.5
+""","""        initial_time=state['time-pos']
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'initial visual playback clock is invalid')
+"""),
+        ("            return observed if delta>=minimum_post_geometry_advance else None\n",
+         "            return observed if delta>=.05 else None\n"),
+        ("""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+""","""                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+"""))
+    for index,(current,previous) in enumerate(replacements):
+        if source.count(current)!=1:
+            raise AssertionError(f'Post-geometry readiness inverse occurrence differs at {index}')
+        source=source.replace(current,previous,1)
+    return source
+
+
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_pulsed_visual_native(source)
+    source=restore_post_geometry_readiness(source)
     source=restore_epiphany_product_route(source)
     source=restore_moving_player_retirement(source)
     source=restore_runtime_failure_fix(source)
@@ -524,7 +668,9 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(segment(new,name,'Smoke'),segment(old,name,'Smoke'))
         bounded=restore_bounded_retry_native(new)
         self.assertEqual(segment(bounded,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
-        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),
+        for text in (new.replace("pulse=bytes(channel+4 for channel in base)",
+                                  "pulse=bytes(channel+5 for channel in base)",1),
+                     new.replace("time.sleep(.5)","time.sleep(.6)",1),
                      new.replace('(attempt_limit-1) * retry_settle_seconds + 3.5',
                                  '(attempt_limit-1) * retry_settle_seconds + 4.5',1),
                      new.replace("schema='arctic-native-visual-attempts-v1'",
@@ -732,18 +878,20 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_calls={71:0}
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
             def prop(path,key,pid,uid):
+                if key=='pause':return next(pause_values)
                 if key!='time-pos':return media[key]
-                time_calls[pid]+=1
-                return 0 if time_calls[pid]==1 else .2
+                return next(time_values)
             endpoints=[socket.socket(socket.AF_UNIX)]
             endpoints[0].bind(str(root/'visual-reference-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                with patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+                pause.assert_called_once_with(root/'visual-reference-ipc.sock',smoke.owned[0]['pid'],smoke.uid)
                 smoke.controlled_controls_trials.assert_not_called()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())

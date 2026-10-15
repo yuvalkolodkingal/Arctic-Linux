@@ -356,21 +356,21 @@ class NewControls(unittest.TestCase):
                     grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_calls=0
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
             def prop(path,key,*args):
-                nonlocal time_calls
+                if key=='pause':return next(pause_values)
                 if key!='time-pos':return props[key]
-                time_calls+=1;return 0 if time_calls==1 else .2
+                return next(time_values)
             oracle_control=(patch.object(N,'evaluate_reference_rgb',side_effect=ValueError('synthetic oracle failure'))
                             if case=='oracle-failed' else contextlib.nullcontext())
             with socket.socket(socket.AF_UNIX) as peer:
                 peer.bind(str(root/'visual-reference-ipc.sock'))
-                # Rebind only this tested module.  Patching time.sleep on the
-                # shared stdlib module also records sleeps from unrelated
-                # background tests on slower CI runners.
+                # Rebind only this tested module. Patching time.sleep on the
+                # shared stdlib module also records unrelated background sleeps.
                 sleep=Mock()
                 tested_time=SimpleNamespace(sleep=sleep,monotonic=N.time.monotonic)
-                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N,'time',tested_time):
+                with oracle_control,patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'time',tested_time):
                     if case=='positive':
                         value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
                     else:
@@ -378,13 +378,21 @@ class NewControls(unittest.TestCase):
                             smoke.visual_media()
             self.assertEqual(smoke.fresh_window.call_count,1)
             self.assertEqual(len(launched),1);self.assertEqual(len(grim_calls),1)
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+            delays=[call.args[0] for call in sleep.call_args_list]
+            self.assertEqual(delays.count(.5),1)
+            self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
+            self.assertEqual(receipt['fixture_cadence'],N.visual_reference_cadence())
             self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]
             self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
+            self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
+                advanced_seconds=.8,paused_seconds=.8,settled_seconds=.8,capture_paused=True,
+                maximum_settled_drift_seconds=.05,minimum_advance_seconds=.5,
+                anchor='after fullscreen and controls transitions'))
+            pause.assert_called_once_with(root/'visual-reference-ipc.sock',proof['pid'],smoke.uid)
             self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
             self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
             self.assertFalse((root/'celluloid-reference-player-2.png').exists())

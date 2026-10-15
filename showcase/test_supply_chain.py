@@ -19,13 +19,43 @@ ACTIONS = {
 
 
 class SupplyChainTest(unittest.TestCase):
-    def test_exact_capture_execution_manifest_is_fail_closed(self):
+    def test_exact_capture_execution_manifest_matches_repository_bytes(self):
         manifest_path = ROOT / "capture/exact_image/execution-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        self.assertFalse(manifest["ready"])
-        self.assertIsNone(manifest["image"])
-        self.assertEqual(manifest["execution_files"], {})
+        self.assertTrue(manifest["ready"])
+        self.assertEqual(manifest["image"], {
+            "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
+            "bytes": 1936267264,
+            "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
+            "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a",
+            "run_id": 38735141923,
+            "artifact_id": 11976239386,
+            "archive_bytes": 1936454966,
+            "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
+            "producer_mode": "frozen-external-paired-v1",
+            "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
+        })
         self.assertFalse(manifest["release_acceptance"])
+        expected_paths = {
+            ".github/workflows/showcase-exact-capture-20261014.yml",
+            "tools/native-functional/fetch-image.py",
+            "showcase/capture/exact_image/automation.py",
+            "showcase/capture/exact_image/bundle.py",
+            "showcase/capture/exact_image/capture_probe.py",
+            "showcase/capture/exact_image/capture_vm.py",
+            "showcase/capture/exact_image/contract.py",
+            "showcase/capture/exact_image/guest.py",
+            "showcase/capture/exact_image/host.py",
+            "showcase/capture/exact_image/unattended.py",
+            "showcase/capture/exact_image/validate_bundle.py",
+        }
+        self.assertEqual(set(manifest["execution_files"]), expected_paths)
+        for relative, expected in manifest["execution_files"].items():
+            self.assertEqual(
+                hashlib.sha256((REPOSITORY / relative).read_bytes()).hexdigest(),
+                expected,
+            )
+        self.assertFalse((REPOSITORY / ".github/qualification-20261014.showcase-capture").exists())
 
     def test_gsap_committed_bytes_and_prepare_pin_match(self):
         asset = ROOT / "assets/gsap.min.js"

@@ -1,4 +1,5 @@
-"""Negative controls for the disabled same-image update lane and serial gates."""
+"""Readiness and negative controls for the same-image update lane and serial gates."""
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -65,10 +66,62 @@ class UpdateRecordsTest(unittest.TestCase):
                 records.verify(original.replace('ARCTIC-INSTALLED-SMOKE-EXIT=0', marker), 'final')
 
     def test_disabled_manifest_stops_before_external_actions(self):
-        manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
+        manifest = {'ready': False, 'release_acceptance': False,
+                    'image': None, 'stable': None, 'execution_files': {}}
         self.assertFalse(manifest['ready'])
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             guard.verify(manifest, ROOT)
+
+    def test_checked_in_manifest_is_bound_to_final_image_and_stable_repo(self):
+        manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
+        self.assertIs(manifest['ready'], True)
+        self.assertIs(manifest['release_acceptance'], False)
+        self.assertEqual(manifest['image'], {
+            'run_id': 38735141923,
+            'artifact_id': 11976239386,
+            'archive_bytes': 1936454966,
+            'archive_sha256': '86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee',
+            'source_sha': '14ba50a70783fec583a288d34ea233a5d7c9941a',
+            'name': 'Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso',
+            'bytes': 1936267264,
+            'sha256': '1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a',
+            'producer_mode': 'frozen-external-paired-v1',
+            'producer_receipt_sha256': 'f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c',
+        })
+        self.assertEqual(manifest['stable'], {
+            'run_id': 38731467191,
+            'source_sha': '35454003fee95639c845040be0b3627bf12dfa47',
+            'release_suffix': '.20261015120050.202610151205.git3545400',
+            'live_manifest_sha256': '71b5931cff6018e14fc71e6cdec39be404038116b107768a6be7c2a47bd1e346',
+            'gpg_fingerprint': '80F75DE9A23B632246FD1FF1BD1A642B5436645A',
+        })
+        self.assertTrue(manifest['execution_files'])
+        for relative, expected in manifest['execution_files'].items():
+            self.assertEqual(hashlib.sha256((ROOT / relative).read_bytes()).hexdigest(), expected)
+        self.assertFalse((ROOT / '.github/qualification-20261010.update').exists())
+
+
+class SigningFingerprintTest(unittest.TestCase):
+    def setUp(self):
+        self.guest = load('update_nix_signature_guest', 'tools/nix-acceptance/guest.py')
+        self.expected = '80F75DE9A23B632246FD1FF1BD1A642B5436645A'
+
+    def output(self, fingerprint):
+        return ('synthetic.rpm:\n'
+                f'    Header OpenPGP V4 RSA/SHA256 signature, key fingerprint: {fingerprint}: OK\n'
+                '    Header SHA256 digest: OK\n'
+                '    Payload SHA256 digest: OK')
+
+    def test_signature_must_match_full_pinned_fingerprint(self):
+        from unittest.mock import patch
+        with patch.object(self.guest, 'run', return_value=self.output(self.expected.lower())):
+            self.assertIn(self.expected.lower(),
+                          self.guest.verified_rpm_signatures(['synthetic.rpm'], self.expected))
+        for fingerprint in ('0' * 40, self.expected[-8:]):
+            with self.subTest(fingerprint=fingerprint), \
+                    patch.object(self.guest, 'run', return_value=self.output(fingerprint)), \
+                    self.assertRaisesRegex(RuntimeError, 'Unexpected signing key'):
+                self.guest.verified_rpm_signatures(['synthetic.rpm'], self.expected)
 
 
 class HigherEvrTest(unittest.TestCase):

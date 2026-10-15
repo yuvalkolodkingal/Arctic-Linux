@@ -14,16 +14,25 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso",
-    "bytes": 1_936_279_552,
-    "sha256": "b6bbbea37bc761d783e71417878d047bf4d1805feb60d7bbaf2cf0c5a94d05ea",
-    "source_sha": "a13d91118fb90b99dbbf1899fadc3e184ea213ca",
-    "run_id": 38_536_710_765,
-    "artifact_id": 11_883_891_542,
-    "archive_bytes": 1_936_466_960,
-    "archive_sha256": "83d86c18089e23ce76a0e93616f1b2b677feae2c7530b71b577ce46e6555752c",
+    "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
+    "bytes": 1_936_267_264,
+    "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
+    "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a",
+    "run_id": 38_735_141_923,
+    "artifact_id": 11_976_239_386,
+    "archive_bytes": 1_936_454_966,
+    "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "11abed9b44a83d253b51c57fab54f19ede0b9eb335cb5637e9b0c5f93501db23",
+    "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
+}
+REVIEWED_EXECUTION = {
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "workflow": ".github/workflows/iso.yml",
+    "run_id": IMAGE["run_id"],
+    "source_sha": IMAGE["source_sha"],
+    "artifact_id": IMAGE["artifact_id"],
+    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
+    "evidence": "reviewed exact candidate build; capture remains human-review pending",
 }
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
@@ -76,6 +85,13 @@ INSTALL_PROGRESS_STAGES = (
     "page-apps", "page-summary", "installation", "target-mount",
     "install-seal", "host-handoff",
 )
+INSTALLER_IPC_FAILURE_REASONS = (
+    "installer-process-absent",
+    "installer-process-ambiguous",
+    "installer-ipc-call-failed",
+    "installer-ipc-response-invalid",
+    "installer-never-ready",
+)
 HEX32 = re.compile(r"[0-9a-f]{32}")
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
@@ -87,6 +103,20 @@ HOME = re.compile(r"/(?:var/)?home/[^\s]+|/root(?:/[^\s]+)?(?=$|[\s)\]}>,'\"])")
 def require(condition: object, message: str) -> None:
     if not condition:
         raise Invalid(message)
+
+
+def require_active() -> None:
+    complete_image = {
+        "name": str, "bytes": int, "sha256": str, "source_sha": str,
+        "run_id": int, "artifact_id": int, "archive_bytes": int,
+        "archive_sha256": str, "producer_mode": str,
+        "producer_receipt_sha256": str,
+    }
+    require(type(IMAGE) is dict and set(IMAGE) == set(complete_image)
+            and all(type(IMAGE[key]) is expected
+                    for key, expected in complete_image.items())
+            and type(REVIEWED_EXECUTION) is dict and bool(REVIEWED_EXECUTION),
+            "exact image contract is not activated")
 
 
 def fullmatch(pattern, value) -> bool:
@@ -122,20 +152,10 @@ def hashed(value: str) -> str:
 
 
 def image_identity(value) -> None:
+    require_active()
     require(type(value) is dict and set(value) == set(IMAGE)
             and all(type(value[key]) is type(expected) and value[key] == expected
                     for key, expected in IMAGE.items()), "exact image identity differs")
-
-
-REVIEWED_EXECUTION = {
-    "repository": "yuvalkolodkingal/Arctic-Linux",
-    "workflow": ".github/workflows/iso.yml",
-    "run_id": IMAGE["run_id"],
-    "source_sha": IMAGE["source_sha"],
-    "artifact_id": IMAGE["artifact_id"],
-    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
-    "evidence": "reviewed exact candidate build; capture remains human-review pending",
-}
 
 CONTROLLER = {
     "schema": "arctic-showcase-unattended-controller-v1",
@@ -144,6 +164,7 @@ CONTROLLER = {
     "accelerator": "kvm",
     "output": {"width": 1280, "height": 800, "scale": 1, "count": 1},
     "account": {"username": "arcticshowcase", "uid": 1000, "hostname": "arctic-showcase",
+                "prompt": {"rendered": "~>", "ocr_suffixes": ["~>", "~ >"]},
                 "autologin": True, "disposable": True},
     "network_control": "none; QEMU user networking has no host forwarding",
     "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
@@ -198,7 +219,9 @@ def controller_trace(value) -> None:
         "installed-boot": {"installed-login-ready", "first-login-welcome",
                            "first-login-dismissed"},
         "installed-console": {"installed-console-login", "installed-password-prompt",
-                              "installed-shell", "installed-sudo-password"},
+                              "installed-fetch-greeting", "installed-shell-ready",
+                              "installed-shell",
+                              "installed-sudo-password"},
         "dictationsetup": {"dictation-ready-page"},
         "winter": {"wallpaper-page", "wallpaper-hide-dialog"},
         "updates": {"whats-new-layer"},
@@ -208,13 +231,13 @@ def controller_trace(value) -> None:
         "live-install": (623, "86818a073728d6702ca128ccb0b3c4e881a170f3887d7386129047ec97a14bde"),
         "installed-username": (14, "b8214c27644e8af628d5030b053746bea3f72aca7325a066a912de18aef48c0a"),
         "installed-shell-proof": (119, "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"),
-        "installed-scenes": (417, "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"),
+        "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
         "live-boot": {("home", "down", "ret")},
         "live-console": {("ctrl-alt-f6",), ("ret",)},
         "live-install": {("ret",)},
-        "installed-console": {("ctrl-alt-f6",), ("ret",)},
+        "installed-console": {("ctrl-alt-f6",), ("ctrl-l",), ("ret",)},
         "installed-boot": {("esc",)},
         "installed-scenes": {("ret",)},
     }
@@ -234,6 +257,7 @@ def controller_trace(value) -> None:
         if kind == "screen":
             exact_geometry = detail.get("expectation") in {
                 "installer-done", "first-login-welcome", "first-login-dismissed",
+                "installed-shell-ready", "installed-shell",
                 "dictation-ready-page", "wallpaper-page", "wallpaper-hide-dialog",
                 "whats-new-layer",
             }
@@ -313,6 +337,8 @@ def controller_trace(value) -> None:
         ("live-console", "live-console-login"), ("install-complete", "installer-done"),
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
+        ("installed-console", "installed-fetch-greeting"),
+        ("installed-console", "installed-shell-ready"),
         ("installed-console", "installed-shell"),
         ("installed-console", "installed-sudo-password"),
         ("installed-boot", "first-login-welcome"),
@@ -329,6 +355,23 @@ def controller_trace(value) -> None:
             cursor += 1
         require(cursor < len(screen_sequence), "controller screen sequence differs")
         cursor += 1
+    greeting = [index for index, event in enumerate(events)
+                if event["stage"] == "installed-console"
+                and event["kind"] == "screen"
+                and event["detail"].get("expectation") == "installed-fetch-greeting"]
+    require(len(greeting) == 1 and greeting[0] + 3 < len(events),
+            "installed fetch redraw sequence differs")
+    at = greeting[0]
+    require(events[at + 1]["stage"] == "installed-console"
+            and events[at + 1]["kind"] == "keys"
+            and events[at + 1]["detail"] == {"names": ["ctrl-l"]}
+            and events[at + 2]["stage"] == "installed-console"
+            and events[at + 2]["kind"] == "screen"
+            and events[at + 2]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 3]["stage"] == "installed-console"
+            and events[at + 3]["kind"] == "text"
+            and events[at + 3]["detail"].get("command") == "installed-shell-proof",
+            "installed fetch redraw sequence differs")
     require([event["detail"]["command"] for event in events if event["kind"] == "text"]
             == ["live-username", "live-install", "installed-username",
                 "installed-shell-proof", "installed-scenes"]
@@ -348,6 +391,7 @@ def controller_trace(value) -> None:
             and keys.count(("live-console", ("ret",))) == 2
             and keys.count(("live-install", ("ret",))) == 1
             and 1 <= keys.count(("installed-console", ("ctrl-alt-f6",))) <= 70
+            and keys.count(("installed-console", ("ctrl-l",))) == 1
             and keys.count(("installed-console", ("ret",))) == 4
             and keys.count(("installed-scenes", ("ret",))) == 1
             and keys.count(("installed-boot", ("esc",))) == 1,
@@ -355,6 +399,7 @@ def controller_trace(value) -> None:
 
 
 def execution(value) -> None:
+    require_active()
     require(type(value) is dict and value == REVIEWED_EXECUTION
             and all(type(value[key]) is type(expected)
                     for key, expected in REVIEWED_EXECUTION.items()),
@@ -424,12 +469,20 @@ def install_seal(value) -> None:
 
 def install_progress(value) -> None:
     """Validate the privacy-safe live-install lifecycle projection."""
-    require(type(value) is dict and set(value) == {
+    base = {
         "schema", "sequence", "stage", "status", "release_acceptance"
-    } and value["schema"] == "arctic-showcase-install-progress-v1"
+    }
+    keys = set(value) if type(value) is dict else set()
+    diagnostic = keys == base | {"failure_reason"}
+    require(type(value) is dict and keys in (base, base | {"failure_reason"})
+        and value["schema"] == "arctic-showcase-install-progress-v1"
         and type(value["sequence"]) is int and 0 <= value["sequence"] < 64
         and value["stage"] in INSTALL_PROGRESS_STAGES
         and value["status"] in ("started", "passed", "failed")
+        and (not diagnostic or (
+            value["stage"] == "installer-ipc" and value["status"] == "failed"
+            and value["failure_reason"] in INSTALLER_IPC_FAILURE_REASONS
+        ))
         and value["release_acceptance"] is False,
         "installation progress differs")
 
@@ -439,7 +492,8 @@ def capture_failure(value) -> None:
     require(type(value) is dict and set(value) == {
         "schema", "status", "release_acceptance", "image", "host_phase",
         "failure_code", "guest_progress", "private_runtime_removed",
-        "screens_exported", "logs_exported", "pixels_exported", "privacy"
+        "screens_exported", "logs_exported", "pixels_exported", "privacy",
+        "live_startup", "installed_startup"
     } and value["schema"] == "arctic-showcase-capture-failure-v1"
         and value["status"] == "failed" and value["release_acceptance"] is False
         and value["host_phase"] in (
@@ -458,6 +512,16 @@ def capture_failure(value) -> None:
             "human_review": "not_applicable",
         }, "capture failure projection differs")
     image_identity(value["image"])
+    if value["live_startup"] is not None:
+        live_startup_diagnostic(value["live_startup"])
+    else:
+        require(value["host_phase"] == "vm-start",
+                "live startup diagnostic is absent after controller start")
+    if value["installed_startup"] is not None:
+        installed_startup_diagnostic(value["installed_startup"])
+    else:
+        require(value["host_phase"] == "vm-start",
+                "installed startup diagnostic is absent after controller start")
     progress = value["guest_progress"]
     require(type(progress) is list and len(progress) <= 63,
             "capture failure progress count differs")
@@ -467,6 +531,176 @@ def capture_failure(value) -> None:
     if value["failure_code"] == "guest-install-failed":
         require(progress and progress[-1]["status"] == "failed",
                 "guest installation failure projection differs")
+
+
+def live_startup_diagnostic(value) -> None:
+    """Validate fixed enums and bounded timings exported without private pixels/text."""
+    require(type(value) is dict and set(value) == {
+        "schema", "release_acceptance", "boot_menu", "selection",
+        "welcome_gate", "post_failure_probe"
+    } and value["schema"] == "arctic-showcase-live-startup-diagnostic-v1"
+        and value["release_acceptance"] is False,
+        "live startup diagnostic identity differs")
+
+    def timed(item, statuses, limit):
+        require(type(item) is dict and set(item) == {"status", "elapsed_seconds"}
+                and item["status"] in statuses
+                and (item["elapsed_seconds"] is None
+                     or (type(item["elapsed_seconds"]) is int
+                         and 0 <= item["elapsed_seconds"] <= limit)),
+                "live startup timing differs")
+
+    timed(value["boot_menu"], ("not-observed", "observed"), 300)
+    timed(value["selection"], ("not-sent", "sent"), 300)
+    require((value["boot_menu"]["status"] == "observed")
+            == (value["boot_menu"]["elapsed_seconds"] is not None)
+            and (value["selection"]["status"] == "sent")
+            == (value["selection"]["elapsed_seconds"] is not None),
+            "live startup event timing differs")
+    require(value["selection"]["status"] != "sent"
+            or (value["boot_menu"]["status"] == "observed"
+                and value["boot_menu"]["elapsed_seconds"]
+                <= value["selection"]["elapsed_seconds"]),
+            "live startup selection preceded boot menu")
+
+    surfaces = {
+        "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+        "boot-menu", "boot-progress", "live-desktop", "installer-partial",
+        "installer-error", "console-or-emergency", "other-text", "installer-welcome",
+    }
+    gate = value["welcome_gate"]
+    require(type(gate) is dict and set(gate) == {
+        "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
+        "last_observation", "first_observation_seconds"
+    } and gate["expectation"] == "live-installer-visible"
+        and gate["timeout_seconds"] == 600
+        and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
+        and (gate["elapsed_seconds"] is None
+             or (type(gate["elapsed_seconds"]) is int
+                 and 0 <= gate["elapsed_seconds"] <= 600))
+        and type(gate["samples"]) is int and 0 <= gate["samples"] <= 301
+        and gate["last_observation"] in surfaces
+        and type(gate["first_observation_seconds"]) is dict
+        and set(gate["first_observation_seconds"]) == surfaces,
+        "live startup Welcome gate differs")
+    require((gate["status"] in ("passed", "timed-out"))
+            == (gate["elapsed_seconds"] is not None),
+            "live startup Welcome timing differs")
+    require(gate["status"] == "not-started"
+            or value["selection"]["status"] == "sent",
+            "live startup Welcome gate preceded selection")
+    observed = 0
+    for seconds in gate["first_observation_seconds"].values():
+        require(seconds is None or (type(seconds) is int and 0 <= seconds <= 600),
+                "live startup observation timing differs")
+        observed += seconds is not None
+    require(observed <= gate["samples"], "live startup observation count differs")
+    require((gate["samples"] == 0) == (observed == 0),
+            "live startup observation presence differs")
+    if gate["samples"]:
+        require(gate["first_observation_seconds"][gate["last_observation"]] is not None,
+                "live startup last observation was not observed")
+    if gate["status"] == "passed":
+        require(gate["last_observation"] == "installer-welcome",
+                "live startup passed without Welcome observation")
+
+    probe = value["post_failure_probe"]
+    require(type(probe) is dict and set(probe) == {
+        "status", "boot_mode", "graphical_session", "installer_process"
+    } and probe["status"] in (
+        "not-run", "console-unavailable", "command-sent", "channel-unavailable", "completed")
+        and probe["boot_mode"] in ("unknown", "install", "other")
+        and probe["graphical_session"] in ("unknown", "running", "absent")
+        and probe["installer_process"] in ("unknown", "running", "absent"),
+        "live startup post-failure probe differs")
+    require((probe["status"] == "completed")
+            == (probe["boot_mode"] != "unknown"
+                and probe["graphical_session"] != "unknown"
+                and probe["installer_process"] != "unknown"),
+            "live startup probe completion differs")
+    require(probe["status"] == "not-run" or gate["status"] == "timed-out",
+            "live startup probe preceded authoritative timeout")
+
+
+def installed_startup_diagnostic(value) -> None:
+    """Validate the fixed installed login/Fish diagnostic projection."""
+    require(type(value) is dict and set(value) == {
+        "schema", "release_acceptance", "login", "authentication", "fetch",
+        "dismissal", "shell_ready_gate", "post_failure_interrupt"
+    } and value["schema"] == "arctic-showcase-installed-startup-diagnostic-v1"
+        and value["release_acceptance"] is False,
+        "installed startup diagnostic identity differs")
+
+    def timed(item, statuses, limit):
+        require(type(item) is dict and set(item) == {"status", "elapsed_seconds"}
+                and item["status"] in statuses
+                and (item["elapsed_seconds"] is None
+                     or (type(item["elapsed_seconds"]) is int
+                         and 0 <= item["elapsed_seconds"] <= limit))
+                and ((item["status"] == "observed")
+                     == (item["elapsed_seconds"] is not None)),
+                "installed startup timing differs")
+
+    timed(value["login"], ("not-observed", "observed"), 900)
+    timed(value["fetch"], ("not-observed", "observed"), 1035)
+    require(value["authentication"] in ("not-sent", "sent")
+            and value["dismissal"] in ("not-sent", "sent"),
+            "installed startup action differs")
+    require(value["authentication"] != "sent"
+            or value["login"]["status"] == "observed",
+            "installed authentication preceded login")
+    require(value["fetch"]["status"] != "observed"
+            or (value["authentication"] == "sent"
+                and value["login"]["elapsed_seconds"]
+                <= value["fetch"]["elapsed_seconds"]),
+            "installed fetch preceded authentication")
+    require(value["dismissal"] != "sent" or value["fetch"]["status"] == "observed",
+            "installed fetch dismissal preceded greeting")
+
+    surfaces = {
+        "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+        "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
+        "suffix-only", "login-or-password", "other-text",
+    }
+    gate = value["shell_ready_gate"]
+    require(type(gate) is dict and set(gate) == {
+        "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
+        "last_observation", "first_observation_seconds"
+    } and gate["expectation"] == "installed-shell-ready"
+        and gate["timeout_seconds"] == 90
+        and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
+        and (gate["elapsed_seconds"] is None
+             or (type(gate["elapsed_seconds"]) is int
+                 and 0 <= gate["elapsed_seconds"] <= 90))
+        and type(gate["samples"]) is int and 0 <= gate["samples"] <= 46
+        and gate["last_observation"] in surfaces
+        and type(gate["first_observation_seconds"]) is dict
+        and set(gate["first_observation_seconds"]) == surfaces,
+        "installed shell-ready gate differs")
+    require((gate["status"] in ("passed", "timed-out"))
+            == (gate["elapsed_seconds"] is not None),
+            "installed shell-ready timing differs")
+    require(gate["status"] == "not-started" or value["dismissal"] == "sent",
+            "installed shell-ready gate preceded fetch dismissal")
+    observed = 0
+    for seconds in gate["first_observation_seconds"].values():
+        require(seconds is None or (type(seconds) is int and 0 <= seconds <= 90),
+                "installed shell observation timing differs")
+        observed += seconds is not None
+    require(observed <= gate["samples"]
+            and ((gate["samples"] == 0) == (observed == 0)),
+            "installed shell observation count differs")
+    if gate["samples"]:
+        require(gate["first_observation_seconds"][gate["last_observation"]] is not None,
+                "installed shell last observation was not observed")
+    if gate["status"] == "passed":
+        require(gate["last_observation"] == "prompt-exact",
+                "installed shell gate passed without exact prompt")
+    interrupt = value["post_failure_interrupt"]
+    require(interrupt in ("not-run", "sent-no-prompt", "recovered-prompt",
+                          "controller-unavailable")
+            and (interrupt == "not-run") == (gate["status"] != "timed-out"),
+            "installed post-failure interrupt differs")
 
 
 def vm_provenance(value) -> None:
