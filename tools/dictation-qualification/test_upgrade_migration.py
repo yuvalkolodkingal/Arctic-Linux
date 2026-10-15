@@ -20,6 +20,9 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[2]
 SETUP = ROOT / "packaging/dictation/arctic-voxtype-setup"
+STATUS = ROOT / "packaging/dictation/arctic-dictation"
+LAUNCHER = ROOT / "packaging/dictation/voxtype"
+CONFIGURE = ROOT / "packaging/dictation/arctic-voxtype-configure"
 SOURCE_COMMIT = "e2638ca63f566f1682bcedc0abea8e4b25211c21"
 PROFILE_SHA = {
     "small-v2": "d4b9326169fe0773b36857ce4b2c52d31294c4c421933c5fbb41422227e92756",
@@ -183,7 +186,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
                            vulkan_binary_sha256=digest(vulkan_data))
         return receipt
 
-    def _fixture_setup(self, crash_before_marker=False, online_failure=False):
+    def _fixture_setup(self, crash_before_marker=False, online_failure=False,
+                       crash_after_vulkan_receipt=False, crash_after_cpu_selector=False):
         text = SETUP.read_text()
         replacements = {}
         for key, (_name, data, _mode) in ASSETS.items():
@@ -233,6 +237,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
             "[[ $EUID -eq 0 ]]", f"[[ $EUID -eq {self.uid} ]]"
         ).replace(
             'if [ -S "/run/user/$uid/bus" ]; then', "if true; then"
+        ).replace(
+            "timeout 120", "timeout 1"
         )
         start = text.index("prepare_packaged_release_metadata() {")
         end = text.index("\n}\n", start) + 3
@@ -284,10 +290,78 @@ class UpgradeMigrationExecution(unittest.TestCase):
             commit = 'durable_atomic_text "$STATE/upstream-direct-v1" 0644 upstream-direct-v1'
             self.assertIn(commit, text)
             text = text.replace(commit, "exit 91\n    " + commit, 1)
-        suffix = "-crash" if crash_before_marker else "-network-failure" if online_failure else ""
+        if crash_after_vulkan_receipt:
+            commit = 'update_receipt_backend vulkan "$VULKAN_BYTES" "$VULKAN_SHA"'
+            self.assertIn(commit, text)
+            text = text.replace(commit, commit + "\n            exit 92", 1)
+        if crash_after_cpu_selector:
+            start = text.index("set_backend() {")
+            commit = 'durable_atomic_text "$STATE/backend" 0644 cpu'
+            self.assertIn(commit, text[start:])
+            tail = text[start:].replace(commit, commit + "\n            exit 93", 1)
+            text = text[:start] + tail
+        suffix = ("-crash" if crash_before_marker else
+                  "-network-failure" if online_failure else
+                  "-vulkan-receipt-crash" if crash_after_vulkan_receipt else
+                  "-cpu-selector-crash" if crash_after_cpu_selector else "")
         path = self.root / ("setup" + suffix)
         self._write_executable(path, text)
         return path
+
+    def _fixture_status(self):
+        text = STATUS.read_text().replace(
+            "/var/lib/arctic/dictation", str(self.state)
+        ).replace(
+            "/usr/libexec/arctic/arctic-voxtype-host-profile", str(self.bin / "host-profile")
+        ).replace(
+            "/opt/arctic/voxtype/1.1.1", str(self.current_payload)
+        ).replace(
+            "/opt/arctic/voxtype/models", str(self.models)
+        ).replace(
+            str(CURRENT_PRODUCTION["vulkan"][0]), str(len(CURRENT_ASSETS["vulkan"][1]))
+        ).replace(
+            CURRENT_PRODUCTION["vulkan"][1], digest(CURRENT_ASSETS["vulkan"][1])
+        )
+        path = self.root / "status"
+        self._write_executable(path, text)
+        return path
+
+    def _fixture_launcher(self):
+        text = LAUNCHER.read_text().replace(
+            "lib=/opt/arctic/voxtype/1.1.1", "lib=" + str(self.current_payload)
+        ).replace(
+            "/var/lib/arctic/dictation", str(self.state)
+        ).replace(
+            "/usr/libexec/arctic/arctic-voxtype-host-profile", str(self.bin / "host-profile")
+        ).replace(
+            str(CURRENT_PRODUCTION["vulkan"][0]), str(len(CURRENT_ASSETS["vulkan"][1]))
+        ).replace(
+            CURRENT_PRODUCTION["vulkan"][1], digest(CURRENT_ASSETS["vulkan"][1])
+        )
+        path = self.root / "launcher"
+        self._write_executable(path, text)
+        return path
+
+    def _fixture_configure(self):
+        text = CONFIGURE.read_text().replace(
+            "/opt/arctic/voxtype/models", str(self.models)
+        ).replace(
+            "/opt/arctic/voxtype/1.1.1", str(self.current_payload)
+        )
+        path = self.root / "configure-real"
+        self._write_executable(path, text)
+        return path
+
+    def _status(self):
+        runtime = self.root / "runtime"
+        runtime.mkdir(mode=0o700, exist_ok=True)
+        result = subprocess.run(
+            [str(self._fixture_status()), "status"],
+            env=dict(os.environ, PATH=str(self.bin) + ":/usr/bin:/bin",
+                     XDG_RUNTIME_DIR=str(runtime), HOME=str(self.root)),
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10,
+        )
+        return json.loads(result.stdout)
 
     def _run(self, script, check=True, verb="--migrate-legacy"):
         env = dict(os.environ, PATH=str(self.bin) + ":/usr/bin:/bin",
@@ -323,6 +397,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
 
     def _assert_strict_cpu_receipt(self):
         receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual(self.state.joinpath("verified.json").stat().st_mode & 0o777, 0o644)
         self.assertEqual(receipt["backend"], "cpu")
         self.assertEqual(set(receipt), {
             "integration", "version", "source_commit", "release_signing_fingerprint",
@@ -334,6 +409,23 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._prepare_current_vulkan()
         self._run(self._fixture_setup(), verb="--backend-cpu")
         self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self._assert_strict_cpu_receipt()
+
+    def test_cpu_transition_crash_mismatch_fails_closed_and_retries(self):
+        self._prepare_current_vulkan()
+        crashed = self._run(self._fixture_setup(crash_after_cpu_selector=True),
+                            check=False, verb="--backend-cpu")
+        self.assertEqual(crashed.returncode, 93, crashed.stderr.decode())
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self.assertEqual(json.loads((self.state / "verified.json").read_text())["backend"],
+                         "vulkan")
+        launched = subprocess.run([str(self._fixture_launcher()), "status"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(launched.returncode, 69)
+        status = self._status()
+        self.assertEqual((status["state"], status["ready"]), ("error", False))
+        self.assertIn("interrupted", status["error"])
+        self._run(self._fixture_setup(), verb="--backend-cpu")
         self._assert_strict_cpu_receipt()
 
     def test_failed_vulkan_reenable_leaves_reusable_cpu_receipt_across_crash(self):
@@ -361,6 +453,140 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self._assert_strict_cpu_receipt()
         self.assertTrue((self.state / "upstream-direct-v1").is_file())
         self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
+
+    def test_exit_zero_cpu_fallback_cannot_publish_vulkan(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
+        self._write_executable(
+            self.current_assets / "voxtype-vulkan",
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'whisper_init_with_params_no_state: use gpu = 1' >&2\n"
+            "printf '%s\\n' 'whisper_backend_init_gpu: no GPU found' >&2\n"
+            "exit 0\n",
+        )
+        failed = self._run(self._fixture_setup(), check=False, verb="--backend-vulkan")
+        self.assertNotEqual(failed.returncode, 0)
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self._assert_strict_cpu_receipt()
+        self.assertEqual((self.state / "setup.error").read_text(), "backend-vulkan\n")
+
+    def test_vulkan_proof_rejects_contradiction_intent_unknown_oversize_and_nonzero(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
+        cases = {
+            "positive-and-negative": (
+                "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n"
+                "printf '%s\\n' 'ggml_vulkan: Found 0 Vulkan devices' >&2\n", 0),
+            "intent-only": (
+                "printf '%s\\n' 'whisper_init_with_params_no_state: use gpu = 1' >&2\n", 0),
+            "unknown": ("printf '%s\\n' 'model initialized' >&2\n", 0),
+            "oversize": ("head -c 1048577 /dev/zero >&2\n", 0),
+            "nonzero-after-positive": (
+                "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n", 7),
+        }
+        for name, (body, code) in cases.items():
+            with self.subTest(name=name):
+                self._write_executable(
+                    self.current_assets / "voxtype-vulkan",
+                    "#!/bin/sh\n" + body + f"exit {code}\n",
+                )
+                failed = self._run(self._fixture_setup(), check=False, verb="--backend-vulkan")
+                self.assertNotEqual(failed.returncode, 0)
+                self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+                self._assert_strict_cpu_receipt()
+                self.assertEqual((self.state / "setup.error").read_text(), "backend-vulkan\n")
+
+        self._write_executable(self.current_assets / "voxtype-vulkan",
+                               "#!/bin/sh\nsleep 2\nexit 0\n")
+        timed_out = self._run(self._fixture_setup(), check=False, verb="--backend-vulkan")
+        self.assertNotEqual(timed_out.returncode, 0)
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        self._assert_strict_cpu_receipt()
+
+    def test_positive_gpu_proof_is_published_receipt_before_backend(self):
+        self._prepare_current_vulkan()
+        self._write_executable(self.bin / "vulkaninfo", "#!/bin/sh\nexit 0\n")
+        self._write_executable(
+            self.current_assets / "voxtype-vulkan",
+            "#!/bin/sh\n"
+            "printf '%s\\n' 'whisper_init_with_params_no_state: use gpu = 1' >&2\n"
+            "printf '%s\\n' 'whisper_backend_init_gpu: using Vulkan0 backend' >&2\n"
+            "exit 0\n",
+        )
+        self._run(self._fixture_setup(), verb="--backend-vulkan")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual((receipt["backend"], (self.state / "backend").read_text()),
+                         ("vulkan", "vulkan\n"))
+        self.assertEqual((self.state / "verified.json").stat().st_mode & 0o777, 0o644)
+        self.assertFalse((self.state / "setup.error").exists())
+
+        # Simulate power loss after the durable receipt but before selector.
+        self._run(self._fixture_setup(), verb="--backend-cpu")
+        crashed = self._run(self._fixture_setup(crash_after_vulkan_receipt=True),
+                            check=False, verb="--backend-vulkan")
+        self.assertEqual(crashed.returncode, 92, crashed.stderr.decode())
+        self.assertEqual(json.loads((self.state / "verified.json").read_text())["backend"],
+                         "vulkan")
+        self.assertEqual((self.state / "backend").read_text(), "cpu\n")
+        launched = subprocess.run([str(self._fixture_launcher()), "status"],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(launched.returncode, 69)
+        status = self._status()
+        self.assertEqual((status["state"], status["ready"], status["backend"]),
+                         ("error", False, "cpu"))
+        self.assertIn("interrupted", status["error"])
+        self._run(self._fixture_setup(), verb="--backend-cpu")
+        self._assert_strict_cpu_receipt()
+
+    def test_failed_migration_offline_deferral_reports_queued(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        migrated = self._run(self._fixture_setup(), check=False)
+        self.assertNotEqual(migrated.returncode, 0)
+        self.assertEqual((self.state / "setup.error").read_text(), "setup\n")
+        self._run(self._fixture_setup(), verb="--install-offline")
+        self.assertFalse((self.state / "setup.error").exists())
+        self.assertEqual((self.state / "setup.state").read_text(), "queued\n")
+        status = self._status()
+        self.assertEqual((status["state"], status["ready"], status["error"]),
+                         ("queued", False, ""))
+
+    def test_precommit_config_validation_uses_exact_verified_binary_fresh_and_upgrade(self):
+        self.models.mkdir(mode=0o755)
+        model = self.models / "ggml-small.bin"
+        self._write(model, ASSETS["small"][1], 0o644)
+        binary = self.current_payload / "voxtype-baseline"
+        calls = self.root / "validator-calls"
+        self._write_executable(
+            binary,
+            "#!/bin/sh\n"
+            "[ \"$1\" = --config ] && [ -f \"$2\" ] && "
+            "[ \"$3 $4 $5 $6\" = 'config get whisper.language --json' ] || exit 64\n"
+            f"printf '%s\\n' \"$2\" >>{calls}\n",
+        )
+        # The strict runtime launcher must remain closed before commit.
+        launch = subprocess.run([str(self._fixture_launcher()), "status"],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
+        self.assertEqual(launch.returncode, 69)
+
+        home = self.root / "home"
+        home.mkdir(mode=0o700)
+        helper = self._fixture_configure()
+        env = dict(os.environ, HOME=str(home))
+        subprocess.run([str(helper), str(model), str(binary)], env=env,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10)
+        config = home / ".config/voxtype/config.toml"
+        self.assertIn('language = ["he", "en"]', config.read_text())
+
+        config.write_text("[whisper]\nlanguage = \"en\"\n")
+        config.chmod(0o600)
+        subprocess.run([str(helper), str(model), str(binary)], env=env,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10)
+        self.assertEqual((config.parent / "config.toml.pre-arctic-voxtype-v1").read_text(),
+                         "[whisper]\nlanguage = \"en\"\n")
+        self.assertEqual(len(calls.read_text().splitlines()), 2)
 
     def test_old_stable_profile_wins_and_crash_retries_without_network(self):
         self._json("verified.json", self._legacy_receipt("small-v2"))

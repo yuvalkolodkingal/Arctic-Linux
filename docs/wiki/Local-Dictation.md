@@ -70,6 +70,12 @@ Arctic reports that fallback as an error instead of accepting it as Vulkan
 acceleration. Select CPU explicitly, or repair the driver and enable Vulkan
 again.
 
+The setup check requires VoxType's observed post-initialization Vulkan marker.
+An exit code of zero or a message saying GPU use was requested is insufficient;
+fallback, contradictory and unknown results keep CPU selected. The generated
+silence transcript is discarded. Setup parses a bounded private stderr stream
+only for the official acceleration outcome and does not save or display it.
+
 | Problem | What to do |
 |---|---|
 | Setup is queued or a file is missing | Connect and choose **Set up / retry…**. |

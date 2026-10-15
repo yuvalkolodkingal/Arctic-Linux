@@ -30,8 +30,12 @@ Setup chooses one CPU path conservatively:
 Missing RPM dependencies add to those totals. Vulkan is a later, explicit
 choice in Settings and adds **66,575,872 bytes (66.6 MB)**. It is not included in
 the initial modern CPU total. Enabling Vulkan runs `vulkaninfo` and a real local
-model initialization before changing the selected backend. Failure leaves CPU
-selected and records an actionable error.
+model initialization before changing the selected backend. Arctic requires the
+official 1.1.1 post-initialization Vulkan outcome marker; exit zero, GPU intent,
+CPU fallback, contradictory output, and unknown output all fail closed. The
+silence transcript is discarded, and at most 1 MiB of private stderr is parsed
+in memory without publishing it. Failure leaves CPU selected and records an
+actionable error.
 
 | File | Bytes | SHA-256 |
 |---|---:|---|

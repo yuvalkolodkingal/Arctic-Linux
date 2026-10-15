@@ -177,8 +177,12 @@ class DirectUpstreamIntegration(unittest.TestCase):
         prepare_state = setup[setup.index("prepare_state_dir() {"):
                               setup.index("\n}\n", setup.index("prepare_state_dir() {")) + 3]
         self.assertIn('durable_sync_tree "$STATE" "$STATE_ROOT"', prepare_state)
-        self.assertLess(setup.index('prepare_state_dir\n    durable_atomic_text "$STATE/user"'),
-                        setup.index('durable_atomic_text "$STATE/pending"'))
+        queue = setup[setup.index("queue_user() {"):
+                      setup.index("\n}\n", setup.index("queue_user() {")) + 3]
+        self.assertLess(queue.index("prepare_state_dir"),
+                        queue.index('durable_remove "$STATE/setup.error"'))
+        self.assertLess(queue.index('durable_remove "$STATE/setup.error"'),
+                        queue.index('durable_atomic_text "$STATE/pending"'))
         posttrans = spec[spec.index("# Direct-upstream dictation replaced"):
                          spec.index("# Migrate old boot-wanted", spec.index("# Direct-upstream dictation replaced"))]
         self.assertIn('arctic-voxtype-setup --migrate-legacy "$user"', posttrans)
@@ -197,6 +201,17 @@ class DirectUpstreamIntegration(unittest.TestCase):
                         setup.index('durable_remove "$STATE/pending"'))
         self.assertIn('systemctl --user daemon-reload >/dev/null 2>&1 || :', setup_user)
         self.assertIn('systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :', setup_user)
+
+        # Vulkan is published only after the official post-init marker is
+        # observed; intent, exit zero, and device enumeration are insufficient.
+        self.assertIn('whisper_backend_init_gpu:', setup)
+        self.assertIn('found gpu device', setup)
+        self.assertIn('"using" in line and "backend" in line', setup)
+        self.assertLess(setup.index('update_receipt_backend vulkan'),
+                        setup.index('durable_atomic_text "$STATE/backend" 0644 vulkan'))
+        launcher = (D / "voxtype").read_text()
+        self.assertIn('backend state is incomplete', launcher)
+        self.assertIn('[ "$backend" != "$receipt_backend" ]', launcher)
 
     def test_runtime_error_cache_is_per_uid_and_no_follow(self):
         adapter = (D / "arctic-dictation").read_text()
@@ -256,6 +271,8 @@ class DirectUpstreamIntegration(unittest.TestCase):
         configure_start = setup.index("configure_user() {")
         configure = setup[configure_start:setup.index("\n}\n", configure_start) + 3]
         self.assertIn("as_user", configure)
+        self.assertIn('"$DEST/voxtype-$cpu"', setup)
+        self.assertIn('"$validator" --config', helper.read_text())
         for root_operation in ("install ", "chown", "mktemp", "mv "):
             self.assertNotIn(root_operation, configure)
 

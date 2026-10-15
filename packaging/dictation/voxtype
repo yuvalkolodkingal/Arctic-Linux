@@ -3,10 +3,31 @@
 # handled by that upstream binary; this launcher only chooses a host variant.
 set -eu
 lib=/opt/arctic/voxtype/1.1.1
-backend=cpu
+backend=
+receipt=/var/lib/arctic/dictation/verified.json
 if [ -r /var/lib/arctic/dictation/backend ]; then
     IFS= read -r selected < /var/lib/arctic/dictation/backend || :
-    [ "$selected" = vulkan ] && backend=vulkan
+    case "$selected" in cpu|vulkan) backend=$selected ;; esac
+fi
+receipt_backend=
+if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r "$receipt" ] \
+        && grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
+        && grep -Fq '"version":"1.1.1"' "$receipt"; then
+    if grep -Fq '"backend":"cpu"' "$receipt" \
+            && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+            && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+        receipt_backend=cpu
+    elif grep -Fq '"backend":"vulkan"' "$receipt" \
+            && ! grep -Fq '"backend":"cpu"' "$receipt" \
+            && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+            && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
+            && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
+        receipt_backend=vulkan
+    fi
+fi
+if [ -z "$receipt_backend" ] || [ "$backend" != "$receipt_backend" ]; then
+    echo "VoxType backend state is incomplete. Open Settings -> Dictation and select CPU or Vulkan again." >&2
+    exit 69
 fi
 if [ "$backend" = vulkan ] && [ -x "$lib/voxtype-vulkan" ]; then
     exec "$lib/voxtype-vulkan" "$@"

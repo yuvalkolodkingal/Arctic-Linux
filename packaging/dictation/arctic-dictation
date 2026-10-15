@@ -19,17 +19,17 @@ clear_runtime_error() {
     rm -f "$runtime/voxtype-error"
 }
 status() {
-    state=unavailable error= language=auto backend=cpu integrity_ready=false
+    state=unavailable error= language=auto backend= backend_state_valid=false integrity_ready=false
     if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ]; then
         profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
     else
         profile=small-v2; model=small; model_bytes=487601967; download_bytes=506440871
     fi
     [ -r /var/lib/arctic/dictation/backend ] && IFS= read -r backend </var/lib/arctic/dictation/backend || :
-    case "$backend" in cpu|vulkan) ;; *) backend=cpu ;; esac
+    case "$backend" in cpu|vulkan) backend_state_valid=true ;; *) backend=cpu ;; esac
     if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r /var/lib/arctic/dictation/verified.json ]; then
         receipt=/var/lib/arctic/dictation/verified.json
-        binary_path= model_path= binary_bytes=
+        binary_path= model_path= binary_bytes= receipt_backend=
         if ! grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
                 || ! grep -Fq '"version":"1.1.1"' "$receipt"; then
             state=error
@@ -39,15 +39,37 @@ status() {
             else
                 error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
             fi
-        elif grep -Fq '"profile":"small-v2"' "$receipt"; then
+        elif grep -Fq '"backend":"cpu"' "$receipt" \
+                && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+                && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+            receipt_backend=cpu
+        elif grep -Fq '"backend":"vulkan"' "$receipt" \
+                && ! grep -Fq '"backend":"cpu"' "$receipt" \
+                && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+                && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
+                && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
+            receipt_backend=vulkan
+        else
+            state=error
+            error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
+        fi
+        if [ -n "$receipt_backend" ] && [ "$backend_state_valid" != true ]; then
+            state=error
+            error='The VoxType backend update was interrupted. Select CPU or Vulkan again to finish it.'
+            receipt_backend=
+        elif [ -n "$receipt_backend" ] && [ "$receipt_backend" != "$backend" ]; then
+            state=error
+            error='The VoxType backend update was interrupted. Select CPU or Vulkan again to finish it.'
+            receipt_backend=
+        elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"small-v2"' "$receipt"; then
             profile=small-v2; model=small; model_bytes=487601967; download_bytes=506440871
             binary_path=/opt/arctic/voxtype/1.1.1/voxtype-baseline; binary_bytes=18838904
             model_path=/opt/arctic/voxtype/models/ggml-small.bin
-        elif grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
+        elif [ -n "$receipt_backend" ] && grep -Fq '"profile":"turbo-q5-v3"' "$receipt"; then
             profile=turbo-q5-v3; model=large-v3-turbo-q5_0; model_bytes=574041195; download_bytes=593457131
             binary_path=/opt/arctic/voxtype/1.1.1/voxtype-avx2; binary_bytes=19415936
             model_path=/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin
-        else
+        elif [ -n "$receipt_backend" ]; then
             state=error
             error='The VoxType setup receipt is obsolete or damaged. Retry setup to repair it.'
         fi

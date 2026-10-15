@@ -372,7 +372,10 @@ VoxType 1.1.1 release, exact bytes and SHA-256, then installs one CPU binary and
 one multilingual model atomically: baseline/Small is 506,440,871 bytes; the
 conservatively selected AVX2/Turbo Q5 path is 593,457,131 bytes. Optional Vulkan
 is an explicit later 66,575,872-byte download and must pass real local model
-initialization before selection.
+initialization with a positive observed Vulkan outcome before selection. Exit
+zero, intent-only, fallback, contradictory, unknown, oversized and timed-out
+proofs retain CPU. The silence transcript is discarded and the bounded private
+stderr proof is never persisted.
 
 Upgrades from VoxType 1.1.0 preserve the verified model and hardware profile,
 then queue the new signed executable without blocking the RPM transaction. The

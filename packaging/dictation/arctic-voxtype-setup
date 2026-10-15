@@ -141,6 +141,13 @@ fail() {
 backend_fail() {
     trap - ERR
     prepare_state_dir
+    # A failed re-enable must leave the runtime on CPU. Best-effort receipt
+    # normalization also repairs an ordinary write failure after Vulkan was
+    # attested but before the backend selector was published. A power loss in
+    # that narrow interval is handled fail-closed by the launcher and status
+    # adapter until the user retries either backend.
+    durable_atomic_text "$STATE/backend" 0644 cpu || :
+    [[ ! -r $STATE/verified.json ]] || update_receipt_backend cpu || :
     durable_atomic_text "$STATE/setup.error" 0644 backend-vulkan
     printf '%s\n' 'Vulkan could not initialize the verified local model. CPU remains selected.' >&2
     exit 1
@@ -179,6 +186,10 @@ user_from_uid() {
 }
 queue_user() {
     prepare_state_dir
+    # A package transaction can intentionally defer a failed online migration
+    # to first boot. Clear that stale failure durably before publishing the new
+    # retry queue, so status cannot override queued with the earlier error.
+    durable_remove "$STATE/setup.error"
     durable_atomic_text "$STATE/user" 0600 "$1"
     # Pending is durable before setup starts. Until the direct marker is also
     # durable, a crash therefore leaves both a retry and every legacy byte.
@@ -510,8 +521,8 @@ as_user() {
     runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" "$@"
 }
 configure_user() {
-    local user=$1 home=$2 model=$3
-    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model"
+    local user=$1 home=$2 model=$3 binary=$4
+    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model" "$binary"
 }
 
 reuse_legacy_model() {
@@ -606,7 +617,10 @@ setup_user() {
     durable_sync_file "$model_path"
     durable_sync_tree "$DEST" "$STORAGE_ROOT"
     durable_sync_tree "$MODELS" "$STORAGE_ROOT"
-    configure_user "$user" "$home" "$model_path"
+    # The runtime launcher correctly rejects the not-yet-committed receipt.
+    # Validate the temporary config with the exact signed CPU binary whose
+    # bytes were just checked and synced instead of weakening that guard.
+    configure_user "$user" "$home" "$model_path" "$DEST/voxtype-$cpu"
     systemctl --global enable voxtype.service >/dev/null
     uid=$(id -u "$user")
     durable_atomic_text "$STATE/backend" 0644 cpu
@@ -633,9 +647,9 @@ setup_user() {
     return 0
 }
 update_receipt_backend() {
-    python3 - "$STATE/verified.json" "$1" <<'PY'
+    python3 - "$STATE/verified.json" "$@" <<'PY'
 import json, os, sys, tempfile
-path, backend = sys.argv[1:]
+path, backend, *attestation = sys.argv[1:]
 with open(path, encoding='utf-8') as src:
     data = json.load(src)
 data['backend'] = backend
@@ -645,12 +659,19 @@ if backend == 'cpu':
     # next package migration and can turn a safe fallback into a repair.
     for key in ('vulkan_binary', 'vulkan_binary_bytes', 'vulkan_binary_sha256'):
         data.pop(key, None)
+elif backend == 'vulkan' and len(attestation) == 2:
+    size, sha = attestation
+    data.update(vulkan_binary='voxtype-vulkan', vulkan_binary_bytes=int(size),
+                vulkan_binary_sha256=sha)
+else:
+    raise SystemExit(2)
 fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
 try:
     with os.fdopen(fd, 'w', encoding='utf-8') as out:
+        os.fchmod(out.fileno(), 0o644)
         json.dump(data, out, separators=(',', ':')); out.write('\n')
         out.flush(); os.fsync(out.fileno())
-    os.chmod(tmp, 0o644); os.replace(tmp, path)
+    os.replace(tmp, path)
     directory = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
     try:
         os.fsync(directory)
@@ -664,20 +685,57 @@ except BaseException:
     raise
 PY
 }
+vulkan_acceleration_proven() {
+    # The official 1.1.1 `info accel` implementation treats these
+    # whisper_backend_init_gpu outcome lines as positive GPU evidence. It
+    # explicitly treats `use gpu = 1` as intent and unknown as unknown. Stream
+    # stderr through a bounded, non-persistent parser; stdout (which contains
+    # the transcript) is discarded by the caller.
+    python3 -c '
+import sys
+limit = 1024 * 1024
+kept = bytearray()
+total = 0
+while True:
+    chunk = sys.stdin.buffer.read(65536)
+    if not chunk:
+        break
+    total += len(chunk)
+    if len(kept) < limit:
+        kept.extend(chunk[:limit - len(kept)])
+if total > limit:
+    raise SystemExit(1)
+positive = False
+negative = False
+for raw in kept.decode("utf-8", "replace").splitlines():
+    line = " ".join(raw.lower().split())
+    if "use gpu = 0" in line:
+        negative = True
+    if "whisper_backend_init_gpu:" in line and "no gpu found" in line:
+        negative = True
+    if "ggml_vulkan" in line and "found 0" in line:
+        negative = True
+    if "whisper_backend_init_gpu:" not in line or "vulkan" not in line:
+        continue
+    if "found gpu device" in line or ("using" in line and "backend" in line):
+        positive = True
+raise SystemExit(0 if positive and not negative else 1)
+'
+}
 set_backend() {
-    local backend=$1 user tmp keyring uid home config fixture receipt
+    local backend=$1 user tmp keyring uid home config fixture
     trap backend_fail ERR
     user=$(user_from_uid) || usage; valid_user "$user" || usage; [[ -r "$STATE/verified.json" ]] || fail
     case "$backend" in
         cpu)
-            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            durable_atomic_text "$STATE/backend" 0644 cpu
             update_receipt_backend cpu
-            rm -f "$STATE/setup.error"
+            durable_remove "$STATE/setup.error"
             ;;
         vulkan)
             # Selection remains CPU until both the driver probe and real local
             # model initialization through the official Vulkan binary pass.
-            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            durable_atomic_text "$STATE/backend" 0644 cpu
             update_receipt_backend cpu
             tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
             prepare_release_metadata "$tmp" "$keyring"; install_asset vulkan "$tmp" "$keyring"
@@ -691,22 +749,15 @@ with wave.open(sys.argv[1], 'wb') as out:
     out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000)
     out.writeframes(struct.pack('<16000h', *([0] * 16000)))
 PY
-            runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" RUST_LOG=error \
-                timeout 120 "$DEST/voxtype-vulkan" -q --config "$config" transcribe "$fixture" >/dev/null 2>&1
-            printf '%s\n' vulkan | install -m 0644 /dev/stdin "$STATE/backend"
-            receipt="$STATE/verified.json"
-            python3 - "$receipt" "$VULKAN_BYTES" "$VULKAN_SHA" <<'PY'
-import json, os, sys, tempfile
-path, size, sha = sys.argv[1:]
-with open(path, encoding='utf-8') as src:
-    data = json.load(src)
-data.update(backend='vulkan', vulkan_binary='voxtype-vulkan', vulkan_binary_bytes=int(size), vulkan_binary_sha256=sha)
-fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
-with os.fdopen(fd, 'w', encoding='utf-8') as out:
-    json.dump(data, out, separators=(',', ':')); out.write('\n')
-os.chmod(tmp, 0o644); os.replace(tmp, path)
-PY
-            rm -f "$STATE/setup.error"
+            runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" RUST_LOG=info \
+                timeout 120 "$DEST/voxtype-vulkan" --config "$config" transcribe "$fixture" \
+                2>&1 >/dev/null | vulkan_acceleration_proven
+            # Attest the positive model-init result before publishing Vulkan
+            # as the runtime selector. A crash between these durable writes is
+            # a mismatch, which the launcher and status adapter reject.
+            update_receipt_backend vulkan "$VULKAN_BYTES" "$VULKAN_SHA"
+            durable_atomic_text "$STATE/backend" 0644 vulkan
+            durable_remove "$STATE/setup.error"
             ;;
         *) usage ;;
     esac
