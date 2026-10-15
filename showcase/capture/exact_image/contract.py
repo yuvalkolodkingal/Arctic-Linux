@@ -475,7 +475,7 @@ def capture_failure(value) -> None:
         "schema", "status", "release_acceptance", "image", "host_phase",
         "failure_code", "guest_progress", "private_runtime_removed",
         "screens_exported", "logs_exported", "pixels_exported", "privacy",
-        "live_startup"
+        "live_startup", "installed_startup"
     } and value["schema"] == "arctic-showcase-capture-failure-v1"
         and value["status"] == "failed" and value["release_acceptance"] is False
         and value["host_phase"] in (
@@ -499,6 +499,11 @@ def capture_failure(value) -> None:
     else:
         require(value["host_phase"] == "vm-start",
                 "live startup diagnostic is absent after controller start")
+    if value["installed_startup"] is not None:
+        installed_startup_diagnostic(value["installed_startup"])
+    else:
+        require(value["host_phase"] == "vm-start",
+                "installed startup diagnostic is absent after controller start")
     progress = value["guest_progress"]
     require(type(progress) is list and len(progress) <= 63,
             "capture failure progress count differs")
@@ -597,6 +602,87 @@ def live_startup_diagnostic(value) -> None:
             "live startup probe completion differs")
     require(probe["status"] == "not-run" or gate["status"] == "timed-out",
             "live startup probe preceded authoritative timeout")
+
+
+def installed_startup_diagnostic(value) -> None:
+    """Validate the fixed installed login/Fish diagnostic projection."""
+    require(type(value) is dict and set(value) == {
+        "schema", "release_acceptance", "login", "authentication", "fetch",
+        "dismissal", "shell_ready_gate", "post_failure_interrupt"
+    } and value["schema"] == "arctic-showcase-installed-startup-diagnostic-v1"
+        and value["release_acceptance"] is False,
+        "installed startup diagnostic identity differs")
+
+    def timed(item, statuses, limit):
+        require(type(item) is dict and set(item) == {"status", "elapsed_seconds"}
+                and item["status"] in statuses
+                and (item["elapsed_seconds"] is None
+                     or (type(item["elapsed_seconds"]) is int
+                         and 0 <= item["elapsed_seconds"] <= limit))
+                and ((item["status"] == "observed")
+                     == (item["elapsed_seconds"] is not None)),
+                "installed startup timing differs")
+
+    timed(value["login"], ("not-observed", "observed"), 900)
+    timed(value["fetch"], ("not-observed", "observed"), 1035)
+    require(value["authentication"] in ("not-sent", "sent")
+            and value["dismissal"] in ("not-sent", "sent"),
+            "installed startup action differs")
+    require(value["authentication"] != "sent"
+            or value["login"]["status"] == "observed",
+            "installed authentication preceded login")
+    require(value["fetch"]["status"] != "observed"
+            or (value["authentication"] == "sent"
+                and value["login"]["elapsed_seconds"]
+                <= value["fetch"]["elapsed_seconds"]),
+            "installed fetch preceded authentication")
+    require(value["dismissal"] != "sent" or value["fetch"]["status"] == "observed",
+            "installed fetch dismissal preceded greeting")
+
+    surfaces = {
+        "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
+        "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
+        "suffix-only", "login-or-password", "other-text",
+    }
+    gate = value["shell_ready_gate"]
+    require(type(gate) is dict and set(gate) == {
+        "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
+        "last_observation", "first_observation_seconds"
+    } and gate["expectation"] == "installed-shell-ready"
+        and gate["timeout_seconds"] == 90
+        and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
+        and (gate["elapsed_seconds"] is None
+             or (type(gate["elapsed_seconds"]) is int
+                 and 0 <= gate["elapsed_seconds"] <= 90))
+        and type(gate["samples"]) is int and 0 <= gate["samples"] <= 46
+        and gate["last_observation"] in surfaces
+        and type(gate["first_observation_seconds"]) is dict
+        and set(gate["first_observation_seconds"]) == surfaces,
+        "installed shell-ready gate differs")
+    require((gate["status"] in ("passed", "timed-out"))
+            == (gate["elapsed_seconds"] is not None),
+            "installed shell-ready timing differs")
+    require(gate["status"] == "not-started" or value["dismissal"] == "sent",
+            "installed shell-ready gate preceded fetch dismissal")
+    observed = 0
+    for seconds in gate["first_observation_seconds"].values():
+        require(seconds is None or (type(seconds) is int and 0 <= seconds <= 90),
+                "installed shell observation timing differs")
+        observed += seconds is not None
+    require(observed <= gate["samples"]
+            and ((gate["samples"] == 0) == (observed == 0)),
+            "installed shell observation count differs")
+    if gate["samples"]:
+        require(gate["first_observation_seconds"][gate["last_observation"]] is not None,
+                "installed shell last observation was not observed")
+    if gate["status"] == "passed":
+        require(gate["last_observation"] == "prompt-exact",
+                "installed shell gate passed without exact prompt")
+    interrupt = value["post_failure_interrupt"]
+    require(interrupt in ("not-run", "sent-no-prompt", "recovered-prompt",
+                          "controller-unavailable")
+            and (interrupt == "not-run") == (gate["status"] != "timed-out"),
+            "installed post-failure interrupt differs")
 
 
 def vm_provenance(value) -> None:

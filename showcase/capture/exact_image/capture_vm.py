@@ -457,12 +457,13 @@ def _failure_code(error, cleanup_failure) -> str:
 
 
 def _write_failure_report(path: Path, phase: str, progress: list, error, cleanup_failure,
-                          live_startup):
+                          live_startup, installed_startup):
     value = {"schema": "arctic-showcase-capture-failure-v1", "status": "failed",
              "release_acceptance": False, "image": dict(c.IMAGE), "host_phase": phase,
              "failure_code": _failure_code(error, cleanup_failure),
              "guest_progress": list(progress), "private_runtime_removed": True,
              "live_startup": live_startup,
+             "installed_startup": installed_startup,
              "screens_exported": False, "logs_exported": False, "pixels_exported": False,
              "privacy": {"content": "no guest text, logs, screenshots or pixels exported",
                          "human_review": "not_applicable"}}
@@ -677,8 +678,11 @@ def host_mode(args) -> int:
                 try:
                     live_startup = (controller.live_startup.projection()
                                     if controller is not None else None)
+                    installed_startup = (controller.installed_startup.projection()
+                                         if controller is not None else None)
                     _write_failure_report(failure_path, phase, guest_progress,
-                                          report_error, cleanup_failure, live_startup)
+                                          report_error, cleanup_failure, live_startup,
+                                          installed_startup)
                 except BaseException as error:
                     if failure is None:
                         failure = error

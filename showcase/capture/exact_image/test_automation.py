@@ -227,6 +227,94 @@ class UnattendedController(unittest.TestCase):
         with self.assertRaises(c.Invalid):
             c.live_startup_diagnostic(forged)
 
+    def test_installed_shell_surface_projection_uses_only_fixed_enums(self):
+        image = Image.new("RGB", (1280, 800))
+        pixels = image.load()
+        for y in range(800):
+            for x in range(1280):
+                pixels[x, y] = ((x // 40) % 32, (y // 40) % 20, (x + y) % 251)
+        account = "arcticshowcase@arctic-showcase"
+        suffixes = ("~>", "~ >")
+        cases = {
+            account + " ~>": "prompt-exact",
+            account + " ~>\ntrailing fetch row": "prompt-not-final",
+            "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
+            account: "account-only",
+            "~ >": "suffix-only",
+            "arctic-showcase login:": "login-or-password",
+            "unrecognized private-looking words": "other-text",
+            "": "ocr-empty",
+        }
+        for text, expected in cases.items():
+            with self.subTest(expected=expected):
+                self.assertEqual(automation._installed_shell_surface_class(
+                    image, text, account, suffixes), expected)
+        self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1280, 800), "black"), "private", account, suffixes),
+            "blank-output")
+        self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
+            "geometry-mismatch")
+
+    def test_installed_startup_diagnostic_is_bounded_and_rejects_private_content(self):
+        diagnostic = automation.InstalledStartupDiagnostic()
+        diagnostic.start()
+        diagnostic.login_observed()
+        diagnostic.authentication_sent()
+        diagnostic.fetch_observed()
+        diagnostic.dismissal_sent()
+        diagnostic.gate_start()
+        diagnostic.observe("fetch-greeting")
+        diagnostic.observe("account-only")
+        diagnostic.gate_end("timed-out")
+        diagnostic.interrupt("sent-no-prompt")
+        value = diagnostic.projection()
+        c.installed_startup_diagnostic(value)
+        self.assertEqual(value["shell_ready_gate"]["timeout_seconds"], 90)
+        self.assertLessEqual(value["shell_ready_gate"]["samples"], 46)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["private_ocr"] = "do not export"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["post_failure_interrupt"] = "guest-selected"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+
+    def test_installed_prompt_timeout_interrupts_only_after_failure_and_never_types_proof(self):
+        operations = []
+
+        def wait(_stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", expectation, phrases, kwargs))
+            if expectation == "installed-shell-ready":
+                raise automation.InstalledShellReadyTimeout(
+                    "controller screen expectation installed-shell-ready absent")
+            return None, ""
+
+        def press(_stage, *names, **_kwargs):
+            operations.append(("keys", names))
+
+        def text(_stage, command_id, _value, **_kwargs):
+            operations.append(("text", command_id))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
+                automation.InstalledShellReadyTimeout, "installed-shell-ready absent"):
+            self.controller.boot_installed_and_start()
+        timeout_at = operations.index((
+            "screen", "installed-shell-ready", (),
+            {"seconds": 90, "exact_output": True,
+             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >"))},
+        ))
+        self.assertEqual(operations[timeout_at + 1], ("keys", ("ctrl-c",)))
+        self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
+        self.assertNotIn(("text", "installed-shell-proof"), operations)
+        self.assertEqual(self.controller.installed_startup.interrupt_status,
+                         "recovered-prompt")
+
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
@@ -848,13 +936,15 @@ class GuestAutomation(unittest.TestCase):
             capture_vm._write_failure_report(
                 path, "live-install", progress,
                 c.Invalid("private capture channel timed out"), None,
-                automation.LiveStartupDiagnostic().projection())
+                automation.LiveStartupDiagnostic().projection(),
+                automation.InstalledStartupDiagnostic().projection())
             self.assertLessEqual(path.stat().st_size, 32768)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             value = c.strict_json(path.read_bytes())
             c.capture_failure(value)
             self.assertEqual(value["failure_code"], "private-channel-timeout")
             self.assertEqual(value["live_startup"]["release_acceptance"], False)
+            self.assertEqual(value["installed_startup"]["release_acceptance"], False)
             self.assertNotIn("private capture channel timed out", path.read_text())
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
