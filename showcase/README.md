@@ -14,8 +14,8 @@ photo backgrounds, separate Remove apps, official VoxType 1.1.1 local dictation,
 the one-time What's New summary, and per-account hide/restore for packaged wallpapers.
 
 The script has 38 scenes and 130 caption cues. Every time window is aligned to the verified
-582.356463-second direct-VoxType 1.1.1 River master. Rendering remains blocked by human listening,
-qualified final-image captures and release binding.
+582.356463-second direct-VoxType 1.1.1 River master. Rendering remains blocked by qualified
+final-image captures and release binding; human listening remains mandatory before publication.
 
 The prior faster-whisper results are preserved as evidence for the superseded master only. The
 first full-script River request failed because the connector caps one request at 5,000 characters;
@@ -101,10 +101,11 @@ the complete output, and review representative frames. The final MP4 size, SHA-2
 and matching ISO fields remain pending qualification.
 
 The resolver does not trust `ready_for_render` by itself. `--purpose private-render` admits only an
-unpublished candidate after verifying the private draft asset, human listening receipt, the actual
+unpublished candidate after verifying the private draft asset, the actual
 `tools/qualified-release/manifest.json` schema (including update, active-installer and every media
 review), all five reviewed capture contracts, one matching ISO identity and identical render-ready
-timing. `--purpose publish-video` additionally requires the release publication flag, the
+timing. The private candidate is the review object for complete human listening and frame review.
+`--purpose publish-video` additionally requires the approved human-listening receipt, the release publication flag, the
 publisher's public-video confirmation, and a reviewed final-render receipt. That receipt binds the
 exact source commit, render run and artifact, MP4 bytes, duration and SHA-256, full decode and
 subtitle checks, and human review of the eight representative frames. `--purpose

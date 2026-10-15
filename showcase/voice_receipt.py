@@ -207,7 +207,7 @@ def _qualified_iso(value: object) -> dict:
     return value
 
 
-def _validate_source_archive(receipt: dict, master: dict[str, str]) -> None:
+def validate_source_archive(receipt: dict, master: dict[str, str]) -> None:
     archive = receipt.get("source_archive")
     keys = {
         "status", "release_id", "draft", "public", "target_commit", "tag",
@@ -519,12 +519,17 @@ def _validate_final_render_review(receipt: dict, master: dict[str, str]) -> dict
 
 
 def validate_render_readiness(receipt: dict, repository: Path = REPOSITORY) -> dict[str, str]:
-    """Validate private candidate-render gates without granting publication."""
+    """Validate private candidate-render gates without granting publication.
+
+    Human listening is deliberately a post-render publication gate.  The private
+    MP4 is the review object that lets a person assess the complete narration in
+    context, including the exact segment join.  It remains mandatory before any
+    public-video admission.
+    """
     master = validate_assembled_master(receipt, repository)
     if receipt.get("ready_for_render") is not True:
         raise ValueError("segmented direct-VoxType River master is not ready")
-    _validate_source_archive(receipt, master)
-    _validate_human_listening(receipt, master)
+    validate_source_archive(receipt, master)
     image, _manifest = _validate_release_binding(receipt, repository)
     _validate_captures(receipt, repository, image)
     _validate_render_timing(repository, master)
@@ -539,11 +544,14 @@ def validate_publication_readiness(
 ) -> dict[str, str]:
     """Validate public-video approval and the stronger optional source-audio scope."""
     master = validate_render_readiness(receipt, repository)
-    scope = _validate_publication_confirmation(receipt, redistribute_source_audio)
+    _validate_human_listening(receipt, master)
     _image, manifest = _validate_release_binding(receipt, repository)
     if manifest["publication_approved"] is not True:
         raise ValueError("qualified release publication is not approved")
     _validate_final_render_review(receipt, master)
+    # Ask the publisher to confirm the connected ElevenLabs plan only after a
+    # concrete private MP4 has passed decode, subtitle and human frame review.
+    scope = _validate_publication_confirmation(receipt, redistribute_source_audio)
     return {
         **master,
         "admission": "public_video",

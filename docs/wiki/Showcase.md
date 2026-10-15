@@ -29,8 +29,10 @@ Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130
 WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; its
 measured loudness is -24.6 LUFS with a -2.2 dBTP true peak, and the segment boundary lies inside
 0.431905 seconds below -60 dBFS. These automated results do not replace
-listening. Rendering is blocked pending human listening, qualified captures, private source-archive
-verification and release binding, so no replacement video link is published yet.
+listening. The exact master is preserved in a verified private draft release. A private render is
+blocked pending qualified captures and release binding; publication additionally requires complete
+human listening, final video and frame review, confirmation that the connected ElevenLabs plan
+permits the public video, and verified public downloads. No replacement video link is published yet.
 
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 

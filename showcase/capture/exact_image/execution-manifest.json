@@ -1,61 +1,31 @@
 {
   "branch": "codex/showcase-exact-capture-20261014",
   "controller": {
-    "schema": "arctic-showcase-unattended-controller-v1",
-    "mode": "fixed-qmp-and-owned-virtio-serial",
-    "display": "none",
     "accelerator": "kvm",
+    "account": {
+      "autologin": true,
+      "disposable": true,
+      "hostname": "arctic-showcase",
+      "uid": 1000,
+      "username": "arcticshowcase"
+    },
+    "display": "none",
+    "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
+    "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
+    "mode": "fixed-qmp-and-owned-virtio-serial",
+    "network_control": "none; QEMU user networking has no host forwarding",
     "output": {
-      "width": 1280,
+      "count": 1,
       "height": 800,
       "scale": 1,
-      "count": 1
+      "width": 1280
     },
-    "account": {
-      "username": "arcticshowcase",
-      "uid": 1000,
-      "hostname": "arctic-showcase",
-      "prompt": {
-        "rendered": "~>",
-        "ocr_suffixes": [
-          "~>",
-          "~ >"
-        ]
-      },
-      "autologin": true,
-      "disposable": true
-    },
-    "network_control": "none; QEMU user networking has no host forwarding",
-    "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
-    "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
-    "release_acceptance": false
+    "release_acceptance": false,
+    "schema": "arctic-showcase-unattended-controller-v1"
   },
-  "execution_files": {
-    ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
-    "showcase/capture/exact_image/automation.py": "1480bfbb7e710aee75f34a3c4951b3b4f6e1a0ed4deb50b589c3917ab7607cb7",
-    "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
-    "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
-    "showcase/capture/exact_image/capture_vm.py": "2629e63663d3c7573b76f64f3a8de0eec238a213439e4ddad85666e8ba15845a",
-    "showcase/capture/exact_image/contract.py": "0ae33055fed0ade738d92370866a6a2449861c930e3d390d1a0117cf9f5226cb",
-    "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
-    "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
-    "showcase/capture/exact_image/unattended.py": "61f65ff246e2d1acbde8fa9831430e398967549ec47b00996862b05aa370aa84",
-    "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
-  },
-  "image": {
-    "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
-    "bytes": 1936267264,
-    "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
-    "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a",
-    "run_id": 38735141923,
-    "artifact_id": 11976239386,
-    "archive_bytes": 1936454966,
-    "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c"
-  },
-  "ready": true,
+  "execution_files": {},
+  "image": null,
+  "ready": false,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }

@@ -248,6 +248,10 @@ class VoiceReceiptTest(unittest.TestCase):
         self.assertEqual(values["master_sha256"], "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b")
         self.assertEqual(values["master_duration"], "582.356463")
 
+    def test_current_private_draft_archive_receipt_is_exact(self):
+        master = MODULE.validate_assembled_master(RECEIPT)
+        MODULE.validate_source_archive(RECEIPT, master)
+
     def test_two_segments_reproduce_locked_narration_exactly(self):
         plan = MODULE.validate_segment_plan(RECEIPT)
         self.assertEqual(plan["minimum_generation_calls"], 2)
@@ -259,7 +263,7 @@ class VoiceReceiptTest(unittest.TestCase):
     def test_bare_ready_boolean_cannot_unlock_current_receipt(self):
         receipt = copy.deepcopy(RECEIPT)
         receipt["ready_for_render"] = True
-        with self.assertRaisesRegex(ValueError, "immutable source preparation commit"):
+        with self.assertRaisesRegex(ValueError, "final image release manifest"):
             MODULE.resolve(receipt)
 
     def test_fully_bound_ready_receipt_exports_private_render_admission(self):
@@ -270,12 +274,15 @@ class VoiceReceiptTest(unittest.TestCase):
         self.assertEqual(values["master_duration"], "582.356463")
         self.assertEqual(values["admission"], "private_render")
 
-    def test_ready_receipt_rejects_pending_human_listening(self):
+    def test_private_render_admits_pending_human_listening_for_candidate_review(self):
         receipt = approved_receipt()
         root = self.ready_repository(receipt)
-        receipt["validation"]["human_listening_review"]["status"] = "pending"
+        receipt["validation"]["human_listening_review"] = copy.deepcopy(
+            RECEIPT["validation"]["human_listening_review"]
+        )
+        self.assertEqual(MODULE.resolve(receipt, root)["admission"], "private_render")
         with self.assertRaisesRegex(ValueError, "human listening review"):
-            MODULE.resolve(receipt, root)
+            MODULE.resolve_publication(receipt, root)
 
     def test_private_render_does_not_require_publication_confirmation(self):
         receipt = approved_receipt()
@@ -288,6 +295,19 @@ class VoiceReceiptTest(unittest.TestCase):
         root = self.ready_repository(receipt)
         receipt["license"]["publication_confirmation"]["status"] = "pending"
         with self.assertRaisesRegex(ValueError, "connected plan"):
+            MODULE.resolve_publication(receipt, root)
+
+    def test_publication_checks_private_render_review_before_plan_confirmation(self):
+        receipt = approved_receipt()
+        root = self.ready_repository(receipt)
+        receipt["license"]["publication_confirmation"] = copy.deepcopy(
+            RECEIPT["license"]["publication_confirmation"]
+        )
+        receipt["validation"]["final_render_verified"] = False
+        receipt["validation"]["final_render_review"] = copy.deepcopy(
+            RECEIPT["validation"]["final_render_review"]
+        )
+        with self.assertRaisesRegex(ValueError, "final render is not verified"):
             MODULE.resolve_publication(receipt, root)
 
     def test_public_video_accepts_video_only_scope(self):
