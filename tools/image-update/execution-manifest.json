@@ -15,18 +15,18 @@
     "tools/test-install.sh": "dabe05fe9d7decbbce01a0ce32e9d3aa75251da053a2a39f877bf2b759448ce5"
   },
   "image": {
-    "archive_bytes": null,
-    "archive_sha256": null,
-    "artifact_id": null,
+    "archive_bytes": 1936373046,
+    "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+    "artifact_id": 11961831325,
     "bytes": 1936185344,
     "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": null,
+    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
     "run_id": 38707130991,
     "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
     "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6"
   },
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
   "stable": {
     "gpg_fingerprint": "80F75DE9A23B632246FD1FF1BD1A642B5436645A",

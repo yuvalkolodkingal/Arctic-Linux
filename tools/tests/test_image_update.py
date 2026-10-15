@@ -72,9 +72,9 @@ class UpdateRecordsTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, 'disabled'):
             guard.verify(manifest, ROOT)
 
-    def test_checked_in_manifest_stages_known_identity_without_guessing_missing_pins(self):
+    def test_checked_in_manifest_is_exactly_pinned_and_ready(self):
         manifest = json.loads((ROOT / 'tools/image-update/execution-manifest.json').read_text())
-        self.assertIs(manifest['ready'], False)
+        self.assertIs(manifest['ready'], True)
         self.assertFalse(manifest['release_acceptance'])
         self.assertEqual(set(manifest['execution_files']), guard.FILES)
         self.assertEqual(manifest['execution_files'], {
@@ -82,13 +82,13 @@ class UpdateRecordsTest(unittest.TestCase):
             for name in guard.FILES
         })
         self.assertEqual(manifest['image'], {
-            'archive_bytes': None,
-            'archive_sha256': None,
-            'artifact_id': None,
+            'archive_bytes': 1936373046,
+            'archive_sha256': '1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3',
+            'artifact_id': 11961831325,
             'bytes': 1936185344,
             'name': 'Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso',
             'producer_mode': 'frozen-external-paired-v1',
-            'producer_receipt_sha256': None,
+            'producer_receipt_sha256': '9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4',
             'run_id': 38707130991,
             'sha256': '92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66',
             'source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
