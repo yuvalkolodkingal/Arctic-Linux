@@ -466,6 +466,45 @@ def diagnose_invalid_utf8_member(relative):
     print('ARCTIC-EVIDENCE-DIAGNOSTIC=utf8-' + role + '-rejection-invalid-utf8', flush=True)
 
 
+# A failed Native run may leave a console stream with byte-interleaved UTF-8
+# from independent kernel/userspace writers.  That private raw stream remains
+# rejected, but it must not suppress the already-public, source-bounded failure
+# receipts (including the failure-only host-frame capture) in the same artifact.
+# A successful run never receives this diagnostic-only omission.
+FAILED_NATIVE_UART_MEMBERS = frozenset((
+    'harness/serial-install.log',
+    'harness/serial-boot.log',
+))
+
+
+def failed_native_execution(source):
+    path = source / 'execution.json'
+    if (not path.is_file() or path.is_symlink()
+            or path.stat().st_size > 1024 * 1024):
+        return False
+    try:
+        def unique(items):
+            value = {}
+            for key, item in items:
+                if key in value:
+                    raise ValueError('Duplicate native execution field')
+                value[key] = item
+            return value
+        value = json.loads(path.read_bytes().decode('utf-8'), object_pairs_hook=unique,
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError('Nonfinite native execution number')))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError, TypeError):
+        return False
+    checker = value.get('checker', {}) if type(value) is dict else {}
+    return (type(value) is dict and value.get('status') == 'failed_or_unrun'
+        and value.get('release_acceptance') is False
+        and type(value.get('error')) is str and bool(value['error'])
+        and type(value.get('source_image_run')) is int
+        and type(value.get('execution_checker_head')) is str
+        and re.fullmatch(r'[0-9a-f]{40}', value['execution_checker_head']) is not None
+        and type(checker) is dict and checker.get('method') == 'native-functional'
+        and checker.get('release_acceptance') is False)
+
+
 # BEGIN PUBLIC_NATIVE_BINARY_ARCHIVE_FIXTURE
 # The public archive roundtrip intentionally includes NUL and 0xff in a .txt
 # fixture. Only its finite, source-bound extractor destinations and public bytes
@@ -513,6 +552,7 @@ def copy_screened(source, target, *, external=False):
     if len(files) > 1000:
         raise RuntimeError('Too many diagnostic members')
     manifest = dict(scope='Owned synthetic QEMU VM only; no host desktop, VM disks or credentials', files={})
+    failed_native = failed_native_execution(source) if not external else False
     total = 0
     for path in files:
         if path.is_symlink():
@@ -549,6 +589,13 @@ def copy_screened(source, target, *, external=False):
                         diagnose_invalid_utf8_member(path.relative_to(source).as_posix())
                     except BaseException:
                         pass  # A diagnostic failure cannot replace the strict original decode rejection.
+                    relative = path.relative_to(source).as_posix()
+                    if failed_native and relative in FAILED_NATIVE_UART_MEMBERS:
+                        manifest.setdefault('rejected_files', {})[relative] = dict(
+                            role=UTF8_MEMBER_DIAGNOSTICS[relative], reason='invalid-utf8',
+                            original_sha256=original, bytes=len(content), uploaded=False,
+                            release_acceptance=False)
+                        continue
                     raise
                 value, redactions = SENSITIVE.subn('[redacted]', value)
                 content = value.encode()
