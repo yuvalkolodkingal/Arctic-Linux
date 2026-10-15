@@ -1,4 +1,12 @@
 {
+  "receipt_scope": {
+    "status": "legacy_published_showcase_only",
+    "edition_date": "2026-10-03",
+    "release_tag": "showcase-2026-10-03",
+    "video_asset": "Arctic-Linux-Showcase-1080p.mp4",
+    "description": "This receipt validates only the published 407-second Kokoro showcase. It is not a receipt for the pending ElevenLabs River replacement or the final Arctic Linux image.",
+    "replacement_validation_receipt": null
+  },
   "hyperframes": "0.8.114",
   "duration_seconds": 407.014,
   "resolution": [
