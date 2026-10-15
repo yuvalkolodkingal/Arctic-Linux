@@ -1,14 +1,14 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "dbc8d3e571293dff6ac996ded31c539bd8923a71594d370f729872525cc9bb85",
+    "test_controls_state_trials.py": "07583990eea8d914a38af4b841e1aa364560ec5990a59a4a023503425626503f",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
-    "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
-    "test_native_desktop_v6.py": "e3ae42924980760bb0be3bd6f750b912b71f94fc0d3691243bcb7ede828e4a65",
+    "test_native_capture_controls.py": "c707b72fa40d2916cc0d344624c1c7e353428a3809d1076729908f7f3c193f15",
+    "test_native_desktop_v6.py": "e31ea6319f78adc55c4cc9ef4a7ebcf24651a13d6f88a062955d959825834f88",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_protocol_diagnostics.py": "49c34b9e40039caee22318d263603b68e65fdf4b76f6de1979dfc9cf2776f2a5",
+    "test_native_protocol_diagnostics.py": "2a10b41f7ee06f68a8eef5d7a8dd5fea0fb59002df389d8fb96f987a7bedaf6c",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "37062845dddf688458839354f1dbe639679fba06d0de6554c9ca05a89c70df00",
-    "test_native_v6.py": "914d2d237c6025be3e3ffcadc4b12f4b0e17559210db7f595d0c6336033b84c6",
+    "test_native_smoke.py": "feaae23c44024ade388c994cfd722ab909b558e17712305adc8362e2dcea8b9b",
+    "test_native_v6.py": "73988f23721971507abbdee634c67c99b6cefe1ccd6340109688fe465a2a13d1",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "8a2197ebeb84552a313c88109a8e41e4531e54c6f3a3e71f7648730ec7bd7e6d",
+    "guest-check-native-v6.py": "d3355dad0a70841b512baab8cac01bbd69b70ca326f5f72e05228a8ce3c3bb02",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
-    "native_smoke.py": "f033e671ffbab8196231785be172b57b7ed1625bceac73a4280970137c1dc354"
+    "native_smoke.py": "e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,7 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "f033e671ffbab8196231785be172b57b7ed1625bceac73a4280970137c1dc354",
+  "native_source_sha256": "e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -279,19 +279,19 @@
     "owned_ipc_retirement": "before signalling, connect to the exact socket and require SO_PEERCRED PID/UID while pinning its inode with O_PATH; after the exact pidfd-bound process retires, atomically move the pathname with renameat2(RENAME_NOREPLACE) into a root-owned private quarantine, compare the quarantined entry to the held fd, unlink there, and keep the original directory fd open through the final exact-client wait",
     "race_and_inode_aba_control": "the desktop UID cannot mutate the quarantined directory; deterministic pre-quarantine replacement, held-inode ABA, post-quarantine path recreation, parent-directory relocation with moved-root socket recreation and existing-target tests all preserve replacements and fail closed",
     "release_acceptance": false,
-    "static_capture_attempt_limit": 1,
+    "static_capture_attempt_limit": 2,
     "static_capture_deadline_seconds": 9.5,
     "static_player_attempt_limit": 1,
     "wrong_peer_replaced_inode_nonprivate_directory_and_retained_client_fail_closed": true
   },
   "single_primary_capture": {
-    "capture_attempt_limit": 1,
+    "capture_attempt_limit": 2,
     "capture_command_timeout_seconds": 3,
     "failure_artifact_id": 11945334674,
     "failure_artifact_sha256": "8b8c5477316f57626a99acd1eb9c38805b61a55c3ec8b5e22e48cca2ab730c02",
     "failure_diagnosis": "installed sole capture observed an entirely black owned fullscreen GL client while the same exact ISO live capture matched all 316224 checked pixels; the earlier clock sample preceded fullscreen and controls transitions, so it did not prove post-geometry playback readiness",
     "failure_run": 38672376980,
-    "first_failed_or_unmatched_oracle": "hard gate failure; no recapture, restart, or diagnostic acceptance path",
+    "first_failed_or_unmatched_oracle": "only an unmatched content result permits one 0.5 second same-player recapture; an oracle error, second unmatched result, identity/geometry change or total-deadline exhaustion is a hard gate failure",
     "fixture_cadence": "20 frames at 10 fps alternating every RGB channel by +4; both phases remain inside unchanged oracle thresholds and every decoded frame differs from its predecessor",
     "host_attempt_receipt_schema_exact": true,
     "maximum_owned_player_attempts": 1,
@@ -299,10 +299,18 @@
     "playback_clock_anchor": "sampled after the exact owned player reaches fullscreen and its controls-hidden transition completes",
     "playback_clock_minimum_advance_seconds": 0.5,
     "playback_clock_timeout_seconds": 5,
-    "policy": "exactly one fresh product-wrapper Celluloid process and one screencopy",
+    "policy": "exactly one proved product-wrapper Celluloid process and at most two strict screencopies of that same paused process",
     "post_geometry_settle_seconds": 0.5,
     "release_acceptance": false,
-    "screenshot_path": "celluloid-reference.png"
+    "screenshot_path": "celluloid-reference.png",
+    "current_failure_run": 38798884343,
+    "current_failure_artifact_id": 12005320775,
+    "current_failure_artifact_sha256": "34aa41a5ec33fb2295cddcf53de9afaecea641f69125f8fb77ae4977531d995f",
+    "current_failure_diagnosis": "after the supported same-player MPRIS OpenUri transition, installed mpv reported the exact target path, 160x120 video, libmpv renderer, advancing clock and a settled paused clock, while the sole screencopy retained the prior moving fixture grid over the new 16-color frame; live on the same ISO captured the settled frame with zero mismatched pixels",
+    "retry_settle_seconds": 0.5,
+    "total_capture_deadline_seconds": 9.5,
+    "same_process_identity_focus_geometry_and_monitor_revalidated_before_retry": true,
+    "installed_smoke_and_taskbar_failure_was_cascading_after_visual_gate": true
   },
   "taskbar_context_media_protection": {
     "bounded_diagnosis": "retained context validates exactly, while ambient payload modes and a simultaneous desktop-user optical automount were not covered by the existing actual-CD test; the closed stage cannot distinguish those protected-file metadata paths",
@@ -341,7 +349,7 @@
     "validate_harness_serial"
   ],
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
-  "validators_source_sha256": "77a05e7336620e963f23a3860e7b309ed11b9220ce59735d12330bcf419b5d5c",
+  "validators_source_sha256": "eaa0bbb798b4fd0c664a7148d21fc090cd582f2b4e676d0a842b872a7c25d356",
   "paused_visual_capture": {
     "failure_run": 38715355526,
     "failure_artifact_id": 11962563734,
@@ -476,5 +484,31 @@
     "requires_exact_image_rerun": true,
     "release_acceptance": false,
     "scope": "observer-owned sequential fixture transition only; black frames remain rejected"
+  },
+  "supported_celluloid_fixture_transition": {
+    "failure_run": 38795172736,
+    "failure_artifact_id": 12001134820,
+    "failure_artifact_sha256": "f282b624901e382ba556455c2305d0863f71b64a1127a64e4180d45b3440d3fc",
+    "observed_failure": "the visibly proved owned Celluloid player remained alive, native, focused and on the moving fixture, but raw mpv JSON IPC request 48 rejected the observer-injected loadfile transition before the static oracle",
+    "diagnosis": "the observer bypassed Celluloid model state with a raw mpv loadfile command; its generic assertion also discarded the exact negative acknowledgement, so no product or ISO failure is established",
+    "change": "retain the same proved Celluloid PID, Wayland client and renderer; SO_PEERCRED-bind its existing mpv socket, select exactly one Celluloid per-window MPRIS name whose D-Bus owner PID is that same PID, invoke the supported bounded OpenUri method with the exact static fixture URI, then retain exact owned-mpv path/video readback and the unchanged fullscreen pixel oracle",
+    "mpris_object_path": "/org/mpris/MediaPlayer2",
+    "mpris_interface": "org.mpris.MediaPlayer2.Player",
+    "mpris_method": "OpenUri",
+    "dbus_timeout_milliseconds": 3000,
+    "helper_timeout_seconds": 8,
+    "same_player_pid_renderer_and_wayland_client_required": true,
+    "exact_target_path_and_video_state_required_after_call": true,
+    "fixtures_renderer_geometry_oracle_and_acceptance_thresholds_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "requires_exact_image_rerun": true,
+    "release_acceptance": false,
+    "upstream_celluloid_version": "0.30",
+    "upstream_source_sha256": {
+      "src/mpris/celluloid-mpris.c": "566ebf0f72e004a9d19f5ccbed1b7405d4c00ef95ce1d07a839a85b0d3ee9d31",
+      "src/mpris/celluloid-mpris-player.c": "c1181a626ed94380f8bdcc7f5d8d85685c89ac3071ce07a6f216a6ed18afc025",
+      "src/celluloid-model.c": "9fdce9dbf8b8125c55b3817b4b58d46826757f1c30370e3b29c0fbfc6e30fb91",
+      "src/celluloid-mpv.c": "b41406dac8d356f3a15cdce7374998156fdcfa8a48005299d854387c6dd110cc"
+    }
   }
 }

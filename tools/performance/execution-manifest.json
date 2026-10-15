@@ -1,35 +1,14 @@
 {
-  "schema": "arctic-external-paired-plan-v1",
-  "ready": true,
-  "release_acceptance": false,
-  "performance_mode": "frozen-external-paired-v1",
-  "image": {
-    "run_id": 38785714856,
-    "artifact_id": 12000837359,
-    "archive_bytes": 1936311606,
-    "archive_sha256": "cb69dc4f166679cce0925f67c134e75cdebdb8af04599527bf8962bc8de9c52d",
-    "source_sha": "3e16234b71ad64c27ab24871d51863b940ad2521",
-    "name": "Arctic-Linux-1.2-candidate-38785714856-1-x86_64.iso",
-    "bytes": 1936123904,
-    "sha256": "aefd49d17bab66bbdec6144df7fc5403877b63e81d212a0c4a8abcdb435f4642",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "544c5bf365b04b1e011ccc8ff87f2305330f95dcffc936321ad15e0b08436377"
-  },
   "baseline": {
-    "name": "Arctic-Linux-1.2-x86_64.iso",
     "bytes": 2322073600,
-    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f",
-    "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d"
+    "name": "Arctic-Linux-1.2-x86_64.iso",
+    "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
+    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f"
   },
   "candidate_source_files": {
     "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
     "shell/AppsService.qml": "3d5c34c6a79fd5c24c1f733792ef56816089f38678a187337a13f2964c92116e",
     "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
-  },
-  "observer": {
-    "source_sha256": "aa2160b307965cb2f95aa5eebaa3bc20ee3a4da8247e893f0618fed359476ced",
-    "frozen_sha256": "6202c39596e7bbff382fdc411a7961101a16eebd0be974b982b71a53029c76d7",
-    "comparator_sha256": "876a48621979e2f19d6294b45b0dcdca551d5c14746b29cdea3343afd54d967c"
   },
   "execution_files": {
     ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
@@ -37,17 +16,38 @@
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
-    "tools/performance/causal.py": "2a9142d7fe8ad28e8391279480921758b731d822eedc638e265de59461445e7d",
-    "tools/performance/compare.py": "876a48621979e2f19d6294b45b0dcdca551d5c14746b29cdea3343afd54d967c",
+    "tools/performance/causal.py": "8ddb36c2c84a3e103e8e34e0c39a2a9d61ddc992ed5ddd1e2396ad06be30e680",
+    "tools/performance/compare.py": "c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc",
     "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
     "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
     "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
     "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
-    "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
+    "tools/performance/guest.py": "62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
-    "tools/performance/qualification.py": "79f54a55f7a5cc87ef5c9668163ce4f21985c15f4f3afee7a9afdcd28ee0fa23",
-    "tools/performance/run-paired.py": "96f15b351f9ff9c0b1f7e42e54c3bceaea6272f13977b3dea5b9e265214dd69a",
+    "tools/performance/qualification.py": "5b06a456c3a1a0b1c0e69b9ee21eb48c0f98d94bb4c43ad56d097d9df5776578",
+    "tools/performance/run-paired.py": "86d59e7055234beb0a743f38573ac076d12e89f087508cf72715832148b9fd52",
     "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
-  }
+  },
+  "image": {
+    "archive_bytes": 1936311606,
+    "archive_sha256": "cb69dc4f166679cce0925f67c134e75cdebdb8af04599527bf8962bc8de9c52d",
+    "artifact_id": 12000837359,
+    "bytes": 1936123904,
+    "name": "Arctic-Linux-1.2-candidate-38785714856-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "544c5bf365b04b1e011ccc8ff87f2305330f95dcffc936321ad15e0b08436377",
+    "run_id": 38785714856,
+    "sha256": "aefd49d17bab66bbdec6144df7fc5403877b63e81d212a0c4a8abcdb435f4642",
+    "source_sha": "3e16234b71ad64c27ab24871d51863b940ad2521"
+  },
+  "observer": {
+    "comparator_sha256": "c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc",
+    "frozen_sha256": "4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256",
+    "source_sha256": "fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf"
+  },
+  "performance_mode": "frozen-external-paired-v1",
+  "ready": true,
+  "release_acceptance": false,
+  "schema": "arctic-external-paired-plan-v1"
 }

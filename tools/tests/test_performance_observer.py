@@ -199,12 +199,43 @@ class NativeObserverTest(unittest.TestCase):
         self.assertTrue(all(command == b'get all-clients\n' for command in fixture.commands))
 
     def test_initial_cli_native_disagreement_does_not_launch_app(self):
-        _, prefix = self.server(lambda: b'{"clients":[{"id":99}]}\n')
+        fixture, prefix = self.server(lambda: b'{"clients":[{"id":99}]}\n')
         sentinel = Path(self.directory.name)/'unexpected-launch'
-        with patch.object(guest, 'clients', return_value={}):
+        with patch.object(guest, 'clients', return_value={}) as cli:
             with self.assertRaisesRegex(RuntimeError, 'initial client identities differ'):
                 guest.startup(prefix, [sys.executable, '-c', f'open({str(sentinel)!r},"w").close()'], 'kitty')
         self.assertFalse(sentinel.exists())
+        self.assertEqual(len(fixture.commands), 20)
+        self.assertEqual(cli.call_count, 40)
+
+    def test_initial_live_transition_retries_until_exact_triplet(self):
+        state = Path(self.directory.name)/'mapped'
+        initial_queries = 0
+
+        def response():
+            nonlocal initial_queries
+            if state.exists():
+                clients = [dict(id=42, appid='kitty')]
+            else:
+                initial_queries += 1
+                clients = [dict(id=99)] if initial_queries == 1 else []
+            return json.dumps(dict(clients=clients)).encode()+b'\n'
+
+        fixture, prefix = self.server(response)
+
+        def cli(_):
+            return {'42': dict(id=42, appid='kitty')} if state.exists() else {}
+
+        program = (f'import pathlib,time; pathlib.Path({str(state)!r}).write_text("ready"); '
+                   'time.sleep(10)')
+        with patch.object(guest, 'clients', side_effect=cli), \
+                patch.object(guest, 'emit'), patch.object(guest, 'snapshot', return_value={}), \
+                patch.object(guest.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)):
+            measured = guest.startup(prefix, [sys.executable, '-c', program], 'kitty',
+                                     timeout=3, hold_seconds=.02)
+        self.assertGreaterEqual(measured, 0)
+        self.assertGreaterEqual(len(fixture.commands), 4)
+        self.assertTrue(all(command == b'get all-clients\n' for command in fixture.commands))
 
     def test_parent_delay_does_not_inflate_worker_mapping_timestamp(self):
         transition = {}
@@ -332,8 +363,8 @@ class NativeObserverTest(unittest.TestCase):
             return process
 
         with patch.object(guest.subprocess, 'Popen', side_effect=record), \
-                patch.object(guest, 'clients', side_effect=[{}, RuntimeError('diagnostic IPC failed'),
-                                                          RuntimeError('cleanup IPC failed')]), \
+                patch.object(guest, 'clients', side_effect=[{}, {}, RuntimeError('diagnostic IPC failed'),
+                                                              RuntimeError('cleanup IPC failed')]), \
                 patch.object(guest, 'emit'):
             with self.assertRaisesRegex(RuntimeError, 'cleanup IPC failed'):
                 guest.startup(prefix, [sys.executable, '-c', 'import time; time.sleep(30)'], 'kitty', timeout=.02)

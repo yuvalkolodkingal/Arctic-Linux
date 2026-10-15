@@ -6,10 +6,10 @@
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
+    "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
     "tools/nix-acceptance/guest.py": "f1aa4415e8e5e7f03e1270040db215503a3d6bf63c7f68679343d77cdcefcd0a",
     "tools/performance/compose-nix-probe.py": "743788e3c2329c0916de26e02295af5af4f5f26d7eda42c81fc4097f652e5684",
-    "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
+    "tools/performance/guest.py": "62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415",
     "tools/performance/offline-update-boot.py": "9b16c14adbd1129a2bfe01a44c7157f695c68a30956d19c865e8dc66d5d01b09",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"

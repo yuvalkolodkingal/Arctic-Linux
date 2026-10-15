@@ -296,8 +296,8 @@ class NewControls(unittest.TestCase):
                         for item in n.body:
                             if isinstance(item,ast.FunctionDef):result[n.name+'.'+item.name]=ast.get_source_segment(text,item)
             return result
-        from test_controls_state_trials import restore_security_stream_native
-        after=nodes(restore_security_stream_native(current))
+        from test_controls_state_trials import restore_same_player_recapture,restore_security_stream_native
+        after=nodes(restore_security_stream_native(restore_same_player_recapture(current,verify=True)))
         for name in ('guest_guard','discover_desktop','identity','window_proof','process_snapshot','SecurityInterval',
                      'parse_audit_status','verify_security','tree_hashes','verify_tree','mpv_property','validate_player_samples',
                      'Smoke.cleanup','Smoke.setup','Smoke.archives','Smoke.desktop_services','Smoke.media_fixture'):
@@ -328,10 +328,11 @@ class NewControls(unittest.TestCase):
             N.visual_capture_geometry(client,dict(monitors=[monitor,monitor]))
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'host FFmpeg absent; actual guest gate remains mandatory')
-    def test_actual_visual_method_uses_one_player_and_one_capture(self):
+    def test_actual_visual_method_uses_one_player_and_bounded_recapture(self):
         # Actual visual_media method + real FFmpeg fixture/PNG/crop. GUI/window
         # authority and mpv responses are explicit host-only fixtures.
-        for case in ('positive','corrupt-first-capture','oracle-failed'):
+        for case in ('positive','corrupt-first-capture','unmatched-both','oracle-failed',
+                     'retry-deadline','retry-geometry-change'):
           with self.subTest(case=case),tempfile.TemporaryDirectory() as t:
             root=Path(t);smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.user=pwd.getpwuid(os.getuid())
             smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[];smoke.owned=[];smoke.gui_v6=True;smoke.stage='live'
@@ -357,6 +358,7 @@ class NewControls(unittest.TestCase):
                 return value
             smoke.wait=Mock(side_effect=wait)
             monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
+            monitor_calls=[]
             props={'pause':False,
                    'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
             raw_good=root/'fake-good.raw';raw_good.write_bytes(N.visual_reference_frame())
@@ -371,12 +373,17 @@ class NewControls(unittest.TestCase):
             original=smoke.cmd
             def cmd(argv,**kwargs):
                 if argv[:2]==['mmsg','dispatch']:return (0,'{"success":true}','')
-                if argv==['mmsg','get','all-monitors']:return (0,json.dumps(dict(monitors=[monitor])),'')
+                if argv==['mmsg','get','all-monitors']:
+                    monitor_calls.append(True);observed=dict(monitor)
+                    if case=='retry-geometry-change' and len(monitor_calls)==3:observed['width']=159
+                    return (0,json.dumps(dict(monitors=[observed])),'')
                 if argv[0]=='grim':
-                    grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
+                    grim_calls.append(list(argv))
+                    good=(case=='positive' or case=='corrupt-first-capture' and len(grim_calls)==2)
+                    shutil.copyfile(good_capture if good else bad_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(root/'visual-reference.mkv'),str(root/'visual-reference.mkv')))
+            time_values=iter((0,.2,.8,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(root/'visual-reference.mkv'),str(root/'visual-reference.mkv')))
             def prop(path,key,*args):
                 if key=='pause':return next(pause_values)
                 if key=='path':return next(path_values)
@@ -389,37 +396,64 @@ class NewControls(unittest.TestCase):
                 # Rebind only this tested module. Patching time.sleep on the
                 # shared stdlib module also records unrelated background sleeps.
                 sleep=Mock()
-                tested_time=SimpleNamespace(sleep=sleep,monotonic=N.time.monotonic)
-                transition=dict(schema='arctic-native-fixture-transition-v1',transport='owned mpv IPC SO_PEERCRED',
+                monotonic=(Mock(side_effect=(0,0,0,9.1)) if case=='retry-deadline' else N.time.monotonic)
+                tested_time=SimpleNamespace(sleep=sleep,monotonic=monotonic)
+                transition=dict(schema='arctic-native-fixture-transition-v2',
+                    transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
                     source=str(root/'open-codec-fixture.mkv'),target=str(root/'visual-reference.mkv'),
-                    command=['loadfile',str(root/'visual-reference.mkv'),'replace'],request_id=48,
-                    acknowledgement={'data':None,'error':'success','request_id':48},
+                    target_uri=(root/'visual-reference.mkv').as_uri(),
+                    bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7',
+                    owner_pid=proof['pid'],ipc_peer_pid=proof['pid'],ipc_peer_uid=smoke.uid,
+                    object_path='/org/mpris/MediaPlayer2',interface='org.mpris.MediaPlayer2.Player',
+                    method='OpenUri',reply_signature='()',
                     same_process_renderer_required=True,release_acceptance=False)
                 reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=proof,
                     ipc=str(root/'celluloid-ipc.sock'),moving_fixture=str(root/'open-codec-fixture.mkv'),
                     moving_screenshot_sha256='9'*64,product_renderer=smoke.product_renderer_contract.return_value,
                     same_process_renderer_required=True,release_acceptance=False)
                 with oracle_control,patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'mpv_replace_fixture',return_value=transition) as replace,patch.object(N,'time',tested_time):
-                    if case=='positive':
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'celluloid_replace_fixture',return_value=transition) as replace,patch.object(N,'time',tested_time):
+                    if case in ('positive','corrupt-first-capture'):
                         value=smoke.visual_media(reuse);self.assertEqual(value['oracle']['status'],'matched')
+                    elif case=='retry-deadline':
+                        with self.assertRaisesRegex(RuntimeError,'visual capture retry deadline exhausted'):
+                            smoke.visual_media(reuse)
+                    elif case=='retry-geometry-change':
+                        with self.assertRaisesRegex(RuntimeError,'owned player client is clipped/too small/unbounded'):
+                            smoke.visual_media(reuse)
                     else:
                         with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                             smoke.visual_media(reuse)
-                replace.assert_called_once_with(root/'celluloid-ipc.sock',proof['pid'],smoke.uid,
+                replace.assert_called_once_with(smoke.prefix,root/'celluloid-ipc.sock',proof['pid'],smoke.uid,
                     root/'open-codec-fixture.mkv',root/'visual-reference.mkv')
             self.assertEqual(smoke.fresh_window.call_count,0)
-            self.assertEqual(len(launched),0);self.assertEqual(len(grim_calls),1)
+            self.assertEqual(len(launched),0)
+            expected_captures=2 if case in ('corrupt-first-capture','unmatched-both') else 1
+            self.assertEqual(len(grim_calls),expected_captures)
             delays=[call.args[0] for call in sleep.call_args_list]
-            self.assertEqual(delays.count(.5),1)
+            retried=case in ('corrupt-first-capture','unmatched-both','retry-geometry-change')
+            self.assertEqual(delays.count(.5),1+retried)
             self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
+            if case in ('retry-deadline','retry-geometry-change'):
+                self.assertEqual(receipt['schema'],'arctic-native-visual-attempts-v1')
+                self.assertEqual((receipt['capture_attempt_limit'],receipt['capture_deadline_seconds']),(2,9.5))
+                self.assertEqual(len(receipt['capture_attempts']),1)
+                self.assertEqual(smoke.player_fullscreen.call_args_list,
+                                 [unittest.mock.call(proof,True,root/'celluloid-ipc.sock')])
+                continue
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
             self.assertEqual(receipt['fixture_cadence'],N.visual_reference_cadence())
-            self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
+            self.assertEqual(receipt['accepted_player_attempt'],1 if case in ('positive','corrupt-first-capture') else None)
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]
-            self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
+            self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(2,expected_captures))
+            self.assertEqual(row['capture_deadline_seconds'],9.5)
+            if case=='corrupt-first-capture':
+                self.assertEqual([x['oracle']['status'] for x in row['capture_attempts']],['unmatched','matched'])
+                self.assertEqual(row['accepted_capture_attempt'],2)
+            elif case=='positive':self.assertEqual(row['accepted_capture_attempt'],1)
+            else:self.assertIsNone(row['accepted_capture_attempt'])
             self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
                 advanced_seconds=.8,paused_seconds=.8,settled_seconds=.8,capture_paused=True,
                 presentation_refresh='frame-step',

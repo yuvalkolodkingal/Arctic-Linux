@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed observer profile for the exact final producer image."""
+"""Historical exact 387351 observer profile remains fail closed."""
 import hashlib
 import importlib.util
 import json
@@ -21,17 +21,17 @@ def load(name, relative):
     return module
 
 
-causal = load('final_release_causal', 'tools/performance/causal.py')
-comparison = load('final_release_compare', 'tools/performance/compare.py')
+causal = load('historical_387351_causal', 'tools/performance/causal.py')
+comparison = load('historical_387351_compare', 'tools/performance/compare.py')
 
 
-class FinalReleaseImageMangoProfileControls(unittest.TestCase):
+class Historical387351MangoProfileControls(unittest.TestCase):
     def record(self):
         raw = AUDIT.read_bytes()
         self.assertEqual(hashlib.sha256(raw).hexdigest(), AUDIT_SHA256)
         return json.loads(raw)
 
-    def test_exact_final_image_and_rpm_identity_are_closed(self):
+    def test_historical_image_and_rpm_identity_are_closed(self):
         record = self.record()
         self.assertEqual(record['schema'], 'arctic-mango-native-profile-audit-v1')
         self.assertEqual(record['status'],
@@ -131,8 +131,6 @@ class FinalReleaseImageMangoProfileControls(unittest.TestCase):
         self.assertFalse(gates['samples_dropped'])
         manifest = json.loads((ROOT / 'tools/performance/execution-manifest.json').read_text())
         self.assertIs(manifest['ready'], True)
-        self.assertEqual(manifest['image']['sha256'],
-                         '1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a')
         self.assertIs(manifest['release_acceptance'], False)
         self.assertFalse((ROOT / '.github/qualification-20261010.performance').exists())
         source = (ROOT / 'tools/performance/compare.py').read_text()

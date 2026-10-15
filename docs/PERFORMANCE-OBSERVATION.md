@@ -223,7 +223,7 @@ format/filter, precision and paired-boot checks remain necessary. A rebuilt ISO
 with changed code, packaging notes or build ID needs a separate exact audit;
 neither identical source nor a matching map function admits an unknown ELF.
 
-The final external candidate from producer `38735141923` received that separate
+The prior external candidate from producer `38735141923` received that separate
 audit. Its RPMDB-verified Mango ELF is
 `11471553075f17b05411a8511b106a91d506100544d6f76400ce139c2ce0c99c`
 (`mangowm-0.17.3-1.preview.38735141923.1.git14ba50a.fc44.x86_64`, build ID
@@ -236,6 +236,19 @@ therefore has its own whole-ELF profile and audit at
 This static admission does not claim a runtime result: all six paired boots,
 precision bounds, the 10% regression limit, role identity and zero-loss checks
 remain mandatory.
+
+The prior rebuilt producer `38785714856` received a separate exact static
+audit from inspector run `38794838239`. Its RPMDB-verified Mango ELF is
+`f7a5fc37f530fed782d2597ac61e9b6dd50a2e6f6f3f07ef787dad6f588b2652`
+(`mangowm-0.17.3-1.preview.38785714856.1.git3e16234.fc44.x86_64`, build ID
+`34f9fbc65289436f00d1ab2f966b9b66af0f274d`). The complete Mango `.text`, mapping function,
+original app-ID getter, probe sites and production wlroots ELF are identical
+to the prior independently audited final profile. The whole Mango ELF and
+build ID are different, so this image is bound to its own audit at
+`tools/performance/mango-audits/f7a5fc37f530fed782d2597ac61e9b6dd50a2e6f6f3f07ef787dad6f588b2652.json`.
+The source static report retained `observer_profile_admitted=false`; this
+separate review admits only the exact static profile. Runtime, performance and
+release acceptance remain false until the unchanged paired-boot gates pass.
 
 The type-specific upper receipt records the kernel's literal instruction
 address, the client and handle pointers, the handle's owner, the same foreign

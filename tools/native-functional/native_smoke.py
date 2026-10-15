@@ -1929,7 +1929,8 @@ class Smoke:
                     'moving player was not restored before static fixture transition')
             source_path=mpv_property(ipc,'path',player['pid'],self.uid)
             require(source_path==reuse['moving_fixture'],'moving player source changed before static transition')
-            transition=mpv_replace_fixture(ipc,player['pid'],self.uid,Path(source_path),fixture)
+            transition=celluloid_replace_fixture(self.prefix,ipc,player['pid'],self.uid,
+                                                  Path(source_path),fixture)
         else:
             require(reuse is None,'non-GUI visual fixture cannot reuse a GUI player')
             player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
@@ -1965,7 +1966,7 @@ class Smoke:
         # clock sampled before those transitions can satisfy the old delta as
         # soon as the window enters fullscreen, while its GL content is still
         # unpainted.  The exact same owned player must advance for a bounded
-        # interval in its final capture geometry before the sole screenshot.
+        # interval in its final capture geometry before the bounded capture.
         initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
@@ -1984,7 +1985,7 @@ class Smoke:
         # capturing while the software GL path is replacing that texture can
         # expose a transient tiled buffer rather than one complete frame. Pause
         # this same proved player, require the clock to settle, and keep the
-        # sole screenshot/oracle and every acceptance threshold unchanged.
+        # strict screenshot/oracle and every acceptance threshold unchanged.
         mpv_pause_reference(ipc,player['pid'],self.uid)
         def paused_reference():
             value=mpv_property(ipc,'pause',player['pid'],self.uid)
@@ -2010,11 +2011,15 @@ class Smoke:
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
         image=self.root/'celluloid-reference.png'
         rgb=self.root/'visual-owned-window.rgb'
-        attempt_limit=1
+        # A screencopy can race the first repaint after the supported OpenUri
+        # transition even after mpv's path, video state and paused clock have
+        # settled.  Permit one bounded recapture of this same proved player,
+        # with its identity, focus, geometry and monitor revalidated.  Keep the
+        # original 9.5 second total deadline and exact pixel oracle unchanged.
+        attempt_limit=2
         capture_command_timeout_seconds=3
         retry_settle_seconds=.5
-        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
-                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline_seconds=9.5
         capture_deadline=time.monotonic()+capture_deadline_seconds
         attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
         oracle=dict(status='unmatched',reason='No capture attempted')
@@ -2070,6 +2075,7 @@ class Smoke:
                 capture_attempts=attempts,capture_attempt_limit=attempt_limit,
                 capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\n')
             if oracle.get('status')=='matched': break
+            if oracle.get('status')!='unmatched': break
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,client,after,screenshot)
         info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
@@ -2480,9 +2486,33 @@ class ControlsTrialSmoke(RendererTrialSmoke):
 # END CONTROLLED_CONTROLS_STUDY
 
 
-def mpv_replace_fixture(path, expected_pid, expected_uid, source, target):
-    """Replace one exact owned fixture on the already presented Celluloid player."""
+CELLULOID_MPRIS_OPEN_URI_CODE=r'''from gi.repository import Gio,GLib
+import json,re,sys
+pid=int(sys.argv[1]);uri=sys.argv[2]
+bus=Gio.bus_get_sync(Gio.BusType.SESSION,None)
+def call(name,path,interface,method,parameters,reply_type):
+    return bus.call_sync(name,path,interface,method,parameters,GLib.VariantType.new(reply_type),
+                         Gio.DBusCallFlags.NONE,3000,None)
+names=call('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus',
+           'ListNames',None,'(as)').unpack()[0]
+pattern=re.compile(r'org\.mpris\.MediaPlayer2\.io\.github\.celluloid_player\.Celluloid\.instance-[1-9][0-9]*')
+owned=[]
+for name in names:
+    if pattern.fullmatch(name):
+        owner=call('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus',
+                   'GetConnectionUnixProcessID',GLib.Variant('(s)',(name,)),'(u)').unpack()[0]
+        if owner==pid: owned.append(name)
+if len(owned)!=1: raise RuntimeError('exact owned Celluloid MPRIS name unavailable')
+reply=call(owned[0],'/org/mpris/MediaPlayer2','org.mpris.MediaPlayer2.Player','OpenUri',
+           GLib.Variant('(s)',(uri,)),'()')
+if reply.unpack()!=(): raise RuntimeError('Celluloid MPRIS OpenUri reply differs')
+print(json.dumps({'bus_name':owned[0],'owner_pid':pid,'reply_signature':'()'},sort_keys=True))'''
+
+
+def celluloid_replace_fixture(prefix, path, expected_pid, expected_uid, source, target):
+    """Replace a fixture through the exact owned Celluloid window's supported API."""
     require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0
+            and type(prefix) is list and prefix[:2]==['runuser','-u'] and prefix[3:5]==['--','env']
             and isinstance(source,Path) and isinstance(target,Path)
             and source.is_absolute() and target.is_absolute() and source.parent==target.parent
             and source.name=='open-codec-fixture.mkv' and target.name=='visual-reference.mkv',
@@ -2490,35 +2520,41 @@ def mpv_replace_fixture(path, expected_pid, expected_uid, source, target):
     info=Path(path).lstat()
     require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
             'Celluloid fixture transition IPC path owner/type differs')
-    request_id=48;command=['loadfile',str(target),'replace']
+    for fixture in (source,target):
+        info=fixture.lstat()
+        require(stat.S_ISREG(info.st_mode) and info.st_uid==expected_uid and not fixture.is_symlink(),
+                'Celluloid fixture transition file owner/type differs')
+    # Bind the existing mpv IPC endpoint to the same process before addressing
+    # Celluloid's public per-window MPRIS service.  Raw mpv loadfile injection
+    # bypasses Celluloid's model and is not a supported application transition.
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
         peer.settimeout(2);peer.connect(str(path))
         pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
         require((pid,uid)==(expected_pid,expected_uid),'Celluloid fixture transition IPC peer differs')
-        peer.sendall(json.dumps(dict(command=command,request_id=request_id),separators=(',',':')).encode()+b'\n')
-        data=b'';deadline=time.monotonic()+3
-        while time.monotonic()<deadline:
-            chunk=peer.recv(4096)
-            require(chunk,'Celluloid fixture transition IPC disconnected before acknowledgement')
-            data+=chunk;require(len(data)<=4096,'Celluloid fixture transition IPC reply exceeded bound')
-            while b'\n' in data:
-                line,data=data.split(b'\n',1)
-                def pairs(items):
-                    value={}
-                    for key,item in items:
-                        require(key not in value,'Celluloid fixture transition IPC duplicate field')
-                        value[key]=item
-                    return value
-                message=json.loads(line,object_pairs_hook=pairs)
-                require(type(message) is dict,'Celluloid fixture transition IPC reply is not an object')
-                if message.get('request_id')==request_id:
-                    require(type(message['request_id']) is int and message.get('error')=='success'
-                            and message.get('data') is None,'Celluloid fixture transition IPC command failed')
-                    return dict(schema='arctic-native-fixture-transition-v1',
-                        transport='owned mpv IPC SO_PEERCRED',source=str(source),target=str(target),
-                        command=command,request_id=request_id,acknowledgement=message,
-                        same_process_renderer_required=True,release_acceptance=False)
-        raise RuntimeError('Celluloid fixture transition IPC acknowledgement timed out')
+    uri=target.as_uri()
+    _,output,_=execute(prefix+['/usr/bin/python3','-c',CELLULOID_MPRIS_OPEN_URI_CODE,
+                               str(expected_pid),uri],timeout=8)
+    def pairs(items):
+        value={}
+        for key,item in items:
+            require(key not in value,'Celluloid fixture transition D-Bus duplicate field')
+            value[key]=item
+        return value
+    receipt=json.loads(output,object_pairs_hook=pairs)
+    bus_prefix='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-'
+    require(type(receipt) is dict and set(receipt)=={'bus_name','owner_pid','reply_signature'}
+            and type(receipt['bus_name']) is str and receipt['bus_name'].startswith(bus_prefix)
+            and receipt['bus_name'][len(bus_prefix):].isdigit()
+            and receipt['owner_pid']==expected_pid and receipt['reply_signature']=='()',
+            'Celluloid fixture transition D-Bus acknowledgement differs')
+    return dict(schema='arctic-native-fixture-transition-v2',
+                transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
+                source=str(source),target=str(target),target_uri=uri,
+                bus_name=receipt['bus_name'],owner_pid=receipt['owner_pid'],
+                ipc_peer_pid=pid,ipc_peer_uid=uid,object_path='/org/mpris/MediaPlayer2',
+                interface='org.mpris.MediaPlayer2.Player',method='OpenUri',
+                reply_signature=receipt['reply_signature'],same_process_renderer_required=True,
+                release_acceptance=False)
 
 
 def mpv_celluloid_fullscreen(path, expected_pid, expected_uid, enabled):

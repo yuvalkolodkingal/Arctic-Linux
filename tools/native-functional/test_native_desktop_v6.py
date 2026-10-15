@@ -34,11 +34,15 @@ def product_renderer(player):
    owner=dict(pid=player['pid'],start_ticks=player['start_ticks'],executable_sha256=player['executable_sha256']),
    realized_renderer=dict(status='reported-realized',renderer='gl',owned_stderr_binding_verified=True,
     environment_request_is_not_attestation=True,release_acceptance=False)))
-def fixture_transition(root):
+def fixture_transition(root,pid=70,uid=1000):
  target=root+'/visual-reference.mkv'
- return dict(schema='arctic-native-fixture-transition-v1',transport='owned mpv IPC SO_PEERCRED',
-  source=root+'/open-codec-fixture.mkv',target=target,command=['loadfile',target,'replace'],request_id=48,
-  acknowledgement={'data':None,'error':'success','request_id':48},same_process_renderer_required=True,release_acceptance=False)
+ return dict(schema='arctic-native-fixture-transition-v2',
+  transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
+  source=root+'/open-codec-fixture.mkv',target=target,target_uri=Path(target).as_uri(),
+  bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7',owner_pid=pid,
+  ipc_peer_pid=pid,ipc_peer_uid=uid,object_path='/org/mpris/MediaPlayer2',
+  interface='org.mpris.MediaPlayer2.Player',method='OpenUri',reply_signature='()',
+  same_process_renderer_required=True,release_acceptance=False)
 def moving_reuse(root,player,shot):
  return dict(schema='arctic-native-player-fixture-continuity-v1',player=player,ipc=root+'/celluloid-ipc.sock',
   moving_fixture=root+'/open-codec-fixture.mkv',moving_screenshot_sha256=shot['sha256'],
@@ -54,14 +58,14 @@ def fullscreen_fixture(value,visual,moving_shot):
   for j,enabled in enumerate((True,False)):
    turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=46 if enabled else 47,acknowledgement={'data':None,'error':'success','request_id':46 if enabled else 47}),monotonic_ns=100+cycle*100+j*20,completed_monotonic_ns=110+cycle*100+j*20,release_acceptance=False))
   caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
- visual.update(player=p,player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
-  capture_deadline_seconds=42,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
+ visual.update(player=p,player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=2,
+  capture_deadline_seconds=9.5,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
  matched=dict(status='matched');capture=dict(attempt=1,screenshot_sha256=visual['screenshot']['sha256'],
   actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
  transition=fixture_transition(root)
  accepted=dict(player_attempt=1,player=p,player_state={},fixture_sha256=visual['fixture_sha256'],
   input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
-  playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=42,
+  playback_clock={},capture_attempts=[capture],capture_attempt_limit=2,capture_deadline_seconds=9.5,
   accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],product_renderer=product_renderer(p),
   fixture_transition=transition,owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
  visual['player_attempts']=[accepted]
@@ -250,16 +254,19 @@ class FullscreenControls(unittest.TestCase):
      player=players[0];smoke.player_fullscreen(player,True,'/tmp/owned.sock');full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False,'/tmp/owned.sock')
    matched=dict(status='matched',mismatched_pixels=0)
    hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
-   capture=dict(attempt=1,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
+   first_capture=dict(attempt=1,screenshot_sha256='7'*64,actual_rgb_sha256='9'*64,
+      oracle=dict(status='unmatched',reason='fixture repaint pending'),playback_time_seconds=.5,
+      owned_identity_geometry_unchanged=True)
+   capture=dict(attempt=2,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
       oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
    transition=fixture_transition(root)
    accepted=dict(player_attempt=1,player=players[0],player_state={},**hashes,actual_rgb_sha256='8'*64,
-      playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=9.5,
-      accepted_capture_attempt=1,oracle=matched,screenshot=shots[1],product_renderer=product_renderer(players[0]),fixture_transition=transition,
+      playback_clock={},capture_attempts=[first_capture,capture],capture_attempt_limit=2,capture_deadline_seconds=9.5,
+      accepted_capture_attempt=2,oracle=matched,screenshot=shots[1],product_renderer=product_renderer(players[0]),fixture_transition=transition,
       owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
-   visual=dict(player=players[0],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
+   visual=dict(player=players[0],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=2,
       capture_deadline_seconds=9.5,screenshot=shots[1],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
-      playback_clock=accepted['playback_clock'],capture_attempts=[capture],accepted_capture_attempt=1,
+      playback_clock=accepted['playback_clock'],capture_attempts=[first_capture,capture],accepted_capture_attempt=2,
       oracle=matched,product_renderer=accepted['product_renderer'],fixture_transition=transition,player_attempts=[accepted],**hashes)
    report=dict(evidence_root=root,proven_new_processes=players,
       diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
@@ -277,7 +284,8 @@ class FullscreenControls(unittest.TestCase):
    rejected(lambda v:v.update(player_attempt_limit=2))
    rejected(lambda v:v.update(accepted_player_attempt=2))
    rejected(lambda v:v['player_attempts'].append(copy.deepcopy(v['player_attempts'][0])))
-   rejected(lambda v:v['player_attempts'][0].update(capture_attempt_limit=6))
+   rejected(lambda v:v['player_attempts'][0].update(capture_attempt_limit=1))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0]['oracle'].update(status='matched'))
    rejected(lambda v:v['player_attempts'][0].update(restart_eligible=True))
    rejected(lambda v:v['player_attempts'][0]['oracle'].update(status='unmatched'))
    rejected(lambda v:v['player_attempts'][0].update(actual_rgb_sha256='9'*64))

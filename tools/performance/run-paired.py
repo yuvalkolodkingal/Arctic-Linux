@@ -224,7 +224,7 @@ def failure_phase_summary(work, screen_failure):
                 out['reason'] = 'frame_context_unknown'
                 return
         if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
-                or frames[1][1] != 'main' or not 942 <= frames[1][0] <= 1008):
+                or frames[1][1] != 'main' or not 947 <= frames[1][0] <= 1013):
             out['reason'] = 'frame_chain_invalid'
             return
         ending = endings[0][1]
@@ -280,11 +280,11 @@ def failure_phase_summary(work, screen_failure):
         unknown = dict(status='unknown', code='none', exception_class='none',
             last_observer_phase='unavailable')
         envelope = result['guest_envelope']  # envelope-only
-        pins = dict(guest='69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73',
-            causal='2a9142d7fe8ad28e8391279480921758b731d822eedc638e265de59461445e7d')
-        observer = dict(source_sha256='aa2160b307965cb2f95aa5eebaa3bc20ee3a4da8247e893f0618fed359476ced',
-            frozen_sha256='6202c39596e7bbff382fdc411a7961101a16eebd0be974b982b71a53029c76d7',
-            comparator_sha256='876a48621979e2f19d6294b45b0dcdca551d5c14746b29cdea3343afd54d967c')
+        pins = dict(guest='62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415',
+            causal='8ddb36c2c84a3e103e8e34e0c39a2a9d61ddc992ed5ddd1e2396ad06be30e680')
+        observer = dict(source_sha256='fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf',
+            frozen_sha256='4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256',
+            comparator_sha256='c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
             return unknown
@@ -349,7 +349,7 @@ def failure_phase_summary(work, screen_failure):
         # Complete 110-site inventory bound to the frozen observer.
         # A changed source requires a fresh explicit inventory review.
         digest = hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        if len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51':
+        if len(inventory) != 110 or digest != '8c931e11ec264d92c4f789e9d3b6a3bfea603cbf43c6821b5156c865dd60cab9':
             envelope['reason'] = 'source_inventory_mismatch'  # envelope-only
             return dict(unknown, status='source_mismatch')
         try:
@@ -438,7 +438,7 @@ def failure_phase_summary(work, screen_failure):
                 envelope['reason'] = 'frame_unrecognized'  # envelope-only
                 return unknown
         if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
-                or frames[1][1] != 'main' or not 942 <= frames[1][0] <= 1008):
+                or frames[1][1] != 'main' or not 947 <= frames[1][0] <= 1013):
             envelope['frame_status'] = 'invalid_chain'  # envelope-only
             envelope['reason'] = 'frame_chain_invalid'  # envelope-only
             return unknown

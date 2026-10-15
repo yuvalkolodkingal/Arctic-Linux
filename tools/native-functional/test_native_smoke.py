@@ -1,7 +1,9 @@
 """Host controls only. No guest, GUI, network, package installs or dispatch."""
+import contextlib
 import copy
 import hashlib
 import importlib.util
+import io
 import json
 import os
 from pathlib import Path
@@ -9,8 +11,10 @@ import pwd
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
+import types
 import unittest
 from unittest.mock import patch
 
@@ -226,28 +230,125 @@ class Controls(unittest.TestCase):
         self.assertEqual(observed,[dict(command=['set_property','pause',True],request_id=44),
                                    dict(command=['frame-step'],request_id=45)])
 
-    def test_static_fixture_replaces_exact_file_on_same_owned_player(self):
+    def test_static_fixture_uses_exact_owned_celluloid_mpris_service(self):
         path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
         target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')
-        observed=[]
+        prefix=['runuser','-u','arctic','--','env','DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus']
+        bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7'
         with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
             server.bind(str(path));server.listen(1)
             def accept():
                 peer,_=server.accept()
-                with peer:
-                    data=b''
-                    while b'\n' not in data:data+=peer.recv(4096)
-                    observed.append(json.loads(data.splitlines()[0]))
-                    peer.sendall(b'{"data":null,"error":"success","request_id":48}\n')
+                peer.close()
             thread=threading.Thread(target=accept);thread.start()
-            receipt=s.mpv_replace_fixture(path,os.getpid(),os.getuid(),source,target)
+            response=json.dumps(dict(bus_name=bus_name,owner_pid=os.getpid(),reply_signature='()'))
+            with patch.object(s,'execute',return_value=(0,response,'')) as execute:
+                receipt=s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid(),source,target)
             thread.join(3);self.assertFalse(thread.is_alive())
-        command=['loadfile',str(target),'replace']
-        self.assertEqual(observed,[dict(command=command,request_id=48)])
-        self.assertEqual(receipt,dict(schema='arctic-native-fixture-transition-v1',
-            transport='owned mpv IPC SO_PEERCRED',source=str(source),target=str(target),command=command,
-            request_id=48,acknowledgement=dict(data=None,error='success',request_id=48),
-            same_process_renderer_required=True,release_acceptance=False))
+        argv=execute.call_args.args[0]
+        self.assertEqual(argv[:len(prefix)],prefix)
+        self.assertEqual(argv[-2:],[str(os.getpid()),target.as_uri()])
+        self.assertIn("'OpenUri'",argv[-3])
+        self.assertEqual(receipt,dict(schema='arctic-native-fixture-transition-v2',
+            transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
+            source=str(source),target=str(target),target_uri=target.as_uri(),bus_name=bus_name,
+            owner_pid=os.getpid(),ipc_peer_pid=os.getpid(),ipc_peer_uid=os.getuid(),
+            object_path='/org/mpris/MediaPlayer2',interface='org.mpris.MediaPlayer2.Player',
+            method='OpenUri',reply_signature='()',same_process_renderer_required=True,
+            release_acceptance=False))
+
+    def test_static_fixture_rejects_wrong_mpris_owner(self):
+        path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
+        target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')
+        prefix=['runuser','-u','arctic','--','env']
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            with self.assertRaisesRegex(RuntimeError,'IPC path owner/type'):
+                s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid()+1,source,target)
+            thread=threading.Thread(target=lambda:server.accept()[0].close());thread.start()
+            response=json.dumps(dict(bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7',
+                                     owner_pid=os.getpid()+1,reply_signature='()'))
+            with patch.object(s,'execute',return_value=(0,response,'')):
+                with self.assertRaisesRegex(RuntimeError,'acknowledgement differs'):
+                    s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid(),source,target)
+            thread.join(3);self.assertFalse(thread.is_alive())
+
+    def run_mpris_helper(self,names,owners,*,fail_open=False):
+        calls=[]
+        class Reply:
+            def __init__(self,value):self.value=value
+            def unpack(self):return self.value
+        class Variant:
+            def __init__(self,signature,value):self.signature=signature;self.value=value
+        class Bus:
+            def call_sync(self,name,path,interface,method,parameters,reply_type,flags,timeout,cancellable):
+                calls.append((name,path,interface,method,parameters,reply_type,flags,timeout,cancellable))
+                if method=='ListNames':return Reply((names,))
+                if method=='GetConnectionUnixProcessID':return Reply((owners[parameters.value[0]],))
+                if method=='OpenUri':
+                    if fail_open:raise RuntimeError('synthetic D-Bus call failure')
+                    return Reply(())
+                raise AssertionError(method)
+        gio=types.SimpleNamespace(bus_get_sync=lambda *args:Bus(),BusType=types.SimpleNamespace(SESSION=1),
+                                  DBusCallFlags=types.SimpleNamespace(NONE=0))
+        glib=types.SimpleNamespace(Variant=Variant,VariantType=types.SimpleNamespace(new=lambda value:value))
+        repository=types.ModuleType('gi.repository');repository.Gio=gio;repository.GLib=glib
+        gi=types.ModuleType('gi');gi.repository=repository
+        output=io.StringIO()
+        argv=['mpris-helper',str(os.getpid()),(self.root/'visual-reference.mkv').as_uri()]
+        with patch.dict(sys.modules,{'gi':gi,'gi.repository':repository}),patch.object(sys,'argv',argv), \
+             contextlib.redirect_stdout(output):
+            exec(s.CELLULOID_MPRIS_OPEN_URI_CODE,{})
+        return calls,output.getvalue()
+
+    def test_mpris_helper_requires_one_matching_owner_and_bounded_call(self):
+        base='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-'
+        calls,output=self.run_mpris_helper([base+'7','org.mpris.MediaPlayer2.unrelated'],
+                                           {base+'7':os.getpid()})
+        self.assertTrue(all(call[7]==3000 for call in calls))
+        self.assertEqual([call[3] for call in calls],['ListNames','GetConnectionUnixProcessID','OpenUri'])
+        self.assertEqual(json.loads(output),dict(bus_name=base+'7',owner_pid=os.getpid(),reply_signature='()'))
+        for names,owners in (([base+'7'],{base+'7':os.getpid()+1}),
+                             ([base+'7',base+'8'],{base+'7':os.getpid(),base+'8':os.getpid()}),([],{})):
+            with self.subTest(names=names):
+                with self.assertRaisesRegex(RuntimeError,'exact owned'):self.run_mpris_helper(names,owners)
+
+    def test_mpris_helper_propagates_dbus_failure(self):
+        name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7'
+        with self.assertRaisesRegex(RuntimeError,'synthetic D-Bus'):
+            self.run_mpris_helper([name],{name:os.getpid()},fail_open=True)
+
+    def test_static_fixture_rejects_changed_path_nonfile_and_wrong_ipc_identity(self):
+        prefix=['runuser','-u','arctic','--','env'];source=self.root/'open-codec-fixture.mkv'
+        source.write_bytes(b'moving');target=self.root/'visual-reference.mkv';target.write_bytes(b'static')
+        path=self.root/'celluloid-ipc.sock'
+        with self.assertRaisesRegex(RuntimeError,'identity/path'):
+            s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid(),source,self.root/'other.mkv')
+        target.unlink();target.mkdir()
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            with self.assertRaisesRegex(RuntimeError,'file owner/type'):
+                s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid(),source,target)
+        target.rmdir();target.write_bytes(b'static')
+        path.unlink(missing_ok=True)
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            thread=threading.Thread(target=lambda:server.accept()[0].close());thread.start()
+            with self.assertRaisesRegex(RuntimeError,'IPC peer differs'):
+                s.celluloid_replace_fixture(prefix,path,os.getpid()+1,os.getuid(),source,target)
+            thread.join(3);self.assertFalse(thread.is_alive())
+
+    def test_static_fixture_propagates_helper_timeout(self):
+        path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
+        target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')
+        prefix=['runuser','-u','arctic','--','env']
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            thread=threading.Thread(target=lambda:server.accept()[0].close());thread.start()
+            with patch.object(s,'execute',side_effect=subprocess.TimeoutExpired('python3',8)):
+                with self.assertRaises(subprocess.TimeoutExpired):
+                    s.celluloid_replace_fixture(prefix,path,os.getpid(),os.getuid(),source,target)
+            thread.join(3);self.assertFalse(thread.is_alive())
 
     def test_nonzero_command_fails_without_shell(self):
         with self.assertRaisesRegex(RuntimeError,'command failed'):

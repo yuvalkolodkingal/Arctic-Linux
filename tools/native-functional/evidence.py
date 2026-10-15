@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = 'f033e671ffbab8196231785be172b57b7ed1625bceac73a4280970137c1dc354'
+NATIVE_SOURCE_SHA = 'e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '8a2197ebeb84552a313c88109a8e41e4531e54c6f3a3e71f7648730ec7bd7e6d')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'd3355dad0a70841b512baab8cac01bbd69b70ca326f5f72e05228a8ce3c3bb02')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -390,8 +390,8 @@ def check_fullscreen(target,report,uid):
     for index,row in enumerate(attempts,1):
         expected_keys=base_keys
         R.require(type(row) is dict and set(row)==expected_keys and row['player_attempt']==index
-                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==1
-                  and row['capture_deadline_seconds']==visual['capture_deadline_seconds']
+                  and row['capture_attempt_limit']==visual['capture_attempt_limit']==2
+                  and row['capture_deadline_seconds']==visual['capture_deadline_seconds']==9.5
                   and row['release_acceptance'] is False
                   and all(row[key]==visual[key] for key in ('fixture_sha256','input_rgb_sha256','expected_rgb_sha256')),
                   'Fullscreen visual player-attempt schema/binding differs')
@@ -399,7 +399,7 @@ def check_fullscreen(target,report,uid):
         rows=row['capture_attempts']
         capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
                       'playback_time_seconds','owned_identity_geometry_unchanged'}
-        R.require(type(rows) is list and len(rows)==1
+        R.require(type(rows) is list and 1<=len(rows)<=2
                   and all(type(item) is dict and set(item)==capture_keys
                           and item['attempt']==number
                           and type(item['screenshot_sha256']) is str
@@ -414,6 +414,7 @@ def check_fullscreen(target,report,uid):
                   and row['actual_rgb_sha256']==rows[-1]['actual_rgb_sha256']
                   and row['accepted_capture_attempt']==(
                   len(rows) if row['oracle'].get('status')=='matched' else None)
+                  and all(item['oracle'].get('status')=='unmatched' for item in rows[:-1])
                   and row['oracle']==rows[-1].get('oracle')
                   and row['screenshot'].get('sha256')==rows[-1].get('screenshot_sha256'),
                   'Fullscreen visual capture-attempt binding differs')
@@ -441,14 +442,21 @@ def check_fullscreen(target,report,uid):
                    same_process_renderer_required=True,release_acceptance=False),
               'Moving/static player continuity proof differs')
     R.require(type(transition) is dict
-              and set(transition)=={'schema','transport','source','target','command','request_id',
-                                    'acknowledgement','same_process_renderer_required','release_acceptance'}
-              and transition['schema']=='arctic-native-fixture-transition-v1'
-              and transition['transport']=='owned mpv IPC SO_PEERCRED'
+              and set(transition)=={'schema','transport','source','target','target_uri','bus_name',
+                                    'owner_pid','ipc_peer_pid','ipc_peer_uid','object_path','interface',
+                                    'method','reply_signature','same_process_renderer_required',
+                                    'release_acceptance'}
+              and transition['schema']=='arctic-native-fixture-transition-v2'
+              and transition['transport']=='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding'
               and transition['source']==source and transition['target']==target_path
-              and transition['command']==['loadfile',target_path,'replace']
-              and transition['request_id']==48
-              and transition['acknowledgement']=={'data':None,'error':'success','request_id':48}
+              and transition['target_uri']==Path(target_path).as_uri()
+              and re.fullmatch(r'org\.mpris\.MediaPlayer2\.io\.github\.celluloid_player\.Celluloid\.instance-[1-9][0-9]*',
+                               transition['bus_name']) is not None
+              and transition['owner_pid']==transition['ipc_peer_pid']==moving['player']['pid']
+              and transition['ipc_peer_uid']==uid
+              and transition['object_path']=='/org/mpris/MediaPlayer2'
+              and transition['interface']=='org.mpris.MediaPlayer2.Player'
+              and transition['method']=='OpenUri' and transition['reply_signature']=='()'
               and transition['same_process_renderer_required'] is True
               and transition['release_acceptance'] is False
               and attempts[-1].get('fixture_transition')==transition

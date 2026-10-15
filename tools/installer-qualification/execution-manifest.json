@@ -14,7 +14,7 @@
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/native_smoke.py": "f033e671ffbab8196231785be172b57b7ed1625bceac73a4280970137c1dc354",
+    "tools/native-functional/native_smoke.py": "e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc",
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
@@ -23,16 +23,16 @@
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750"
   },
   "image": {
-    "archive_bytes": 1936311606,
-    "archive_sha256": "cb69dc4f166679cce0925f67c134e75cdebdb8af04599527bf8962bc8de9c52d",
-    "artifact_id": 12000837359,
-    "bytes": 1936123904,
-    "name": "Arctic-Linux-1.2-candidate-38785714856-1-x86_64.iso",
+    "archive_bytes": 1936516406,
+    "archive_sha256": "4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6",
+    "artifact_id": 12011000602,
+    "bytes": 1936328704,
+    "name": "Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "544c5bf365b04b1e011ccc8ff87f2305330f95dcffc936321ad15e0b08436377",
-    "run_id": 38785714856,
-    "sha256": "aefd49d17bab66bbdec6144df7fc5403877b63e81d212a0c4a8abcdb435f4642",
-    "source_sha": "3e16234b71ad64c27ab24871d51863b940ad2521"
+    "producer_receipt_sha256": "85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6",
+    "run_id": 38808271154,
+    "sha256": "304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23",
+    "source_sha": "10b94bf1f6aef4950889d4a498c9e1138cf7973d"
   },
   "ready": true,
   "release_acceptance": false
