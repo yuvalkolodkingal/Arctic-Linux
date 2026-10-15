@@ -54,18 +54,27 @@ files and are published atomically only after verification.
 
 A system with VoxType 1.1.0 keeps its verified model, selected hardware profile
 and receipt-bound user. The stable RPM update queues a background download of only the new
-signed executable; until that succeeds, Settings accurately reports setup as
-pending. The RPM carries the 1.1.1 signed manifest and detached CPU signatures
+signed executable. Until that succeeds, the launcher continues to run the exact
+receipt-bound official 1.1.0 binary and Settings reports dictation as ready with
+an update pending. The RPM carries the 1.1.1 signed manifest and detached CPU signatures
 for verification and crash recovery. The direct-integration receipt and
 `upstream-direct-v1` marker are committed only after the new executable,
 existing model hash and per-user configuration verify. A failed download leaves
-the previous payload intact and the setup retryable. A trusted, root-owned
+the previous payload intact, runnable and retryable. The atomic current receipt
+is the runtime version switch; a staged CPU selector cannot override the old
+receipt's selected backend before that switch. A trusted, root-owned
 legacy receipt selects the previously working profile and account even when both payload
 sets exist or a later profile
 change was interrupted; the trusted profile-selection file is used only when
 there is no receipt. The pending queue, config, receipt and marker are published
-with file and directory fsyncs. The marker is the durable commit point, and
-legacy cleanup cannot run before it.
+with file and directory fsyncs. Cleanup cannot run before the current receipt
+and marker are durable.
+
+If the package transaction stops before `%posttrans` can create the queue, the
+already-enabled setup timer recognizes the trusted 1.1.0 receipt, restores the
+root-owned queue for its receipt-bound account and performs the same verified
+resume. A strict receipt or payload hash failure publishes a durable rejection
+state, so the compatibility launcher cannot run bytes the migration refused.
 
 If the old root-owned receipt is malformed or no longer matches its exact
 schema, the transaction-time offline migration leaves it and the old payload

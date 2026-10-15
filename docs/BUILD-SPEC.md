@@ -384,15 +384,23 @@ RPM ships the upstream 1.1.1 manifest and detached CPU signatures for
 verification and crash recovery. It verifies the new binary and retained model,
 writes the user configuration, then publishes the direct receipt and marker
 before deleting exact previous payloads. If any check fails, the previous
-payload remains and the ordinary online retry queue stays enabled. The
+official payload remains runnable and the ordinary online retry queue stays
+enabled. The launcher follows the old receipt, including its selected backend,
+until the atomic 1.1.1 receipt switch; Settings reports ready plus update
+pending throughout an offline deferral. The
 root-owned verified receipt is authoritative over a conflicting pending profile
-choice. File and parent-directory fsyncs make the queue-to-marker transition
-crash durable; the marker is committed before cleanup and the queue is removed
-afterward. A malformed but structurally trusted legacy receipt fails the first
+choice. File and parent-directory fsyncs make the queue-to-receipt transition
+crash durable; the current receipt and marker are committed before cleanup and
+the queue is removed afterward. A malformed but structurally trusted legacy receipt fails the first
 transaction attempt closed, then the normal online resume quarantines it and uses
 fresh signed metadata for repair. Current-session user-service activation is
 best effort after the commit point and cannot rewrite a completed migration as
 a pre-commit setup failure.
+The post-boot timer also recognizes an old direct receipt when a stopped RPM
+transaction never created `pending`; it reconstructs the queue for the bound
+account and safely no-ops on a current receipt. Failed strict receipt or payload
+hash validation leaves a durable rejection marker that both launcher and status
+honor until signed repair completes.
 
 The systemd user service runs official VoxType directly with local-only,
 error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and

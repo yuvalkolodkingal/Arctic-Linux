@@ -115,6 +115,30 @@ class DirectUpstreamIntegration(unittest.TestCase):
         ):
             self.assertIn(value, adapter)
 
+    def test_previous_direct_release_remains_runnable_only_while_receipt_is_authoritative(self):
+        launcher = (D / "voxtype").read_text()
+        adapter = (D / "arctic-dictation").read_text()
+        setup = (D / "arctic-voxtype-setup").read_text()
+        for value in (
+            "/opt/arctic/voxtype/1.1.0", '"version":"1.1.0"',
+            "e2638ca63f566f1682bcedc0abea8e4b25211c21",
+            "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a",
+            "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28",
+            "db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2",
+        ):
+            self.assertIn(value, launcher)
+        self.assertIn("backend=$receipt_backend", launcher)
+        self.assertIn("previous-direct-rejected", launcher)
+        self.assertIn("upgrade_pending=true", adapter)
+        self.assertIn('"upgrade_pending":%s', adapter)
+        self.assertIn("def exact_file(path, mode, size, digest):", setup)
+        self.assertIn("hashlib.sha256()", setup)
+        self.assertIn('durable_atomic_text "$PREVIOUS_REJECTED" 0644 rejected', setup)
+        self.assertIn('previous_direct_user >/dev/null', setup)
+        service = (ROOT / "packaging/systemd/arctic-dictation-setup.service").read_text()
+        self.assertIn("ExecCondition=/usr/libexec/arctic/arctic-voxtype-setup --needs-resume", service)
+        self.assertNotIn("ConditionPathExists=/var/lib/arctic/dictation/pending", service)
+
     def test_mutations_return_safe_status_and_persist_setup_errors(self):
         adapter = (D / "arctic-dictation").read_text()
         setup = (D / "arctic-voxtype-setup").read_text()
