@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, READINESS_FAILURE_STAGES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -111,6 +111,19 @@ class MicrophoneStageFailure(Invalid):
                 'unknown-microphone-failure-family')
         super().__init__()
         self.failure_stage = MICROPHONE_FAILURE_STAGES[stage]
+        self.error_label = label
+
+
+class ReadinessStageFailure(Invalid):
+    """Transcript-free projection of one fixed lazy-activation substage."""
+
+    def __init__(self, stage, label):
+        require(type(stage) is str and stage in READINESS_FAILURE_STAGES,
+                'unknown-readiness-failure-stage')
+        require(type(label) is str and label in ERROR_LABELS,
+                'unknown-readiness-failure-family')
+        super().__init__()
+        self.failure_stage = READINESS_FAILURE_STAGES[stage]
         self.error_label = label
 
 def mark_collector_setup(stage):
@@ -566,7 +579,8 @@ class Checker:
         except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
             label = caught_error_label(error)
             observations = {}
-            if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure):
+            if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure,
+                               ReadinessStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
@@ -704,45 +718,70 @@ class Checker:
         return {'file_count': len(self.assets)}
 
     def ready(self):
-        value = self.adapter('status')
-        require(value.get('ready') is True and value.get('state') == 'ready'
-                and value.get('profile') == self.profile_id
-                and value.get('backend') in ('cpu', 'vulkan')
-                and not (SYSTEM / 'pending').exists(), 'upstream-not-ready')
+        value = self.readiness_stage('status-command', lambda: self.adapter('status'))
+        self.readiness_stage('status-contract', lambda: require(
+            value.get('ready') is True and value.get('state') == 'ready'
+            and value.get('profile') == self.profile_id
+            and value.get('backend') in ('cpu', 'vulkan')
+            and not (SYSTEM / 'pending').exists(), 'upstream-not-ready'))
         marker = SYSTEM / 'upstream-direct-v1'
-        owned_file(marker)
-        require(marker.read_text() == 'upstream-direct-v1\n',
-                'upstream-readiness-marker-invalid')
-        service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
-                           check=False)
-        require(service.stdout.strip() != b'active' and not self.state_path.exists()
-                and self.engines() == [], 'upstream-lazy-login-resident')
+        self.readiness_stage('readiness-marker-stat', lambda: owned_file(marker))
+        self.readiness_stage('readiness-marker-content', lambda: require(
+            marker.read_text() == 'upstream-direct-v1\n',
+            'upstream-readiness-marker-invalid'))
+        def lazy_process_state():
+            service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                               check=False)
+            require(service.stdout.strip() != b'active' and not self.state_path.exists()
+                    and self.engines() == [], 'upstream-lazy-login-resident')
+        self.readiness_stage('lazy-process-state', lazy_process_state)
         session_marker = self.runtime / 'arctic/voxtype-session-started-v1'
-        require(not session_marker.exists(), 'upstream-lazy-session-marker-present')
+        self.readiness_stage('lazy-session-marker', lambda: require(
+            not session_marker.exists(), 'upstream-lazy-session-marker-present'))
 
         # Establish the deterministic PipeWire route before exercising the same
         # first guarded activation that Mango exposes. This is the only start;
         # later gates reuse the resident official daemon.
-        self.route()
-        activation = self.cmd([str(TOGGLE)], timeout=75, check=False)
-        require(activation.returncode == 0 and len(activation.stdout) <= 16384
-                and len(activation.stderr) <= 16384,
-                'upstream-first-activation-failed')
-        self.observe('upstream-first-activation-recording',
-                     lambda: self.state(allow_absent=True) == 'recording', 20)
-        require(session_marker.is_dir() and not session_marker.is_symlink(),
-                'upstream-lazy-session-marker-missing')
-        self.record('cancel')
-        self.daemon_ready('upstream-first-activation-resident', 60)
-        engines = self.engines()
-        require(len(engines) == 1, 'upstream-daemon-not-unique')
-        status = (Path('/proc') / str(engines[0][0]) / 'status').read_text()
-        rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
-        require(rss is not None and int(rss.group(1)) > 0,
-                'upstream-resident-rss-unavailable')
+        self.readiness_stage('audio-route', self.route)
+        def first_activation():
+            activation = self.cmd([str(TOGGLE)], timeout=75, check=False)
+            require(activation.returncode == 0 and len(activation.stdout) <= 16384
+                    and len(activation.stderr) <= 16384,
+                    'upstream-first-activation-failed')
+        self.readiness_stage('first-activation-command', first_activation)
+        self.readiness_stage('first-activation-recording', lambda: self.observe(
+            'upstream-first-activation-recording',
+            lambda: self.state(allow_absent=True) == 'recording', 20))
+        self.readiness_stage('first-activation-session-marker', lambda: require(
+            session_marker.is_dir() and not session_marker.is_symlink(),
+            'upstream-lazy-session-marker-missing'))
+        self.readiness_stage('first-activation-cancel', lambda: self.record('cancel'))
+        self.readiness_stage('resident-daemon-ready', lambda: self.daemon_ready(
+            'upstream-first-activation-resident', 60))
+        def resident_engine():
+            found = self.engines()
+            require(len(found) == 1, 'upstream-daemon-not-unique')
+            return found
+        engines = self.readiness_stage('resident-engine-unique', resident_engine)
+        def resident_rss():
+            status = (Path('/proc') / str(engines[0][0]) / 'status').read_text()
+            rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
+            require(rss is not None and int(rss.group(1)) > 0,
+                    'upstream-resident-rss-unavailable')
+            return int(rss.group(1)) * 1024
+        rss_bytes = self.readiness_stage('resident-rss', resident_rss)
         return {'ready': True, 'pending': False,
                 'pre_activation_engine_count': 0,
-                'resident_rss_bytes': int(rss.group(1)) * 1024}
+                'resident_rss_bytes': rss_bytes}
+
+    def readiness_stage(self, stage, fn):
+        require(type(stage) is str and stage in READINESS_FAILURE_STAGES,
+                'unknown-readiness-failure-stage')
+        try:
+            return fn()
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            raise ReadinessStageFailure(stage, caught_error_label(error)) from None
 
     def command_contract(self):
         help_result = self.cmd([str(VOXTYPE), 'record', '--help'])
