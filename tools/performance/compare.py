@@ -68,7 +68,7 @@ EXPECTED_ROLES = {'baseline': dict(terminal='kitty', files='nautilus', browser='
                   'candidate': dict(terminal='foot', files='pcmanfm', browser='gnome-web')}
 ROLE_COMMANDS = {'kitty': ('kitty',), 'foot': ('foot',), 'nautilus': ('nautilus',),
                  'pcmanfm': ('pcmanfm',), 'zen': ('gtk-launch app.zen_browser.zen',),
-                 'gnome-web': ('epiphany', 'gtk-launch org.gnome.Epiphany')}
+                 'gnome-web': ('gtk-launch org.gnome.Epiphany',)}
 ROLE_PROGRAMS = dict(kitty='kitty', foot='foot', nautilus='nautilus', pcmanfm='pcmanfm',
                      zen='flatpak', **{'gnome-web': 'epiphany'})
 ROLE_APPIDS = dict(kitty=['kitty'], foot=['foot'], nautilus=['org.gnome.nautilus'], pcmanfm=['pcmanfm'],
@@ -147,6 +147,23 @@ def role_evidence(runs):
                         if (not re.match(r'epiphany-[0-9]+:', launcher)
                                 or launcher not in run['rpm_inventory']['nevra']):
                             raise ValueError('Declared Epiphany desktop launcher RPM is absent or wrong')
+                        product = package.get('product_launcher_owner', '')
+                        desktop = app.get('effective_desktop', {})
+                        expected_values = {
+                            'Desktop Entry.Exec': '/usr/libexec/arctic/arctic-epiphany %U',
+                            'Desktop Entry.TryExec': '/usr/bin/epiphany',
+                            'Desktop Entry.DBusActivatable': 'false',
+                            'Desktop Action new-window.Exec': '/usr/libexec/arctic/arctic-epiphany --new-window %U',
+                            'Desktop Action Incognito.Exec': '/usr/libexec/arctic/arctic-epiphany --incognito-mode %U'}
+                        if (app.get('product_launcher') != '/usr/libexec/arctic/arctic-epiphany'
+                                or not re.match(r'arctic-desktop-config-[0-9]+:', product)
+                                or package.get('product_desktop_owner') != product
+                                or product not in run['rpm_inventory']['nevra']
+                                or desktop.get('path') != '/usr/share/arctic/applications/org.gnome.Epiphany.desktop'
+                                or not re.fullmatch('[0-9a-f]{64}', desktop.get('sha256', ''))
+                                or desktop.get('values') != expected_values
+                                or state.get('desktop_entries', {}).get('org.gnome.Epiphany.desktop') != desktop):
+                            raise ValueError('Declared Epiphany product launcher integration is absent or bypassed')
                 for phase in ('cold', 'warm'):
                     timing = run.get('startup_role_' + role + '_' + phase + '_seconds', {})
                     expected_phase = ('first_gui_role_execution_from_pristine_install' if phase == 'cold'

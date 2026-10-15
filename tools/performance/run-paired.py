@@ -158,7 +158,7 @@ def failure_phase_summary(work, screen_failure):
     # colored-trace-only-begin
     def envelope_colored_traceback(body, traces, inventory, source_frames):
         # Exact CPython v3.14.0 default theme grammar, independently projected
-        # onto the same pinned 104-site inventory. This never changes admission.
+        # onto the same pinned 110-site inventory. This never changes admission.
         out = result['guest_envelope']['colored_traceback']
         if len(traces) != 1:
             out['reason'] = 'traceback_not_unique'
@@ -224,7 +224,7 @@ def failure_phase_summary(work, screen_failure):
                 out['reason'] = 'frame_context_unknown'
                 return
         if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
-                or frames[1][1] != 'main' or not 871 <= frames[1][0] <= 942):
+                or frames[1][1] != 'main' or not 942 <= frames[1][0] <= 1008):
             out['reason'] = 'frame_chain_invalid'
             return
         ending = endings[0][1]
@@ -280,11 +280,11 @@ def failure_phase_summary(work, screen_failure):
         unknown = dict(status='unknown', code='none', exception_class='none',
             last_observer_phase='unavailable')
         envelope = result['guest_envelope']  # envelope-only
-        pins = dict(guest='088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d',
+        pins = dict(guest='69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73',
             causal='bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562')
-        observer = dict(source_sha256='7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed',
-            frozen_sha256='733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7',
-            comparator_sha256='d3d3ac5dcdf9066b73ac91a48c968dd7f84cd43f3c5571939d7c1041f879a0cf')
+        observer = dict(source_sha256='c6532d1b6dde6101c7f8856072498985b3be5aeb7d91d873ac428610e1dc7ae6',
+            frozen_sha256='5a1bce24d3097cbeeb936701de0cf87b4bc8bf7f8aa121dc0f7a498b9a821b1e',
+            comparator_sha256='dce568410fb95f027c1ab4b44148b8af93ea16f32e0b64dcff79bcb707b77940')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
             return unknown
@@ -346,10 +346,10 @@ def failure_phase_summary(work, screen_failure):
             return dict(unknown, status='source_mismatch')
         finally:
             os.close(source_root)
-        # Complete 104-site inventory bound to the original frozen observer.
+        # Complete 110-site inventory bound to the frozen observer.
         # A changed source requires a fresh explicit inventory review.
         digest = hashlib.sha256(json.dumps(inventory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
-        if len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b':
+        if len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51':
             envelope['reason'] = 'source_inventory_mismatch'  # envelope-only
             return dict(unknown, status='source_mismatch')
         try:
@@ -438,7 +438,7 @@ def failure_phase_summary(work, screen_failure):
                 envelope['reason'] = 'frame_unrecognized'  # envelope-only
                 return unknown
         if (not 2 <= len(frames) <= 128 or frames[0] != (11, '<module>')
-                or frames[1][1] != 'main' or not 871 <= frames[1][0] <= 942):
+                or frames[1][1] != 'main' or not 942 <= frames[1][0] <= 1008):
             envelope['frame_status'] = 'invalid_chain'  # envelope-only
             envelope['reason'] = 'frame_chain_invalid'  # envelope-only
             return unknown

@@ -54,9 +54,11 @@ ROLE_APPS = {
     'zen': dict(role='browser', configured=('gtk-launch app.zen_browser.zen',), program='flatpak',
                flatpak='app.zen_browser.zen', desktop='app.zen_browser.zen.desktop',
                appids=('zen', 'app.zen_browser.zen'), cold_paths=('home/.var/app/app.zen_browser.zen',)),
-    'gnome-web': dict(role='browser', configured=('epiphany', 'gtk-launch org.gnome.Epiphany'),
+    'gnome-web': dict(role='browser', configured=('gtk-launch org.gnome.Epiphany',),
                      program='epiphany', rpm='epiphany-runtime', desktop_rpm='epiphany',
                      desktop='org.gnome.Epiphany.desktop',
+                     product_launcher='/usr/libexec/arctic/arctic-epiphany',
+                     product_launcher_rpm='arctic-desktop-config',
                      appids=('org.gnome.epiphany', 'epiphany'),
                      cold_paths=('cache/epiphany', 'data/epiphany', 'config/epiphany')),
 }
@@ -440,6 +442,20 @@ for path in (pathlib.Path('/etc/arctic/default-apps'),roots['config']/'arctic/de
         if '=' in line and line.split('=',1)[0] in ('terminal','files','browser'):
             key,value=line.split('=',1);configured[key]=value
 programs={name:shutil.which(name) for name in ('kitty','foot','nautilus','pcmanfm','epiphany','flatpak')}
+desktop_entries={}
+data_dirs=[roots['data']]+[pathlib.Path(value) for value in
+    os.environ.get('XDG_DATA_DIRS','/usr/local/share:/usr/share').split(':') if value]
+for ident in ('org.gnome.Epiphany.desktop',):
+    for directory in data_dirs:
+        path=directory/'applications'/ident
+        if not path.is_file():continue
+        raw=path.read_bytes();section='Desktop Entry';values={}
+        for line in raw.decode().splitlines():
+            if line.startswith('[') and line.endswith(']'):section=line[1:-1]
+            elif line.startswith(('Exec=','TryExec=','DBusActivatable=')):
+                key,value=line.split('=',1);values[section+'.'+key]=value
+        desktop_entries[ident]=dict(path=str(path),sha256=hashlib.sha256(raw).hexdigest(),values=values)
+        break
 paths=json.loads(__import__('sys').argv[1]);present=[]
 for relative in paths:
     root,rest=relative.split('/',1);path=roots[root]/rest
@@ -452,7 +468,7 @@ for path in pathlib.Path('/proc').glob('[0-9]*'):
         if name in ('kitty','foot','nautilus','pcmanfm','epiphany','zen','zen-bin'):
             running.append(dict(pid=int(path.name),name=name))
     except OSError:pass
-print(json.dumps(dict(configured=configured,sources=sources,programs=programs,
+print(json.dumps(dict(configured=configured,sources=sources,programs=programs,desktop_entries=desktop_entries,
     prior_role_state_paths=present,running_role_apps=running,uid=os.getuid())))
 '''
 
@@ -508,6 +524,31 @@ def declare_roles(prefix, context, inventory):
                 if desktop_owner != launchers[0]:
                     raise RuntimeError('Desktop launcher is not owned by the declared role RPM: ' + ident)
                 package['desktop_owner'] = desktop_owner
+            if 'product_launcher' in app:
+                launcher = Path(app['product_launcher'])
+                if not launcher.is_file() or not os.access(launcher, os.X_OK):
+                    raise RuntimeError('Epiphany product launcher is missing')
+                owners = [value for value in inventory['nevra']
+                          if re.match(re.escape(app['product_launcher_rpm'])+r'-[0-9]+:', value)]
+                launcher_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}', str(launcher)])
+                desktop_entry = state['desktop_entries'].get(app['desktop'], {})
+                expected_values = {
+                    'Desktop Entry.Exec': app['product_launcher']+' %U',
+                    'Desktop Entry.TryExec': '/usr/bin/epiphany',
+                    'Desktop Entry.DBusActivatable': 'false',
+                    'Desktop Action new-window.Exec': app['product_launcher']+' --new-window %U',
+                    'Desktop Action Incognito.Exec': app['product_launcher']+' --incognito-mode %U'}
+                if (len(owners) != 1 or launcher_owner != owners[0]
+                        or desktop_entry.get('path') != '/usr/share/arctic/applications/'+app['desktop']
+                        or desktop_entry.get('values') != expected_values):
+                    raise RuntimeError('Epiphany product launcher integration differs')
+                product_desktop_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}', desktop_entry['path']])
+                if product_desktop_owner != launcher_owner:
+                    raise RuntimeError('Epiphany product desktop owner differs')
+                package['product_launcher_owner'] = launcher_owner
+                package['product_desktop_owner'] = product_desktop_owner
         else:
             commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
             if not re.fullmatch('[0-9a-f]{64}', commit):
@@ -516,6 +557,9 @@ def declare_roles(prefix, context, inventory):
         roles[role] = dict(id=ident, role=role, configured_command=configured,
                           legacy_system_mime_fallback=legacy_zen_fallback, program_path=state['programs'][app['program']],
                           appids=tuple(app['appids']), package=package)
+        if 'product_launcher' in app:
+            roles[role]['product_launcher'] = app['product_launcher']
+            roles[role]['effective_desktop'] = state['desktop_entries'][app['desktop']]
     return dict(image=image, roles=roles, configuration_sources=state['sources'],
                 default_browser_desktop=browser, pristine_state=state, boot_context=context,
                 meaning='First GUI-role execution from a pristine installed profile after normal desktop login; shared OS libraries and host disk caches may already be warm')
@@ -558,6 +602,23 @@ def functional_roles(prefix, inventory=None):
                 if len(launchers) != 1 or desktop_owner != launchers[0]:
                     raise RuntimeError('Role desktop launcher owner differs: ' + ident)
                 package['desktop_owner'] = desktop_owner
+            if 'product_launcher' in app:
+                launcher = Path(app['product_launcher'])
+                owners = [value for value in inventory['nevra']
+                          if re.match(re.escape(app['product_launcher_rpm'])+r'-[0-9]+:', value)]
+                launcher_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}', str(launcher)])
+                desktop_entry = state['desktop_entries'].get(app['desktop'], {})
+                if (not launcher.is_file() or not os.access(launcher, os.X_OK) or len(owners) != 1
+                        or launcher_owner != owners[0]
+                        or desktop_entry.get('path') != '/usr/share/arctic/applications/'+app['desktop']):
+                    raise RuntimeError('Epiphany product launcher integration differs')
+                product_desktop_owner = run(['rpm', '-qf', '--qf',
+                    '%{NAME}-%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}', desktop_entry['path']])
+                if product_desktop_owner != launcher_owner:
+                    raise RuntimeError('Epiphany product desktop owner differs')
+                package['product_launcher_owner'] = launcher_owner
+                package['product_desktop_owner'] = product_desktop_owner
         else:
             commit = run(prefix + ['flatpak', 'info', '--system', '--show-commit', app['flatpak']])
             if not re.fullmatch('[0-9a-f]{64}', commit):
@@ -566,6 +627,9 @@ def functional_roles(prefix, inventory=None):
         roles[role] = dict(id=ident, role=role, program_path=path,
                           configured_command=state['configured'].get(role, ''),
                           appids=tuple(app['appids']), package=package)
+        if 'product_launcher' in app:
+            roles[role]['product_launcher'] = app['product_launcher']
+            roles[role]['effective_desktop'] = state['desktop_entries'][app['desktop']]
     return dict(image=image, roles=roles, default_browser_desktop=browser,
                 configuration_sources=state['sources'], first_use_measurement=False)
 
@@ -649,7 +713,9 @@ def role_command(app, workload):
     if ident == 'zen':
         return ['flatpak', 'run', 'app.zen_browser.zen', '--new-window', workload['url']]
     if ident == 'gnome-web':
-        return ['epiphany', '--new-window', workload['url']]
+        if app.get('configured_command') != 'gtk-launch org.gnome.Epiphany':
+            raise RuntimeError('Epiphany measurement is not using the configured product launcher')
+        return ['gtk-launch', 'org.gnome.Epiphany', workload['url']]
     raise RuntimeError('Unsupported declared role application: ' + ident)
 
 

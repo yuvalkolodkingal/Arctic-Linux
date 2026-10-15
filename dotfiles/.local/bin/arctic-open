@@ -144,12 +144,19 @@ for c in "${candidates[@]}"; do
   # A desktop entry can't be handed a command to run.
   (( ${#exec_args[@]} )) && [[ "$c" == gtk-launch* ]] && continue
   if available "$c"; then
+    # Older installs recorded the native browser as the upstream executable.
+    # Keep that user choice, but route it through Arctic's Epiphany launcher so
+    # stable package updates gain the same renderer default as fresh installs.
+    launch="$c"
+    if [[ "$role" == browser && "${c%% *}" == epiphany && -x /usr/libexec/arctic/arctic-epiphany ]]; then
+      launch="/usr/libexec/arctic/arctic-epiphany${c#epiphany}"
+    fi
     mapfile -t ids < <(id_args "$c")
     # A window rule needs the app id: skip to a terminal that can set one (kitty, foot…).
     [[ -n "$app_id" && ${#ids[@]} -eq 0 ]] && continue
     # Detach so the app outlives the keybinding's process. The role's command line is a
     # command line (word-split by sh); the command to run is passed as separate arguments.
-    setsid -f sh -c "exec $c \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" "${app_args[@]}" >/dev/null 2>&1
+    setsid -f sh -c "exec $launch \"\$@\"" arctic-open "${ids[@]}" "${exec_args[@]}" "${app_args[@]}" >/dev/null 2>&1
     exit 0
   fi
 done

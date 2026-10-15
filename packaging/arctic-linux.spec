@@ -974,6 +974,9 @@ install -Dpm 0644 packaging/desktop/live-mimeapps.list %{buildroot}%{_datadir}/a
 install -Dpm 0755 packaging/desktop/arctic-celluloid %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
 install -Dpm 0644 packaging/desktop/io.github.celluloid_player.Celluloid.desktop \
   %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+install -Dpm 0755 packaging/desktop/arctic-epiphany %{buildroot}%{_libexecdir}/arctic/arctic-epiphany
+install -Dpm 0644 packaging/desktop/org.gnome.Epiphany.desktop \
+  %{buildroot}%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 install -d %{buildroot}%{_sysconfdir}/arctic/mango
 install -Dpm 0644 packaging/desktop/arctic-graphics.sh %{buildroot}%{_sysconfdir}/profile.d/arctic-graphics.sh
 install -Dpm 0755 packaging/nix/arctic-nix-system %{buildroot}%{_libexecdir}/arctic-nix-system
@@ -1165,7 +1168,9 @@ install -Dpm 0644 live/live.conf %{buildroot}%{_datadir}/arctic/mango/live.conf
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.arcticlinux.Installer.desktop
 desktop-file-validate %{buildroot}%{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+desktop-file-validate %{buildroot}%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 sh -n %{buildroot}%{_libexecdir}/arctic/arctic-celluloid
+sh -n %{buildroot}%{_libexecdir}/arctic/arctic-epiphany
 # arctic-release: the key and enabled repositories go together; never secret key material;
 # the testing channel is always off by default.
 key=%{buildroot}%{_sysconfdir}/pki/rpm-gpg/RPM-GPG-KEY-arctic
@@ -1558,8 +1563,10 @@ fi
 %{_datadir}/arctic/live-default-apps
 %{_datadir}/arctic/live-mimeapps.list
 %{_libexecdir}/arctic/arctic-celluloid
+%{_libexecdir}/arctic/arctic-epiphany
 %dir %{_datadir}/arctic/applications
 %{_datadir}/arctic/applications/io.github.celluloid_player.Celluloid.desktop
+%{_datadir}/arctic/applications/org.gnome.Epiphany.desktop
 %{_sysconfdir}/profile.d/arctic-graphics.sh
 %{_libexecdir}/arctic-nix-system
 %{_datadir}/polkit-1/actions/org.arcticlinux.nix.policy
