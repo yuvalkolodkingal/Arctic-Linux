@@ -631,7 +631,9 @@ class UpgradeMigrationExecution(unittest.TestCase):
         model = self.models / "ggml-small.bin"
         self._write(model, ASSETS["small"][1], 0o644)
         binary = self.current_payload / "voxtype-baseline"
-        calls = self.root / "validator-calls"
+        home = self.root / "home"
+        home.mkdir(mode=0o700)
+        calls = home / "validator-calls"
         self._write_executable(
             binary,
             "#!/bin/sh\n"
@@ -644,19 +646,36 @@ class UpgradeMigrationExecution(unittest.TestCase):
                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=10)
         self.assertEqual(launch.returncode, 69)
 
-        home = self.root / "home"
-        home.mkdir(mode=0o700)
         helper = self._fixture_configure()
         env = dict(os.environ, HOME=str(home))
+        run_as_user = {}
+        if os.geteuid() == 0:
+            # rpmbuild runs %check as root, while production always invokes
+            # this helper through runuser for the selected desktop account.
+            # Preserve the helper's root refusal and exercise the real user
+            # boundary rather than weakening it for the build environment.
+            rejected = subprocess.run([str(helper), str(model), str(binary)], env=env,
+                                      stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                      timeout=10)
+            self.assertEqual(rejected.returncode, 77)
+            self.assertFalse((home / ".config").exists())
+            nobody = pwd.getpwnam("nobody")
+            self.root.chmod(0o755)
+            os.chown(home, nobody.pw_uid, nobody.pw_gid)
+            run_as_user = {"user": nobody.pw_uid, "group": nobody.pw_gid,
+                           "extra_groups": []}
+
         subprocess.run([str(helper), str(model), str(binary)], env=env,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10)
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10,
+                       **run_as_user)
         config = home / ".config/voxtype/config.toml"
         self.assertIn('language = ["he", "en"]', config.read_text())
 
         config.write_text("[whisper]\nlanguage = \"en\"\n")
         config.chmod(0o600)
         subprocess.run([str(helper), str(model), str(binary)], env=env,
-                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10)
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=10,
+                       **run_as_user)
         self.assertEqual((config.parent / "config.toml.pre-arctic-voxtype-v1").read_text(),
                          "[whisper]\nlanguage = \"en\"\n")
         self.assertEqual(len(calls.read_text().splitlines()), 2)
