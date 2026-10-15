@@ -33,6 +33,30 @@ TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd6
 PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
 
 
+def restore_host_frame_diagnostic(source):
+    """Remove only the failure-only same-frame host observation."""
+    begin='    # BEGIN HOST_FRAME_DIAGNOSTIC\n';end='    # END HOST_FRAME_DIAGNOSTIC\n\n'
+    if source.count(begin)!=1 or source.count(end)!=1:
+        raise AssertionError('Host frame diagnostic inverse block differs')
+    first=source.index(begin);last=source.index(end,first)+len(end)
+    source=source[:first]+source[last:]
+    current="""        if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
+        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None) in ('live','installed')
+                and info['oracle']['status']=='unmatched'):
+            self.host_frame_diagnostic(player,expected,info)
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+"""
+    previous="""        if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
+            self.player_fullscreen(player,False)
+"""
+    if source.count(current)!=1:
+        raise AssertionError('Host frame diagnostic inverse invocation differs')
+    return source.replace(current,previous,1)
+
+
 def restore_paused_visual_capture(source):
     """Reverse only the one-player paused-frame capture stabilization."""
     helper_start='def mpv_pause_reference(path, expected_pid, expected_uid):\n'
@@ -565,6 +589,10 @@ def restore_controls_native(source):
 
 
 def restore_controls_guest(source):
+    source=restore_host_frame_diagnostic(source)
+    host_inventory="    '0-host-frame-request.json',\n"
+    if source.count(host_inventory)!=1:raise AssertionError('Host frame public inventory inverse differs')
+    source=source.replace(host_inventory,'',1)
     failure_headroom="""                    # A failed gate adds one owned failure screenshot after the
                     # normal navigation diagnostics.  Keep the strict 16 MiB
                     # transport ceiling and prioritize that failure frame plus
@@ -953,7 +981,8 @@ class ControlsStateTrials(unittest.TestCase):
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
         removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        added={'0-controls-state-trials.json','0-host-frame-request.json',
+               'controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
         current_labels={'failure-fresh-defaults-and-isolation','failure-archive-content-roundtrips',
             'failure-actual-role-file-manager-terminal-editor','failure-open-codec-content-and-player-state',
             'failure-portal-and-accessibility-reachability','failure-owned-process-cleanup-config-preservation',

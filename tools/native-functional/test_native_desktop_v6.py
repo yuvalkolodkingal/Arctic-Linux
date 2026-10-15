@@ -294,7 +294,9 @@ class HarnessControls(unittest.TestCase):
   self.assertFalse(any(k.arg=='gui_v6' for k in call.keywords))
   fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run_checks')
   self.assertIs(fn.args.kw_defaults[-1].value,False)
-  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
+  from test_native_host_frame import restore_host_frame_controller
+  physical=restore_host_frame_controller((HERE/'native-physical-controller.py').read_text())
+  self.assertEqual(hashlib.sha256(physical.split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
  def test_actual_generated_poll_default_off_and_selected_editor_path(self):
   import os
   F=load('desktop_poll_fixture','test_native_physical_v6.py')

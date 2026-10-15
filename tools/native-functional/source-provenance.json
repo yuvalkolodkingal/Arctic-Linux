@@ -1,9 +1,9 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "5837a22e7a2f3e2a4cffb7d905ba2e62ee934bb5d5c5b7f21acaf5369d4a9f2c",
+    "test_controls_state_trials.py": "321e03e9514160139bb6701dc7ab35e0229f90286cfbff11b0d163974b24a6d0",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
-    "test_native_desktop_v6.py": "814b2f243cb19b8be0977525baaa3dba1d56f50ce63b8e90d6737bd945eb87f6",
+    "test_native_desktop_v6.py": "cca264bf12a7d7a789c29bfb98c8cd319cfeeaab059d62a5a9acd2997a98e841",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
     "test_native_protocol_diagnostics.py": "ef4c1fb6e3f89a400aca3b6de852ef8b6512a539ccbd1ed808a12ba744202b1f",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
@@ -11,7 +11,8 @@
     "test_native_v6.py": "960878317845337f35f45e5231eb6290720923dd54f3edbc5f8a9e31367d8c96",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
-    "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555"
+    "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
+    "test_native_host_frame.py": "561d8756e2f01e5121c46752333bdb4d228b243273efdc6449c6d473f028b133"
   },
   "audit_file_interval_streaming": {
     "diagnosis": "the completed 24-case taskbar matrix accumulated an audit interval above the prior 4 MiB aggregate cap, so the reader rejected it before scanning that interval",
@@ -165,9 +166,9 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "7154e69f513c0c447da8fb19ab3b4820c96a62ed87b9cf0cabc4fc889601993d",
+    "guest-check-native-v6.py": "2528ca2509fcfd76889e67b743c9f0dcfe1652bba4e0154f40bda9bf61064550",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
-    "native-physical-controller.py": "c3eb77688964bb814c9fe4d458072a47b219b0df8ab4753560be6ff342bf835e",
+    "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
     "native_smoke.py": "e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151"
   },
   "installed_login_global_pointer": {
@@ -356,5 +357,34 @@
     "renderer_launcher_fixture_and_geometry_unchanged": true,
     "release_acceptance": false,
     "scope": "prove post-fullscreen playback first, then capture one complete settled frame; no retry, restart, alternate renderer or failed-frame acceptance path"
+  },
+  "host_frame_diagnostic": {
+    "comparison": "the exact guest expected 16-color palette is carried as 16 RGB triplets and evaluated by the identical pinned evaluate_reference_rgb implementation and thresholds",
+    "controller_integration": "native-physical-controller.py consumes the original complete UART inside the already-native-only physical_poll path; shared tools/test-install.sh remains byte-identical",
+    "graphics_offload_readback": {
+      "backend": "keyfile",
+      "binding": "exact owned Celluloid process XDG_CONFIG_HOME and GSETTINGS_BACKEND",
+      "expected_effective_value": false,
+      "key": "graphics-offload-enable",
+      "schema": "io.github.celluloid-player.Celluloid"
+    },
+    "guest_frame_hold_seconds": 20,
+    "host_capture": "one explicit QMP screendump of the matched virtio-vga device/head; only the exact client crop is retained",
+    "interpretation": {
+      "host_and_guest_unmatched": "VM display presentation failure observed",
+      "host_matched_guest_unmatched": "guest screencopy divergence observed"
+    },
+    "primary_failed_evidence_preserved": true,
+    "product_change_authorized": false,
+    "product_or_iso_change": false,
+    "raw_full_head_exported": false,
+    "release_acceptance": false,
+    "same_frame_binding": "the exact owned focused fullscreen player remains paused with <=0.05 second clock drift and unchanged identity/geometry while the host request is polled",
+    "trigger": "only after the unchanged primary guest grim oracle is unmatched in live or installed native stage",
+    "upstream_celluloid_version": "0.30",
+    "upstream_source_sha256": {
+      "celluloid-video-area.c": "122e35df95e24b41fe4b407b3f8e0e57d2121ace799a6d3d4d9b565cf5146cbf",
+      "io.github.celluloid_player.Celluloid.gschema.xml": "b54d4e8d9633ba4cb7a5915414f718f65f26b568094646119320f55ac00ec2e1"
+    }
   }
 }

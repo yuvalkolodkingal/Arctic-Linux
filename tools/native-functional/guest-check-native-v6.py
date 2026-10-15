@@ -1174,6 +1174,100 @@ class Smoke:
             try: drain.finish()
             except Exception: pass
 
+    # BEGIN HOST_FRAME_DIAGNOSTIC
+    def host_frame_diagnostic(self,player,expected,primary):
+        """Request one QMP frame while the failed primary player stays frozen."""
+        value=dict(schema='arctic-native-host-frame-request-v1',stage=self.stage,
+            status='unknown',primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',release_acceptance=False,
+            rendering_cause_proven=False)
+        try:
+            require(self.stage in ('live','installed'),'host frame request requires a native stage')
+            require(primary['oracle']['status']=='unmatched','host frame request requires the failed primary oracle')
+            require(primary['playback_clock']['capture_paused'] is True
+                    and abs(primary['playback_clock']['settled_seconds']-
+                            primary['playback_clock']['paused_seconds'])<=.05,
+                    'host frame request requires the settled paused primary')
+            client=self.alive(player)
+            require(all(client.get(key)==primary['client_after'].get(key)
+                        for key in ('id','pid','monitor','is_visible','is_focused','is_fullscreen','x','y','width','height')),
+                    'host frame request player identity or geometry changed')
+            require(client['is_visible'] is True and client['is_focused'] is True
+                    and client['is_fullscreen'] is True,'host frame request player is not focused fullscreen')
+            monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor,geometry,crop=visual_capture_geometry(client,monitors)
+            require(geometry=={key:primary['client_after'][key] for key in ('x','y','width','height')}
+                    and crop==primary['client_pixel_crop'],
+                    'host frame request capture geometry changed')
+            environ=Path('/proc')/str(player['pid'])/'environ'
+            require(environ.stat().st_uid==self.uid,'host frame settings process owner differs')
+            with environ.open('rb') as stream: raw=stream.read(65537)
+            require(len(raw)<=65536,'host frame settings environment exceeded bound')
+            variables=raw.split(b'\0')
+            config_values=[item.split(b'=',1)[1] for item in variables if item.startswith(b'XDG_CONFIG_HOME=')]
+            require([item for item in variables if item.startswith(b'GSETTINGS_BACKEND=')]==
+                    [b'GSETTINGS_BACKEND=keyfile'] and len(config_values)==1,
+                    'host frame settings backend/config is not process bound')
+            config=Path(os.fsdecode(config_values[0]));expected_config=self.reference_settings_config()
+            require(config==expected_config and config.resolve()==config,
+                    'host frame process settings config differs')
+            query=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','XDG_CONFIG_HOME='+str(config),
+                   '/usr/bin/gsettings','get','io.github.celluloid-player.Celluloid','graphics-offload-enable']
+            result=self.cmd(query,timeout=5,original=True)
+            require(result[0]==0 and result[1] in ('true','false'),
+                    'graphics offload process-bound readback is not boolean')
+            reference=expected.read_bytes()
+            require(len(reference)==160*120*3,'host frame expected RGB format differs')
+            palette=[list(reference[((row*30+15)*160+column*40+20)*3:
+                                    ((row*30+15)*160+column*40+20)*3+3])
+                     for row in range(4) for column in range(4)]
+            request=dict(schema='arctic-native-host-frame-request-v1',stage=self.stage,
+                nonce=os.urandom(16).hex(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                player={key:player[key] for key in ('client_id','pid','start_ticks','executable','executable_sha256','is_xwayland')},
+                monitor={key:monitor[key] for key in ('name','x','y','width','height','scale','is_hdr')},
+                client_geometry=geometry,client_pixel_crop=crop,expected_palette=palette,
+                expected_rgb_sha256=primary['expected_rgb_sha256'],
+                primary_screenshot_sha256=primary['screenshot']['sha256'],
+                primary_oracle_status='unmatched',playback_paused=True,
+                playback_time_seconds=primary['playback_clock']['settled_seconds'],
+                graphics_offload=dict(schema='io.github.celluloid-player.Celluloid',
+                    key='graphics-offload-enable',effective_value=result[1]=='true',
+                    settings_backend='keyfile',private_config_process_bound=True),
+                hold_seconds=20,release_acceptance=False)
+            print('ARCTIC-NATIVE-HOST-FRAME-REQUEST '+json.dumps(request,sort_keys=True),flush=True)
+            # No guest input or product state changes occur during this bounded
+            # window. The host polls the original UART and captures this exact
+            # QEMU head with an explicit device/head selector.
+            time.sleep(request['hold_seconds'])
+            after=self.alive(player)
+            paused=mpv_property(self.root/'visual-reference-ipc.sock','pause',player['pid'],self.uid)
+            observed=mpv_property(self.root/'visual-reference-ipc.sock','time-pos',player['pid'],self.uid)
+            require(paused is True and type(observed) in (int,float) and not isinstance(observed,bool)
+                    and math.isfinite(observed) and abs(observed-request['playback_time_seconds'])<=.05
+                    and all(after.get(key)==client.get(key) for key in
+                            ('id','pid','monitor','is_visible','is_focused','is_fullscreen','x','y','width','height')),
+                    'host frame hold did not preserve the paused player')
+            value.update(status='request-held',request=request,hold_completed=True,
+                         player_identity_geometry_unchanged=True,
+                         playback_clock_drift_seconds=abs(observed-request['playback_time_seconds']))
+        except Exception as error:
+            value['error']=renderer_trial_error(error)
+        try:
+            raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+            require(len(raw)<=64*1024,'host frame request receipt exceeded bound')
+            directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                require(os.fstat(directory).st_uid==self.uid,'host frame receipt directory owner differs')
+                fd=os.open('0-host-frame-request.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                           0o600,dir_fd=directory)
+                with os.fdopen(fd,'wb') as stream:
+                    os.fchown(stream.fileno(),self.uid,-1);stream.write(raw)
+            finally: os.close(directory)
+        except (OSError,ValueError,RuntimeError):
+            pass
+
+    # END HOST_FRAME_DIAGNOSTIC
+
     def controlled_renderer_trials(self,fixture,expected,source_sha,primary):
         """Failure-only diagnostics. Primary oracle/error and overall FAIL stand."""
         rows=[dict(intervention=mode,status='unrun',release_acceptance=False)
@@ -2076,6 +2170,10 @@ class Smoke:
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
             self.native_protocol_diagnostic(player,state,screenshot,client)
+        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None) in ('live','installed')
+                and info['oracle']['status']=='unmatched'):
+            self.host_frame_diagnostic(player,expected,info)
+        if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,False)
         require(info['oracle']['status']=='matched',
                 'actual static visual fixture content unmatched; rendered-content gate remains open')
@@ -2716,6 +2814,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
+    '0-host-frame-request.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
     'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
