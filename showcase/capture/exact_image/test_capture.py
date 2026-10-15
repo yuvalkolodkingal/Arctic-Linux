@@ -141,12 +141,17 @@ def vm_provenance():
 
 
 def controller_trace():
-    screen = lambda expectation: {"bytes": 1234, "sha256": "a" * 64,
-                                  "ocr_sha256": "b" * 64, "expectation": expectation,
-                                  "width": 1280, "height": 800}
+    def screen(expectation):
+        width, height = ((1920, 1080) if expectation == "install-boot-menu-selected"
+                         else (1280, 800))
+        return {"bytes": 1234, "sha256": "a" * 64,
+                "ocr_sha256": "b" * 64, "expectation": expectation,
+                "width": width, "height": height}
     rows = [
         ("live-boot", "screen", screen("install-boot-menu")),
-        ("live-boot", "keys", {"names": ["home", "down", "ret"]}),
+        ("live-boot", "keys", {"names": ["home", "down"]}),
+        ("live-boot", "screen", screen("install-boot-menu-selected")),
+        ("live-boot", "keys", {"names": ["ret"]}),
         ("live-boot", "screen", screen("live-installer-visible")),
         ("live-console", "keys", {"names": ["ctrl-alt-f6"]}),
         ("live-console", "screen", screen("live-console-login")),

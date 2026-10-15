@@ -213,7 +213,8 @@ def controller_trace(value) -> None:
               "installed-transition", "installed-boot", "installed-console", "installed-scenes",
               "dictation-readiness", "dictationsetup", "winter", "updates", "shutdown"}
     screen_expectations = {
-        "live-boot": {"install-boot-menu", "live-installer-visible"},
+        "live-boot": {"install-boot-menu", "install-boot-menu-selected",
+                      "live-installer-visible"},
         "live-console": {"live-console-login"},
         "install-complete": {"installer-done"},
         "installed-boot": {"installed-login-ready", "first-login-welcome",
@@ -234,7 +235,7 @@ def controller_trace(value) -> None:
         "installed-scenes": (548, "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"),
     }
     key_events = {
-        "live-boot": {("home", "down", "ret")},
+        "live-boot": {("home", "down"), ("ret",)},
         "live-console": {("ctrl-alt-f6",), ("ret",)},
         "live-install": {("ret",)},
         "installed-console": {("ctrl-alt-f6",), ("ctrl-l",), ("ret",)},
@@ -261,6 +262,7 @@ def controller_trace(value) -> None:
                 "dictation-ready-page", "wallpaper-page", "wallpaper-hide-dialog",
                 "whats-new-layer",
             }
+            boot_selection = detail.get("expectation") == "install-boot-menu-selected"
             require(set(detail) == {"bytes", "sha256", "ocr_sha256", "expectation", "width", "height"}
                     and type(detail["bytes"]) is int and 0 < detail["bytes"] <= 10 * 1024 * 1024
                     and fullmatch(HEX64, detail["sha256"])
@@ -268,6 +270,7 @@ def controller_trace(value) -> None:
                     and type(detail["width"]) is int and 640 <= detail["width"] <= 3840
                     and type(detail["height"]) is int and 480 <= detail["height"] <= 2160
                     and (not exact_geometry or (detail["width"], detail["height"]) == (1280, 800))
+                    and (not boot_selection or (detail["width"], detail["height"]) == (1920, 1080))
                     and detail["expectation"] in screen_expectations.get(stage, set()),
                     "controller screen record differs")
         elif kind == "keys":
@@ -321,6 +324,24 @@ def controller_trace(value) -> None:
             cursor += 1
         require(cursor < len(sequence), "controller required event sequence differs")
         cursor += 1
+    boot_prefix = [
+        ("live-boot", "screen", "install-boot-menu"),
+        ("live-boot", "keys", ("home", "down")),
+        ("live-boot", "screen", "install-boot-menu-selected"),
+        ("live-boot", "keys", ("ret",)),
+        ("live-boot", "screen", "live-installer-visible"),
+    ]
+    actual_boot_prefix = []
+    for event in events[:len(boot_prefix)]:
+        if event["kind"] == "screen":
+            detail = event["detail"]["expectation"]
+        elif event["kind"] == "keys":
+            detail = tuple(event["detail"]["names"])
+        else:
+            detail = None
+        actual_boot_prefix.append((event["stage"], event["kind"], detail))
+    require(actual_boot_prefix == boot_prefix,
+            "controller boot selection proof sequence differs")
     require(any(event["stage"] == "installed-boot" and event["kind"] == "screen"
                 and event["detail"].get("expectation") == "first-login-welcome"
                 for event in events)
@@ -333,7 +354,9 @@ def controller_trace(value) -> None:
     screen_sequence = [(event["stage"], event["detail"]["expectation"])
                        for event in events if event["kind"] == "screen"]
     required_screens = [
-        ("live-boot", "install-boot-menu"), ("live-boot", "live-installer-visible"),
+        ("live-boot", "install-boot-menu"),
+        ("live-boot", "install-boot-menu-selected"),
+        ("live-boot", "live-installer-visible"),
         ("live-console", "live-console-login"), ("install-complete", "installer-done"),
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
@@ -386,7 +409,8 @@ def controller_trace(value) -> None:
             "controller exact input or operation inventory differs")
     keys = [(event["stage"], tuple(event["detail"]["names"]))
             for event in events if event["kind"] == "keys"]
-    require(keys.count(("live-boot", ("home", "down", "ret"))) == 1
+    require(keys.count(("live-boot", ("home", "down"))) == 1
+            and keys.count(("live-boot", ("ret",))) == 1
             and keys.count(("live-console", ("ctrl-alt-f6",))) == 1
             and keys.count(("live-console", ("ret",))) == 2
             and keys.count(("live-install", ("ret",))) == 1

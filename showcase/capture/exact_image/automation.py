@@ -132,6 +132,25 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     return bool(lines) and lines[-1] in accepted
 
 
+def _install_boot_entry_selected(image) -> bool:
+    """Recognize the immutable ISO's highlighted Install row, not OCR alone."""
+    if image.size != (1920, 1080):
+        return False
+    # The reviewed GRUB theme draws one 418x40 amber selection pill.  Restrict
+    # the scan to the fixed menu rectangle so the amber logo mark cannot count.
+    rows = []
+    pixels = image.load()
+    for y in range(210, 350):
+        amber = sum(1 for x in range(700, 1220)
+                    if pixels[x, y][0] >= 220
+                    and 140 <= pixels[x, y][1] <= 220
+                    and pixels[x, y][2] <= 130)
+        if amber >= 300:
+            rows.append(y)
+    return (30 <= len(rows) <= 50 and rows == list(range(rows[0], rows[-1] + 1))
+            and 290 <= (rows[0] + rows[-1]) / 2 <= 307)
+
+
 LIVE_SURFACES = (
     "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
     "boot-menu", "boot-progress", "live-desktop", "installer-partial",
@@ -450,6 +469,18 @@ class Controller:
             time.sleep(gap)
         self.record(stage, "keys", {"names": list(names)})
 
+    def press_held(self, stage: str, *names: str, gap=.18):
+        """Use QEMU's bounded key-up timer for firmware and VT controls."""
+        c.require(names and len(names) <= 8, "unattended held key sequence differs")
+        for name in names:
+            chord = name.split("-") if "-" in name else [name]
+            self.qmp.command("send-key", {
+                "keys": [{"type": "qcode", "data": item} for item in chord],
+                "hold-time": 100,
+            })
+            time.sleep(gap)
+        self.record(stage, "keys", {"names": list(names)})
+
     def type_text(self, stage: str, command_id: str, value: str, gap=.012):
         c.require(1 <= len(value) <= 4096, "unattended typed text length differs")
         for character in value:
@@ -616,10 +647,48 @@ class Controller:
                          ("Hide", "Butterfly", "Gold", "packaged picture", "restore"),
                          seconds=60, exact_output=True)
 
+    def wait_install_boot_selection(self, seconds=10):
+        """Require the exact themed Install highlight before Enter is sent."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            path = None
+            try:
+                path, info, image, text = self._shot("install-boot-menu-selected")
+                # The selected row's black-on-amber label is deliberately not
+                # an OCR dependency: Tesseract 5.3.4 omits it on the exact
+                # frame.  The other ordered labels establish the fixed menu;
+                # the reviewed pixel band establishes the selected row.
+                phrases = ("Try Arctic Linux", "Safe graphics mode",
+                           "Check USB for errors", "Boot from first disk")
+                if (_phrases_present(text, phrases, ordered=True)
+                        and _install_boot_entry_selected(image)):
+                    self.record("live-boot", "screen", {
+                        "bytes": info.st_size, "sha256": c.sha256(path),
+                        "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                        "expectation": "install-boot-menu-selected",
+                        "width": image.width, "height": image.height,
+                    })
+                    path.unlink(missing_ok=True)
+                    path = None
+                    return
+            except (c.Invalid, OSError):
+                pass
+            finally:
+                if path is not None and path.exists():
+                    path.unlink(missing_ok=True)
+            time.sleep(.25)
+        raise c.Invalid("controller Install boot selection proof absent")
+
     def boot_live_and_start(self):
         self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
         self.live_startup.boot_observed()
-        self.press("live-boot", "home", "down", "ret")
+        # Firmware/GRUB can miss zero-duration down/up batches.  The exact ISO
+        # has a five-second menu, so use QEMU's bounded hold timer, then prove
+        # the amber Install row before Enter.  A missed key can no longer boot
+        # the default Try entry and burn the full Welcome timeout.
+        self.press_held("live-boot", "home", "down")
+        self.wait_install_boot_selection()
+        self.press_held("live-boot", "ret")
         self.live_startup.selection_sent()
         # "Install Arctic Linux" is also present in the boot menu.  Requiring
         # that text here let the just-selected GRUB frame satisfy this gate and
@@ -629,7 +698,7 @@ class Controller:
         self.wait_screen("live-boot", "live-installer-visible",
                          ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
                          seconds=600, visible=True, exact_output=True)
-        self.press("live-console", "ctrl-alt-f6")
+        self.press_held("live-console", "ctrl-alt-f6")
         self.wait_screen("live-console", "live-console-login", ("login",), seconds=60)
         self.type_text("live-console", "live-username", "liveuser")
         self.press("live-console", "ret")
@@ -643,7 +712,7 @@ class Controller:
         """Run a fixed console probe only after the Welcome gate has failed."""
         c.require(self.live_startup.gate_status == "timed-out",
                   "live startup probe preceded authoritative gate failure")
-        self.press("live-diagnostic", "ctrl-alt-f6")
+        self.press_held("live-diagnostic", "ctrl-alt-f6")
         try:
             self.wait_screen("live-diagnostic", "live-diagnostic-login", ("login",), seconds=45)
         except c.Invalid:

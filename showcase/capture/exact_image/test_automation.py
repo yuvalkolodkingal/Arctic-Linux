@@ -71,6 +71,49 @@ class UnattendedController(unittest.TestCase):
             "detail": {"names": ["ctrl-l"]},
         }])
 
+    def test_held_key_uses_qemu_timer_and_records_only_reviewed_names(self):
+        self.controller.press_held("live-boot", "home", "down", gap=0)
+        self.assertEqual(self.qmp.commands, [
+            ("send-key", {"keys": [{"type": "qcode", "data": "home"}],
+                          "hold-time": 100}),
+            ("send-key", {"keys": [{"type": "qcode", "data": "down"}],
+                          "hold-time": 100}),
+        ])
+        self.assertEqual(self.controller.events, [{
+            "index": 0, "stage": "live-boot", "kind": "keys",
+            "detail": {"names": ["home", "down"]},
+        }])
+
+    def test_install_selection_requires_exact_firmware_geometry_and_amber_row(self):
+        def frame(top):
+            image = Image.new("RGB", (1920, 1080), "#101820")
+            for y in range(top, top + 40):
+                for x in range(750, 1168):
+                    image.putpixel((x, y), (250, 190, 84))
+            return image
+
+        self.assertTrue(automation._install_boot_entry_selected(frame(279)))
+        self.assertFalse(automation._install_boot_entry_selected(frame(235)))
+        self.assertFalse(automation._install_boot_entry_selected(
+            Image.new("RGB", (1280, 800), (250, 190, 84))))
+
+    def test_install_selection_records_only_fixed_menu_and_pixel_proof(self):
+        path = self.root / "selected.png"
+        image = Image.new("RGB", (1920, 1080), "#101820")
+        for y in range(279, 319):
+            for x in range(750, 1168):
+                image.putpixel((x, y), (250, 190, 84))
+        image.save(path)
+        text = ("Try Arctic Linux\nSafe graphics mode\nCheck USB for errors\n"
+                "Boot from first disk")
+        self.controller._shot = mock.Mock(return_value=(path, path.lstat(), image, text))
+        self.controller.wait_install_boot_selection(seconds=1)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.controller.events[0]["detail"]["expectation"],
+                         "install-boot-menu-selected")
+        self.assertEqual((self.controller.events[0]["detail"]["width"],
+                          self.controller.events[0]["detail"]["height"]), (1920, 1080))
+
     def test_screen_gate_records_host_qmp_pixels_and_deletes_probe(self):
         self.controller.ocr = lambda path: "Arctic Linux is ready Remove the USB stick"
         path, _ = self.controller.wait_screen("install-complete", "installer-done",
@@ -148,16 +191,25 @@ class UnattendedController(unittest.TestCase):
         def press(stage, *names, **_kwargs):
             operations.append(("keys", stage, names))
 
+        def selection(*_args, **_kwargs):
+            operations.append(("selection", "live-boot", "install-boot-menu-selected"))
+
         def text(stage, command_id, _value, **_kwargs):
             operations.append(("text", stage, command_id))
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press
+        self.controller.wait_install_boot_selection = selection
         self.controller.type_text = text
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_live_and_start()
 
-        installer = operations[2]
+        self.assertEqual(operations[1], ("keys", "live-boot", ("home", "down")))
+        self.assertEqual(operations[2],
+                         ("selection", "live-boot", "install-boot-menu-selected"))
+        self.assertEqual(operations[3], ("keys", "live-boot", ("ret",)))
+        installer = operations[4]
         self.assertEqual(installer[:4], (
             "screen", "live-boot", "live-installer-visible",
             ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
@@ -167,7 +219,7 @@ class UnattendedController(unittest.TestCase):
         })
         self.assertFalse(all(phrase.casefold() in "Try Arctic Linux Install Arctic Linux".casefold()
                              for phrase in installer[3]))
-        self.assertEqual(operations[3], ("keys", "live-console", ("ctrl-alt-f6",)))
+        self.assertEqual(operations[5], ("keys", "live-console", ("ctrl-alt-f6",)))
 
     def test_live_startup_surface_projection_uses_only_fixed_enums(self):
         image = Image.new("RGB", (1280, 800))
@@ -495,10 +547,32 @@ class TraceContract(unittest.TestCase):
 
     def test_required_event_order_is_fail_closed(self):
         value = controller_trace()
-        value["events"][8], value["events"][11] = value["events"][11], value["events"][8]
+        selected = next(index for index, event in enumerate(value["events"])
+                        if event["kind"] == "screen"
+                        and event["detail"].get("expectation") == "install-boot-menu-selected")
+        welcome = next(index for index, event in enumerate(value["events"])
+                       if event["kind"] == "screen"
+                       and event["detail"].get("expectation") == "live-installer-visible")
+        value["events"][selected], value["events"][welcome] = (
+            value["events"][welcome], value["events"][selected])
         for index, event in enumerate(value["events"]):
             event["index"] = index
         with self.assertRaises(c.Invalid):
+            c.controller_trace(value)
+
+    def test_enter_before_install_selection_proof_is_rejected(self):
+        value = controller_trace()
+        selected = next(index for index, event in enumerate(value["events"])
+                        if event["kind"] == "screen"
+                        and event["detail"].get("expectation") == "install-boot-menu-selected")
+        enter = next(index for index, event in enumerate(value["events"])
+                     if event["stage"] == "live-boot" and event["kind"] == "keys"
+                     and event["detail"] == {"names": ["ret"]})
+        value["events"][selected], value["events"][enter] = (
+            value["events"][enter], value["events"][selected])
+        for index, event in enumerate(value["events"]):
+            event["index"] = index
+        with self.assertRaisesRegex(c.Invalid, "boot selection proof sequence"):
             c.controller_trace(value)
 
 

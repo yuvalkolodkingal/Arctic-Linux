@@ -53,10 +53,18 @@ RGB QMP PNGs, pass the same automated privacy rules as final captures, and are
 deleted. Their byte, pixel-source, and OCR hashes are recorded in the controller
 trace. The full QEMU argv hash, exact ISO/disk/channel topology, fixed scene
 commands, QMP events, input events, and final pixels are bound into each receipt.
-After selecting the Install boot entry, the controller requires copy unique to
-the real installer Welcome page (`Welcome to Arctic Linux`, `Keyboard`, `Time
-zone`, and `Summary`) before switching to the private console. The boot menu's
-own `Install Arctic Linux` label cannot satisfy that gate.
+GRUB's reviewed menu lasts five seconds. Firmware keys use QEMU's fixed 100 ms
+key-up timer, then the controller requires both the ordered, fixed menu copy and
+the immutable theme's 1920x1080 amber highlight on the Install row before it
+sends Enter. This prevents a zero-duration firmware key event from silently
+leaving the default Try entry selected. The prior bounded failure projection
+proved that the menu and key sequence preceded a 600-second Welcome timeout;
+because it exported no pixels or guest mode, it did not establish which entry
+booted. After selection, the
+controller still requires copy unique to the real installer Welcome page
+(`Welcome to Arctic Linux`, `Keyboard`, `Time zone`, and `Summary`) before
+switching to the private console. Neither the selection proof nor the boot
+menu's own `Install Arctic Linux` label can satisfy that Welcome gate.
 
 The Welcome gate remains the authoritative, unchanged 600-second acceptance
 condition. If it times out, a diagnostic path runs only after that failure. It
