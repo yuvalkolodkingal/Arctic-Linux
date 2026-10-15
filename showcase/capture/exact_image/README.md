@@ -98,7 +98,7 @@ which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
 The proof defines a `fish_prompt` function only in the disposable Fish session.
-That function renders the fixed contiguous account token in bold bright white
+That function renders the fixed contiguous uppercase account token in bold bright white
 and the `~>` suffix in regular bright white. The proof then clears and homes the VT before printing a bold
 marker, using the same pattern as the successful installed-image identity
 challenge. Fish itself invokes the session prompt function after the proof
@@ -109,7 +109,7 @@ reads each private row through an 8x nearest-neighbour enlargement and pinned
 single-line PSM 7. Both transformed crops are always deleted; the
 original 1280x800 frame remains the sole screen evidence and geometry gate. It requires
 `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
-account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
+account's real `ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>` Fish prompt on an exact
 1280x800 frame. Spaces that Tesseract inserts immediately around the marker's
 hyphens, the fixed account's `@` and hostname hyphen, or between `~` and `>` are
 admitted; every alphanumeric account and host byte remains exact. The host

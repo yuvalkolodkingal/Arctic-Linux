@@ -164,7 +164,7 @@ class UnattendedController(unittest.TestCase):
             if "-marker-ocr.png" in path.name:
                 return "ARCTIC - SHOWCASE - SHELL - READY\n"
             self.assertIn("-prompt-ocr.png", path.name)
-            return "arcticshowcase@arctic-showcase ~>\n"
+            return "ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>\n"
 
         self.qmp.screendump = screendump
         self.controller.ocr = full_ocr
@@ -188,7 +188,7 @@ class UnattendedController(unittest.TestCase):
                          (info.st_size, info.st_size, (1280, 800)))
         self.assertEqual(image.getpixel((10, 12)), (0, 32, 96))
         self.assertEqual(image.getpixel((11, 12)), (224, 224, 224))
-        self.assertEqual(text.splitlines()[-1], "arcticshowcase@arctic-showcase ~>")
+        self.assertEqual(text.splitlines()[-1], "ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>")
         self.assertEqual(list(self.root.glob(
             "controller-001-installed-shell-ready-*-ocr.png")), [])
         path.unlink()
@@ -704,9 +704,9 @@ class UnattendedController(unittest.TestCase):
             self.controller.boot_installed_and_start()
         timeout_at = operations.index((
             "screen", "installed-shell-ready",
-            ("ARCTIC-SHOWCASE-SHELL-READY", "arcticshowcase@arctic-showcase"),
+            ("ARCTIC-SHOWCASE-SHELL-READY", "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
             {"seconds": 90, "exact_output": True, "ordered": True,
-             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >"))},
+             "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE", ("~>", "~ >"))},
         ))
         self.assertEqual(operations[timeout_at + 1], ("held-keys", ("ctrl-c",)))
         self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
@@ -720,15 +720,14 @@ class UnattendedController(unittest.TestCase):
         prefix, rendered_command = automation.Controller.SHELL_PROOF.rsplit("printf ", 1)
         self.assertEqual(prefix, (
             "function fish_prompt; set_color --bold brwhite; "
-            "printf 'arcticshowcase@arctic-showcase'; "
+            "printf 'ARCTICSHOWCASE@ARCTIC-SHOWCASE'; "
             "set_color normal; set_color brwhite; printf ' ~> '; "
             "set_color normal; end; "
         ))
         self.assertNotIn("set -U", prefix)
         self.assertNotIn("funcsave", prefix)
         self.assertNotIn("functions --copy", prefix)
-        account = (c.CONTROLLER["account"]["username"] + "@"
-                   + c.CONTROLLER["account"]["hostname"])
+        account = automation.SHELL_PROMPT_ACCOUNT
         self.assertEqual(prefix.count(account), 1)
         self.assertIn("printf '" + account + "'; set_color normal; ", prefix)
         self.assertIn("set_color brwhite; printf ' "
@@ -758,8 +757,7 @@ class UnattendedController(unittest.TestCase):
         shell = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell"]
         self.assertEqual((len(ready), len(shell)), (1, 1))
-        prompt = (c.CONTROLLER["account"]["username"] + "@"
-                  + c.CONTROLLER["account"]["hostname"])
+        prompt = automation.SHELL_PROMPT_ACCOUNT
         self.assertEqual(ready[0].args[2],
                          ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
         self.assertEqual(ready[0].kwargs,
@@ -839,13 +837,13 @@ uptime   2 mins
 
     def test_fixed_shell_proof_accepts_only_marker_before_real_account(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
-        prompt = "arcticshowcase@arctic-showcase"
+        prompt = automation.SHELL_PROMPT_ACCOUNT
         suffixes = ("~>", "~ >")
         old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
         returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
         spaced = "ARCTIC - SHOWCASE- SHELL -READY\n" + prompt + " ~>"
         punctuation_spaced = ("ARCTIC - SHOWCASE- SHELL -READY\n"
-                              "arcticshowcase @ arctic - showcase ~ >")
+                              "ARCTICSHOWCASE @ ARCTIC - SHOWCASE ~ >")
         self.assertFalse(automation._fixed_shell_proof_present(
             old_prompt_only, prompt, suffixes))
         self.assertTrue(automation._fixed_shell_proof_present(
@@ -858,7 +856,9 @@ uptime   2 mins
             "ARCTIC SHOWCASE SHELL READY\n" + prompt,
             "ARCTIC-SHOWCASE-SHELL-READY extra\n" + prompt,
             "ARCTIC-SHOWCASE-SHELL-WRONG\n" + prompt,
-            marker + "\nother@arctic-showcase ~>",
+            marker + "\nOTHER@ARCTIC-SHOWCASE ~>",
+            marker + "\narcticshowcase@arctic-showcase ~>",
+            marker + "\nArcticshowcase@Arctic-Showcase ~>",
             marker + "\n" + prompt + " ~>\ntrailing guest signal",
             marker + "\nARCTIC-SHOWCASE-PROBE-READY updates",
         ):
@@ -867,13 +867,13 @@ uptime   2 mins
                     forged, prompt, suffixes))
 
     def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
-        prompt = "arcticshowcase@arctic-showcase"
+        prompt = automation.SHELL_PROMPT_ACCOUNT
         source = Image.new("RGB", (1280, 800), "black")
         source.putpixel((10, 12), (255, 255, 255))
         self.qmp.screendump = lambda path: source.save(path)
         self.controller.ocr = lambda _path: (
             "ARCTIC - SHOWCASE - SHELL - READY\n"
-            "arcticshowcase @ arctic - showcase ~ >")
+            "ARCTICSHOWCASE @ ARCTIC - SHOWCASE ~ >")
         self.controller.shell_focus_ocr = self.controller.ocr
         path, text = self.controller.wait_screen(
             "installed-console", "installed-shell-ready",
@@ -882,7 +882,7 @@ uptime   2 mins
             prompt_contract=(prompt, ("~>", "~ >")))
         self.assertIsNone(path)
         self.assertEqual(text.splitlines()[-1],
-                         "arcticshowcase @ arctic - showcase ~ >")
+                         "ARCTICSHOWCASE @ ARCTIC - SHOWCASE ~ >")
         self.assertEqual(list(self.root.glob("controller-*.png")), [])
 
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
@@ -940,9 +940,9 @@ uptime   2 mins
                     {"seconds": 90})
         ready = ("screen", "installed-shell-ready",
                  ("ARCTIC-SHOWCASE-SHELL-READY",
-                  "arcticshowcase@arctic-showcase"),
+                  "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
                  {"seconds": 90, "exact_output": True, "ordered": True,
-                      "prompt_contract": ("arcticshowcase@arctic-showcase",
+                      "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE",
                                           ("~>", "~ >"))})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
@@ -957,9 +957,9 @@ uptime   2 mins
         self.assertEqual(operations[at + 6],
                          ("screen", "installed-shell",
                           ("ARCTIC-SHOWCASE-SHELL-READY",
-                           "arcticshowcase@arctic-showcase"),
+                           "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
                           {"seconds": 90, "exact_output": True, "ordered": True,
-                           "prompt_contract": ("arcticshowcase@arctic-showcase",
+                           "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE",
                                                ("~>", "~ >"))}))
         self.assertEqual(operations[at + 7], ("text", "installed-scenes"))
 

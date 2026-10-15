@@ -367,6 +367,7 @@ INSTALLED_SHELL_SURFACES = (
     "account-only", "suffix-only", "login-or-password", "other-text",
 )
 INSTALLED_SHELL_SIGNALS = ("marker", "account-pattern", "suffix", "exact")
+SHELL_PROMPT_ACCOUNT = "ARCTICSHOWCASE@ARCTIC-SHOWCASE"
 
 
 def _installed_shell_signals(text: str, account: str, suffixes) -> dict:
@@ -568,7 +569,7 @@ class Controller:
     # a complete Fish prompt OCR-visible for this disposable session only; the
     # shell still invokes the prompt function after the command returns.
     SHELL_PROOF = ("function fish_prompt; set_color --bold brwhite; "
-                   "printf 'arcticshowcase@arctic-showcase'; "
+                   f"printf '{SHELL_PROMPT_ACCOUNT}'; "
                    "set_color normal; set_color brwhite; printf ' ~> '; "
                    "set_color normal; end; "
                    "printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
@@ -1001,8 +1002,7 @@ class Controller:
         # separate Fish Ctrl-L redraw. Sudo
         # remains forbidden until the fresh response and the exact final
         # prompt are visible together.
-        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
-                        + c.CONTROLLER["account"]["hostname"])
+        shell_prompt = SHELL_PROMPT_ACCOUNT
         prompt_contract = c.CONTROLLER["account"]["prompt"]
         installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
         # Match the exact-image installer qualification's proven Fish/VT input
