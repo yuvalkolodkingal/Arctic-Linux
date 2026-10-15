@@ -45,17 +45,40 @@ def git(root, *args):
 
 
 class ManifestControls(unittest.TestCase):
-    def test_shipped_lane_is_disabled_and_has_exact_execution_hashes_no_marker(self):
+    def test_shipped_lane_prepares_exact_unqualified_image_without_activation(self):
         shipped = S.read_json((HERE / 'execution-manifest.json').read_text())
-        self.assertIs(shipped['ready'], False)
-        self.assertEqual(shipped['image'], {})
-        self.assertEqual(shipped['source_files'], {})
+        self.assertEqual(S.validate_manifest(shipped), shipped['image'])
+        self.assertEqual(shipped['image'], {
+            'archive_bytes': 1936516406,
+            'archive_sha256': '4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6',
+            'artifact_id': 12011000602,
+            'bytes': 1936328704,
+            'name': 'Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso',
+            'producer_mode': F.EXTERNAL_MODE,
+            'producer_receipt_sha256': '85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6',
+            'run_id': 38808271154,
+            'sha256': '304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23',
+            'source_sha': '10b94bf1f6aef4950889d4a498c9e1138cf7973d',
+        })
+        self.assertIs(shipped['ready'], True)
+        self.assertIs(shipped['release_acceptance'], False)
+        self.assertIs(shipped['performance_acceptance'], False)
+        self.assertIs(shipped['observer_profile_admitted'], False)
         self.assertFalse((ROOT / S.MARKER).exists())
         self.assertEqual(shipped['execution_files'],
                          {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in S.EXECUTION_FILES})
-        with patch.object(S, 'api') as api, self.assertRaisesRegex(ValueError, 'disabled'):
-            S.activation_guard(shipped, ROOT)
-        api.assert_not_called()
+        for name, pin in shipped['source_files'].items():
+            content = subprocess.check_output(['git', '-C', str(ROOT), 'show',
+                                               shipped['image']['source_sha'] + ':' + name])
+            mode, _, blob_sha, listed_name = git(
+                ROOT, 'ls-tree', shipped['image']['source_sha'], '--', name).split(None, 3)
+            self.assertEqual(listed_name, name)
+            self.assertEqual(pin, {
+                'blob_sha': blob_sha,
+                'bytes': len(content),
+                'mode': mode,
+                'sha256': hashlib.sha256(content).hexdigest(),
+            })
 
     def test_generated_evidence_upload_includes_only_owned_hidden_source_exports(self):
         workflow = (ROOT / S.WORKFLOW).read_text()
