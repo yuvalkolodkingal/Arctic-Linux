@@ -32,7 +32,19 @@ class ColoredTracebackTest(unittest.TestCase):
         raw = raw.replace(b"exception_class='none', format='none'),\n", b"exception_class='none', format='none')),\n", 1)
         # Preserve the original history digest through exact reviewed identity inverses.
         historical = raw
+        historical = historical.replace(b'pinned 110-site inventory', b'pinned 104-site inventory')
+        historical = historical.replace(b'Complete 110-site inventory bound to the frozen observer.',
+                                        b'Complete 104-site inventory bound to the original frozen observer.')
+        historical = historical.replace(b"len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51'",
+                                        b"len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b'")
+        self.assertEqual(historical.count(b'not 942 <= frames[1][0] <= 1008'), 1)
+        historical = historical.replace(b'not 942 <= frames[1][0] <= 1008',
+                                        b'not 871 <= frames[1][0] <= 942')
         for current, previous in (
+                (b'12d104c47d4cad17dc35cac2386d23fe8019428aa0280e7410ba4f8420f364de', b'f910e117803951c8838301590bf29986e8af6c2f049ef746236f2842ffbf4634'),
+                (b'2938c9d4eb522b6b5b577ef042be1f5c2f31a0942d0aa7ce63935ad8bd23a29b', b'7b730fbb30852e7185a7ae0177b92c152a895f9593bcc4f54c28d25a1010a347'),
+                (b'69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73', b'088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d'),
+                (b'8aee3965affb58af2aab1d2af7143c08d64845354c6985b012443de4ea0ba17c', b'184c4508b5c679c6edcd2179bf963154d2c15a3d0934ad6bd44f1c3e93dac6e5'),
                 (b'dafe6d744e55a4205c416ec67ba890ebaf5375be9bcf5fe48086bb145dcfddf0', b'a99761ab522b20285a07b282102c63adcc3caf63e1ec99f7fddf9f66aca95ac5'),
                 (b'f910e117803951c8838301590bf29986e8af6c2f049ef746236f2842ffbf4634', b'3b51ccffa915f059cea8527f426c9c3200356cbb73d6955e910d8518f8cfbb0d'),
                 (b'7b730fbb30852e7185a7ae0177b92c152a895f9593bcc4f54c28d25a1010a347', b'5cc98198d4ca2a6a19736f2fd32b0c002964e2b6d95b1d86d11a5149f56aab91'),
@@ -62,6 +74,7 @@ class ColoredTracebackTest(unittest.TestCase):
         self.old = types.ModuleType('original_color_classifier'); self.old.__file__ = str(P.ROOT/'tools/performance/run-paired.py')
         exec(compile(raw, self.old.__file__, 'exec'), self.old.__dict__); self.old.ROOT = P.inner.ROOT
         consumer = (P.ROOT/'tools/performance/qualification.py').read_bytes()
+        consumer = P.before_epiphany_failure_sites(consumer)
         consumer = re.sub(rb'(?ms)^[ ]*# colored-trace-only-begin\n.*?^[ ]*# colored-trace-only-end\n', b'', consumer)
         consumer = consumer.replace(b", 'colored_traceback'}", b"}", 1)
         self.assertEqual(hashlib.sha256(consumer).hexdigest(), 'e452f27cc1229684613f39dc2ff59d6b32500b817cf97f26cc74f80434943495')
@@ -89,7 +102,7 @@ class ColoredTracebackTest(unittest.TestCase):
         if target.exists(): shutil.rmtree(target)
         with patch.object(P.inner, 'failure_phase_summary', return_value=result): self.fixture.export(target)
 
-    def test_all_104_source_color_projections_leave_original_unknown(self):
+    def test_all_110_source_color_projections_leave_original_unknown(self):
         for site in self.fixture.sites:
             with self.subTest(source=site['source'], line=site['line']):
                 result = self.result(self.colored(site)); projection = result['guest_envelope']['colored_traceback']
@@ -99,7 +112,7 @@ class ColoredTracebackTest(unittest.TestCase):
                 self.consumer(result)
                 self.assertLessEqual((self.fixture.root/'screened/unqualified-failure-phase.json').stat().st_size, 4096)
 
-    def test_plain_all_104_existing_source_admission_unchanged(self):
+    def test_plain_all_110_existing_source_admission_unchanged(self):
         for site in self.fixture.sites:
             result=self.result(self.fixture.guest_trace(site))
             self.assertEqual(result['guest_failure']['status'],'source_known_shape')
@@ -108,24 +121,24 @@ class ColoredTracebackTest(unittest.TestCase):
     def test_custom_malformed_colors_headers_paths_frames_and_message_are_closed(self):
         valid=self.colored()
         for fault in (valid.replace('[35m"','[31m"'), valid.replace('/run/t/guest-check.py','/run/t/private.py'),
-                valid.replace('/run/t/guest-check.py','/run/t/guest-check.py/..'), valid.replace('line \x1b[35m360','line \x1b[35m0360'),
+                valid.replace('/run/t/guest-check.py','/run/t/guest-check.py/..'), valid.replace('line \x1b[35m362','line \x1b[35m0362'),
                 valid.replace('in \x1b[35mdesktop','in \x1b[35mprivate_function'),
                 valid.replace('Traceback (most recent call last):','\x1b[35mTraceback (most recent call last):\x1b[0m'),
                 valid.replace('No unique non-root Mango session','private forged message'),
-                valid.replace('\x1b[1;35mRuntimeError','\x1b[1;31mRuntimeError'), valid.replace('\x1b[35m360\x1b[0m','\x1b[35m360'),
+                valid.replace('\x1b[1;35mRuntimeError','\x1b[1;31mRuntimeError'), valid.replace('\x1b[35m362\x1b[0m','\x1b[35m362'),
                 valid.replace('in \x1b[35mmain\x1b[0m','in \x1b[35mprivate\x1b[0m')):
             result=self.result(fault); self.assertEqual(result['guest_envelope']['colored_traceback']['code'],'none')
 
     def test_unknown_untrusted_code_context_rejected_and_exact_source_context_admitted(self):
-        site=next(x for x in self.fixture.sites if (x['source'],x['line'])==('guest',360))
+        site=next(x for x in self.fixture.sites if (x['source'],x['line'])==('guest',362))
         valid=self.colored(site); boundary='\n\x1b[1;35mRuntimeError'
-        source=(P.ROOT/'tools/performance/guest.py').read_text().splitlines()[359].strip()
+        source=(P.ROOT/'tools/performance/guest.py').read_text().splitlines()[361].strip()
         wrapper = valid.replace('in \x1b[35m<module>\x1b[0m\n',
             'in \x1b[35m<module>\x1b[0m\n    measurement["main"](preconditioned=True, causal_precision=True)\n')
-        self.assertEqual(self.result(wrapper)['guest_envelope']['colored_traceback']['code'], 'guest_360')
+        self.assertEqual(self.result(wrapper)['guest_envelope']['colored_traceback']['code'], 'guest_362')
         for context in ('    '+source+'\n','    \x1b[1;31m'+source+'\x1b[0m\n    \x1b[1;31m^^^^\x1b[0m\n'):
             result=self.result(valid.replace(boundary,'\n'+context+'\x1b[1;35mRuntimeError'))
-            self.assertEqual(result['guest_envelope']['colored_traceback']['code'],'guest_360')
+            self.assertEqual(result['guest_envelope']['colored_traceback']['code'],'guest_362')
         for context in ('    private forged source\n','    \x1b[32m'+source+'\x1b[0m\n','    \x1b[1;31mprivate\x1b[0m\n','    '+source+'\x07\n'):
             result=self.result(valid.replace(boundary,'\n'+context+'\x1b[1;35mRuntimeError'))
             self.assertEqual(result['guest_envelope']['colored_traceback']['code'],'none')

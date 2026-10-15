@@ -17,6 +17,21 @@ import performance_external_fixture as F
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def before_epiphany_failure_sites(data):
+    """Restore the reviewed pre-product-launcher guest failure-site tuple."""
+    current = b"""    sites = dict(guest=(195, 205, 207, 213, 217, 220, 223, 225, 229, 254, 257, 290, 326,
+        337, 362, 404, 420, 481, 486, 488, 500, 502, 504, 509, 514, 520, 525, 530, 545,
+        549, 555, 573, 581, 588, 594, 603, 615, 619, 625, 671, 674, 685, 702, 717, 719,
+        728, 756, 774, 817, 946, 950, 965, 1006),
+"""
+    previous = b"""    sites = dict(guest=(193, 203, 205, 211, 215, 218, 221, 223, 227, 252, 255, 288, 324,
+        335, 360, 402, 418, 465, 470, 472, 484, 486, 488, 493, 498, 504, 509, 514, 529,
+        537, 544, 550, 559, 564, 607, 610, 621, 638, 653, 662, 690, 708, 751, 880, 884, 899, 940),
+"""
+    assert data.count(current) == 1
+    return data.replace(current, previous)
+
+
 def load(name, relative):
     spec = importlib.util.spec_from_file_location(name, ROOT/relative)
     module = importlib.util.module_from_spec(spec)
@@ -279,16 +294,16 @@ class FixedFailurePhaseTest(unittest.TestCase):
                 self.sites.append(dict(source=source, line=node.lineno,
                     function=function.name if isinstance(function, ast.FunctionDef) else '<module>',
                     exception=node.exc.func.id, prefix=prefix, exact=exact))
-        self.assertEqual(len(self.sites), 104)
+        self.assertEqual(len(self.sites), 110)
 
     def guest_record(self, check, value):
         return 'ARCTIC-PERFORMANCE ' + json.dumps(dict(stage='installed', check=check, value=value)) + '\n'
 
     def guest_trace(self, site=None, message=None):
-        site = site or next(x for x in self.sites if (x['source'], x['line']) == ('guest', 360))
+        site = site or next(x for x in self.sites if (x['source'], x['line']) == ('guest', 362))
         frames = '  File "/run/t/guest-check.py", line 11, in <module>\n'
         if site['function'] != 'main':
-            frames += '  File "/run/t/guest-check.py", line 881, in main\n'
+            frames += '  File "/run/t/guest-check.py", line 947, in main\n'
         frames += f'  File "/run/t/guest-check.py", line {site["line"]}, in {site["function"]}\n'
         return ('ARCTIC-COLLECT-BEGIN\n'
             + self.guest_record('observer_source_sha256', self.observer['source_sha256'])
@@ -298,7 +313,7 @@ class FixedFailurePhaseTest(unittest.TestCase):
             + 'password=do-not-export transcript: מילים סודיות https://private.invalid/?token=private\n'
             + 'ARCTIC-INSTALLED-SMOKE-EXIT=1\nARCTIC-COLLECT-END\n')
 
-    def test_all_104_actual_source_sites_have_closed_diagnostic_codes_only(self):
+    def test_all_110_actual_source_sites_have_closed_diagnostic_codes_only(self):
         self.prepare_guest()
         for site in self.sites:
             with self.subTest(source=site['source'], line=site['line']):
@@ -312,7 +327,7 @@ class FixedFailurePhaseTest(unittest.TestCase):
                 content = json.dumps(result).encode()
                 self.assertEqual(screen.external_text(content), content)
                 self.assertNotIn(b'do-not-export', content)
-                # Exercise the independent consumer's entire closed 104-code
+                # Exercise the independent consumer's entire closed 110-code
                 # inventory without substituting/reimplementing its validator.
                 target = self.root/'screened'
                 with patch.object(inner, 'failure_phase_summary', return_value=result):
@@ -322,11 +337,11 @@ class FixedFailurePhaseTest(unittest.TestCase):
 
     def test_known_dynamic_error_and_unknown_private_error_never_export_tails(self):
         self.prepare_guest()
-        site = next(x for x in self.sites if (x['source'], x['line']) == ('guest', 211))
+        site = next(x for x in self.sites if (x['source'], x['line']) == ('guest', 213))
         self.write('runs/baseline/1/serial-boot.log', self.guest_trace(site,
             site['prefix']+'password=do-not-export transcript: מילים סודיות'))
         result = self.summary()
-        self.assertEqual(result['guest_failure']['code'], 'guest_211')
+        self.assertEqual(result['guest_failure']['code'], 'guest_213')
         original = (self.work/'runs/baseline/1/serial-boot.log').read_bytes()
         self.export()
         exported = (self.root/'screened/unqualified-failure-phase.json').read_bytes()
@@ -344,10 +359,10 @@ class FixedFailurePhaseTest(unittest.TestCase):
         variants = [
             valid.replace('Traceback (most recent call last):', '$ echo Traceback (most recent call last):'),
             valid.replace('/run/t/guest-check.py', '/private/guest-check.py'),
-            valid.replace('line 360, in desktop', 'line 361, in desktop'),
-            valid.replace('line 360, in desktop', 'line 360, in injected'),
+            valid.replace('line 362, in desktop', 'line 363, in desktop'),
+            valid.replace('line 362, in desktop', 'line 362, in injected'),
             valid.replace('line 11, in <module>', 'line 8, in <module>'),
-            valid.replace('line 881, in main', 'line 881, in injected'),
+            valid.replace('line 947, in main', 'line 947, in injected'),
             valid.replace('Traceback (most recent call last):', '\x1b[31mTraceback (most recent call last):'),
             valid.replace('Traceback (most recent call last):', '\vTraceback (most recent call last):'),
             valid.replace('RuntimeError: No unique non-root Mango session', 'RuntimeError: No unique non-root Mango session EXTRA'),
