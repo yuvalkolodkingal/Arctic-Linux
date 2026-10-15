@@ -27,9 +27,9 @@
     "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
   },
   "observer": {
-    "source_sha256": "f910e117803951c8838301590bf29986e8af6c2f049ef746236f2842ffbf4634",
-    "frozen_sha256": "7b730fbb30852e7185a7ae0177b92c152a895f9593bcc4f54c28d25a1010a347",
-    "comparator_sha256": "184c4508b5c679c6edcd2179bf963154d2c15a3d0934ad6bd44f1c3e93dac6e5"
+    "source_sha256": "12d104c47d4cad17dc35cac2386d23fe8019428aa0280e7410ba4f8420f364de",
+    "frozen_sha256": "2938c9d4eb522b6b5b577ef042be1f5c2f31a0942d0aa7ce63935ad8bd23a29b",
+    "comparator_sha256": "8aee3965affb58af2aab1d2af7143c08d64845354c6985b012443de4ea0ba17c"
   },
   "execution_files": {
     ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
