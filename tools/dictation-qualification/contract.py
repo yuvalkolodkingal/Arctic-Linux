@@ -147,6 +147,22 @@ MICROPHONE_FAILURE_STAGES = {
     'language-restore': 122,
     'error-clear': 123,
 }
+READINESS_FAILURE_STAGES = {
+    'status-command': 201,
+    'status-contract': 202,
+    'readiness-marker-stat': 203,
+    'readiness-marker-content': 204,
+    'lazy-process-state': 205,
+    'lazy-session-marker': 206,
+    'audio-route': 207,
+    'first-activation-command': 208,
+    'first-activation-recording': 209,
+    'first-activation-session-marker': 210,
+    'first-activation-cancel': 211,
+    'resident-daemon-ready': 212,
+    'resident-engine-unique': 213,
+    'resident-rss': 214,
+}
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',
@@ -157,11 +173,16 @@ FAILURE_STAGE_GATES = {
     **{gate: frozenset(TRANSCRIPTION_FAILURE_STAGES.values())
        for gate in TRANSCRIPTION_GATES},
     'microphone-disconnect-error': frozenset(MICROPHONE_FAILURE_STAGES.values()),
+    'online-installer-ready': frozenset(READINESS_FAILURE_STAGES.values()),
+    'recovered-ready': frozenset(READINESS_FAILURE_STAGES.values()),
 }
 TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',
 }
+STAGED_FAILURE_GATES = (TRANSCRIPTION_REQUIRED_FAILURE_GATES |
+                        {'microphone-disconnect-error', 'online-installer-ready',
+                         'recovered-ready'})
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
@@ -341,9 +362,7 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             require(type(observed['failure_stage']) is int
                     and observed['failure_stage'] in FAILURE_STAGE_GATES.get(gate['id'], ()),
                     'gate-failure-stage-value')
-        elif (gate['status'] == 'failed'
-              and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
-                                 | {'microphone-disconnect-error'})):
+        elif gate['status'] == 'failed' and gate['id'] in STAGED_FAILURE_GATES:
             require(False, 'gate-failure-stage-missing')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
