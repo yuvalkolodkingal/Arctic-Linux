@@ -106,6 +106,21 @@ def controller_decode(path: Path):
         raise c.Invalid("controller PNG decode failed") from error
 
 
+def _phrases_present(text: str, phrases, *, ordered: bool) -> bool:
+    """Match reviewed OCR phrases, optionally requiring their screen order."""
+    folded = text.casefold()
+    if not ordered:
+        return all(phrase.casefold() in folded for phrase in phrases)
+    offset = 0
+    for phrase in phrases:
+        needle = phrase.casefold()
+        found = folded.find(needle, offset)
+        if found < 0:
+            return False
+        offset = found + len(needle)
+    return True
+
+
 class Controller:
     """Finite host state machine. Guest JSON and messages never choose actions."""
 
@@ -208,17 +223,16 @@ class Controller:
         return path, info, image, text
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
-                    visible=False, retain=False, exact_output=False):
+                    visible=False, retain=False, exact_output=False, ordered=False):
         deadline = time.monotonic() + seconds
         last = None
         while time.monotonic() < deadline:
             path = None
             try:
                 path, info, image, text = self._shot(expectation)
-                folded = text.casefold()
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
-                if ((not phrases or all(phrase.casefold() in folded for phrase in phrases))
+                if ((not phrases or _phrases_present(text, phrases, ordered=ordered))
                         and (not exact_output or image.size == (1280, 800))
                         and (not visible or nonblank)):
                     detail = {"bytes": info.st_size, "sha256": c.sha256(path),
@@ -361,8 +375,15 @@ class Controller:
         time.sleep(1)
         self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
         self.press("installed-console", "ret")
-        self.wait_screen("installed-console", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",),
-                         seconds=90)
+        # The executed marker can reach the VT before Fish has drawn its next
+        # prompt and resumed its line editor.  Do not type the longer sudo
+        # launcher into that interval: require the fixed account's real prompt
+        # in the same exact output after the marker.
+        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
+                        + c.CONTROLLER["account"]["hostname"])
+        self.wait_screen("installed-console", "installed-shell",
+                         ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
+                         seconds=90, exact_output=True, ordered=True)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
         self.press("installed-scenes", "ret")
         self.wait_screen("installed-console", "installed-sudo-password",

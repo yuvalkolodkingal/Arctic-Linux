@@ -26,7 +26,7 @@
   "execution_files": {
     ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "showcase/capture/exact_image/automation.py": "ba389dece3477c269a90e1c470e3fb3e56e2ab117e343f5bd0df70b3962d0fe8",
+    "showcase/capture/exact_image/automation.py": "001abc633c7cfdea3cdd4643aaf9b8feed4171a91c8718e1a8311652a18d4c12",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "f38d0ecc510531217c68508c94bba4b7ec71b775d6b312a5b1d02041e62d93f1",

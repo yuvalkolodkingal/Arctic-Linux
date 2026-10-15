@@ -157,6 +157,38 @@ class UnattendedController(unittest.TestCase):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
 
+    def test_shell_proof_waits_for_fixed_fish_prompt_before_sudo_launcher(self):
+        self.controller.wait_screen = mock.Mock(return_value=(None, ""))
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+
+        shell = [call for call in self.controller.wait_screen.call_args_list
+                 if call.args[1] == "installed-shell"]
+        self.assertEqual(len(shell), 1)
+        prompt = (c.CONTROLLER["account"]["username"] + "@"
+                  + c.CONTROLLER["account"]["hostname"])
+        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
+        self.assertEqual(shell[0].kwargs,
+                         {"seconds": 90, "exact_output": True, "ordered": True})
+        self.assertFalse(all(phrase.casefold()
+                             in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
+                             for phrase in shell[0].args[2]))
+
+    def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
+        marker = "ARCTIC-SHOWCASE-SHELL-READY"
+        prompt = "arcticshowcase@arctic-showcase"
+        old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
+        returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
+        self.assertFalse(automation._phrases_present(
+            old_prompt_only, (marker, prompt), ordered=True))
+        self.assertTrue(automation._phrases_present(
+            returned_prompt, (marker, prompt), ordered=True))
+        self.assertTrue(automation._phrases_present(
+            old_prompt_only, (marker, prompt), ordered=False))
+
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
         marker = "ARCTIC-SHOWCASE-AUTH-READY"
         self.assertNotIn(marker, automation.Controller.INSTALLED_COMMAND)
@@ -182,8 +214,8 @@ class UnattendedController(unittest.TestCase):
     def test_installed_shell_waits_for_fetch_and_dismisses_it_with_one_key(self):
         operations = []
 
-        def wait(_stage, expectation, phrases=(), **_kwargs):
-            operations.append(("screen", expectation, phrases))
+        def wait(_stage, expectation, phrases=(), **kwargs):
+            operations.append(("screen", expectation, phrases, kwargs))
             return None, ""
 
         def press(_stage, *names, **_kwargs):
@@ -202,14 +234,19 @@ class UnattendedController(unittest.TestCase):
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_installed_and_start()
 
-        greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"))
+        greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
+                    {"seconds": 90})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
         self.assertEqual(operations[at + 1], ("keys", ("ret",)))
         self.assertEqual(operations[at + 2], proof)
         self.assertLess(operations.index(("secret",)), at)
         self.assertEqual(operations[at + 4],
-                         ("screen", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",)))
+                         ("screen", "installed-shell",
+                          ("ARCTIC-SHOWCASE-SHELL-READY",
+                           "arcticshowcase@arctic-showcase"),
+                          {"seconds": 90, "exact_output": True, "ordered": True}))
+        self.assertEqual(operations[at + 5], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):
