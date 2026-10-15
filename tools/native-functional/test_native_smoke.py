@@ -219,11 +219,29 @@ class Controls(unittest.TestCase):
         self.assertEqual(len(decoder['audio_sha256']),64)
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'host lacks ffmpeg; guest visual fixture remains mandatory')
-    def test_actual_static_ffv1_rgb_reference_matches_known_palette(self):
+    def test_actual_pulsed_ffv1_rgb_reference_matches_known_palette(self):
         fixture,reference,source_hash=self.host_smoke().visual_fixture()
         self.assertTrue(fixture.is_file());self.assertEqual(len(source_hash),64)
-        result=s.evaluate_reference_rgb(reference.read_bytes(),160,120,reference.read_bytes())
-        self.assertEqual(result['status'],'matched')
+        raw=(self.root/'visual-reference-input.raw').read_bytes();size=160*120*3
+        base=s.visual_reference_frame();pulse=bytes(value+4 for value in base)
+        self.assertEqual(len(raw),20*size)
+        self.assertEqual([raw[index*size:(index+1)*size] for index in range(20)],
+                         [base if index%2==0 else pulse for index in range(20)])
+        self.assertNotEqual(hashlib.sha256(base).digest(),hashlib.sha256(pulse).digest())
+        expected=reference.read_bytes()
+        decoded=self.root/'visual-reference-decoded.raw'
+        s.execute(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-i',str(fixture),
+                   '-pix_fmt','rgb24','-f','rawvideo',str(decoded)])
+        decoded_raw=decoded.read_bytes();self.assertEqual(len(decoded_raw),20*size)
+        decoded_frames=[decoded_raw[index*size:(index+1)*size] for index in range(20)]
+        self.assertTrue(all(left!=right for left,right in zip(decoded_frames,decoded_frames[1:])))
+        self.assertEqual(len({hashlib.sha256(frame).digest() for frame in decoded_frames}),2)
+        self.assertTrue(all(s.evaluate_reference_rgb(frame,160,120,expected)['status']=='matched'
+                            for frame in decoded_frames))
+        self.assertEqual(s.evaluate_reference_rgb(expected,160,120,expected)['status'],'matched')
+        self.assertEqual(s.visual_reference_cadence(),dict(schema='arctic-native-visual-cadence-v1',
+            frames=20,frames_per_second=10,alternating_rgb_delta=4,changes_every_frame=True,
+            oracle_thresholds_unchanged=True,release_acceptance=False))
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

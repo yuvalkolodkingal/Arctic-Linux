@@ -459,6 +459,27 @@ def visual_reference_frame():
                  for channel in palette[(y//30)*4+x//40])
 
 
+def visual_reference_stream():
+    """Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    """
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+
+
 def visual_capture_geometry(client, monitors):
     """Validate an observed focused client and scale1 SDR monitor before cropping."""
     require(isinstance(client,dict) and client.get('is_focused') is True
@@ -1799,7 +1820,7 @@ class Smoke:
                     scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
-        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
+        source=self.write('visual-reference-input.raw',visual_reference_stream())
         fixture=self.root/'visual-reference.mkv'
         expected=self.root/'visual-reference-frame.rgb'
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
@@ -2017,9 +2038,9 @@ class Smoke:
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
-                  product_renderer=renderer,
+                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
-                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
+                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
