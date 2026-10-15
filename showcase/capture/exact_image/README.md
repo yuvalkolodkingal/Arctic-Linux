@@ -127,8 +127,11 @@ suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty,
 and other text, plus bounded integer timings. Each sample also retains four
 independent booleans for the exact fixed marker, the account pattern with only
 the acceptance-approved punctuation spacing, suffix and complete prompt, with
-only their boolean seen/final aggregates exported. OCR strings
-remain private. Only after a timeout, the
+only their boolean seen/final aggregates exported. After full-frame geometry
+and privacy validation, it also exports bounded nonblack-pixel counts for
+sixteen fixed 640x8 bands at the top left. Those integers can locate the VT
+glyph rows but contain no pixels, text, crops, screens or identifiers. OCR
+strings remain private. Only after a timeout, the
 controller sends one interrupt and records
 whether the exact prompt becomes visible within 30 seconds. That post-failure
 probe cannot promote the attempt or authorize the proof or sudo commands. Its

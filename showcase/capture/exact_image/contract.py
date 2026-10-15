@@ -706,7 +706,7 @@ def installed_startup_diagnostic(value) -> None:
     require(type(gate) is dict and set(gate) == {
         "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
         "last_observation", "first_observation_seconds", "signal_samples",
-        "signal_seen", "signal_final"
+        "signal_seen", "signal_final", "nonbackground_occupancy"
     } and gate["expectation"] == "installed-shell-ready"
         and gate["timeout_seconds"] == 90
         and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
@@ -756,6 +756,24 @@ def installed_startup_diagnostic(value) -> None:
             and all(type(item) is bool for item in gate["signal_seen"].values())
             and all(type(item) is bool for item in gate["signal_final"].values()),
             "installed shell signal aggregate differs")
+    occupancy = gate["nonbackground_occupancy"]
+    require(type(occupancy) is dict and set(occupancy) == {
+        "region", "band_height", "bands", "maximum_per_band", "samples"
+    } and occupancy["region"] == "left-640-top-128"
+        and occupancy["band_height"] == 8 and occupancy["bands"] == 16
+        and occupancy["maximum_per_band"] == 5120
+        and type(occupancy["samples"]) is list
+        and len(occupancy["samples"]) == gate["samples"],
+        "installed shell occupancy projection differs")
+    for sample in occupancy["samples"]:
+        require(sample is None or (
+                    type(sample) is list and len(sample) == 16
+                    and all(type(item) is int and 0 <= item <= 5120
+                            for item in sample)),
+                "installed shell occupancy sample differs")
+    if gate["status"] == "passed":
+        require(occupancy["samples"] and occupancy["samples"][-1] is not None,
+                "installed shell passed without occupancy sample")
     if gate["status"] == "passed":
         require(gate["last_observation"] == "prompt-exact"
                 and all(gate["signal_final"].values()),

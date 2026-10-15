@@ -270,6 +270,25 @@ class UnattendedController(unittest.TestCase):
         for actual, wanted in zip(focused, expected, strict=True):
             self.assertIsNone(ImageChops.difference(actual, wanted).getbbox())
 
+    def test_shell_occupancy_counts_fixed_bands_without_retaining_pixels(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((0, 0), (1, 0, 0))
+        source.putpixel((639, 7), (0, 1, 0))
+        source.putpixel((0, 8), (0, 0, 1))
+        source.putpixel((639, 127), (1, 1, 1))
+        # These boundary-adjacent pixels are outside the fixed diagnostic region.
+        source.putpixel((640, 0), (255, 255, 255))
+        source.putpixel((0, 128), (255, 255, 255))
+        unchanged = source.copy()
+
+        counts = automation._shell_nonbackground_occupancy(source)
+
+        self.assertEqual(counts, (2, 1) + (0,) * 13 + (1,))
+        self.assertTrue(all(type(value) is int and 0 <= value <= 5120
+                            for value in counts))
+        self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
+        self.assertEqual(list(self.root.glob("*occupancy*")), [])
+
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
         order = []
         image = Image.new("RGB", (1920, 1080), "#101820")
@@ -578,11 +597,11 @@ class UnattendedController(unittest.TestCase):
         diagnostic.observe("fetch-greeting", {
             "marker": False, "account-pattern": False,
             "suffix": False, "exact": False,
-        })
+        }, (0,) * 16)
         diagnostic.observe("account-only", {
             "marker": True, "account-pattern": True,
             "suffix": False, "exact": False,
-        })
+        }, tuple(range(16)))
         diagnostic.gate_end("timed-out")
         diagnostic.interrupt("sent-no-prompt")
         value = diagnostic.projection()
@@ -600,6 +619,11 @@ class UnattendedController(unittest.TestCase):
                           "suffix": False, "exact": False})
         self.assertEqual(value["shell_ready_gate"]["signal_final"],
                          value["shell_ready_gate"]["signal_samples"][-1])
+        self.assertEqual(value["shell_ready_gate"]["nonbackground_occupancy"], {
+            "region": "left-640-top-128", "band_height": 8, "bands": 16,
+            "maximum_per_band": 5120,
+            "samples": [[0] * 16, list(range(16))],
+        })
         forged = copy.deepcopy(value)
         forged["shell_ready_gate"]["private_ocr"] = "do not export"
         with self.assertRaises(c.Invalid):
@@ -616,6 +640,20 @@ class UnattendedController(unittest.TestCase):
         forged["shell_ready_gate"]["signal_seen"]["suffix"] = True
         with self.assertRaises(c.Invalid):
             c.installed_startup_diagnostic(forged)
+        for mutate in (
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"].update(
+                {"raw_pixels": "private"}),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].__setitem__(0, 5121),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].__setitem__(0, True),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].pop(),
+        ):
+            forged = copy.deepcopy(value)
+            mutate(forged)
+            with self.assertRaises(c.Invalid):
+                c.installed_startup_diagnostic(forged)
 
     def test_installed_signal_samples_are_bounded_and_fit_failure_projection(self):
         diagnostic = automation.InstalledStartupDiagnostic()
@@ -628,9 +666,9 @@ class UnattendedController(unittest.TestCase):
         empty = {"marker": False, "account-pattern": False,
                  "suffix": False, "exact": False}
         for _ in range(46):
-            diagnostic.observe("ocr-empty", empty)
+            diagnostic.observe("ocr-empty", empty, (5120,) * 16)
         with self.assertRaisesRegex(c.Invalid, "installed startup signals differ"):
-            diagnostic.observe("ocr-empty", empty)
+            diagnostic.observe("ocr-empty", empty, (5120,) * 16)
         diagnostic.gate_end("timed-out")
         diagnostic.interrupt("sent-no-prompt")
         value = diagnostic.projection()

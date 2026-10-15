@@ -196,6 +196,26 @@ def _shell_ocr_row_focuses(image):
     )
 
 
+SHELL_OCCUPANCY_WIDTH = 640
+SHELL_OCCUPANCY_BAND_HEIGHT = 8
+SHELL_OCCUPANCY_BANDS = 16
+SHELL_OCCUPANCY_MAX = SHELL_OCCUPANCY_WIDTH * SHELL_OCCUPANCY_BAND_HEIGHT
+
+
+def _shell_nonbackground_occupancy(image):
+    """Count nonblack pixels in fixed private bands without retaining pixels."""
+    c.require(image.mode == "RGB" and image.size == (1280, 800),
+              "controller shell occupancy source geometry differs")
+    pixels = image.load()
+    return tuple(
+        sum(pixels[x, y] != (0, 0, 0)
+            for y in range(band * SHELL_OCCUPANCY_BAND_HEIGHT,
+                           (band + 1) * SHELL_OCCUPANCY_BAND_HEIGHT)
+            for x in range(SHELL_OCCUPANCY_WIDTH))
+        for band in range(SHELL_OCCUPANCY_BANDS)
+    )
+
+
 def _boot_entry_selected(image, entry: str) -> bool:
     """Recognize one immutable ISO GRUB highlight row, not OCR alone."""
     if entry not in ("try", "install"):
@@ -422,6 +442,7 @@ class InstalledStartupDiagnostic:
         self.signal_samples = []
         self.signal_seen = {item: False for item in INSTALLED_SHELL_SIGNALS}
         self.signal_final = {item: False for item in INSTALLED_SHELL_SIGNALS}
+        self.occupancy_samples = []
         self.interrupt_status = "not-run"
 
     @staticmethod
@@ -450,19 +471,27 @@ class InstalledStartupDiagnostic:
         self.gate_status = "waiting"
         self.gate_started = time.monotonic()
 
-    def observe(self, surface, signals):
+    def observe(self, surface, signals, occupancy):
         c.require(surface in INSTALLED_SHELL_SURFACES,
                   "installed startup surface differs")
         c.require(type(signals) is dict and tuple(signals) == INSTALLED_SHELL_SIGNALS
                   and all(type(value) is bool for value in signals.values())
                   and len(self.signal_samples) < 46,
                   "installed startup signals differ")
+        c.require(occupancy is None or (
+                      type(occupancy) is tuple
+                      and len(occupancy) == SHELL_OCCUPANCY_BANDS
+                      and all(type(value) is int and 0 <= value <= SHELL_OCCUPANCY_MAX
+                              for value in occupancy)),
+                  "installed startup occupancy differs")
         self.samples += 1
         self.last = surface
         if self.first[surface] is None:
             self.first[surface] = self._seconds(self.gate_started, 90)
         sample = dict(signals)
         self.signal_samples.append(sample)
+        self.occupancy_samples.append(
+            None if occupancy is None else list(occupancy))
         self.signal_final = sample
         for name, present in sample.items():
             self.signal_seen[name] = self.signal_seen[name] or present
@@ -497,6 +526,12 @@ class InstalledStartupDiagnostic:
                 "signal_samples": [dict(sample) for sample in self.signal_samples],
                 "signal_seen": dict(self.signal_seen),
                 "signal_final": dict(self.signal_final),
+                "nonbackground_occupancy": {
+                    "region": "left-640-top-128", "band_height": 8,
+                    "bands": 16, "maximum_per_band": 5120,
+                    "samples": [None if sample is None else list(sample)
+                                for sample in self.occupancy_samples],
+                },
             },
             "post_failure_interrupt": self.interrupt_status,
         }
@@ -696,7 +731,7 @@ class Controller:
                     signals = _installed_shell_signals(text, account, suffixes)
                     self.installed_startup.observe(
                         _installed_shell_surface_class(image, text, account, suffixes),
-                        signals)
+                        signals, _shell_nonbackground_occupancy(image))
                 prompt_ok = (prompt_contract is None
                              or _fixed_fish_prompt_present(text, *prompt_contract))
                 phrase_ok = (not phrases or _phrases_present(
@@ -732,7 +767,7 @@ class Controller:
                 if installed_gate:
                     self.installed_startup.observe(
                         "capture-error",
-                        {item: False for item in INSTALLED_SHELL_SIGNALS})
+                        {item: False for item in INSTALLED_SHELL_SIGNALS}, None)
             finally:
                 if path is not None and path.exists():
                     path.unlink(missing_ok=True)
