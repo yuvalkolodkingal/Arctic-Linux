@@ -41,13 +41,13 @@
     "tools/performance/compare.py": "876a48621979e2f19d6294b45b0dcdca551d5c14746b29cdea3343afd54d967c",
     "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
     "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
-    "tools/performance/contract.py": "c3a4b423154e6542488e7290bc7f75a59e4381084eee0e225f2602b342d0aefb",
+    "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
     "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
     "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "79f54a55f7a5cc87ef5c9668163ce4f21985c15f4f3afee7a9afdcd28ee0fa23",
-    "tools/performance/run-paired.py": "23181b163f6c97487d1e455b2972de1267b42ec4cd4069943eef32e81645f406",
+    "tools/performance/run-paired.py": "96f15b351f9ff9c0b1f7e42e54c3bceaea6272f13977b3dea5b9e265214dd69a",
     "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
   }
 }
