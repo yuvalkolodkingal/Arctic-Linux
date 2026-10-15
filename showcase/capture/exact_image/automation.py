@@ -525,8 +525,9 @@ class Controller:
     # initialized shell executing printf can assemble the visible proof. Keep
     # a complete Fish prompt OCR-visible for this disposable session only; the
     # shell still invokes the prompt function after the command returns.
-    SHELL_PROOF = ("function fish_prompt; set_color brwhite; "
-                   "printf 'arcticshowcase@arctic-showcase ~> '; "
+    SHELL_PROOF = ("function fish_prompt; set_color --bold brwhite; "
+                   "printf 'arcticshowcase@arctic-showcase'; "
+                   "set_color normal; set_color brwhite; printf ' ~> '; "
                    "set_color normal; end; "
                    "printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
                    "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
@@ -939,8 +940,9 @@ class Controller:
         # gives Fish time to complete the empty command after the renderer has
         # exited.  The proof contains no secret and cannot mimic its fixed
         # response. It defines only this Fish session's prompt function so the
-        # complete fixed account token and suffix are contiguous and bright
-        # white, then clears and homes the VT before drawing a bold marker,
+        # complete fixed account token is contiguous, bold and bright white;
+        # the fixed suffix remains bright white. It then clears and homes the
+        # VT before drawing a bold marker,
         # matching the successful installed-image identity challenge. Fish
         # itself calls that function after the command returns. This removes
         # the retained rich greeting from the OCR surface without relying on a

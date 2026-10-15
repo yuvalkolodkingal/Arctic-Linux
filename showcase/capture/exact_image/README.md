@@ -98,8 +98,8 @@ which completes the empty command and establishes its line editor while the
 rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
 The proof defines a `fish_prompt` function only in the disposable Fish session.
-That function renders the fixed contiguous account token and `~>` suffix in
-bright white. The proof then clears and homes the VT before printing a bold
+That function renders the fixed contiguous account token in bold bright white
+and the `~>` suffix in regular bright white. The proof then clears and homes the VT before printing a bold
 marker, using the same pattern as the successful installed-image identity
 challenge. Fish itself invokes the session prompt function after the proof
 command returns. The host

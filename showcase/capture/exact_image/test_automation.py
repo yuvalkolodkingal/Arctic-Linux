@@ -647,8 +647,9 @@ class UnattendedController(unittest.TestCase):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
         prefix, rendered_command = automation.Controller.SHELL_PROOF.rsplit("printf ", 1)
         self.assertEqual(prefix, (
-            "function fish_prompt; set_color brwhite; "
-            "printf 'arcticshowcase@arctic-showcase ~> '; "
+            "function fish_prompt; set_color --bold brwhite; "
+            "printf 'arcticshowcase@arctic-showcase'; "
+            "set_color normal; set_color brwhite; printf ' ~> '; "
             "set_color normal; end; "
         ))
         self.assertNotIn("set -U", prefix)
@@ -657,7 +658,9 @@ class UnattendedController(unittest.TestCase):
         account = (c.CONTROLLER["account"]["username"] + "@"
                    + c.CONTROLLER["account"]["hostname"])
         self.assertEqual(prefix.count(account), 1)
-        self.assertIn(account + " " + c.CONTROLLER["account"]["prompt"]["rendered"],
+        self.assertIn("printf '" + account + "'; set_color normal; ", prefix)
+        self.assertIn("set_color brwhite; printf ' "
+                      + c.CONTROLLER["account"]["prompt"]["rendered"] + " ';",
                       prefix)
         rendered = subprocess.run(
             ["/bin/sh", "-c", "printf " + rendered_command],
