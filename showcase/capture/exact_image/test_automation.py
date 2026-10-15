@@ -38,8 +38,8 @@ class UnattendedController(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.qmp = QMP()
-        self.controller = automation.Controller(self.qmp, self.root, lambda path: "clean",
-                                                (), "f" * 64)
+        self.controller = automation.Controller(
+            self.qmp, self.root, lambda path: "clean", lambda path: "clean", (), "f" * 64)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -153,6 +153,7 @@ class UnattendedController(unittest.TestCase):
 
         self.qmp.screendump = screendump
         self.controller.ocr = ocr
+        self.controller.shell_focus_ocr = ocr
         path, info, image, text = self.controller._shot(
             "installed-shell-ready", shell_ocr_focus=True)
         self.assertEqual(observations, [
@@ -185,8 +186,36 @@ class UnattendedController(unittest.TestCase):
             return "clean"
 
         self.controller.ocr = ocr
+        self.controller.shell_focus_ocr = ocr
         with self.assertRaisesRegex(c.Invalid, "private focus OCR failed"):
             self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+
+    def test_installed_shell_focus_output_is_privacy_checked_and_deleted(self):
+        private = "private-fragment-0123456789"
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        self.controller.fragments = (private,)
+        self.controller.ocr = lambda _path: "clean"
+        self.controller.shell_focus_ocr = lambda _path: private
+
+        with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+
+    def test_full_frame_privacy_precedes_shell_focus_creation(self):
+        private = "private-fragment-0123456789"
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        self.controller.fragments = (private,)
+        self.controller.ocr = lambda _path: private
+        self.controller.shell_focus_ocr = mock.Mock(return_value="clean")
+
+        with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.controller.shell_focus_ocr.assert_not_called()
         self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
 
     def test_shell_ocr_focus_whitens_only_nonblack_glyph_pixels(self):
@@ -676,6 +705,7 @@ uptime   2 mins
         self.controller.ocr = lambda _path: (
             "ARCTIC - SHOWCASE - SHELL - READY\n"
             "arcticshowcase @ arctic - showcase ~ >")
+        self.controller.shell_focus_ocr = self.controller.ocr
         path, text = self.controller.wait_screen(
             "installed-console", "installed-shell-ready",
             ("ARCTIC-SHOWCASE-SHELL-READY", prompt), seconds=1,

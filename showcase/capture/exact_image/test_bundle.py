@@ -153,6 +153,58 @@ class ExportedBundle(unittest.TestCase):
 
 
 class WrapperProtocol(unittest.TestCase):
+    def test_shell_focus_ocr_uses_only_pinned_uniform_block_invocation(self):
+        result = types.SimpleNamespace(returncode=0, stdout=b"marker\nprompt\n")
+        with mock.patch.object(bundle, "approved_ocr_identity",
+                               return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                mock.patch.object(bundle.subprocess, "run", return_value=result) as run:
+            text = bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+
+        self.assertEqual(text, "marker\nprompt\n")
+        self.assertEqual(run.call_args.args[0], [
+            c.OCR_IDENTITY["path"], "/private/focus.png",
+            *c.OCR_IDENTITY["shell_focus_invocation"],
+        ])
+        self.assertIn("6", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertNotIn("11", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertEqual(run.call_args.kwargs, {
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.DEVNULL,
+            "timeout": 17,
+            "check": False,
+            "env": {"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+        })
+
+    def test_shell_focus_ocr_fails_closed_on_process_size_and_encoding(self):
+        failures = (
+            (types.SimpleNamespace(returncode=1, stdout=b""),
+             "capture shell focus OCR failed"),
+            (types.SimpleNamespace(returncode=0, stdout=b"x" * 256_001),
+             "capture shell focus OCR failed"),
+            (types.SimpleNamespace(returncode=0, stdout=b"\xff"),
+             "capture shell focus OCR output invalid"),
+        )
+        for result, message in failures:
+            with self.subTest(message=message, bytes=len(result.stdout)), \
+                    mock.patch.object(bundle, "approved_ocr_identity",
+                                      return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                    mock.patch.object(bundle.subprocess, "run", return_value=result), \
+                    self.assertRaisesRegex(c.Invalid, message):
+                bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+        with mock.patch.object(bundle, "approved_ocr_identity",
+                               return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                mock.patch.object(bundle.subprocess, "run",
+                                  side_effect=subprocess.TimeoutExpired("tesseract", 17)), \
+                self.assertRaisesRegex(c.Invalid, "capture shell focus OCR failed"):
+            bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+
+    def test_shell_focus_invocation_is_part_of_exact_ocr_identity(self):
+        changed = copy.deepcopy(c.OCR_IDENTITY)
+        changed["shell_focus_invocation"][changed["shell_focus_invocation"].index("6")] = "11"
+        with self.assertRaisesRegex(c.Invalid, "OCR identity differs"):
+            c.ocr_identity(changed)
+
     def test_uaccess_rule_precedes_seat_late_and_nonroot_opens_device_path(self):
         self.assertLess(Path(c.CHANNEL_RULE_PATH).name, "73-seat-late.rules")
         self.assertIn(b'TAG+="uaccess"', c.CHANNEL_RULE)

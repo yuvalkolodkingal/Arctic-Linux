@@ -207,7 +207,10 @@ the contract rejects extra keys, flexible strings and out-of-range values. The
 workflow first proves that all private runtime, image and capture paths were
 removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
-version, language data and both OCR invocations are pinned in the receipt contract.
+version, language data and all three OCR invocations are pinned in the receipt
+contract. Full-frame privacy and scene OCR stays on sparse-text PSM 11. Only the
+private normalized shell block uses uniform-block PSM 6 before its second privacy
+check and guaranteed deletion.
 
 The host invocation is:
 

@@ -497,12 +497,16 @@ class Controller:
         "$m $s $i >/dev/virtio-ports/org.arctic.showcase.capture"
     )
 
-    def __init__(self, qmp, runtime: Path, ocr, private_fragments, tooling_sha256: str):
+    def __init__(self, qmp, runtime: Path, ocr, shell_focus_ocr, private_fragments,
+                 tooling_sha256: str):
         c.require(tooling_sha256 and c.fullmatch(c.HEX64, tooling_sha256),
                   "unattended tooling identity missing")
+        c.require(callable(ocr) and callable(shell_focus_ocr),
+                  "unattended OCR implementation missing")
         self.qmp = qmp
         self.runtime = runtime
         self.ocr = ocr
+        self.shell_focus_ocr = shell_focus_ocr
         self.fragments = tuple(private_fragments)
         self.tooling_sha256 = tooling_sha256
         self.events = []
@@ -594,7 +598,7 @@ class Controller:
             try:
                 _shell_ocr_focus(image).save(focus, format="PNG")
                 host._regular_new(focus, host.MAX_PNG_BYTES)
-                text = self.ocr(focus)
+                text = self.shell_focus_ocr(focus)
             finally:
                 focus.unlink(missing_ok=True)
         else:

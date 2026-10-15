@@ -557,9 +557,12 @@ def host_mode(args) -> int:
         fragments = bundle.read_private_fragments(args.private_fragments)
         ocr_identity = bundle.approved_ocr_identity()
         ocr = lambda path: bundle.tesseract_ocr(path, args.ocr_timeout)
+        shell_focus_ocr = lambda path: bundle.tesseract_shell_focus_ocr(
+            path, args.ocr_timeout)
         c.require(args.unattended and args.display == "none" and args.accel == "kvm",
                   "exact capture requires the reviewed unattended KVM controller")
-        controller = automation.Controller(qmp, runtime, ocr, fragments, tooling_sha256)
+        controller = automation.Controller(qmp, runtime, ocr, shell_focus_ocr, fragments,
+                                           tooling_sha256)
         phase = "live-boot"
         try:
             controller.boot_live_and_start()
