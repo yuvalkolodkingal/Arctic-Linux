@@ -135,11 +135,24 @@ class UnattendedController(unittest.TestCase):
         source = Image.new("RGB", (1280, 800), "black")
         source.putpixel((10, 12), (0, 32, 96))
         source.putpixel((11, 12), (224, 224, 224))
+        source.putpixel((10, 44), (0, 32, 96))
+        source.putpixel((11, 44), (224, 224, 224))
 
         def screendump(path):
             source.save(path)
 
-        def ocr(path):
+        def full_ocr(path):
+            with Image.open(path) as image:
+                observations.append({
+                    "name": path.name,
+                    "size": image.size,
+                    "background": image.getpixel((0, 0)),
+                    "blue_glyph": image.getpixel((10, 12)),
+                    "white_glyph": image.getpixel((11, 12)),
+                })
+            return "clean"
+
+        def focus_ocr(path):
             with Image.open(path) as image:
                 observations.append({
                     "name": path.name,
@@ -148,19 +161,26 @@ class UnattendedController(unittest.TestCase):
                     "blue_glyph": image.getpixel((80, 96)),
                     "white_glyph": image.getpixel((88, 96)),
                 })
-            return ("ARCTIC - SHOWCASE - SHELL - READY\n"
-                    "arcticshowcase@arctic-showcase ~>")
+            if "-marker-ocr.png" in path.name:
+                return "ARCTIC - SHOWCASE - SHELL - READY\n"
+            self.assertIn("-prompt-ocr.png", path.name)
+            return "arcticshowcase@arctic-showcase ~>\n"
 
         self.qmp.screendump = screendump
-        self.controller.ocr = ocr
-        self.controller.shell_focus_ocr = ocr
+        self.controller.ocr = full_ocr
+        self.controller.shell_focus_ocr = focus_ocr
         path, info, image, text = self.controller._shot(
             "installed-shell-ready", shell_ocr_focus=True)
         self.assertEqual(observations, [
             {"name": "controller-001-installed-shell-ready.png", "size": (1280, 800),
-             "background": (0, 0, 0), "blue_glyph": (0, 0, 0),
-             "white_glyph": (0, 0, 0)},
-            {"name": "controller-001-installed-shell-ready-ocr.png", "size": (5120, 1024),
+             "background": (0, 0, 0), "blue_glyph": (0, 32, 96),
+             "white_glyph": (224, 224, 224)},
+            {"name": "controller-001-installed-shell-ready-marker-ocr.png",
+             "size": (5120, 256),
+             "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
+             "white_glyph": (255, 255, 255)},
+            {"name": "controller-001-installed-shell-ready-prompt-ocr.png",
+             "size": (5120, 256),
              "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
              "white_glyph": (255, 255, 255)},
         ])
@@ -169,7 +189,8 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(image.getpixel((10, 12)), (0, 32, 96))
         self.assertEqual(image.getpixel((11, 12)), (224, 224, 224))
         self.assertEqual(text.splitlines()[-1], "arcticshowcase@arctic-showcase ~>")
-        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
         path.unlink()
 
     def test_installed_shell_ocr_focus_is_deleted_when_private_ocr_fails(self):
@@ -189,7 +210,8 @@ class UnattendedController(unittest.TestCase):
         self.controller.shell_focus_ocr = ocr
         with self.assertRaisesRegex(c.Invalid, "private focus OCR failed"):
             self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
-        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
 
     def test_installed_shell_focus_output_is_privacy_checked_and_deleted(self):
         private = "private-fragment-0123456789"
@@ -198,11 +220,13 @@ class UnattendedController(unittest.TestCase):
         self.qmp.screendump = lambda path: source.save(path)
         self.controller.fragments = (private,)
         self.controller.ocr = lambda _path: "clean"
-        self.controller.shell_focus_ocr = lambda _path: private
+        self.controller.shell_focus_ocr = mock.Mock(side_effect=("clean", private))
 
         with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
             self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
-        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+        self.assertEqual(self.controller.shell_focus_ocr.call_count, 2)
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
 
     def test_full_frame_privacy_precedes_shell_focus_creation(self):
         private = "private-fragment-0123456789"
@@ -216,28 +240,35 @@ class UnattendedController(unittest.TestCase):
         with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
             self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
         self.controller.shell_focus_ocr.assert_not_called()
-        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
 
-    def test_shell_ocr_focus_whitens_only_nonblack_glyph_pixels(self):
+    def test_shell_ocr_row_focuses_use_exact_cell_bounds_and_whiten_glyphs(self):
         source = Image.new("RGB", (1280, 800), "black")
         source.putpixel((7, 9), (0, 1, 0))
-        source.putpixel((8, 9), (12, 34, 56))
-        source.putpixel((639, 127), (1, 1, 1))
+        source.putpixel((639, 31), (12, 34, 56))
+        source.putpixel((8, 32), (0, 1, 0))
+        source.putpixel((639, 63), (12, 34, 56))
         source.putpixel((640, 9), (255, 255, 255))
-        source.putpixel((7, 128), (255, 255, 255))
+        source.putpixel((7, 64), (255, 255, 255))
         unchanged = source.copy()
-        expected = Image.new("RGB", (640, 128), "black")
-        expected.putpixel((7, 9), (255, 255, 255))
-        expected.putpixel((8, 9), (255, 255, 255))
-        expected.putpixel((639, 127), (255, 255, 255))
-        expected = expected.resize((5120, 1024), Image.Resampling.NEAREST)
+        marker = Image.new("RGB", (640, 32), "black")
+        marker.putpixel((7, 9), (255, 255, 255))
+        marker.putpixel((639, 31), (255, 255, 255))
+        prompt = Image.new("RGB", (640, 32), "black")
+        prompt.putpixel((8, 0), (255, 255, 255))
+        prompt.putpixel((639, 31), (255, 255, 255))
+        expected = tuple(image.resize((5120, 256), Image.Resampling.NEAREST)
+                         for image in (marker, prompt))
 
-        focused = automation._shell_ocr_focus(source)
+        focused = automation._shell_ocr_row_focuses(source)
 
         self.assertEqual(source.size, (1280, 800))
         self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
-        self.assertEqual(focused.size, (5120, 1024))
-        self.assertIsNone(ImageChops.difference(focused, expected).getbbox())
+        self.assertEqual(tuple(image.size for image in focused),
+                         ((5120, 256), (5120, 256)))
+        for actual, wanted in zip(focused, expected, strict=True):
+            self.assertIsNone(ImageChops.difference(actual, wanted).getbbox())
 
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
         order = []

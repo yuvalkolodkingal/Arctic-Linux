@@ -104,8 +104,9 @@ marker, using the same pattern as the successful installed-image identity
 challenge. Fish itself invokes the session prompt function after the proof
 command returns. The host
 keeps full-frame OCR for privacy screening, then maps only nonblack glyph pixels
-in the fixed left 640×128 pixels to white and reads that private mask through an
-8x nearest-neighbour enlargement. The transformed crop is always deleted; the
+in the marker and prompt rows within the fixed left 640×64 pixels to white. It
+reads each private row through an 8x nearest-neighbour enlargement and pinned
+single-line PSM 7. Both transformed crops are always deleted; the
 original 1280x800 frame remains the sole screen evidence and geometry gate. It requires
 `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
@@ -217,8 +218,8 @@ removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
 version, language data and all three OCR invocations are pinned in the receipt
 contract. Full-frame privacy and scene OCR stays on sparse-text PSM 11. Only the
-private normalized shell block uses uniform-block PSM 6 before its second privacy
-check and guaranteed deletion.
+two private normalized shell rows use single-line PSM 7 before their separate
+privacy checks and guaranteed deletion.
 
 The host invocation is:
 

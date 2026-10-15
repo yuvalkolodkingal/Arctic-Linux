@@ -186,7 +186,7 @@ OCR_IDENTITY = {
     },
     "invocation": ["stdout", "-l", "eng", "--oem", "1", "--psm", "11",
                    "-c", "user_defined_dpi=96"],
-    "shell_focus_invocation": ["stdout", "-l", "eng", "--oem", "1", "--psm", "6",
+    "shell_focus_invocation": ["stdout", "-l", "eng", "--oem", "1", "--psm", "7",
                                "-c", "user_defined_dpi=96"],
     "controller_invocation": ["stdout", "-l", "eng", "--oem", "1", "--psm", "11",
                               "-c", "user_defined_dpi=96", "tsv"],

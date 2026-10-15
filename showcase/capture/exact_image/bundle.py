@@ -171,7 +171,7 @@ def tesseract_ocr(path: Path, timeout: int) -> str:
 
 
 def tesseract_shell_focus_ocr(path: Path, timeout: int) -> str:
-    """Read only the private normalized shell block with its pinned PSM."""
+    """Read one private normalized shell row with its pinned single-line PSM."""
     approved_ocr_identity()
     executable = Path(c.OCR_IDENTITY["path"])
     try:

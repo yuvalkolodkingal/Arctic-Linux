@@ -153,19 +153,20 @@ class ExportedBundle(unittest.TestCase):
 
 
 class WrapperProtocol(unittest.TestCase):
-    def test_shell_focus_ocr_uses_only_pinned_uniform_block_invocation(self):
-        result = types.SimpleNamespace(returncode=0, stdout=b"marker\nprompt\n")
+    def test_shell_focus_ocr_uses_only_pinned_single_line_invocation(self):
+        result = types.SimpleNamespace(returncode=0, stdout=b"marker\n")
         with mock.patch.object(bundle, "approved_ocr_identity",
                                return_value=copy.deepcopy(c.OCR_IDENTITY)), \
                 mock.patch.object(bundle.subprocess, "run", return_value=result) as run:
             text = bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
 
-        self.assertEqual(text, "marker\nprompt\n")
+        self.assertEqual(text, "marker\n")
         self.assertEqual(run.call_args.args[0], [
             c.OCR_IDENTITY["path"], "/private/focus.png",
             *c.OCR_IDENTITY["shell_focus_invocation"],
         ])
-        self.assertIn("6", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertIn("7", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertNotIn("6", c.OCR_IDENTITY["shell_focus_invocation"])
         self.assertNotIn("11", c.OCR_IDENTITY["shell_focus_invocation"])
         self.assertEqual(run.call_args.kwargs, {
             "stdin": subprocess.DEVNULL,
@@ -201,7 +202,7 @@ class WrapperProtocol(unittest.TestCase):
 
     def test_shell_focus_invocation_is_part_of_exact_ocr_identity(self):
         changed = copy.deepcopy(c.OCR_IDENTITY)
-        changed["shell_focus_invocation"][changed["shell_focus_invocation"].index("6")] = "11"
+        changed["shell_focus_invocation"][changed["shell_focus_invocation"].index("7")] = "11"
         with self.assertRaisesRegex(c.Invalid, "OCR identity differs"):
             c.ocr_identity(changed)
 

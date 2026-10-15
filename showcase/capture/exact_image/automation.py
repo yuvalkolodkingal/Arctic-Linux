@@ -174,14 +174,14 @@ def _fixed_shell_proof_present(text: str, account: str, suffixes) -> bool:
         text[marker.end():], account, suffixes)
 
 
-def _shell_ocr_focus(image):
-    """Expose low-color VT glyphs in one ephemeral, deterministic OCR crop."""
+def _shell_ocr_row_focuses(image):
+    """Expose the two fixed VT proof rows as ephemeral single-line crops."""
     c.require(image.mode == "RGB" and image.size == (1280, 800),
               "controller shell OCR source geometry differs")
-    # The proof clears and homes the fixed 80-column VT. Its 27-character
-    # marker and 33-character prompt necessarily fit in the left 40 columns;
-    # exclude the unused right half before enlarging each source pixel 8x.
-    crop = image.crop((0, 0, 640, 128))
+    # The proof clears and homes the fixed 80x25 VT. Each cell is 16x32 pixels;
+    # its 27-character marker and 33-character prompt occupy rows zero and one
+    # and necessarily fit in the left 40 columns.
+    crop = image.crop((0, 0, 640, 64))
     pixels = list(crop.getdata())
     foreground = [pixel != (0, 0, 0) for pixel in pixels]
     c.require(any(foreground) and not all(foreground),
@@ -189,7 +189,11 @@ def _shell_ocr_focus(image):
     normalized = Image.new("RGB", crop.size, "black")
     normalized.putdata([(255, 255, 255) if present else (0, 0, 0)
                         for present in foreground])
-    return normalized.resize((5120, 1024), Image.Resampling.NEAREST)
+    return tuple(
+        normalized.crop((0, row * 32, 640, (row + 1) * 32)).resize(
+            (5120, 256), Image.Resampling.NEAREST)
+        for row in (0, 1)
+    )
 
 
 def _boot_entry_selected(image, entry: str) -> bool:
@@ -632,21 +636,31 @@ class Controller:
         full_text = self.ocr(path)
         c.privacy_text(full_text, self.fragments)
         if shell_ocr_focus:
-            # The exact Linux VT draws the cleared proof in its first few
-            # cell rows. Whole-frame sparse-text OCR missed the fixed strings,
-            # and the colored non-bold Fish prompt remained invisible beside
-            # the bold white proof in a 3x crop. Normalize only the nonblack
-            # glyph pixels to white, then OCR a private 4x nearest-neighbour
-            # enlargement. The original 1280x800 frame
-            # remains the sole screen evidence and acceptance geometry.
-            focus = self.runtime / f"controller-{self.counter:03d}-{label}-ocr.png"
-            c.require(not focus.exists(), "controller OCR focus path reused")
+            # The fixed 80x25 Linux VT draws the cleared marker and prompt in
+            # its first two 16x32-pixel cell rows. Normalize only those private
+            # row crops, enlarge each source pixel 8x, and read each as one
+            # pinned PSM-7 line. The original 1280x800 frame remains the sole
+            # screen evidence and acceptance geometry.
+            focuses = tuple(
+                self.runtime / (f"controller-{self.counter:03d}-{label}-"
+                                f"{name}-ocr.png")
+                for name in ("marker", "prompt")
+            )
+            c.require(all(not focus.exists() for focus in focuses),
+                      "controller OCR focus path reused")
             try:
-                _shell_ocr_focus(image).save(focus, format="PNG")
-                host._regular_new(focus, host.MAX_PNG_BYTES)
-                text = self.shell_focus_ocr(focus)
+                row_images = _shell_ocr_row_focuses(image)
+                row_texts = []
+                for row_image, focus in zip(row_images, focuses, strict=True):
+                    row_image.save(focus, format="PNG")
+                    host._regular_new(focus, host.MAX_PNG_BYTES)
+                    row_text = self.shell_focus_ocr(focus)
+                    c.privacy_text(row_text, self.fragments)
+                    row_texts.append(row_text)
+                text = "\n".join(row_texts)
             finally:
-                focus.unlink(missing_ok=True)
+                for focus in focuses:
+                    focus.unlink(missing_ok=True)
         else:
             text = full_text
         c.privacy_text(text, self.fragments)
