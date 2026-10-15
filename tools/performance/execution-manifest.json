@@ -4,16 +4,16 @@
   "release_acceptance": false,
   "performance_mode": "frozen-external-paired-v1",
   "image": {
-    "run_id": 38616494387,
-    "artifact_id": 11924131449,
-    "archive_bytes": 1936409910,
-    "archive_sha256": "78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73",
-    "source_sha": "da59f68a967c39205b2aa7648f3c11224247982c",
-    "name": "Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso",
-    "bytes": 1936222208,
-    "sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
+    "run_id": 38662946177,
+    "artifact_id": 11942517584,
+    "archive_bytes": 1936577846,
+    "archive_sha256": "da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145",
+    "source_sha": "36ae2e8e1627a39f12ab5afee036721e91f97788",
+    "name": "Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso",
+    "bytes": 1936390144,
+    "sha256": "5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
+    "producer_receipt_sha256": "8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae"
   },
   "baseline": {
     "name": "Arctic-Linux-1.2-x86_64.iso",
@@ -38,16 +38,16 @@
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
     "tools/performance/causal.py": "dafe6d744e55a4205c416ec67ba890ebaf5375be9bcf5fe48086bb145dcfddf0",
-    "tools/performance/compare.py": "184c4508b5c679c6edcd2179bf963154d2c15a3d0934ad6bd44f1c3e93dac6e5",
+    "tools/performance/compare.py": "8aee3965affb58af2aab1d2af7143c08d64845354c6985b012443de4ea0ba17c",
     "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
     "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
     "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
     "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
-    "tools/performance/guest.py": "088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d",
+    "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
-    "tools/performance/qualification.py": "7e018cb8e378fedc8ea252fca5f1dfbef3912ffaa50b0e6896cbd934df549743",
-    "tools/performance/run-paired.py": "a3b7c1d4c84c551c42a3dbd083c5178e841f1a9e1e9ba6ed20728c0a6e19a499",
-    "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
+    "tools/performance/qualification.py": "79f54a55f7a5cc87ef5c9668163ce4f21985c15f4f3afee7a9afdcd28ee0fa23",
+    "tools/performance/run-paired.py": "3e12f25d098991712d8f8c7068aed80b920192ff2d9a166b3634f84069fd7065",
+    "tools/test-install.sh": "1b95b20a9a8693e59b15b8d7d5db859f359083d79ca05bc707f50e00b9105080"
   }
 }

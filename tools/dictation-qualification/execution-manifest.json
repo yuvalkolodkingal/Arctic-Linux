@@ -2,16 +2,16 @@
   "ready": true,
   "release_acceptance": false,
   "image": {
-    "run_id": 38616494387,
-    "artifact_id": 11924131449,
-    "archive_bytes": 1936409910,
-    "archive_sha256": "78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73",
-    "source_sha": "da59f68a967c39205b2aa7648f3c11224247982c",
-    "name": "Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso",
-    "bytes": 1936222208,
-    "sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
+    "run_id": 38662946177,
+    "artifact_id": 11942517584,
+    "archive_bytes": 1936577846,
+    "archive_sha256": "da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145",
+    "source_sha": "36ae2e8e1627a39f12ab5afee036721e91f97788",
+    "name": "Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso",
+    "bytes": 1936390144,
+    "sha256": "5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd"
+    "producer_receipt_sha256": "8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae"
   },
   "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
   "fixture_decoder": {
@@ -23,14 +23,14 @@
     ".github/workflows/dictation-candidate-20261009.yml": "a2e4b9e7d95e0084b6983d02aded9e9a52a9302a1f1be84e185e70fa07143de3",
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
-    "tools/dictation-qualification/contract.py": "e2a88d3382c37190c76b78de68818d7e1875c37871b6cd62c8b70bc6293c0a3a",
-    "tools/dictation-qualification/guest_check.py": "e1d8f7f670cc37e4706d52b6b1b2f6a609434531984434bd5f7160c37a686faa",
-    "tools/dictation-qualification/runner.py": "e24e5333a616e5650f0318b56f7e354dd449e4ddd85bf3640970e7abe32fb056",
+    "tools/dictation-qualification/contract.py": "cd73e9a9a596f08c93cb611dda247c95560c64503f5ba315e83a2c2964ed73ed",
+    "tools/dictation-qualification/guest_check.py": "ebd018f971476a1114580ddaa8cf90b05317c3b9bb7a35b7f0f2ca28114f71ea",
+    "tools/dictation-qualification/runner.py": "f51c4ad9f3f89dd1d4b9975e650abe7920bdb9bae539a31aaea9749c5588f9d5",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/test-install.sh": "48d02bedcd5853e183fb0aa296d4167ac2d4c1b8ed01f25fa0fdb3650d0cc3d5"
+    "tools/test-install.sh": "1b95b20a9a8693e59b15b8d7d5db859f359083d79ca05bc707f50e00b9105080"
   },
   "hardware_profiles": [
     "small-v2",

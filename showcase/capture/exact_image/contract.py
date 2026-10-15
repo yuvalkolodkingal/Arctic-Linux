@@ -14,16 +14,16 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso",
-    "bytes": 1_936_222_208,
-    "sha256": "743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c",
-    "source_sha": "da59f68a967c39205b2aa7648f3c11224247982c",
-    "run_id": 38_616_494_387,
-    "artifact_id": 11_924_131_449,
-    "archive_bytes": 1_936_409_910,
-    "archive_sha256": "78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73",
+    "name": "Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso",
+    "bytes": 1_936_390_144,
+    "sha256": "5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a",
+    "source_sha": "36ae2e8e1627a39f12ab5afee036721e91f97788",
+    "run_id": 38_662_946_177,
+    "artifact_id": 11_942_517_584,
+    "archive_bytes": 1_936_577_846,
+    "archive_sha256": "da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd",
+    "producer_receipt_sha256": "8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae",
 }
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {

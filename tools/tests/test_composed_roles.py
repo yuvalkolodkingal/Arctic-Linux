@@ -16,7 +16,7 @@ spec.loader.exec_module(G)
 class ComposedRoleControls(unittest.TestCase):
     def resolve(self, image='candidate', mutate=None):
         expected = G.EXPECTED_ROLES[image]
-        state = dict(uid=1000, sources=[], configured={}, programs={})
+        state = dict(uid=1000, sources=[], configured={}, programs={}, desktop_entries={})
         inventory = {'nevra': []}
         owners = {}
         for role, ident in expected.items():
@@ -29,6 +29,12 @@ class ComposedRoleControls(unittest.TestCase):
                 if 'desktop_rpm' in app:
                     inventory['nevra'].append(app['desktop_rpm'] + '-0:1-1.x86_64')
                     owners['/usr/share/applications/' + app['desktop']] = app['desktop_rpm'] + '-0:1-1.x86_64'
+                if 'product_launcher' in app:
+                    inventory['nevra'].append(app['product_launcher_rpm'] + '-0:1-1.x86_64')
+                    owners[app['product_launcher']] = app['product_launcher_rpm'] + '-0:1-1.x86_64'
+                    product_desktop = '/usr/share/arctic/applications/' + app['desktop']
+                    owners[product_desktop] = app['product_launcher_rpm'] + '-0:1-1.x86_64'
+                    state['desktop_entries'][app['desktop']] = {'path': product_desktop}
         browser = G.ROLE_APPS[expected['browser']]['desktop']
         if mutate:
             mutate(state, inventory)
@@ -44,7 +50,9 @@ class ComposedRoleControls(unittest.TestCase):
                 return 'a' * 64
             raise AssertionError(argv)
 
-        with patch.object(G, 'run', side_effect=run), patch.object(G.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=1000)):
+        with patch.object(G, 'run', side_effect=run), patch.object(G.os, 'access', return_value=True), \
+                patch.object(G.Path, 'is_file', return_value=True), \
+                patch.object(G.pwd, 'getpwnam', return_value=SimpleNamespace(pw_uid=1000)):
             return G.functional_roles(['runuser', '-u', 'ci', '--', 'env'], inventory)
 
     def test_actual_lightweight_and_legacy_role_identities(self):

@@ -13,21 +13,22 @@ their own complete receipts and human pixel review before the source can render.
 The reviewed candidate is fixed in `contract.IMAGE` and
 `execution-manifest.json`:
 
-* producer run `38616494387`, attempt 1, source
-  `da59f68a967c39205b2aa7648f3c11224247982c`;
-* artifact `11924131449`, archive size `1936409910`, archive SHA-256
-  `78bdb23505a2d090f26433f019a52d9bae0b76945e2d21346cfe3e6b0100eb73`;
-* ISO `Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso`, size
-  `1936222208`, SHA-256
-  `743036565d70cb51856c68902d4c46383406b059d29870ce3b41eb709579589c`;
+* producer run `38662946177`, attempt 1, source
+  `36ae2e8e1627a39f12ab5afee036721e91f97788`;
+* artifact `11942517584`, archive size `1936577846`, archive SHA-256
+  `da61e7062f627aabd1646c36b37756aa8329c4aa7fe65e50b59f0ad480b95145`;
+* ISO `Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso`, size
+  `1936390144`, SHA-256
+  `5ca8f868ec4ea361f0a56ebc14b55525607f8207558c3eaa0af9fd8d2befba6a`;
 * producer receipt SHA-256
-  `03d0a8cdb4118e1985202951c0935b241cfbded037c723b76068f4e4624b9ccd`.
+  `8e9100a0fc9a8099357c5679b2ab0c4656dc479af01d19c166f9f23e2c8ec9ae`.
 
-The producer source is a marker-only child of the qualification preparation
-whose ancestry contains final `main`
-`8e351cd2320aea92bab728423eb9f40a8cfd5688`. GitHub records producer run
-`38616494387` as a successful attempt 1. The ISO artifact is retained through
-28 October 2026; that retention window is not capture or release acceptance.
+The producer ran directly from final `main`
+`36ae2e8e1627a39f12ab5afee036721e91f97788` by `workflow_dispatch`. The later
+qualification activations are marker-only children of this reviewed
+preparation. GitHub records producer run
+`38662946177` as a successful attempt 1. The ISO artifact is retained through
+29 October 2026; that retention window is not capture or release acceptance.
 
 The workflow downloads that retained artifact with the existing strict
 `fetch-image.py` verifier. It checks the producer workflow, first attempt, source,
@@ -150,7 +151,7 @@ The host invocation is:
 
 ```sh
 showcase/capture/exact_image/capture_vm.py host \
-  --candidate-iso /private/Arctic-Linux-1.2-candidate-38616494387-1-x86_64.iso \
+  --candidate-iso /private/Arctic-Linux-1.2-candidate-38662946177-1-x86_64.iso \
   --output /private/arctic-showcase-captures \
   --failure-report /private/showcase-failure-projection.json \
   --display none --accel kvm --unattended --timeout 7200

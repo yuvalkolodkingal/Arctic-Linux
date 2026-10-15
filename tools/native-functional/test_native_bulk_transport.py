@@ -40,6 +40,22 @@ def restore_native_bulk_driver(driver):
         if driver.count(addition) != 1:
             raise AssertionError('Native bulk rollback requires one exact addition')
         driver = driver.replace(addition, '', 1)
+    recovery_state = 'dictation_indicator_seen = False\ndictation_recovery_seen = set()\n'
+    recovery_state_original = 'dictation_indicator_seen = False\n'
+    recovery_call = '                dictation_recovery_poll(vm)\n'
+    recovery_start = 'def dictation_recovery_poll(vm):\n'
+    recovery_end = 'taskbar_display_module = None\n'
+    if (driver.count(recovery_state) != 1 or driver.count(recovery_call) != 1
+            or driver.count(recovery_start) != 1 or driver.count(recovery_end) != 1):
+        raise AssertionError('Dictation recovery rollback requires exact additions')
+    start = driver.index(recovery_start)
+    end = driver.index(recovery_end, start)
+    recovery_block = driver[start:end]
+    if sha(recovery_block.encode()) != '0e355f931f13e0eeae6b0938a9f53451df9047bf96afc069ad9a4e05c7c6855f':
+        raise AssertionError('Dictation recovery rollback requires the exact helper block')
+    driver = driver[:start] + driver[end:]
+    driver = driver.replace(recovery_state, recovery_state_original, 1)
+    driver = driver.replace(recovery_call, '', 1)
     pending_current = '    if len(pending)>65536:\n        # The original functional report is a single complete JSON record and\n        # can legitimately grow beyond the controller request-line bound.\n        # Only that exact prefix gets a separate finite in-progress allowance;\n        # final parsing still requires valid JSON, one newline and the END receipt.\n        if pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL "):\n            if len(pending)>4*1024*1024:\n                raise RuntimeError("physical functional report pending bound exceeded")\n            return True\n        raise RuntimeError("physical unfinished line bound exceeded")\n'
     pending_original = '    if len(pending)>65536:raise RuntimeError("physical unfinished line bound exceeded")\n'
     if driver.count(pending_current) != 1:
@@ -135,7 +151,12 @@ class BulkTransportControls(unittest.TestCase):
                               ('pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL ")',
                                'pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL-MUTATED ")'),
                               ('if len(pending)>4*1024*1024:',
-                               'if len(pending)>8*1024*1024:')]:
+                               'if len(pending)>8*1024*1024:'),
+                              ('dictation_recovery_seen = set()',
+                               'dictation_recovery_seen = {}'),
+                              ('def dictation_recovery_poll(vm):',
+                               'def dictation_recovery_poll_mutated(vm):'),
+                              ('                dictation_recovery_poll(vm)\n', '')]:
             with self.subTest(mutation=before):
                 self.assertEqual(driver.count(before), 1)
                 with self.assertRaises(AssertionError):
