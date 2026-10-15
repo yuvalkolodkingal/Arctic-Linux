@@ -1,0 +1,256 @@
+"""Controls for the temporary screened evidence review exporter."""
+
+import copy
+import hashlib
+import importlib.util
+import json
+import os
+from pathlib import Path
+import struct
+import subprocess
+import tempfile
+import unittest
+from unittest.mock import patch
+import zipfile
+
+
+ROOT = Path(__file__).resolve().parents[2]
+
+
+def load():
+    path = ROOT / 'tools/evidence-review-export/export.py'
+    spec = importlib.util.spec_from_file_location('evidence_review_export', path)
+    value = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(value)
+    return value
+
+
+exporter = load()
+
+
+def png(width=2, height=3):
+    return b'\x89PNG\r\n\x1a\n' + struct.pack('>I', 13) + b'IHDR' + struct.pack('>II', width, height) + b'fixture'
+
+
+def file_entry(raw=None):
+    raw = png() if raw is None else raw
+    return {
+        'member': 'screened/session/desktop.png',
+        'output': 'evidence/native/desktop.png',
+        'kind': 'png',
+        'privacy_class': 'screened-vm-ui',
+        'bytes': len(raw),
+        'sha256': hashlib.sha256(raw).hexdigest(),
+        'width': 2,
+        'height': 3,
+    }
+
+
+def artifact(raw=None, archive_bytes=100, archive_sha='a' * 64):
+    return {
+        'artifact_id': 456,
+        'run_id': 123,
+        'run_attempt': 1,
+        'head_sha': 'b' * 40,
+        'head_branch': 'codex/qualification-dispatch-20261010',
+        'workflow_path': '.github/workflows/native-candidate-20261008.yml',
+        'event': 'push',
+        'name': 'native-candidate-qualification',
+        'archive_bytes': archive_bytes,
+        'archive_sha256': archive_sha,
+        'screening': {'stage': 'producer-screened', 'transcript_free': True},
+        'files': [file_entry(raw)],
+    }
+
+
+def manifest(artifacts=None, ready=True):
+    return {
+        'schema': exporter.SCHEMA,
+        'ready': ready,
+        'review_only': True,
+        'repository': exporter.REPOSITORY,
+        'source_branch': exporter.SOURCE_BRANCH,
+        'target_branch': exporter.TARGET_BRANCH,
+        'bounds': copy.deepcopy(exporter.BOUNDS),
+        'artifacts': [artifact()] if artifacts is None and ready else (artifacts or []),
+    }
+
+
+class ManifestControls(unittest.TestCase):
+    def test_repository_manifest_is_disabled_and_empty(self):
+        value = exporter.strict_json((ROOT / exporter.MANIFEST).read_text())
+        self.assertFalse(value['ready'])
+        self.assertEqual(value['artifacts'], [])
+        self.assertEqual(exporter.validate_manifest(value, require_ready=False), value)
+        with self.assertRaises(RuntimeError):
+            exporter.validate_manifest(value)
+
+    def test_exact_pins_allowlist_privacy_classes_and_fixed_bounds_are_required(self):
+        value = manifest()
+        self.assertEqual(exporter.validate_manifest(value), value)
+        cases = []
+        bad = copy.deepcopy(value); bad['review_only'] = False; cases.append(bad)
+        bad = copy.deepcopy(value); bad['bounds']['max_export_files'] += 1; cases.append(bad)
+        bad = copy.deepcopy(value); bad['target_branch'] = 'main'; cases.append(bad)
+        bad = copy.deepcopy(value); bad['artifacts'][0]['workflow_path'] = '.github/workflows/repo.yml'; cases.append(bad)
+        bad = copy.deepcopy(value); bad['artifacts'][0]['screening']['transcript_free'] = False; cases.append(bad)
+        bad = copy.deepcopy(value); bad['artifacts'][0]['files'][0]['privacy_class'] = 'raw'; cases.append(bad)
+        bad = copy.deepcopy(value); bad['artifacts'][0]['files'][0]['sha256'] = '0' * 63; cases.append(bad)
+        for case in cases:
+            with self.subTest(case=case), self.assertRaises(RuntimeError):
+                exporter.validate_manifest(case)
+
+    def test_duplicate_outputs_and_bounds_fail_closed(self):
+        first = artifact()
+        second = copy.deepcopy(first)
+        second['artifact_id'] += 1
+        second['files'][0]['member'] = 'screened/other.png'
+        with self.assertRaises(RuntimeError):
+            exporter.validate_manifest(manifest([first, second]))
+        too_many = manifest([first])
+        too_many['artifacts'][0]['archive_bytes'] = exporter.BOUNDS['max_archive_bytes_each'] + 1
+        with self.assertRaises(RuntimeError):
+            exporter.validate_manifest(too_many)
+
+
+class ArchiveControls(unittest.TestCase):
+    def make_archive(self, root, members):
+        path = root / 'artifact.zip'
+        with zipfile.ZipFile(path, 'w', compression=zipfile.ZIP_STORED) as archive:
+            for name, raw in members:
+                archive.writestr(name, raw)
+        return path
+
+    def test_only_exact_selected_file_is_extracted(self):
+        raw = png()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            archive_path = self.make_archive(root, [
+                ('screened/session/desktop.png', raw),
+                ('private/transcript.txt', b'must stay in archive'),
+            ])
+            item = artifact(raw, archive_path.stat().st_size,
+                            hashlib.sha256(archive_path.read_bytes()).hexdigest())
+            out = root / 'out'; out.mkdir()
+            records = exporter.extract_artifact(item, archive_path, out)
+            self.assertEqual(records, [dict(sorted(file_entry(raw).items()))])
+            self.assertEqual((out / 'evidence/native/desktop.png').read_bytes(), raw)
+            self.assertFalse((out / 'private/transcript.txt').exists())
+
+    def test_changed_bytes_traversal_and_symlink_fail_closed(self):
+        raw = png()
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            for name, symlink in (('screened/session/desktop.png', False), ('../desktop.png', False),
+                                  ('screened/session/desktop.png', True)):
+                path = root / ('a' if not symlink and name.startswith('screened') else 'b' if '..' in name else 'c')
+                with zipfile.ZipFile(path, 'w') as archive:
+                    if symlink:
+                        info = zipfile.ZipInfo(name)
+                        info.create_system = 3
+                        info.external_attr = (0o120777 << 16)
+                        archive.writestr(info, raw)
+                    else:
+                        archive.writestr(name, raw + (b'changed' if path.name == 'a' else b''))
+                item = artifact(raw, path.stat().st_size, hashlib.sha256(path.read_bytes()).hexdigest())
+                out = root / ('out-' + path.name); out.mkdir()
+                with self.subTest(name=name, symlink=symlink), self.assertRaises(RuntimeError):
+                    exporter.extract_artifact(item, path, out)
+
+    def test_json_privacy_filter_rejects_transcript_and_secret_shapes(self):
+        for value in ({'transcript': 'hello'}, {'status': 'token=secret'},
+                      {'status': 'person@example.org'}, {'text': 'hello'}):
+            with self.subTest(value=value), self.assertRaises(RuntimeError):
+                exporter.inspect_json_value(value)
+        exporter.inspect_json_value({'status': 'passed', 'metrics': {'count': 3}})
+
+    def test_pinned_safe_json_and_public_narration_audio_are_accepted(self):
+        safe_json = b'{"metrics":{"count":3},"status":"passed"}\n'
+        json_item = {
+            'member': 'screened/result.json', 'output': 'evidence/result.json',
+            'kind': 'json', 'privacy_class': 'screened-summary',
+            'bytes': len(safe_json), 'sha256': hashlib.sha256(safe_json).hexdigest(),
+        }
+        exporter.validate_file(json_item)
+        exporter.inspect_selected(safe_json, json_item)
+        audio = b'ID3' + b'\x04\x00\x00' + b'public narration fixture'
+        audio_item = {
+            'member': 'screened/narration.mp3', 'output': 'evidence/narration.mp3',
+            'kind': 'audio', 'privacy_class': 'public-narration', 'format': 'mp3',
+            'bytes': len(audio), 'sha256': hashlib.sha256(audio).hexdigest(),
+        }
+        exporter.validate_file(audio_item)
+        exporter.inspect_selected(audio, audio_item)
+        with self.assertRaises(RuntimeError):
+            exporter.inspect_selected(b'not audio'.ljust(len(audio), b'!'),
+                                      audio_item | {'sha256': hashlib.sha256(
+                                          b'not audio'.ljust(len(audio), b'!')).hexdigest()})
+
+
+class IdentityAndActivationControls(unittest.TestCase):
+    def test_remote_run_and_artifact_must_match_all_pins_and_be_successful(self):
+        item = artifact()
+        metadata = {'id': 456, 'name': item['name'], 'expired': False,
+                    'size_in_bytes': 100, 'digest': 'sha256:' + 'a' * 64,
+                    'workflow_run': {'id': 123, 'head_sha': 'b' * 40,
+                                     'head_branch': item['head_branch']}}
+        run = {'id': 123, 'run_attempt': 1, 'head_sha': 'b' * 40,
+               'head_branch': item['head_branch'], 'path': item['workflow_path'],
+               'event': 'push', 'status': 'completed', 'conclusion': 'success'}
+        exporter.verify_remote_identity(item, metadata, run)
+        for field, value in (('conclusion', 'failure'), ('head_sha', 'c' * 40),
+                             ('path', '.github/workflows/ci.yml')):
+            changed = copy.deepcopy(run); changed[field] = value
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                exporter.verify_remote_identity(item, metadata, changed)
+
+    def test_activation_requires_marker_only_child_on_fixed_branch(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            subprocess.run(['git', '-C', str(root), 'init', '-q'], check=True)
+            subprocess.run(['git', '-C', str(root), 'config', 'user.name', 'test'], check=True)
+            subprocess.run(['git', '-C', str(root), 'config', 'user.email', 'test@example.invalid'], check=True)
+            manifest_path = root / exporter.MANIFEST
+            manifest_path.parent.mkdir(parents=True)
+            manifest_path.write_text(json.dumps(manifest()))
+            subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(root), 'commit', '-qm', 'prepare'], check=True)
+            parent = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+            marker = root / exporter.MARKER
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text(parent + '\n')
+            subprocess.run(['git', '-C', str(root), 'add', '.'], check=True)
+            subprocess.run(['git', '-C', str(root), 'commit', '-qm', 'activate'], check=True)
+            head = subprocess.check_output(['git', '-C', str(root), 'rev-parse', 'HEAD'], text=True).strip()
+            event = root / 'event.json'
+            (root / '.git/info/exclude').write_text('event.json\n')
+            event.write_text(json.dumps({'before': parent, 'after': head}))
+            env = {'GITHUB_ACTIONS': 'true', 'RUNNER_ENVIRONMENT': 'github-hosted',
+                   'GITHUB_REPOSITORY': exporter.REPOSITORY,
+                   'GITHUB_REF': 'refs/heads/' + exporter.SOURCE_BRANCH,
+                   'GITHUB_EVENT_NAME': 'push', 'GITHUB_RUN_ATTEMPT': '1',
+                   'GITHUB_SHA': head, 'GITHUB_EVENT_PATH': str(event)}
+            with patch.object(exporter, 'ROOT', root), patch.dict(os.environ, env, clear=False):
+                actual, actual_parent, actual_head = exporter.validate_activation(manifest_path)
+            self.assertEqual((actual, actual_parent, actual_head), (manifest(), parent, head))
+
+
+class WorkflowControls(unittest.TestCase):
+    def test_workflow_is_fixed_marker_only_nonpublishing_and_nonreplacing(self):
+        text = (ROOT / exporter.WORKFLOW).read_text()
+        self.assertIn('branches: [codex/evidence-review-export-20261015]', text)
+        self.assertIn('paths: [.github/evidence-review-export-20261015.activate]', text)
+        self.assertNotIn('workflow_dispatch:', text)
+        self.assertIn('persist-credentials: false', text)
+        self.assertIn('contents: write', text)
+        self.assertIn('actions: read', text)
+        self.assertIn('TARGET_BRANCH: codex/evidence-review-artifacts-20261015', text)
+        self.assertIn('Review branch already exists; refusing to replace it', text)
+        self.assertIn('push origin "HEAD:refs/heads/$TARGET_BRANCH"', text)
+        for forbidden in ('--force', 'gh release', 'tools/build-iso.sh', 'tools/publish-repo.sh',
+                          'refs/heads/main', 'actions/upload-artifact'):
+            self.assertNotIn(forbidden, text)
+
+
+if __name__ == '__main__':
+    unittest.main()

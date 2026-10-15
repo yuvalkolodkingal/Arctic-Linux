@@ -1,0 +1,19 @@
+{
+  "schema": "arctic-screened-evidence-review-export-v1",
+  "ready": false,
+  "review_only": true,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "source_branch": "codex/evidence-review-export-20261015",
+  "target_branch": "codex/evidence-review-artifacts-20261015",
+  "bounds": {
+    "max_artifacts": 12,
+    "max_archive_bytes_each": 250000000,
+    "max_total_archive_bytes": 900000000,
+    "max_zip_members_each": 50000,
+    "max_uncompressed_bytes_each": 750000000,
+    "max_export_files": 320,
+    "max_export_bytes_each": 32000000,
+    "max_total_export_bytes": 150000000
+  },
+  "artifacts": []
+}
