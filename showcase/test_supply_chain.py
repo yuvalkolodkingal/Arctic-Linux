@@ -19,13 +19,29 @@ ACTIONS = {
 
 
 class SupplyChainTest(unittest.TestCase):
-    def test_exact_capture_execution_manifest_is_fail_closed(self):
+    def test_exact_capture_execution_manifest_matches_repository_bytes(self):
         manifest_path = ROOT / "capture/exact_image/execution-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        self.assertFalse(manifest["ready"])
-        self.assertIsNone(manifest["image"])
-        self.assertEqual(manifest["execution_files"], {})
+        self.assertTrue(manifest["ready"])
+        self.assertIsInstance(manifest["image"], dict)
         self.assertFalse(manifest["release_acceptance"])
+        expected_paths = {
+            ".github/workflows/showcase-exact-capture-20261014.yml",
+            "tools/native-functional/fetch-image.py",
+            *{
+                f"showcase/capture/exact_image/{name}"
+                for name in (
+                    "automation.py", "bundle.py", "capture_probe.py", "capture_vm.py",
+                    "contract.py", "guest.py", "host.py", "unattended.py", "validate_bundle.py",
+                )
+            },
+        }
+        self.assertEqual(set(manifest["execution_files"]), expected_paths)
+        for relative_path, expected_digest in manifest["execution_files"].items():
+            path = REPOSITORY / relative_path
+            self.assertTrue(path.is_file())
+            self.assertFalse(path.is_symlink())
+            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_digest)
 
     def test_gsap_committed_bytes_and_prepare_pin_match(self):
         asset = ROOT / "assets/gsap.min.js"

@@ -23,9 +23,32 @@
     "release_acceptance": false,
     "schema": "arctic-showcase-unattended-controller-v1"
   },
-  "execution_files": {},
-  "image": null,
-  "ready": false,
+  "execution_files": {
+    ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "showcase/capture/exact_image/automation.py": "85cdbe5b021d7f97aad843c4c1c6ec09faf3455e0536c5c813502eef55ca71a9",
+    "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
+    "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
+    "showcase/capture/exact_image/capture_vm.py": "f38d0ecc510531217c68508c94bba4b7ec71b775d6b312a5b1d02041e62d93f1",
+    "showcase/capture/exact_image/contract.py": "8d43566380e46494b396d2a6c21e3998de062aace00b92044db99dfdb823705f",
+    "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
+    "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
+    "showcase/capture/exact_image/unattended.py": "303ddaccb9c6c89fa672568177f00cf59829a0019b24a0b1d1e166ac2063eb48",
+    "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38"
+  },
+  "image": {
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "bytes": 1936173056,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54",
+    "run_id": 38684683083,
+    "artifact_id": 11951877248,
+    "archive_bytes": 1936360758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59"
+  },
+  "ready": true,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }

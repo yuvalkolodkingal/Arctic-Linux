@@ -10,10 +10,26 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-No candidate is currently bound. `contract.IMAGE`, `contract.REVIEWED_EXECUTION`
-and the image in `execution-manifest.json` are null, the manifest is not ready,
-and there is no activation marker. The lane therefore fails closed until a
-reviewed replacement ISO is bound atomically in a new preparation commit.
+The reviewed candidate is fixed in `contract.IMAGE` and
+`execution-manifest.json`:
+
+* producer run `38684683083`, attempt 1, source
+  `3152dbfd7a1844117dfb15aa8dd160bb811e8b54`;
+* artifact `11951877248`, archive size `1936360758`, archive SHA-256
+  `b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182`;
+* ISO `Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso`, size
+  `1936173056`, SHA-256
+  `55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4`;
+* producer receipt SHA-256
+  `73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59`.
+
+The producer ran directly from final `main`
+`3152dbfd7a1844117dfb15aa8dd160bb811e8b54` by `workflow_dispatch`. GitHub
+records producer run `38684683083` as a successful attempt 1. The retained
+artifact expires on 29 October 2026; that retention window is not capture or
+release acceptance. The activation marker remains byte-for-byte identical to
+the remote preparation branch until a separate reviewed marker-only commit
+activates the lane.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,

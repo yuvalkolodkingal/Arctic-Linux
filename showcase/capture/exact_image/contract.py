@@ -13,10 +13,27 @@ class Invalid(RuntimeError):
     pass
 
 
-# Qualification preparation is deliberately unbound.  A reviewed replacement
-# ISO activation must set both values atomically with the execution manifest.
-IMAGE = None
-REVIEWED_EXECUTION = None
+IMAGE = {
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "bytes": 1_936_173_056,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54",
+    "run_id": 38_684_683_083,
+    "artifact_id": 11_951_877_248,
+    "archive_bytes": 1_936_360_758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59",
+}
+REVIEWED_EXECUTION = {
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "workflow": ".github/workflows/iso.yml",
+    "run_id": IMAGE["run_id"],
+    "source_sha": IMAGE["source_sha"],
+    "artifact_id": IMAGE["artifact_id"],
+    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
+    "evidence": "reviewed exact candidate build; capture remains human-review pending",
+}
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",
