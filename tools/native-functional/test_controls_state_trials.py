@@ -94,6 +94,7 @@ def restore_paused_visual_capture(source):
     current="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
                                       advanced_seconds=advanced_time,paused_seconds=paused_time,
                                       settled_seconds=settled_time,capture_paused=True,
+                                      presentation_refresh='frame-step',
                                       maximum_settled_drift_seconds=.05,
                                       minimum_advance_seconds=minimum_post_geometry_advance,
                                       anchor='after fullscreen and controls transitions'),

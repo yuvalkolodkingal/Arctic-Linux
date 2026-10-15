@@ -407,6 +407,7 @@ class NewControls(unittest.TestCase):
             self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
             self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
                 advanced_seconds=.8,paused_seconds=.8,settled_seconds=.8,capture_paused=True,
+                presentation_refresh='frame-step',
                 maximum_settled_drift_seconds=.05,minimum_advance_seconds=.5,
                 anchor='after fullscreen and controls transitions'))
             pause.assert_called_once_with(root/'visual-reference-ipc.sock',proof['pid'],smoke.uid)

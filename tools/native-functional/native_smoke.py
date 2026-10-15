@@ -2058,6 +2058,7 @@ class Smoke:
                   playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
                                       advanced_seconds=advanced_time,paused_seconds=paused_time,
                                       settled_seconds=settled_time,capture_paused=True,
+                                      presentation_refresh='frame-step',
                                       maximum_settled_drift_seconds=.05,
                                       minimum_advance_seconds=minimum_post_geometry_advance,
                                       anchor='after fullscreen and controls transitions'),
@@ -2494,7 +2495,7 @@ def mpv_hide_reference_controls(path, expected_pid, expected_uid):
 
 
 def mpv_pause_reference(path, expected_pid, expected_uid):
-    """Pause only the proved reference player through its owned IPC socket."""
+    """Pause and present one complete frame through the proved player's IPC."""
     require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
             'reference pause IPC identity is invalid')
     info=Path(path).lstat()
@@ -2505,8 +2506,13 @@ def mpv_pause_reference(path, expected_pid, expected_uid):
         peer.connect(str(path))
         pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
         require((pid,uid)==(expected_pid,expected_uid), 'reference pause IPC peer differs')
-        peer.sendall(b'{"command":["set_property","pause",true],"request_id":44}\n')
+        # Process both controls on the same authenticated, ordered connection.
+        # frame-step keeps mpv paused but forces the GL video surface to present
+        # a complete post-fullscreen frame instead of retaining a blank buffer.
+        peer.sendall(b'{"command":["set_property","pause",true],"request_id":44}\n'
+                     b'{"command":["frame-step"],"request_id":45}\n')
         data=b''; deadline=time.monotonic()+3
+        acknowledged=set()
         while time.monotonic()<deadline:
             chunk=peer.recv(4096)
             require(chunk, 'reference pause IPC disconnected before acknowledgement')
@@ -2522,10 +2528,13 @@ def mpv_pause_reference(path, expected_pid, expected_uid):
                     return value
                 message=json.loads(line,object_pairs_hook=pairs)
                 require(type(message) is dict, 'reference pause IPC reply is not an object')
-                if message.get('request_id')==44:
+                if message.get('request_id') in (44,45):
                     require(type(message['request_id']) is int and message.get('error')=='success'
                             and message.get('data') is None, 'reference pause IPC command failed')
-                    return
+                    require(message['request_id'] not in acknowledged,
+                            'reference pause IPC duplicate acknowledgement')
+                    acknowledged.add(message['request_id'])
+                    if acknowledged=={44,45}: return
         raise RuntimeError('reference pause IPC acknowledgement timed out')
 
 

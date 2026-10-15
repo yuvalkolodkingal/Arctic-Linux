@@ -1,14 +1,14 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "42a629eb6ecab546ac036628f8fe5c023629e296b37c1a37445717c732775de1",
+    "test_controls_state_trials.py": "eef5c1d06ff4f238ec99fd036ea789379247b49f85ec5b2a535013962791c888",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "cca264bf12a7d7a789c29bfb98c8cd319cfeeaab059d62a5a9acd2997a98e841",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
     "test_native_protocol_diagnostics.py": "ef4c1fb6e3f89a400aca3b6de852ef8b6512a539ccbd1ed808a12ba744202b1f",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "3243823c0cf35e8976724e482f79424f677211942ad9eeee829ba64e39676b8e",
-    "test_native_v6.py": "978e6e3197dbdd2b475713a074565f1692a8e7051232a97bc72dfa8cf401e064",
+    "test_native_smoke.py": "38df8ca6824b1c996c03fea8cbd8f65ca1a0f4fea73b9052e5735a57b1b45243",
+    "test_native_v6.py": "27b625db541b76d2114b66e107ee13bf5b9f041d8463aadc90a105f90279950a",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "9f565ab8375b55ab99aa11aeeeff364adb940ce46907f7b0c6af816e5178d4a0",
+    "guest-check-native-v6.py": "7037dd8ffbbf4917ef3e385f2d23f25afaff77568d64c3bfed959c05390a07f0",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
-    "native_smoke.py": "51730a3413773c0fd9804a5fccbacdbcd199aa741226c09e221779a339733759"
+    "native_smoke.py": "70eac5d33452aee1693ade35fdcfc1a3f58565d87c58212a396394c9e96cec9b"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,7 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "51730a3413773c0fd9804a5fccbacdbcd199aa741226c09e221779a339733759",
+  "native_source_sha256": "70eac5d33452aee1693ade35fdcfc1a3f58565d87c58212a396394c9e96cec9b",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -357,6 +357,19 @@
     "renderer_launcher_fixture_and_geometry_unchanged": true,
     "release_acceptance": false,
     "scope": "prove post-fullscreen playback first, then capture one complete settled frame; no retry, restart, alternate renderer or failed-frame acceptance path"
+  },
+  "paused_visual_presentation_refresh": {
+    "failure_run": 38765112775,
+    "failure_artifact_id": 11990485709,
+    "failure_artifact_sha256": "cf5e794406f7c8cfb0d1529f56ccd96199fefcf9e524d3d65e158359d8dcbe21",
+    "diagnosis": "the exact owned live Celluloid GL player decoded and advanced the pulsed 16-color fixture, then remained paused with unchanged identity and fullscreen geometry, but both its sole guest screencopy and the same held host scanout showed a black video surface; a settled paused clock did not cause a post-pause GL presentation",
+    "moving_capture_correction_verified": "the separate required live moving screenshot visibly contained the fullscreen testsrc2 frame after the prior reordered 0.35 second settle",
+    "change": "send one frame-step immediately after pause=true on the same authenticated ordered mpv IPC connection, then retain the existing 0.5 second paused settle and sole capture",
+    "control_acknowledgements": [44, 45],
+    "player_capture_fixture_renderer_geometry_and_oracle_unchanged": true,
+    "timeouts_and_acceptance_limits_unchanged": true,
+    "release_acceptance": false,
+    "scope": "control-only paused-frame presentation refresh; no retry, restart, alternate renderer, extra capture, timeout extension or failed-frame acceptance path"
   },
   "host_frame_diagnostic": {
     "comparison": "the exact guest expected 16-color palette is carried as 16 RGB triplets and evaluated by the identical pinned evaluate_reference_rgb implementation and thresholds",
