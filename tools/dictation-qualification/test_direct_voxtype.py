@@ -193,6 +193,11 @@ on_transcription = false
         configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
         self.assertTrue(any(call.args == (configure + ['default'],)
                             for call in checker.cmd.call_args_list))
+        missing = [call.args[0][-1] for call in checker.cmd.call_args_list
+                   if call.args and call.args[0][:4] == configure
+                   and call.args[0][-1] != 'default']
+        self.assertEqual(len(missing), 1)
+        self.assertRegex(missing[0], r'^ArcticQualificationMissingInput-[0-9a-f]{32}$')
         self.assertFalse(any(call.args == (configure + [checker.source_name],)
                              for call in checker.cmd.call_args_list))
         self.assertTrue(any(call.args == (configure + ['default'],)
@@ -531,6 +536,45 @@ on_transcription = false
         self.assertEqual(observed, ['fixture-ready', 17])
         self.assertEqual(checker.engines.call_count, 5)
 
+    def test_terminal_idle_waits_for_same_quiescent_official_process(self):
+        checker = self.checker()
+        engine = (202, 22, Path('/usr/bin/voxtype'))
+        checker.engines = Mock(return_value=[engine])
+        checker.state = Mock(return_value='idle')
+        # fields[11:13] are utime/stime and fields[19] is starttime after the
+        # executable name and closing parenthesis have been removed.
+        ticks = iter((10, 11, 11, 11, 11))
+        def stat_text():
+            fields = ['S'] + ['0'] * 19
+            tick = next(ticks)
+            fields[11], fields[12], fields[19] = str(tick), '0', '22'
+            return '202 (voxtype) ' + ' '.join(fields)
+        observed = []
+        def observe(target, fn, seconds):
+            observed.extend((target, seconds))
+            for _ in range(5):
+                value = fn()
+                if value:
+                    return value
+            raise guest.Invalid('observation-timeout')
+        checker.observe = Mock(side_effect=observe)
+        with patch.object(guest.Path, 'read_text', side_effect=stat_text):
+            self.assertEqual(checker.daemon_idle('terminal-state', 240), engine)
+        self.assertEqual(observed, ['terminal-state', 240])
+        self.assertEqual(checker.engines.call_count, 5)
+
+    def test_terminal_idle_rejects_process_identity_change(self):
+        checker = self.checker()
+        checker.engines = Mock(return_value=[(202, 22, Path('/usr/bin/voxtype'))])
+        checker.state = Mock(return_value='idle')
+        fields = ['S'] + ['0'] * 19
+        fields[11], fields[12], fields[19] = '10', '0', '23'
+        checker.observe = Mock(side_effect=lambda _target, fn, _seconds: fn())
+        with patch.object(guest.Path, 'read_text', return_value=(
+                '202 (voxtype) ' + ' '.join(fields))):
+            with self.assertRaisesRegex(guest.Invalid, '^idle-daemon-identity-changed$'):
+                checker.daemon_idle('terminal-state', 240)
+
     def test_missing_model_uses_actionable_guard_without_entering_upstream_recording(self):
         checker = self.checker()
         checker.names = {'model': 'ggml-small.bin'}
@@ -583,8 +627,11 @@ on_transcription = false
         self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
         self.assertIn("status.get('backend') == 'cpu'", source)
         self.assertIn('self.selected_backend = None', source)
-        self.assertLess(source.index("gpu-failure-actionable-error"),
-                        source.rindex("self.select(backend='cpu')"))
+        projection = source.index("gpu-failure-actionable-error")
+        invalidation = source.rindex('self.selected_backend = None')
+        recovery = source.rindex("self.select(backend='cpu')")
+        self.assertLess(projection, invalidation)
+        self.assertLess(invalidation, recovery)
 
     def test_command_contract_requires_direct_mango_binds_and_rejecting_adapter(self):
         checker = self.checker()

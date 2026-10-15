@@ -986,6 +986,35 @@ class Checker:
             return current if stable >= 3 else None
         return self.observe(target, ready, seconds)
 
+    def daemon_idle(self, target, seconds=240):
+        """Wait until the official daemon has finished its advertised idle transition.
+
+        VoxType publishes ``idle`` before the result handler returns and, with
+        on-demand loading, before it trims the just-unloaded model heap.  A
+        following SIGUSR1 can therefore be pending while the state file already
+        says idle.  Require the same official process to remain idle with no CPU
+        progress for three observations.  This orders consecutive fixtures at
+        the daemon's real event-loop boundary without restarting it, retrying a
+        command, or extending the existing terminal-state deadline.
+        """
+        previous, stable = None, 0
+        def idle():
+            nonlocal previous, stable
+            engines = self.engines()
+            if len(engines) != 1 or self.state() != 'idle':
+                previous, stable = None, 0
+                return None
+            pid, started, binary = engines[0]
+            fields = (Path('/proc') / str(pid) / 'stat').read_text()
+            fields = fields[fields.rfind(')') + 2:].split()
+            require(len(fields) > 19 and int(fields[19]) == started,
+                    'idle-daemon-identity-changed')
+            current = (pid, started, binary, int(fields[11]) + int(fields[12]))
+            stable = stable + 1 if current == previous else 0
+            previous = current
+            return engines[0] if stable >= 3 else None
+        return self.observe(target, idle, seconds)
+
     def transcribe(self, sample, purpose='cpu-session'):
         self.transcription_stage('receiver-clear', self.empty)
         self.transcription_stage(
@@ -1026,8 +1055,7 @@ class Checker:
             'transcribing-state', lambda: self.observe(
                 'transcribing-state', lambda: self.state() in ('transcribing', 'idle'), 10))
         self.transcription_stage(
-            'terminal-state', lambda: self.observe(
-                'terminal-state', lambda: self.state() == 'idle', 240))
+            'terminal-state', lambda: self.daemon_idle('terminal-state', 240))
         elapsed = time.monotonic_ns() - before
         previous, stable = None, 0
         def received():
@@ -1167,15 +1195,21 @@ class Checker:
                 if remaining:
                     raise MicrophoneIsolationUnavailable()
             self.microphone_stage('source-isolation', isolated)
-            # Discard the interrupted session, then make the official daemon
-            # reopen the same selected microphone while it is still absent.
-            # That produces VoxType's supported, deterministic device-open
-            # error instead of assuming PipeWire turns a removed virtual node
-            # into a CPAL hot-unplug callback.
+            # Discard the interrupted session, then select a unique absent
+            # ALSA/CPAL device name through VoxType's supported configuration
+            # interface.  A removed PipeWire source does not guarantee that
+            # ALSA's synthetic `default` device disappears, so relying on that
+            # alias can start a null/default stream instead of exercising the
+            # actionable open failure.  The owned source is still removed and
+            # isolated above; the impossible name makes the subsequent open
+            # failure deterministic.
             self.microphone_stage(
                 'interrupted-cancel', lambda: self.record('cancel', check=False))
-            self.microphone_stage('disconnected-daemon-restart', lambda: self.cmd(
-                ['systemctl', '--user', 'restart', 'voxtype.service']))
+            missing_device = 'ArcticQualificationMissingInput-' + os.urandom(16).hex()
+            def restart_disconnected():
+                self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', missing_device])
+                return self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
+            self.microphone_stage('disconnected-daemon-restart', restart_disconnected)
             self.microphone_stage('disconnected-daemon-ready', lambda: self.daemon_ready(
                 'microphone-disconnected-daemon', 30))
             self.microphone_stage(
@@ -1333,6 +1367,11 @@ class Checker:
         status = self.observe('gpu-failure-actionable-error', actionable, 10)
         gpu_failure_capture_ack_sha256 = self.recovery_screen(
             'gpu_failure', status, expected_language='he')
+        # The failed setup preserved CPU authoritatively but also published a
+        # setup error.  Invalidate the control cache so the supported CPU
+        # selection clears that error and restarts the official daemon before
+        # the two recovery dictations.
+        self.selected_backend = None
         self.select(backend='cpu')
         for language in ('en', 'he'):
             sample = next(row for row in self.fixtures
