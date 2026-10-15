@@ -749,3 +749,20 @@ MAPPING_PROFILES += (
 
 )
 # candidate-profile-fe154-end
+
+# final-candidate-profile-114715-begin
+MAPPING_PROFILES += (
+    dict(executable_sha256='11471553075f17b05411a8511b106a91d506100544d6f76400ce139c2ce0c99c',
+         native_audit_sha256='e39ce4f70ca131622ddff1f9341878107834b4a28ca2838a287cf66c202d77a0',
+         function_file_offset=0x43110, function_size=4109,
+         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
+         instruction_file_offset=0x4361e, client_ext_offset=1584,
+         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
+         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
+         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
+         client_type_offset=0, client_surface_offset=328, xdg_type=0,
+         xdg_toplevel_offset=56, xdg_appid_offset=192,
+         xwayland_type=2, xwayland_class_offset=144),
+
+)
+# final-candidate-profile-114715-end
