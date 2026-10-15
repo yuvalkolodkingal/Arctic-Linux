@@ -48,6 +48,10 @@ class UARTEnvelopeTest(unittest.TestCase):
         historical = historical.replace(b'not 942 <= frames[1][0] <= 1008',
                                         b'not 871 <= frames[1][0] <= 942')
         for current, previous in (
+                (b'd576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf', b'fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf'),
+                (b'7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e', b'4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256'),
+                (b'ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85', b'c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc'),
+                (b'06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5', b'8ddb36c2c84a3e103e8e34e0c39a2a9d61ddc992ed5ddd1e2396ad06be30e680'),
                 (b'fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf', b'6a2bde52bc55e3f2fb2545370b6ed16287fa4979e0a64c55eaff134ea6db091c'),
                 (b'4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256', b'03fd8f81c2bd744c5cfdc13fc6694d5aa0ef0ad19a78276763046512aaf5c40d'),
                 (b'62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415', b'69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73'),
