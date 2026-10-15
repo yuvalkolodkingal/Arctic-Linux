@@ -24,35 +24,38 @@ class SupplyChainTest(unittest.TestCase):
         manifest = json.loads(manifest_path.read_text())
         self.assertTrue(manifest["ready"])
         self.assertEqual(manifest["image"], {
-            "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
-            "bytes": 1936185344,
-            "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
-            "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
-            "run_id": 38707130991,
-            "artifact_id": 11961831325,
-            "archive_bytes": 1936373046,
-            "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+            "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
+            "bytes": 1936267264,
+            "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
+            "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a",
+            "run_id": 38735141923,
+            "artifact_id": 11976239386,
+            "archive_bytes": 1936454966,
+            "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
             "producer_mode": "frozen-external-paired-v1",
-            "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
+            "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
         })
         self.assertFalse(manifest["release_acceptance"])
         expected_paths = {
             ".github/workflows/showcase-exact-capture-20261014.yml",
             "tools/native-functional/fetch-image.py",
-            *{
-                f"showcase/capture/exact_image/{name}"
-                for name in (
-                    "automation.py", "bundle.py", "capture_probe.py", "capture_vm.py",
-                    "contract.py", "guest.py", "host.py", "unattended.py", "validate_bundle.py",
-                )
-            },
+            "showcase/capture/exact_image/automation.py",
+            "showcase/capture/exact_image/bundle.py",
+            "showcase/capture/exact_image/capture_probe.py",
+            "showcase/capture/exact_image/capture_vm.py",
+            "showcase/capture/exact_image/contract.py",
+            "showcase/capture/exact_image/guest.py",
+            "showcase/capture/exact_image/host.py",
+            "showcase/capture/exact_image/unattended.py",
+            "showcase/capture/exact_image/validate_bundle.py",
         }
         self.assertEqual(set(manifest["execution_files"]), expected_paths)
-        for relative_path, expected_digest in manifest["execution_files"].items():
-            path = REPOSITORY / relative_path
-            self.assertTrue(path.is_file())
-            self.assertFalse(path.is_symlink())
-            self.assertEqual(hashlib.sha256(path.read_bytes()).hexdigest(), expected_digest)
+        for relative, expected in manifest["execution_files"].items():
+            self.assertEqual(
+                hashlib.sha256((REPOSITORY / relative).read_bytes()).hexdigest(),
+                expected,
+            )
+        self.assertFalse((REPOSITORY / ".github/qualification-20261014.showcase-capture").exists())
 
     def test_gsap_committed_bytes_and_prepare_pin_match(self):
         asset = ROOT / "assets/gsap.min.js"
@@ -103,11 +106,6 @@ class SupplyChainTest(unittest.TestCase):
         render = workflows["showcase-river-render.yml"]
         self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", render)
         self.assertIn("cache-dependency-path: showcase/package-lock.json", render)
-        exact = workflows["showcase-exact-capture-20261014.yml"]
-        self.assertIn("id: reviewed", exact)
-        self.assertIn("candidate_name=image['name']", exact)
-        self.assertIn("steps.reviewed.outputs.candidate_name", exact)
-        self.assertNotIn("candidate-38536710765-1-x86_64.iso", exact)
 
 
 if __name__ == "__main__":

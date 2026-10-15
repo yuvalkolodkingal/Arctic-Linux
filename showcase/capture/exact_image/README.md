@@ -11,22 +11,23 @@ outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
 The preparation is bound to the reviewed candidate from producer run
-`38707130991`, attempt 1, source
-`fc501fdf90c17c617b15b8b13038d062d519fcc6`: ISO
-`Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso`, size `1936185344`,
+`38735141923`, attempt 1, source
+`14ba50a70783fec583a288d34ea233a5d7c9941a`: ISO
+`Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso`, size `1936267264`,
 SHA-256
-`92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66`.
-The retained artifact is `11961831325`, archive size `1936373046`, archive
+`1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a`.
+The retained artifact is `11976239386`, archive size `1936454966`, archive
 SHA-256
-`1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3`,
+`86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4`.
+`f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c`.
 The execution manifest is ready for a later marker-only activation and remains
 `release_acceptance:false`.
 
-The producer ran directly from final `main`
-`fc501fdf90c17c617b15b8b13038d062d519fcc6` by `workflow_dispatch`.
-The activation marker remains byte-for-byte identical to the fixed remote lane.
+The producer ran from the reviewed marker-only source
+`14ba50a70783fec583a288d34ea233a5d7c9941a` by `workflow_dispatch` and passed
+UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
+absent from this preparation.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
@@ -78,8 +79,12 @@ the isolated VM. After the installer's normal cleanup unmounts its target, the
 reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
-drops permanently to UID 1000 for scene work. After dismissing the animated
-greeting, the host requires the fixed account's real
+drops permanently to UID 1000 for scene work. After observing the exact
+candidate's animated greeting, the host sends one Ctrl-L. Its 3D renderer
+deliberately leaves that single ordinary byte queued for Fish, where Ctrl-L can
+only clear the retained greeting and redraw the line editor; if the renderer
+has already returned, the same binding only clears and redraws. No command byte
+or command terminator is sent. The host then requires the fixed account's real
 `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
 typing even its nonsecret proof command. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the

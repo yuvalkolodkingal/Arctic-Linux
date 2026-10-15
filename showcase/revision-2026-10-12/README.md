@@ -18,7 +18,7 @@ published.
   Segment 1 is 4,451 characters (scenes `intro` through `getapps`); segment 2 is 4,642 characters
   (scenes `removeapps` through `outro`). Concatenating the two files byte for byte reproduces the
   9,093-byte locked narration with SHA-256
-  `23d1eab240865ea3230a1448a098abaed2b3e5fa9a1ee58e0a4eaab12e96215e`.
+  `cbf466a4cccfd283bc7971c274a92f063e2bba57f93fd81a52aba9dfa498a3b5`.
 - **Generation receipts:** `voice-timing.json` records exact flow, node, session and generation IDs,
   byte sizes, SHA-256 checksums, durations, estimated costs and the measured segment boundary. Neither
   source segment nor the assembled master is committed or public. Do not regenerate them.

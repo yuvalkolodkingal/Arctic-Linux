@@ -204,7 +204,8 @@ class StartupDiagnostics(unittest.TestCase):
         old=subprocess.check_output(['git','-C',str(ROOT),'show',BASE+':tools/dictation-qualification/runner.py']).decode()
         old_enum=next(n for n in ast.parse(old).body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='HOST_STAGES' for t in n.targets))
         old_codes=ast.literal_eval(old_enum.value.args[0]);new_codes=r.HOST_STAGES-old_codes
-        self.assertEqual(len(new_codes),15)
+        startup_codes={code for code in new_codes if code.startswith('vm-acquire-')}
+        self.assertEqual(len(startup_codes),15)
         with tempfile.TemporaryDirectory() as tmp:
             path=Path(tmp)/'private.log';good=''.join('ARCTIC-DICTATION-HOST-STAGE '+'a'*32+' '+code+'\n' for code in sorted(new_codes))
             bad=''.join('guest '+line for line in good.splitlines(keepends=True))+good.replace('a'*32,'b'*32)+good.replace('\n','\r\n')

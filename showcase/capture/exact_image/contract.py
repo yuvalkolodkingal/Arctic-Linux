@@ -14,16 +14,16 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
-    "bytes": 1_936_185_344,
-    "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
-    "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
-    "run_id": 38_707_130_991,
-    "artifact_id": 11_961_831_325,
-    "archive_bytes": 1_936_373_046,
-    "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+    "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
+    "bytes": 1_936_267_264,
+    "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
+    "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a",
+    "run_id": 38_735_141_923,
+    "artifact_id": 11_976_239_386,
+    "archive_bytes": 1_936_454_966,
+    "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
+    "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
 }
 REVIEWED_EXECUTION = {
     "repository": "yuvalkolodkingal/Arctic-Linux",
@@ -237,7 +237,7 @@ def controller_trace(value) -> None:
         "live-boot": {("home", "down", "ret")},
         "live-console": {("ctrl-alt-f6",), ("ret",)},
         "live-install": {("ret",)},
-        "installed-console": {("ctrl-alt-f6",), ("ret",)},
+        "installed-console": {("ctrl-alt-f6",), ("ctrl-l",), ("ret",)},
         "installed-boot": {("esc",)},
         "installed-scenes": {("ret",)},
     }
@@ -355,6 +355,23 @@ def controller_trace(value) -> None:
             cursor += 1
         require(cursor < len(screen_sequence), "controller screen sequence differs")
         cursor += 1
+    greeting = [index for index, event in enumerate(events)
+                if event["stage"] == "installed-console"
+                and event["kind"] == "screen"
+                and event["detail"].get("expectation") == "installed-fetch-greeting"]
+    require(len(greeting) == 1 and greeting[0] + 3 < len(events),
+            "installed fetch redraw sequence differs")
+    at = greeting[0]
+    require(events[at + 1]["stage"] == "installed-console"
+            and events[at + 1]["kind"] == "keys"
+            and events[at + 1]["detail"] == {"names": ["ctrl-l"]}
+            and events[at + 2]["stage"] == "installed-console"
+            and events[at + 2]["kind"] == "screen"
+            and events[at + 2]["detail"].get("expectation") == "installed-shell-ready"
+            and events[at + 3]["stage"] == "installed-console"
+            and events[at + 3]["kind"] == "text"
+            and events[at + 3]["detail"].get("command") == "installed-shell-proof",
+            "installed fetch redraw sequence differs")
     require([event["detail"]["command"] for event in events if event["kind"] == "text"]
             == ["live-username", "live-install", "installed-username",
                 "installed-shell-proof", "installed-scenes"]
@@ -374,7 +391,8 @@ def controller_trace(value) -> None:
             and keys.count(("live-console", ("ret",))) == 2
             and keys.count(("live-install", ("ret",))) == 1
             and 1 <= keys.count(("installed-console", ("ctrl-alt-f6",))) <= 70
-            and keys.count(("installed-console", ("ret",))) == 5
+            and keys.count(("installed-console", ("ctrl-l",))) == 1
+            and keys.count(("installed-console", ("ret",))) == 4
             and keys.count(("installed-scenes", ("ret",))) == 1
             and keys.count(("installed-boot", ("esc",))) == 1,
             "controller exact key inventory differs")

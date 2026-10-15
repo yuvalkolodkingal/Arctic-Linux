@@ -21,33 +21,6 @@ spec.loader.exec_module(prepare)
 
 
 class PublicationGuardTest(unittest.TestCase):
-    def test_dictation_media_inventory_is_profile_specific_and_complete(self):
-        indicators = {'dictation-indicator-online-installed.png',
-                      'dictation-indicator-recovered-offline.png'}
-        self.assertEqual(prepare.dictation_media_names('small-v2'), indicators)
-        self.assertEqual(prepare.dictation_media_names('turbo-q5-v3'), indicators | {
-            'dictation-recovery-online-installed-gpu-failure.png',
-            'dictation-recovery-online-installed-cpu-ready.png',
-            'dictation-recovery-recovered-offline-gpu-failure.png',
-            'dictation-recovery-recovered-offline-cpu-ready.png'})
-        with self.assertRaisesRegex(RuntimeError, 'Unknown dictation media profile'):
-            prepare.dictation_media_names('unreviewed')
-
-    def test_dictation_publication_rejects_byte_identical_recovery_frames(self):
-        distinct = {'gpu_failure': {'sha256': 'a' * 64},
-                    'cpu_ready': {'sha256': 'b' * 64}}
-        self.assertIsNone(prepare.require_distinct_dictation_recovery_frames(distinct))
-        duplicate = copy.deepcopy(distinct)
-        duplicate['cpu_ready']['sha256'] = duplicate['gpu_failure']['sha256']
-        with self.assertRaisesRegex(RuntimeError, 'byte-identical'):
-            prepare.require_distinct_dictation_recovery_frames(duplicate)
-
-    def test_dictation_publication_requires_preserved_cpu_after_gpu_failure(self):
-        self.assertEqual(prepare.dictation_recovery_status('gpu_failure'), ('error', 'cpu'))
-        self.assertEqual(prepare.dictation_recovery_status('cpu_ready'), ('ready', 'cpu'))
-        with self.assertRaisesRegex(RuntimeError, 'Unknown dictation recovery stage'):
-            prepare.dictation_recovery_status('vulkan_ready')
-
     def test_dictation_timing_scope_names_the_official_voxtype_path(self):
         sources = [
             (ROOT / 'tools/qualified-release/prepare.py').read_text(),

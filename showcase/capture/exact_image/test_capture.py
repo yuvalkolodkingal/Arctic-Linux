@@ -171,7 +171,7 @@ def controller_trace():
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-fetch-greeting")),
-        ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "keys", {"names": ["ctrl-l"]}),
         ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
                                          "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),
@@ -308,6 +308,15 @@ class Protocol(unittest.TestCase):
                        artifact_digest="sha256:" + "b" * 64)
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
+
+    def test_fetch_redraw_is_one_control_l_before_the_prompt_gate(self):
+        value = controller_trace()
+        redraw = next(event for event in value["events"]
+                      if event["kind"] == "keys"
+                      and event["detail"] == {"names": ["ctrl-l"]})
+        redraw["detail"] = {"names": ["ret"]}
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw|key inventory"):
+            c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):
         value = installed_snapshot()

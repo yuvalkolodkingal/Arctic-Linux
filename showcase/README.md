@@ -45,6 +45,11 @@ invokes VoxType record toggle, and Arctic's VoxType-backed indicator stays visib
 reports hosted Westmere CPU measurements of 7.77% English WER and 42.0%
 Hebrew WER; processing took 15.79 and 11.63 times the respective audio durations. Evidence cards
 remain until those paths are captured from the qualified ISO.
+Those are the earlier values spoken by the locked River master. Exact-image run 38699057684 later
+measured official VoxType 1.1.1 Small v2 at 7.77% English and 41.0% Hebrew WER, and Turbo Q5 v3 at
+6.80% and 21.0%, respectively. That five-row-per-language public FLEURS fixture used virtual audio,
+explicit language selection and no retries; its elapsed times include recording and insertion.
+It does not establish physical-microphone, GPU or general Whisper parity.
 The recovery scene requires a reviewed pair rather than a combined claim: one exact frame keeps
 the Vulkan failure visible and a later exact frame shows CPU ready with Hebrew and English. The
 failure is cleared when CPU is selected.

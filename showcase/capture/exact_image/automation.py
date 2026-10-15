@@ -693,14 +693,17 @@ class Controller:
         # Fish starts the packaged animated arctic-fetch before presenting its
         # prompt.  A command sent during that animation can be consumed as the
         # keypress that dismisses it.  First prove the exact installed greeting,
-        # then send one newline: the fetch renderer leaves a single ordinary
-        # byte queued for Fish, where it is only an empty command.  A later
-        # bounded exact-frame gate, rather than elapsed time, proves that its
-        # input loop and terminal restoration have completed.
+        # then send one Ctrl-L.  The exact candidate's renderer deliberately
+        # leaves a single ordinary byte queued for Fish; Ctrl-L cannot submit a
+        # command and makes Fish clear the retained greeting before redrawing
+        # its prompt.  If the renderer has already returned, the same Fish
+        # binding only clears and redraws.  A later bounded exact-frame gate,
+        # rather than elapsed time, proves that its input loop and terminal
+        # restoration have completed.
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.installed_startup.fetch_observed()
-        self.press("installed-console", "ret")
+        self.press("installed-console", "ctrl-l")
         self.installed_startup.dismissal_sent()
         # The fetch renderer can remain visible after it has accepted the
         # dismissal key.  Do not type even the nonsecret proof command until a

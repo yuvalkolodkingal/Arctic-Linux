@@ -22,26 +22,28 @@ EXECUTABLE_SHA256 = '315bc239be1a8a4bc1f0b113e39aa9c959201b26eca2123c75ceb10f01b
 
 class CandidateMangoProfileControls(unittest.TestCase):
     def test_profile_append_preserves_historical_source_and_pins_current_observer(self):
-        additions = (
-            (b'\n# candidate-profile-315bc-begin\n', b'# candidate-profile-315bc-end\n'),
-            (b'\n# candidate-profile-f19e-begin\n', b'# candidate-profile-f19e-end\n'),
-            (b'\n# candidate-profile-9c442-begin\n', b'# candidate-profile-9c442-end\n'),
-            (b'\n# candidate-profile-9a88-begin\n', b'# candidate-profile-9a88-end\n'),
-        )
+        marker = b'\n# candidate-profile-315bc-begin\n'
+        ending = b'# candidate-profile-315bc-end\n'
         old_hashes = {
             'causal.py': '3195ee9137ca9dbd908c9021336a1f262c298ef51725bc8b2a8619d26c54e4d9',
             'compare.py': '8a6097348162d9b58563accbc4a2648b24e1172863b8d9a2e404feaaffaaf86a',
         }
         for name, expected in old_hashes.items():
-            historical = (ROOT / 'tools/performance' / name).read_bytes()
-            for marker, ending in additions:
-                self.assertEqual(historical.count(marker), 1)
-                before, addition = historical.split(marker)
-                self.assertEqual(addition.count(ending), 1)
-                profile, after = addition.split(ending)
-                self.assertTrue(profile.startswith(b'MAPPING_PROFILES += (\n'))
-                historical = before + after
-            self.assertEqual(hashlib.sha256(historical).hexdigest(), expected)
+            current = (ROOT / 'tools/performance' / name).read_bytes()
+            new_marker = b'\n# candidate-profile-fe154-begin\n'
+            new_ending = b'# candidate-profile-fe154-end\n'
+            self.assertEqual(current.count(new_marker), 1)
+            before_new, addition_new = current.split(new_marker)
+            self.assertEqual(addition_new.count(new_ending), 1)
+            profile_new, after_new = addition_new.split(new_ending)
+            self.assertTrue(profile_new.startswith(b'MAPPING_PROFILES += (\n'))
+            current = before_new + after_new
+            self.assertEqual(current.count(marker), 1)
+            before, addition = current.split(marker)
+            self.assertEqual(addition.count(ending), 1)
+            profile, after = addition.split(ending)
+            self.assertTrue(profile.startswith(b'MAPPING_PROFILES += (\n'))
+            self.assertEqual(hashlib.sha256(before + after).hexdigest(), expected)
         observer = contract.observer_hashes(ROOT)
         runner = (ROOT / 'tools/performance/run-paired.py').read_bytes()
         self.assertEqual(runner.count(hashlib.sha256(

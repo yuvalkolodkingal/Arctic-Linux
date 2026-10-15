@@ -27,6 +27,11 @@ browser opens web links, FeatherPad opens text/source files, PCManFM opens folde
 opens supported archives, and Celluloid opens supported audio/video files. **Settings → Default
 apps** changes these choices later. Bash and Nano remain available as system tools.
 
+The image writes these associations through the standard `mimeapps.list` mechanism. They cover
+HTTP/HTTPS and HTML, common plain-text and source formats, folders, common audio/video formats and
+ZIP, tar, 7-Zip, gzip, bzip2, xz, zstd and cpio archives. An app selected in the installer or later
+in **Default apps** replaces the relevant association for that account.
+
 ## Everything the installer offers
 
 The installer's app picker has **132 apps in 21 sections**. The first seven sections (browser,

@@ -100,9 +100,7 @@ def fixture():
         state['profiles'][name] = dict(sha256=C.BASELINE['profile_sha256'] if name=='baseline' else sources['profiles/ci/offline.toml'])
         state['pristine_installed_sources'][name] = {'target.qcow2':('b' if name=='baseline' else 'c')*64,'OVMF_VARS.fd':'d'*64}
         entries[name+'-install-harness.log'] = b'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean\n'
-        entries[name+'/serial-install.log'] = (b'ARCTIC-INSTALL-SERIAL-PROJECTION=arctic-performance-install-v1\n'
-            b'ARCTIC-INSTALL-SERIAL-OMITTED=17\nARCTIC-INSTALL-EXIT=0\n'
-            b'ARCTIC-INSTALL-SERIAL-OMITTED=3\n')
+        entries[name+'/serial-install.log'] = b'ARCTIC-INSTALL-EXIT=0\n'
         entries[name+'/vm-toolchain.txt'] = toolchain
     runs = dict(baseline=[],candidate=[])
     for index,(name,boot) in enumerate(C.ORDER,1):
@@ -114,8 +112,7 @@ def fixture():
         record['observer_source_sha256']=observer['source_sha256']
         record['external_execution']=dict(context=context,observer_file_sha256=observer['frozen_sha256'])
         record['measured_payload']['battery_sha256']=sources['shell/BatteryService.qml']+'  /usr/share/arctic/shell/BatteryService.qml'
-        serial='ARCTIC-BOOT-SERIAL-PROJECTION=arctic-performance-boot-v1\n'
-        serial+='ARCTIC-PERFORMANCE-CONSOLE-RESTORED\nARCTIC-COLLECT-BEGIN\n'
+        serial='ARCTIC-PERFORMANCE-CONSOLE-RESTORED session=2 vt=2\nARCTIC-COLLECT-BEGIN\n'
         serial+='\n'.join('ARCTIC-PERFORMANCE '+json.dumps(dict(stage='installed',check=key,value=value))
             for key,value in record.items())
         serial+='\nARCTIC-INSTALLED-SMOKE-EXIT=0\nARCTIC-COLLECT-END\n'

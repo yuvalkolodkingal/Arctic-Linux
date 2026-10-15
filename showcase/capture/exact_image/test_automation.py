@@ -55,6 +55,22 @@ class UnattendedController(unittest.TestCase):
                                   "characters": 38})
         self.assertNotIn(automation.Controller.PASSWORD, repr(self.controller.events))
 
+    def test_control_l_redraw_has_no_return_or_text_byte(self):
+        self.controller.press("installed-console", "ctrl-l", gap=0)
+        self.assertEqual(len(self.qmp.commands), 1)
+        name, arguments = self.qmp.commands[0]
+        self.assertEqual(name, "input-send-event")
+        events = arguments["events"]
+        self.assertEqual([event["data"]["key"]["data"] for event in events],
+                         ["ctrl", "l", "l", "ctrl"])
+        self.assertEqual([event["data"]["down"] for event in events],
+                         [True, True, False, False])
+        self.assertNotIn("ret", repr(events))
+        self.assertEqual(self.controller.events, [{
+            "index": 0, "stage": "installed-console", "kind": "keys",
+            "detail": {"names": ["ctrl-l"]},
+        }])
+
     def test_screen_gate_records_host_qmp_pixels_and_deletes_probe(self):
         self.controller.ocr = lambda path: "Arctic Linux is ready Remove the USB stick"
         path, _ = self.controller.wait_screen("install-complete", "installer-done",
@@ -418,7 +434,7 @@ uptime   2 mins
         self.assertEqual(sudo[0].args[2], (marker, "password"))
         self.controller.type_secret.assert_called_with("installed-console")
 
-    def test_installed_shell_waits_for_fetch_and_dismisses_it_with_one_key(self):
+    def test_installed_shell_clears_fetch_without_submitting_before_prompt(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -449,9 +465,10 @@ uptime   2 mins
                                           ("~>", "~ >"))})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
-        self.assertEqual(operations[at + 1], ("keys", ("ret",)))
+        self.assertEqual(operations[at + 1], ("keys", ("ctrl-l",)))
         self.assertEqual(operations[at + 2], ready)
         self.assertEqual(operations[at + 3], proof)
+        self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
         self.assertLess(operations.index(("secret",)), at)
         self.assertEqual(operations[at + 5],
                          ("screen", "installed-shell",
