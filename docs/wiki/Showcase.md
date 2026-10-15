@@ -6,7 +6,10 @@ prepared. Its locked script now covers Arctic's direct integration of official V
 verified automatic online setup, a clear offline first-boot retry, local Hebrew and English
 Whisper, Mango shortcuts and Arctic's VoxType-backed indicator. The source reports the hosted Westmere
 CPU measurements honestly: 7.77% English word error, 42.0% Hebrew word error, and slower-than-real-
-time processing. Those figures do not claim parity or real-time CPU performance.
+time processing. Those are the earlier measurements spoken by the locked River master. The later
+exact-image VoxType 1.1.1 fixture measured Small v2 at 7.77% English and 41.0% Hebrew WER, and
+Turbo Q5 v3 at 6.80% and 21.0%, respectively. Both are small virtual-source public read-speech
+fixtures; neither claims general parity, physical-microphone coverage or real-time CPU performance.
 
 The old custom-controller screenshots and their River audio are superseded. Five explicit
 capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
@@ -15,13 +18,13 @@ master has deterministic local alignment and still needs human listening. The lo
 the connected generator's 5,000-character request limit. The failed full-script attempt has no
 renderable audio. Two exact source segments of 4,451 and 4,642 characters are pinned at a paragraph
 boundary. Both one-take River generations completed and their receipts were verified. The
-sample-exact assembled master is 549.987846 seconds with SHA-256
-`90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5`; it remains unpublished.
-Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130 cues, with 3.9375%
-WER and 97.3523% exact-token coverage. A full decode found no errors or hard-clipped samples; the
-segment boundary lies inside 0.382290 seconds below -60 dBFS. These automated results do not replace
-listening. Rendering is blocked pending human listening, qualified captures and release binding, so
-no replacement video link is published yet.
+sample-exact assembled master is 582.356463 seconds with SHA-256
+`f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`; it remains unpublished.
+Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130 cues, with 4.1412%
+WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; the
+segment boundary lies inside 0.431905 seconds below -60 dBFS. These automated results do not replace
+listening. Rendering is blocked pending human listening, qualified captures, private source-archive
+verification and release binding, so no replacement video link is published yet.
 
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 

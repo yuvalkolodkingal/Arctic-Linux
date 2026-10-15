@@ -44,6 +44,16 @@ Its final record intentionally leaves these values pending:
 
 Source checks or a successful artifact build alone do not establish release readiness.
 
+The current retained diagnostic candidate was built from `fc501fdf90c17c617b15b8b13038d062d519fcc6`.
+It is **1,936,185,344 bytes** with SHA-256
+`92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66`, below the strict
+2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its matching signed stable-update
+lane passed offline apply, reboot, SELinux and Nix-persistence checks. Dictation readiness and the
+remaining native, installer, reliability and performance lanes still have to pass before this can
+become the public v1.2.1 image. See the
+[prepared release record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
+for run links and the remaining evidence boundaries.
+
 ## Arctic Linux 1.2.0
 
 The latest published OS image is [v1.2.0](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/tag/v1.2.0).
