@@ -1,0 +1,29 @@
+name: Read safe identity of final ISO producer 38823208615
+
+on:
+  push:
+    branches: [codex/prepare-final-iso-reader-20261015]
+    paths: [.github/final-iso-reader-38823208615.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-identity:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/prepare-final-iso-reader-20261015' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate reader unit tests
+        run: python3 -B -m unittest tools/final-iso-reader/test_read.py
+      - name: Read only validated ISO identity and startup hashes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/final-iso-reader/read.py
+          --manifest tools/final-iso-reader/execution-manifest.json

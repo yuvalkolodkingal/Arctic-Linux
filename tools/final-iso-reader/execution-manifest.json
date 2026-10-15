@@ -1,0 +1,11 @@
+{
+  "schema": "arctic-final-iso-identity-reader-v1",
+  "ready": false,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "workflow": ".github/workflows/iso.yml",
+  "run_id": 38823208615,
+  "run_attempt": 1,
+  "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228",
+  "iso_artifact_id": 0,
+  "receipt_artifact_id": 0
+}
