@@ -615,7 +615,21 @@ DICTATION_HOST_STAGES = frozenset({
     "vm-acquire-json-error", "vm-acquire-qmp-error", "vm-acquire-keyboard-interrupt",
     "vm-acquire-other-error", "vm-acquire-stderr-unobserved",
     "vm-acquire-enforce-host-unavailable", "vm-acquire-enforce-only-spec-ctrl",
-    "vm-acquire-enforce-floor-unavailable", "vm-acquire-enforce-tcg-unavailable"})
+    "vm-acquire-enforce-floor-unavailable", "vm-acquire-enforce-tcg-unavailable",
+    "boot-indicator-poll-json-error", "boot-indicator-poll-unicode-error",
+    "boot-indicator-poll-qmp-error", "boot-indicator-poll-file-missing",
+    "boot-indicator-poll-permission-error", "boot-indicator-poll-os-error",
+    "boot-indicator-poll-key-error", "boot-indicator-poll-type-error",
+    "boot-indicator-poll-value-error", "boot-indicator-poll-runtime-error",
+    "boot-indicator-poll-system-exit", "boot-indicator-poll-keyboard-interrupt",
+    "boot-indicator-poll-other-error",
+    "boot-recovery-poll-json-error", "boot-recovery-poll-unicode-error",
+    "boot-recovery-poll-qmp-error", "boot-recovery-poll-file-missing",
+    "boot-recovery-poll-permission-error", "boot-recovery-poll-os-error",
+    "boot-recovery-poll-key-error", "boot-recovery-poll-type-error",
+    "boot-recovery-poll-value-error", "boot-recovery-poll-runtime-error",
+    "boot-recovery-poll-system-exit", "boot-recovery-poll-keyboard-interrupt",
+    "boot-recovery-poll-other-error"})
 
 def dictation_host_stage(code):
     import re
@@ -844,6 +858,38 @@ def physical_poll(vm,name):
 dictation_indicator_seen = False
 dictation_recovery_seen = set()
 
+def dictation_serial_snapshot():
+    """Return only complete serial records while QEMU may be appending a line."""
+    path = serial("boot")
+    try:
+        with open(path, "rb") as stream:
+            data = stream.read(128 * 1024 * 1024 + 1)
+    except FileNotFoundError:
+        return ""
+    if len(data) > 128 * 1024 * 1024:
+        raise RuntimeError("Dictation serial bound exceeded")
+    complete, separator, pending = data.rpartition(b"\n")
+    if len(pending) > 65536:
+        raise RuntimeError("Dictation unfinished line bound exceeded")
+    return (complete + b"\n" if separator else b"").decode("utf-8", errors="strict")
+
+
+def dictation_poll(kind, function, vm):
+    """Project a fixed failure boundary without exporting exception data."""
+    import json
+    try:
+        function(vm)
+    except BaseException as error:
+        classes = {json.JSONDecodeError: "json-error", UnicodeDecodeError: "unicode-error",
+                   FileNotFoundError: "file-missing", PermissionError: "permission-error",
+                   OSError: "os-error", KeyError: "key-error", TypeError: "type-error",
+                   ValueError: "value-error", RuntimeError: "runtime-error",
+                   SystemExit: "system-exit", KeyboardInterrupt: "keyboard-interrupt"}
+        code = "qmp-error" if type(error) is vmtest.QMPError else classes.get(type(error), "other-error")
+        dictation_host_stage("boot-" + kind + "-poll-" + code)
+        raise
+
+
 def dictation_indicator_poll(vm):
     """Capture only the owned receiver's empty pre-playback recording interval."""
     global dictation_indicator_seen
@@ -852,8 +898,7 @@ def dictation_indicator_poll(vm):
     import hashlib, json, re
     from pathlib import Path
     prefix = "ARCTIC-DICTATION-RECORDING-INDICATOR-REQUESTED "
-    path = serial("boot")
-    raw = Path(path).read_text(errors="strict") if Path(path).exists() else ""
+    raw = dictation_serial_snapshot()
     rows = [json.loads(line[len(prefix):]) for line in raw.splitlines() if line.startswith(prefix)]
     if not rows:
         return
@@ -891,8 +936,7 @@ def dictation_recovery_poll(vm):
     import hashlib, json, re
     from pathlib import Path
     prefix = "ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED "
-    path = serial("boot")
-    raw = Path(path).read_text(errors="strict") if Path(path).exists() else ""
+    raw = dictation_serial_snapshot()
     rows = [json.loads(line[len(prefix):]) for line in raw.splitlines() if line.startswith(prefix)]
     context = json.loads(Path(out, "data/dictation-context.json").read_text())
     if len(rows) > 2 or len({row.get("stage") for row in rows}) != len(rows):
@@ -1709,8 +1753,8 @@ def stage_boot():
             dictation_host_stage("boot-collect")
             while time.time() - t < collect_limit and vm.alive():
                 physical_active = E.get("NATIVE_PHYSICAL_FIXTURE") == "1" and physical_poll(vm,"boot")
-                dictation_indicator_poll(vm)
-                dictation_recovery_poll(vm)
+                dictation_poll("indicator", dictation_indicator_poll, vm)
+                dictation_poll("recovery", dictation_recovery_poll, vm)
                 if E.get("NATIVE_LAUNCHER_FIXTURE") == "1" and vmtest.serial_has(serial("boot"), "ARCTIC-NATIVE-LAUNCHER-FAILED "):
                     log("owned native launcher failed; no retry")
                     return 1
