@@ -251,6 +251,20 @@ class Controls(unittest.TestCase):
         self.assertFalse(result['release_acceptance'])
         self.assertEqual(len(result['images']), 7)
 
+    def test_active_run_identity_receipt_matches_current_three_record_challenge(self):
+        # Run 38670006479 reached a real installed shell and emitted this fresh
+        # nonce/hash pair.  Keep the independent contract bound to the exact
+        # three marked rows the driver hashed, rather than the retired single
+        # unmarked record representation.
+        nonce = '5aa37715cf634f978f56629efa1fd185'
+        record = A.installed_identity_record(nonce)
+        self.assertEqual(record.splitlines(), [
+            '20983566310134451885',
+            '40983566310134451885',
+            '60983566310134451885'])
+        self.assertEqual(A.digest(record.encode('ascii')),
+                         '960c72f08bf7f9a1d418c47a28a120679cd508a3227238c8eb8e464c77d322ef')
+
     def test_all_active_export_wrappers_reject_unknown_private_keys(self):
         report, original, files, media, serial = fixture()
         for path in EXPORT_WRAPPER_PATHS:
@@ -377,6 +391,7 @@ class Controls(unittest.TestCase):
     def test_pre_secret_password_prompts_and_seven_reviewable_images_are_required(self):
         mutations = [lambda s: s['host']['password_prompt_evidence']['getty'].update(observed_line_sha256=A.digest(b'login:')),
                      lambda s: s['host']['password_prompt_evidence']['sudo'].update(observed_line_sha256=A.digest(b'arcticqual@arctic-qual ~ >')),
+                     lambda s: s['host']['password_prompt_evidence']['login_shell'].update(observed_line_sha256=A.digest(b'731904')),
                      lambda s: s['host']['password_prompt_evidence']['sudo'].update(observed_ns=1),
                      lambda s: s['host']['password_prompt_evidence']['engine'].update(program_sha256='f' * 64),
                      lambda s: s['required_images'].pop('host/installed-getty-password.png')]
