@@ -9,12 +9,12 @@
     "tools/installer-qualification/evidence.py": "de5e491879b457414965cc9ad81051d622a50d3c9306cebd77ae11107642564d",
     "tools/installer-qualification/guest.py": "18e1ddd54a39195a2a78dfb45d5308207932e3d3b3f071809fd42e85d34fd93c",
     "tools/installer-qualification/run-live.sh": "7e2eb556ce49ecda84d464a814179ffccf96d715202607ca441c74ae27950ec9",
-    "tools/installer-qualification/runner.py": "bc891700cf2f76d43414faf94f7e572fc29cdad7eaed097b1c718f20e7f7e600",
+    "tools/installer-qualification/runner.py": "23ea0e4274ef5bf82487ef0f342fccbf6896a702db0f5b11469abc11361c5589",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/iso_startup.py": "62d7e3f89f128825c1463761f49d67dd8c8c97f5829ce42b3379f92f2d1a1eda",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/native_smoke.py": "9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203",
+    "tools/native-functional/native_smoke.py": "76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68",
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
@@ -22,7 +22,18 @@
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750"
   },
-  "image": null,
-  "ready": false,
+  "image": {
+    "archive_bytes": 1936360758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "artifact_id": 11951877248,
+    "bytes": 1936173056,
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59",
+    "run_id": 38684683083,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54"
+  },
+  "ready": true,
   "release_acceptance": false
 }

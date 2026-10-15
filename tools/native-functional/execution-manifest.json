@@ -11,16 +11,27 @@
     "tools/native-functional/prepare-taskbar-tools.sh": "fda9e17e3d079834ab0145bb60fdaa2ec3d84c3cee3875160c0cdf1fa744d85c",
     "tools/native-functional/runner.py": "1c333091a15b5b26fb932074526c44af3d9b41a4818c0107ac0cd3141bde68c0",
     "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/native-functional/source-provenance.json": "18e2e76f047cfbf7b55e4be19c40f906e867d3d0d364c6ed5accf97ab5a897c0",
+    "tools/native-functional/source-provenance.json": "a6de2cb9a0eea5b2b98296754bade1f793ad5ad16c30fc4cd5791cbec2e33107",
     "tools/native-functional/taskbar-display.py": "ed1d76cdd504d5284a10df03b1fe4825e716eb987b9cc6748e20bfb025fe3cbe",
     "tools/native-functional/taskbar-evidence.py": "285c67aa190535ea68e9c7451ac8cccd245f511e36d33960ead2956fc6a5eafb",
     "tools/native-functional/taskbar-runtime.py": "297ee48eac1cea021713830f625f47453e84da0abf2bdcd1856c7b4e8082bbb4",
     "tools/native-functional/taskbar-screencopy.c": "c9cd11b7bbbdf62f3050ac7fa3c5089728151de2b1e559a3683e2490b95e7cff",
     "tools/native-functional/taskbar.py": "80cfba045134fc5ba3fcda0e78b2bea338f8b46df603b9f9b03f05885e37b489",
     "tools/native-functional/virtual-pointer.c": "f00fc6e10250f62e2b0f531cc3becf433cc6e65b002b95432ca30b3800947bd4",
-    "tools/test-install.sh": "1b95b20a9a8693e59b15b8d7d5db859f359083d79ca05bc707f50e00b9105080"
+    "tools/test-install.sh": "dabe05fe9d7decbbce01a0ce32e9d3aa75251da053a2a39f877bf2b759448ce5"
   },
-  "image": null,
-  "ready": false,
+  "image": {
+    "archive_bytes": 1936360758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "artifact_id": 11951877248,
+    "bytes": 1936173056,
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59",
+    "run_id": 38684683083,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54"
+  },
+  "ready": true,
   "release_acceptance": false
 }

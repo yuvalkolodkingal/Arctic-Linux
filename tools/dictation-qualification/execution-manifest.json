@@ -3,9 +3,9 @@
     ".github/workflows/dictation-candidate-20261009.yml": "a2e4b9e7d95e0084b6983d02aded9e9a52a9302a1f1be84e185e70fa07143de3",
     "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
     "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
-    "tools/dictation-qualification/contract.py": "cd73e9a9a596f08c93cb611dda247c95560c64503f5ba315e83a2c2964ed73ed",
-    "tools/dictation-qualification/guest_check.py": "9d165fc513d210a196401e3f553d6b5f1bba9c347694804cf97b0b89da6c8ad3",
-    "tools/dictation-qualification/runner.py": "c3a84b23926f2dfd7428f0778bb62711ed282a9e07afa989c3430b359ccdd8dd",
+    "tools/dictation-qualification/contract.py": "f27679c6bcdde7f428778005ac3d792bbde4fd83106b07567825e67f8bcd0493",
+    "tools/dictation-qualification/guest_check.py": "ac10682df18e059ff196d0e93cbd137568571ac861beaac8dd58df738b196b09",
+    "tools/dictation-qualification/runner.py": "aab97bb2ec13fadd94504d4f7d496846d940f5872f0cb88fe3570fd40127a719",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
@@ -22,7 +22,18 @@
     "small-v2",
     "turbo-q5-v3"
   ],
-  "image": null,
-  "ready": false,
+  "image": {
+    "archive_bytes": 1936360758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "artifact_id": 11951877248,
+    "bytes": 1936173056,
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59",
+    "run_id": 38684683083,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54"
+  },
+  "ready": true,
   "release_acceptance": false
 }
