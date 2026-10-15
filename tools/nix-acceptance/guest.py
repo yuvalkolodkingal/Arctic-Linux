@@ -7,6 +7,7 @@ Print one structured serial record per check. GUI probes run as the desktop user
 require a new Mango client and keep it mapped for five seconds.
 """
 import configparser
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -14,6 +15,7 @@ import pwd
 import re
 import shlex
 import signal
+import stat
 import subprocess
 import sys
 import time
@@ -165,6 +167,259 @@ def latest_offline_history():
     number, boot_id = max(entries, key=lambda entry: int(entry[0]))
     history = run(['dnf5', 'offline', 'log', '--number=' + number], timeout=180)
     return dict(listing=listing, number=int(number), boot_id=boot_id, log=history)
+
+
+VOXTYPE_STATE = Path('/var/lib/arctic/dictation')
+VOXTYPE_MODELS = (
+    '/opt/arctic/voxtype/models/ggml-small.bin',
+    '/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin',
+)
+VOXTYPE_LANGUAGES = ('["he", "en"]', '"he"', '"en"')
+WHATS_NEW = Path('/usr/share/arctic/shell/whats-new.json')
+
+
+def voxtype_managed_config(model, language, resident):
+    """Return the byte-exact Arctic 1.1.1 config recognized by the migration."""
+    if model not in VOXTYPE_MODELS or language not in VOXTYPE_LANGUAGES:
+        raise ValueError('Invalid managed VoxType config identity')
+    demand = 'false' if resident else 'true'
+    return f'''# Managed safe defaults for Arctic's local-only VoxType integration.
+engine = "whisper"
+state_file = "auto"
+
+[hotkey]
+enabled = false
+
+[audio]
+device = "default"
+sample_rate = 16000
+max_duration_secs = 60
+pause_media = false
+duck_media = false
+
+[whisper]
+mode = "local"
+model = "{model}"
+language = {language}
+translate = false
+on_demand_loading = {demand}
+
+[text]
+filter_filler_words = false
+
+[output]
+mode = "type"
+driver_order = ["wtype"]
+fallback_to_clipboard = false
+auto_submit = false
+shift_enter_newlines = false
+wait_for_modifier_release = false
+
+[output.notification]
+on_recording_start = false
+on_recording_stop = false
+on_transcription = false
+
+[osd]
+enabled = false
+'''.encode()
+
+
+def _owned_regular(path, uid, mode, maximum=65536):
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != uid
+            or stat.S_IMODE(info.st_mode) != mode or not 0 < info.st_size <= maximum):
+        raise RuntimeError(f'Unsafe file identity: {path}')
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        current = os.fstat(fd)
+        if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+            raise RuntimeError(f'File changed while opening: {path}')
+        data = b''
+        while len(data) <= maximum:
+            chunk = os.read(fd, min(65536, maximum + 1 - len(data)))
+            if not chunk:
+                break
+            data += chunk
+    finally:
+        os.close(fd)
+    if not 0 < len(data) <= maximum:
+        raise RuntimeError(f'Unsafe file size: {path}')
+    return data
+
+
+def _atomic_user_file(path, data, user, mode=0o600):
+    parent = path.parent.lstat()
+    if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != user.pw_uid
+            or stat.S_IMODE(parent.st_mode) & 0o022):
+        raise RuntimeError(f'Unsafe fixture directory: {path.parent}')
+    temporary = path.with_name('.' + path.name + '.arctic-update-fixture')
+    if temporary.exists() or temporary.is_symlink():
+        raise RuntimeError(f'Unexpected fixture temporary path: {temporary}')
+    fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        os.fchown(fd, user.pw_uid, user.pw_gid)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0:
+                raise RuntimeError(f'Could not write fixture file: {path}')
+            view = view[written:]
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    os.replace(temporary, path)
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
+def seed_voxtype_update_fixture(user, state=VOXTYPE_STATE, notes_path=WHATS_NEW):
+    """Turn a fresh managed config into one exact old-stable update fixture."""
+    home = Path(user.pw_dir)
+    config = home / '.config/voxtype/config.toml'
+    current = _owned_regular(config, user.pw_uid, 0o600)
+    identities = [(model, language) for model in VOXTYPE_MODELS for language in VOXTYPE_LANGUAGES
+                  if current == voxtype_managed_config(model, language, True)]
+    if len(identities) != 1:
+        raise RuntimeError('Fresh installed VoxType config is not one exact managed resident config')
+    model, language = identities[0]
+    old = voxtype_managed_config(model, language, False)
+    receipt = json.loads(_owned_regular(state / 'verified.json', os.geteuid(), 0o644, 16384))
+    if (type(receipt) is not dict or receipt.get('integration') != 'upstream-direct-v1'
+            or receipt.get('version') != '1.1.1'
+            or receipt.get('source_commit') != '014c56105b2f071bb3457c51a95c38be380e5124'):
+        raise RuntimeError('Installed VoxType receipt is not the trusted upstream 1.1.1 identity')
+    if _owned_regular(state / 'upstream-direct-v1', os.geteuid(), 0o644, 16384) != b'upstream-direct-v1\n':
+        raise RuntimeError('Installed VoxType direct-integration marker differs')
+    for name in ('config-generation-resident-v1.json', 'config-resident-v1.pending'):
+        path = state / name
+        if path.exists() or path.is_symlink():
+            _owned_regular(path, os.geteuid(), 0o644, 4096)
+            path.unlink()
+    _atomic_user_file(config, old, user)
+    if _owned_regular(config, user.pw_uid, 0o600) != old:
+        raise RuntimeError('Old managed VoxType fixture did not commit')
+
+    notes = json.loads(notes_path.read_text(encoding='utf-8'))
+    update_id = notes.get('update_id') if type(notes) is dict else None
+    if not isinstance(update_id, str) or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9._+~^-]{0,127}', update_id):
+        raise RuntimeError('Installed pre-update What\'s New identity is invalid')
+    seen = home / '.local/state/arctic/whats-new-seen'
+    _atomic_user_file(seen, (update_id + '\n').encode(), user)
+    return dict(model=model, language=language,
+                legacy_sha256=hashlib.sha256(old).hexdigest(),
+                resident_sha256=hashlib.sha256(current).hexdigest(),
+                prior_update_id=update_id)
+
+
+def seed_ready_voxtype_update_fixture(user):
+    """Wait for the offline-install retry before freezing the old stable state."""
+    active = ''
+    for _ in range(120):
+        active = run(['systemctl', 'show', 'arctic-dictation-setup.service',
+                      '-p', 'ActiveState', '--value'])
+        if active == 'inactive':
+            break
+        if active == 'failed':
+            raise RuntimeError('Offline-recovery VoxType setup failed before update')
+        time.sleep(5)
+    if active != 'inactive':
+        raise RuntimeError('Offline-recovery VoxType setup did not settle before update')
+    if (VOXTYPE_STATE / 'pending').exists() or (VOXTYPE_STATE / 'pending').is_symlink():
+        raise RuntimeError('Offline-recovery VoxType setup remains queued before update')
+    if _owned_regular(VOXTYPE_STATE / 'setup.state', os.geteuid(), 0o644, 64) != b'ready\n':
+        raise RuntimeError('Offline-recovery VoxType setup is not ready before update')
+    return seed_voxtype_update_fixture(user)
+
+
+def verify_voxtype_migration_files(user, expected, state=VOXTYPE_STATE):
+    config = Path(user.pw_dir) / '.config/voxtype/config.toml'
+    resident = voxtype_managed_config(expected['model'], expected['language'], True)
+    actual = _owned_regular(config, user.pw_uid, 0o600)
+    if actual != resident or hashlib.sha256(actual).hexdigest() != expected['resident_sha256']:
+        raise RuntimeError('Stable update did not restore the exact resident VoxType config')
+    if (state / 'config-resident-v1.pending').exists() or (state / 'config-resident-v1.pending').is_symlink():
+        raise RuntimeError('VoxType migration pending marker survived the reboot')
+    raw = _owned_regular(state / 'config-generation-resident-v1.json', os.geteuid(), 0o644, 4096)
+    generation = json.loads(raw)
+    wanted = {'schema': 'arctic-voxtype-config-generation-v1', 'migration': 'resident-model-v1',
+              'user': user.pw_name, 'generation': 'resident-model-v1', 'outcome': 'migrated'}
+    if generation != wanted:
+        raise RuntimeError(f'VoxType migration outcome differs: {generation}')
+    return dict(config_sha256=hashlib.sha256(actual).hexdigest(), generation=generation,
+                pending=False)
+
+
+def verify_voxtype_migration_boot(prefix, user):
+    def properties(unit, names):
+        args = sum((['-p', name] for name in names), [])
+        text = run(['systemctl', 'show', unit, *args])
+        values = dict(line.split('=', 1) for line in text.splitlines() if '=' in line)
+        if set(values) != set(names):
+            raise RuntimeError(f'Incomplete systemd properties for {unit}: {values}')
+        return values
+
+    migration = properties('arctic-voxtype-config-migration.service',
+                           ('Result', 'ExecMainCode', 'ExecMainStatus',
+                            'ExecMainStartTimestampMonotonic', 'ExecMainExitTimestampMonotonic'))
+    if (migration['Result'], migration['ExecMainCode'], migration['ExecMainStatus']) != ('success', 'exited', '0'):
+        raise RuntimeError(f'VoxType migration unit did not succeed: {migration}')
+    started, finished = (int(migration[name]) for name in
+                         ('ExecMainStartTimestampMonotonic', 'ExecMainExitTimestampMonotonic'))
+    sessions = properties('systemd-user-sessions.service', ('ActiveEnterTimestampMonotonic',))
+    user_unit = properties(f'user@{user.pw_uid}.service', ('ActiveEnterTimestampMonotonic',))
+    gates = [int(sessions['ActiveEnterTimestampMonotonic']), int(user_unit['ActiveEnterTimestampMonotonic'])]
+    if not (0 < started <= finished <= min(gates)):
+        raise RuntimeError(f'VoxType migration did not finish before login: {started}, {finished}, {gates}')
+    unit = run(['systemctl', 'cat', 'arctic-voxtype-config-migration.service'])
+    for required in ('Before=systemd-user-sessions.service user@.service', 'PrivateNetwork=yes',
+                     'RestrictAddressFamilies=AF_UNIX', 'StandardOutput=null', 'StandardError=null'):
+        if required not in unit:
+            raise RuntimeError('Installed migration isolation differs: ' + required)
+    service = run(prefix + ['systemctl', '--user', 'show', 'voxtype.service', '-p', 'ActiveState', '--value'])
+    if service != 'inactive':
+        raise RuntimeError('VoxType started without an explicit recording activation: ' + service)
+    journal = run(['journalctl', '-b', '-u', 'arctic-voxtype-config-migration.service',
+                   '--no-pager', '-o', 'cat', '-n', '100'])
+    user_journal = run(prefix + ['journalctl', '--user', '-b', '-u', 'voxtype.service',
+                                 '--no-pager', '-o', 'cat', '-n', '100'])
+    combined = journal + '\n' + user_journal
+    if len(combined) > 65536 or re.search(r'on_demand_loading|transcri(?:pt|ption)|ggml-|audio stream|recording', combined, re.I):
+        raise RuntimeError('Migration or idle VoxType journal exposed private/config content')
+    return dict(migration_started=started, migration_finished=finished,
+                login_started=min(gates), voxtype_service=service,
+                screened_journal_bytes=len(combined))
+
+
+def verify_whats_new_voxtype_card(prefix, user, expected, notes_path=WHATS_NEW):
+    notes = json.loads(notes_path.read_text(encoding='utf-8'))
+    update_id = notes.get('update_id') if type(notes) is dict else None
+    rpm_id = run(['rpm', '-q', '--qf', 'arctic-%{VERSION}-%{RELEASE}', 'arctic-shell'])
+    if update_id != rpm_id or update_id == expected['prior_update_id']:
+        raise RuntimeError(f'What\'s New build identity did not advance: {expected["prior_update_id"]} -> {update_id}')
+    items = notes.get('items') if type(notes) is dict else None
+    matches = [item for item in items or [] if item.get('title') == 'Official VoxType dictation']
+    if (len(matches) != 1 or 'Hebrew and English' not in matches[0].get('text', '')
+            or 'audio stays on this computer' not in matches[0].get('text', '')):
+        raise RuntimeError('Updated What\'s New lacks the exact local VoxType card')
+    seen = _owned_regular(Path(user.pw_dir) / '.local/state/arctic/whats-new-seen',
+                          user.pw_uid, 0o600, 1024).decode().strip()
+    if seen != expected['prior_update_id']:
+        raise RuntimeError('Updated What\'s New was marked seen without dismissal')
+    mapped = []
+    for _ in range(30):
+        layers = json.loads(run(prefix + ['mmsg', 'get', 'all-layers'])).get('layers', [])
+        mapped = [layer for layer in layers if layer.get('name') == 'arctic-whats-new']
+        if len(mapped) != 0:
+            break
+        time.sleep(0.5)
+    if len(mapped) != 1 or mapped[0].get('layer') != 'top':
+        raise RuntimeError(f'Updated What\'s New card is absent or duplicated: {mapped}')
+    return dict(prior_update_id=expected['prior_update_id'], update_id=update_id,
+                voxtype_card=matches[0]['title'], mapped_layers=len(mapped))
 
 
 def session_signature(proc_root, uid, runtime, display, env):
@@ -814,6 +1069,12 @@ def main(update_method='dnf', expected_stable_source=None, expected_stable_finge
                 return dict(status=data, installed_at=history.get('installed_at'), arctic_rpms=versions)
             check('signed-offline-update-completed', offline_update_completed)
             check('signed-offline-update-history', latest_offline_history)
+            check('voxtype-resident-config-migrated', lambda: verify_voxtype_migration_files(
+                  user, prior['voxtype_migration']))
+            check('voxtype-migration-prelogin-private', lambda: verify_voxtype_migration_boot(
+                  prefix, user))
+            check('whats-new-voxtype-card', lambda: verify_whats_new_voxtype_card(
+                  prefix, user, prior['voxtype_migration']))
         check('avc', lambda: no_new_nix_avc(before_avc))
         return int(failed)
 
@@ -936,7 +1197,12 @@ ShellRoot {
     if not failed:
         before_rpm = run(['rpm', '-q', 'nix', 'nix-daemon'])
         before_arctic = run(['rpm', '-q', 'arctic-shell', 'arctic-desktop-config'])
+        voxtype_migration = None
         if update_method == 'arctic-offline':
+            voxtype_migration = check('voxtype-legacy-migration-seeded',
+                                      lambda: seed_ready_voxtype_update_fixture(user))
+            if failed:
+                return int(failed)
             check('signed-offline-update-stage', lambda: run(
                   ['/usr/bin/arctic-update', 'now', '--sync'], timeout=2400))
             def staged_update():
@@ -971,7 +1237,8 @@ ShellRoot {
             state_file.write_text(json.dumps(dict(boot=Path('/proc/sys/kernel/random/boot_id').read_text(),
                                   profile=str(profile.resolve()), update_method=update_method, arctic_rpms=before_arctic,
                                   expected_stable_source=expected_stable_source,
-                                  expected_stable_fingerprint=expected_stable_fingerprint)))
+                                  expected_stable_fingerprint=expected_stable_fingerprint,
+                                  voxtype_migration=voxtype_migration)))
     for log in ('/tmp/arctic-release-app.log', '/tmp/arctic-nix-desktop-probe.log'):
         if Path(log).exists():
             print(Path(log).read_text(errors='replace')[-8000:], flush=True)
