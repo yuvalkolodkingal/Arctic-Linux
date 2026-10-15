@@ -28,7 +28,7 @@
     "showcase/capture/exact_image/automation.py": "85cdbe5b021d7f97aad843c4c1c6ec09faf3455e0536c5c813502eef55ca71a9",
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
-    "showcase/capture/exact_image/capture_vm.py": "30cb2879a4dde1a5db3e8bb5b17878305e325ce9b5e257398e61f43699c93ff7",
+    "showcase/capture/exact_image/capture_vm.py": "6c606e5406f5ecadbff2da7d2f4728c26dc2cd0cd6864da3930d4ea6ae1041d8",
     "showcase/capture/exact_image/contract.py": "f997aaa41ab20c62c9ac2bed61ba68cd763a76da1a95f62e23cdeb513fb3d5bb",
     "showcase/capture/exact_image/guest.py": "07f8f3000de782724db05b575b2e47a934a36114915523ad637486e53adb024f",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
