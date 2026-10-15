@@ -148,6 +148,38 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(sudo[0].args[2], (marker, "password"))
         self.controller.type_secret.assert_called_with("installed-console")
 
+    def test_installed_shell_waits_for_fetch_and_dismisses_it_with_one_key(self):
+        operations = []
+
+        def wait(_stage, expectation, phrases=(), **_kwargs):
+            operations.append(("screen", expectation, phrases))
+            return None, ""
+
+        def press(_stage, *names, **_kwargs):
+            operations.append(("keys", names))
+
+        def text(_stage, command_id, _value, **_kwargs):
+            operations.append(("text", command_id))
+
+        def secret(_stage):
+            operations.append(("secret",))
+
+        self.controller.wait_screen = wait
+        self.controller.press = press
+        self.controller.type_text = text
+        self.controller.type_secret = secret
+        with mock.patch.object(automation.time, "sleep"):
+            self.controller.boot_installed_and_start()
+
+        greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"))
+        proof = ("text", "installed-shell-proof")
+        at = operations.index(greeting)
+        self.assertEqual(operations[at + 1], ("keys", ("ret",)))
+        self.assertEqual(operations[at + 2], proof)
+        self.assertLess(operations.index(("secret",)), at)
+        self.assertEqual(operations[at + 4],
+                         ("screen", "installed-shell", ("ARCTIC-SHOWCASE-SHELL-READY",)))
+
 
 class TraceContract(unittest.TestCase):
     def test_guest_fields_cannot_enter_or_promote_trace(self):

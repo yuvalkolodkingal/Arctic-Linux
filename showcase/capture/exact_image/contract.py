@@ -203,7 +203,8 @@ def controller_trace(value) -> None:
         "installed-boot": {"installed-login-ready", "first-login-welcome",
                            "first-login-dismissed"},
         "installed-console": {"installed-console-login", "installed-password-prompt",
-                              "installed-shell", "installed-sudo-password"},
+                              "installed-fetch-greeting", "installed-shell",
+                              "installed-sudo-password"},
         "dictationsetup": {"dictation-ready-page"},
         "winter": {"wallpaper-page", "wallpaper-hide-dialog"},
         "updates": {"whats-new-layer"},
@@ -318,6 +319,7 @@ def controller_trace(value) -> None:
         ("live-console", "live-console-login"), ("install-complete", "installer-done"),
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
+        ("installed-console", "installed-fetch-greeting"),
         ("installed-console", "installed-shell"),
         ("installed-console", "installed-sudo-password"),
         ("installed-boot", "first-login-welcome"),
@@ -353,7 +355,7 @@ def controller_trace(value) -> None:
             and keys.count(("live-console", ("ret",))) == 2
             and keys.count(("live-install", ("ret",))) == 1
             and 1 <= keys.count(("installed-console", ("ctrl-alt-f6",))) <= 70
-            and keys.count(("installed-console", ("ret",))) == 4
+            and keys.count(("installed-console", ("ret",))) == 5
             and keys.count(("installed-scenes", ("ret",))) == 1
             and keys.count(("installed-boot", ("esc",))) == 1,
             "controller exact key inventory differs")
