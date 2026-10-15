@@ -9,9 +9,15 @@ parser.add_argument('output', type=Path)
 parser.add_argument('--online-proxy', action='store_true',
                     help='Require the explicit VM test proxy; configure the daemon only in /run')
 parser.add_argument('--expected-stable-source', help='Require downloaded/installed Arctic packages from this full Git SHA')
+parser.add_argument('--expected-stable-fingerprint',
+                    help='Require every downloaded Arctic RPM signature from this full key fingerprint')
 args = parser.parse_args()
 if args.expected_stable_source and not re.fullmatch('[0-9a-f]{40}', args.expected_stable_source):
     parser.error('--expected-stable-source must be a full Git SHA')
+if args.expected_stable_fingerprint and not re.fullmatch('[0-9A-F]{40}', args.expected_stable_fingerprint):
+    parser.error('--expected-stable-fingerprint must be an uppercase full fingerprint')
+if bool(args.expected_stable_source) != bool(args.expected_stable_fingerprint):
+    parser.error('stable source and signing fingerprint must be pinned together')
 root = Path(__file__).resolve().parent
 performance = (root/'guest.py').read_text()
 nix = (root.parent/'nix-acceptance/guest.py').read_text()
@@ -54,7 +60,9 @@ awake = json.loads(measurement['run'](prefix+['arctic-keep-awake', 'status', '--
 if not awake.get('on'):
     measurement['run'](prefix+['arctic-keep-awake', 'on', '--quiet'])
 try:
-    result = nix_acceptance['main'](update_method='arctic-offline', expected_stable_source=EXPECTED_STABLE_SOURCE)
+    result = nix_acceptance['main'](update_method='arctic-offline',
+        expected_stable_source=EXPECTED_STABLE_SOURCE,
+        expected_stable_fingerprint=EXPECTED_STABLE_FINGERPRINT)
 finally:
     if not awake.get('on'):
         measurement['run'](prefix+['arctic-keep-awake', 'off', '--quiet'])
@@ -68,4 +76,5 @@ args.output.write_text(
     'nix_acceptance = {"__name__": "arctic_nix_acceptance", "__file__": __file__}\n'
     f'exec(compile({nix!r}, __file__, "exec"), nix_acceptance)\n'
     f'ONLINE_PROXY = {args.online_proxy!r}\n'
-    f'EXPECTED_STABLE_SOURCE = {args.expected_stable_source!r}\n' + setup)
+    f'EXPECTED_STABLE_SOURCE = {args.expected_stable_source!r}\n'
+    f'EXPECTED_STABLE_FINGERPRINT = {args.expected_stable_fingerprint!r}\n' + setup)
