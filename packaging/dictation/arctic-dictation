@@ -6,12 +6,43 @@ private_runtime() {
     uid=$(id -u)
     base=${XDG_RUNTIME_DIR:-/run/user/$uid}
     if [ -z "$base" ] || [ ! -d "$base" ] || [ -L "$base" ] || [ "$(stat -c %u:%a "$base" 2>/dev/null || true)" != "$uid:700" ]; then
-        runtime=/tmp/arctic-$uid
+        runtime=/tmp/arctic-dictation-$uid
+        legacy=/tmp/arctic-$uid
     else
-        runtime=$base/arctic
+        runtime=$base/arctic-dictation
+        legacy=$base/arctic
     fi
     if [ ! -e "$runtime" ] && [ ! -L "$runtime" ]; then mkdir -m 0700 "$runtime" 2>/dev/null || return 1; fi
-    [ ! -L "$runtime" ] && [ -d "$runtime" ] && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    [ ! -L "$runtime" ] && [ -d "$runtime" ] \
+        && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    # Preserve the lazy-start marker across an update from the former shared
+    # Arctic directory. Remove only known, type-checked transient state; the
+    # per-login runtime base clears any remaining legacy lock automatically.
+    if [ ! -L "$legacy" ] && [ -d "$legacy" ] \
+            && [ "$(stat -c %u "$legacy" 2>/dev/null || true)" = "$uid" ]; then
+        old_session=$legacy/voxtype-session-started-v1
+        new_session=$runtime/voxtype-session-started-v1
+        if [ ! -L "$old_session" ] && [ -d "$old_session" ] \
+                && [ "$(stat -c %u:%a "$old_session" 2>/dev/null || true)" = "$uid:700" ]; then
+            if [ ! -e "$new_session" ] && [ ! -L "$new_session" ]; then
+                mkdir -m 0700 "$new_session" 2>/dev/null || return 1
+            fi
+            [ ! -L "$new_session" ] && [ -d "$new_session" ] \
+                && [ "$(stat -c %u:%a "$new_session" 2>/dev/null || true)" = "$uid:700" ] || return 1
+            rmdir "$old_session" 2>/dev/null || :
+        fi
+        old_starting=$legacy/voxtype-starting
+        if [ ! -L "$old_starting" ] && [ -d "$old_starting" ] \
+                && [ "$(stat -c %u:%a "$old_starting" 2>/dev/null || true)" = "$uid:700" ]; then
+            rmdir "$old_starting" 2>/dev/null || :
+        fi
+        for old_file in "$legacy/voxtype-error" "$legacy/voxtype-journal.cursor"; do
+            if [ ! -L "$old_file" ] && [ -f "$old_file" ] \
+                    && [ "$(stat -c %u "$old_file" 2>/dev/null || true)" = "$uid" ]; then
+                rm -f "$old_file" || :
+            fi
+        done
+    fi
     printf '%s\n' "$runtime"
 }
 clear_runtime_error() {

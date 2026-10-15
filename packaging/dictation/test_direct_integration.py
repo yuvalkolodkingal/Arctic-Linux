@@ -265,10 +265,14 @@ class DirectUpstreamIntegration(unittest.TestCase):
 
     def test_runtime_error_cache_is_per_uid_and_no_follow(self):
         adapter = (D / "arctic-dictation").read_text()
+        toggle = (D / "arctic-dictation-toggle").read_text()
         self.assertIn('base=${XDG_RUNTIME_DIR:-/run/user/$uid}', adapter)
-        self.assertIn('runtime=/tmp/arctic-$uid', adapter)
+        self.assertIn('runtime=/tmp/arctic-dictation-$uid', adapter)
+        self.assertIn('runtime=$base/arctic-dictation', adapter)
         self.assertIn('[ ! -L "$runtime" ]', adapter)
         self.assertIn('stat -c %u:%a "$runtime"', adapter)
+        self.assertIn('[ ! -L "$runtime" ]', toggle)
+        self.assertIn('stat -c %u:%a "$runtime"', toggle)
         self.assertNotIn('${XDG_RUNTIME_DIR:-/tmp}/arctic', adapter)
 
     def test_bad_complete_partial_is_restarted_and_unready_pill_opens_settings(self):
@@ -360,12 +364,37 @@ esac''')
                        ACTIVE=str(active), COUNT=str(count), XDG_RUNTIME_DIR=str(runtime),
                        RELEASE=str(root / "release"))
 
+            # A dedicated path with an unsafe type is rejected without following it.
+            private = runtime / "arctic-dictation"
+            symlink_target = root / "symlink-target"; symlink_target.mkdir(mode=0o700)
+            private.symlink_to(symlink_target, target_is_directory=True)
+            linked = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(linked.returncode, 69)
+            self.assertEqual(list(symlink_target.iterdir()), [])
+            private.unlink()
+            private.write_text("not a directory")
+            nondirectory = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(nondirectory.returncode, 69)
+            self.assertEqual(private.read_text(), "not a directory")
+            private.unlink()
+
+            # A shared Arctic runtime created with the normal umask may coexist;
+            # dictation creates a separate private namespace and cleans old state.
+            legacy = runtime / "arctic"; legacy.mkdir(mode=0o755); legacy.chmod(0o755)
+            (legacy / "voxtype-starting").mkdir(mode=0o700)
+            (legacy / "voxtype-error").write_text("service-start\n")
+            (legacy / "voxtype-journal.cursor").write_text("opaque cursor\n")
+
             # A failed first start leaves neither loading nor session-resume markers.
             failed = subprocess.run([str(helper)], env=dict(env, START_RC="1"),
                                     text=True, capture_output=True)
             self.assertEqual(failed.returncode, 69)
             self.assertNotIn("private", failed.stdout + failed.stderr)
-            private = runtime / "arctic"
+            self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(legacy.stat().st_mode & 0o777, 0o755)
+            self.assertFalse((legacy / "voxtype-starting").exists())
+            self.assertFalse((legacy / "voxtype-error").exists())
+            self.assertFalse((legacy / "voxtype-journal.cursor").exists())
             self.assertFalse((private / "voxtype-starting").exists())
             self.assertFalse((private / "voxtype-session-started-v1").exists())
             self.assertEqual((private / "voxtype-error").read_text(), "service-start\n")
@@ -421,6 +450,15 @@ esac''')
             self.assertEqual(calls.read_text().count("voxtype record toggle"), 1)
             self.assertIn("already in progress", calls.read_text())
 
+            # A safe legacy session marker is migrated so lock/unlock resume survives.
+            (private / "voxtype-session-started-v1").rmdir()
+            old_session = legacy / "voxtype-session-started-v1"
+            old_session.mkdir(mode=0o700)
+            migrated = subprocess.run([str(helper)], env=success_env, text=True, capture_output=True)
+            self.assertEqual(migrated.returncode, 0)
+            self.assertFalse(old_session.exists())
+            self.assertTrue((private / "voxtype-session-started-v1").is_dir())
+
     def test_lazy_memory_and_configuration_semantics_are_structural(self):
         helper = (D / "arctic-dictation-toggle").read_text()
         adapter = (D / "arctic-dictation").read_text()
@@ -428,7 +466,7 @@ esac''')
         spec = (ROOT / "packaging/arctic-linux.spec").read_text()
         unit = (ROOT / "packaging/systemd/voxtype.service").read_text()
         lock = (ROOT / "shell/LockScreen.qml").read_text()
-        self.assertIn("ConditionPathExists=%t/arctic/voxtype-session-started-v1", unit)
+        self.assertIn("ConditionPathExists=%t/arctic-dictation/voxtype-session-started-v1", unit)
         self.assertIn("on_demand_loading = false", (D / "arctic-voxtype-configure").read_text())
         self.assertIn("systemctl --user start voxtype.service", helper)
         self.assertIn("voxtype status", helper)

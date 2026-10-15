@@ -717,7 +717,7 @@ class Checker:
                            check=False)
         require(service.stdout.strip() != b'active' and not self.state_path.exists()
                 and self.engines() == [], 'upstream-lazy-login-resident')
-        session_marker = self.runtime / 'arctic/voxtype-session-started-v1'
+        session_marker = self.runtime / 'arctic-dictation/voxtype-session-started-v1'
         require(not session_marker.exists(), 'upstream-lazy-session-marker-present')
 
         # Establish the deterministic PipeWire route before exercising the same
@@ -771,7 +771,7 @@ class Checker:
                  for word in line.partition('=')[2].split()]
         require('ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon' in unit
                 and 'ConditionPathExists=%h/.config/voxtype/config.toml' in unit
-                and 'ConditionPathExists=%t/arctic/voxtype-session-started-v1' in unit
+                and 'ConditionPathExists=%t/arctic-dictation/voxtype-session-started-v1' in unit
                 and 'UMask=0077' in unit
                 and 'RestrictAddressFamilies=AF_UNIX' in unit
                 and len(unset) == len(set(unset))
@@ -1284,7 +1284,7 @@ class Checker:
             # independent lock and backend gates run.
             self.selected_language = None
             cleanup('language-restore', lambda: self.select(language=restore_language))
-            error_path = self.runtime / 'arctic/voxtype-error'
+            error_path = self.runtime / 'arctic-dictation/voxtype-error'
             cleanup('error-clear', lambda: require(
                 not error_path.exists() and not error_path.is_symlink(),
                 'microphone-error-not-cleared'))

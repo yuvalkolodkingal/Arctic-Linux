@@ -167,7 +167,7 @@ on_transcription = false
             checker.root = Path(temp)
             checker.runtime = checker.root
             (checker.root / 'received.private').write_bytes(b'')
-            error_path = checker.runtime / 'arctic/voxtype-error'
+            error_path = checker.runtime / 'arctic-dictation/voxtype-error'
             error_path.parent.mkdir()
             error_path.write_text('microphone\n')
             def selection(**choice):
