@@ -475,7 +475,7 @@ class Controller:
         self.record(stage, "keys", {"names": list(names)})
 
     def press_held(self, stage: str, *names: str, gap=.18):
-        """Use QEMU's bounded key-up timer for firmware and VT controls."""
+        """Use QEMU's bounded key-up timer for firmware, VT, and control chords."""
         c.require(names and len(names) <= 8, "unattended held key sequence differs")
         for name in names:
             chord = name.split("-") if "-" in name else [name]
@@ -792,7 +792,13 @@ class Controller:
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.installed_startup.fetch_observed()
-        self.press("installed-console", "ctrl-l")
+        # The exact run reached the greeting but produced only low-color frames
+        # after the zero-duration Ctrl-L batch, without an OCR-visible prompt.
+        # Keep this modifier chord asserted long enough for QEMU's input path to
+        # deliver one bounded guest-visible keypress.  The 100 ms QEMU timer is
+        # below keyboard repeat delay, so the fetch renderer still receives at
+        # most the one ordinary byte its handoff contract requires.
+        self.press_held("installed-console", "ctrl-l")
         self.installed_startup.dismissal_sent()
         # The fetch renderer can remain visible after it has accepted the
         # dismissal key.  Do not type even the nonsecret proof command until a
@@ -809,7 +815,7 @@ class Controller:
                              prompt_contract=installed_prompt)
         except InstalledShellReadyTimeout as error:
             try:
-                self.press("installed-diagnostic", "ctrl-c")
+                self.press_held("installed-diagnostic", "ctrl-c")
             except (c.Invalid, OSError):
                 self.installed_startup.interrupt("controller-unavailable")
                 raise error

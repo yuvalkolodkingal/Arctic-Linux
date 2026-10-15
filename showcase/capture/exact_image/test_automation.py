@@ -55,17 +55,19 @@ class UnattendedController(unittest.TestCase):
                                   "characters": 38})
         self.assertNotIn(automation.Controller.PASSWORD, repr(self.controller.events))
 
-    def test_control_l_redraw_has_no_return_or_text_byte(self):
-        self.controller.press("installed-console", "ctrl-l", gap=0)
+    def test_control_l_redraw_uses_bounded_hold_without_return_or_text_byte(self):
+        self.controller.press_held("installed-console", "ctrl-l", gap=0)
         self.assertEqual(len(self.qmp.commands), 1)
         name, arguments = self.qmp.commands[0]
-        self.assertEqual(name, "input-send-event")
-        events = arguments["events"]
-        self.assertEqual([event["data"]["key"]["data"] for event in events],
-                         ["ctrl", "l", "l", "ctrl"])
-        self.assertEqual([event["data"]["down"] for event in events],
-                         [True, True, False, False])
-        self.assertNotIn("ret", repr(events))
+        self.assertEqual(name, "send-key")
+        self.assertEqual(arguments, {
+            "keys": [
+                {"type": "qcode", "data": "ctrl"},
+                {"type": "qcode", "data": "l"},
+            ],
+            "hold-time": 100,
+        })
+        self.assertNotIn("ret", repr(arguments))
         self.assertEqual(self.controller.events, [{
             "index": 0, "stage": "installed-console", "kind": "keys",
             "detail": {"names": ["ctrl-l"]},
@@ -408,11 +410,15 @@ class UnattendedController(unittest.TestCase):
         def press(_stage, *names, **_kwargs):
             operations.append(("keys", names))
 
+        def press_held(_stage, *names, **_kwargs):
+            operations.append(("held-keys", names))
+
         def text(_stage, command_id, _value, **_kwargs):
             operations.append(("text", command_id))
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press_held
         self.controller.type_text = text
         self.controller.type_secret = mock.Mock()
         with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
@@ -423,7 +429,7 @@ class UnattendedController(unittest.TestCase):
             {"seconds": 90, "exact_output": True,
              "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >"))},
         ))
-        self.assertEqual(operations[timeout_at + 1], ("keys", ("ctrl-c",)))
+        self.assertEqual(operations[timeout_at + 1], ("held-keys", ("ctrl-c",)))
         self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
         self.assertNotIn(("text", "installed-shell-proof"), operations)
         self.assertEqual(self.controller.installed_startup.interrupt_status,
@@ -542,6 +548,9 @@ uptime   2 mins
         def press(_stage, *names, **_kwargs):
             operations.append(("keys", names))
 
+        def press_held(_stage, *names, **_kwargs):
+            operations.append(("held-keys", names))
+
         def text(_stage, command_id, _value, **_kwargs):
             operations.append(("text", command_id))
 
@@ -550,6 +559,7 @@ uptime   2 mins
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press_held
         self.controller.type_text = text
         self.controller.type_secret = secret
         with mock.patch.object(automation.time, "sleep"):
@@ -563,7 +573,7 @@ uptime   2 mins
                                           ("~>", "~ >"))})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
-        self.assertEqual(operations[at + 1], ("keys", ("ctrl-l",)))
+        self.assertEqual(operations[at + 1], ("held-keys", ("ctrl-l",)))
         self.assertEqual(operations[at + 2], ready)
         self.assertEqual(operations[at + 3], proof)
         self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
