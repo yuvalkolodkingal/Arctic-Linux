@@ -30,6 +30,199 @@ PRE_STREAM_NATIVE_SHA = '97bb8590869a823171fdd2d84491268527271984a96e88691beb851
 FRESH_PLAYER_RESTART_NATIVE_SHA = '8caeaa262ca9cdb55de81991c69b16783dae36656b3001870dbb4252ed49118c'
 PRE_PRODUCT_LAUNCH_NATIVE_SHA = 'c951fd9d1d5b2efd0f5d8cc8e21dca859dd9f6e908e8b95d03aadc89e9a9223b'
 TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd601723c396e'
+PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
+
+
+
+PLAYER_REUSE_NATIVE=[("        player = self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],\n            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),\n", "        player = self.fresh_window(lambda:self.launch_protocol_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),\n"), ("                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; the same visibly proved renderer is reused for the sequential static oracle')\n        reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=player,\n                   ipc=str(ipc),moving_fixture=str(fixture),moving_screenshot_sha256=moving_shot['sha256'],\n                   same_process_renderer_required=True,release_acceptance=False)\n        moving_proof['static_oracle_reuse']=reuse\n", "                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')\n        moving_proof['retirement_before_static_oracle']=None\n"), ("        if getattr(self,'gui_v6',False): self.player_fullscreen(player,False,ipc)\n        visual=self.visual_media(reuse if getattr(self,'gui_v6',False) else None)\n", "        if getattr(self,'gui_v6',False):\n            self.player_fullscreen(player,False,ipc)\n            self.finish_native_protocol()\n            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)\n            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))\n        visual=self.visual_media()\n"), ("                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; one owned product player proves the original moving fixture and then an authenticated exact-file transition to the strict static oracle; motion/perceived audio/hardware remain unqualified')\n", "                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')\n"), ('    def visual_media(self,reuse=None):\n', '    def visual_media(self):\n'), ("        transition=None\n        if getattr(self,'gui_v6',False):\n            require(type(reuse) is dict and set(reuse)=={'schema','player','ipc','moving_fixture',\n                    'moving_screenshot_sha256','same_process_renderer_required','release_acceptance'}\n                    and reuse['schema']=='arctic-native-player-fixture-continuity-v1'\n                    and reuse['same_process_renderer_required'] is True and reuse['release_acceptance'] is False,\n                    'visual oracle requires exact moving-player continuity')\n            player=reuse['player'];renderer=self.product_renderer_contract(player)\n            old_ipc=Path(reuse['ipc'])\n            require(old_ipc==self.root/'celluloid-ipc.sock' and old_ipc.is_socket()\n                    and reuse['moving_fixture']==str(self.root/'open-codec-fixture.mkv')\n                    and re.fullmatch(r'[0-9a-f]{64}',reuse['moving_screenshot_sha256']) is not None,\n                    'moving-player continuity paths/evidence differ')\n            ipc=old_ipc\n            before=self.alive(player)\n            require(before.get('is_fullscreen') is False and before.get('is_focused') is True,\n                    'moving player was not restored before static fixture transition')\n            source_path=mpv_property(ipc,'path',player['pid'],self.uid)\n            require(source_path==reuse['moving_fixture'],'moving player source changed before static transition')\n            transition=mpv_replace_fixture(ipc,player['pid'],self.uid,Path(source_path),fixture)\n        else:\n            require(reuse is None,'non-GUI visual fixture cannot reuse a GUI player')\n            player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],self.launch),\n                'celluloid',r'celluloid')\n            renderer=None\n            self.wait(lambda:ipc.is_socket())\n", "        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],\n            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),\n            'celluloid',r'celluloid')\n        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None\n        self.wait(lambda:ipc.is_socket())\n"), ("                return (mpv_property(ipc,'path',player['pid'],self.uid)==str(fixture)\n                        and mpv_property(ipc,'video-params',player['pid'],self.uid))\n", "                return mpv_property(ipc,'video-params',player['pid'],self.uid)\n"), ('                  product_renderer=renderer,fixture_transition=transition,fixture_cadence=visual_reference_cadence(),\n', '                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),\n'), ("            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer','fixture_transition')}\n", "            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}\n"), ("            self.player_fullscreen(player,False,ipc)\n            self.finish_native_protocol()\n        require(info['oracle']['status']=='matched',\n", "            self.player_fullscreen(player,False,ipc)\n        require(info['oracle']['status']=='matched',\n"), ('def mpv_replace_fixture(path, expected_pid, expected_uid, source, target):\n    """Replace one exact owned fixture on the already presented Celluloid player."""\n    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0\n            and isinstance(source,Path) and isinstance(target,Path)\n            and source.is_absolute() and target.is_absolute() and source.parent==target.parent\n            and source.name==\'open-codec-fixture.mkv\' and target.name==\'visual-reference.mkv\',\n            \'Celluloid fixture transition identity/path is invalid\')\n    info=Path(path).lstat()\n    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,\n            \'Celluloid fixture transition IPC path owner/type differs\')\n    request_id=48;command=[\'loadfile\',str(target),\'replace\']\n    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:\n        peer.settimeout(2);peer.connect(str(path))\n        pid,uid,_=struct.unpack(\'3i\',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))\n        require((pid,uid)==(expected_pid,expected_uid),\'Celluloid fixture transition IPC peer differs\')\n        peer.sendall(json.dumps(dict(command=command,request_id=request_id),separators=(\',\',\':\')).encode()+b\'\\n\')\n        data=b\'\';deadline=time.monotonic()+3\n        while time.monotonic()<deadline:\n            chunk=peer.recv(4096)\n            require(chunk,\'Celluloid fixture transition IPC disconnected before acknowledgement\')\n            data+=chunk;require(len(data)<=4096,\'Celluloid fixture transition IPC reply exceeded bound\')\n            while b\'\\n\' in data:\n                line,data=data.split(b\'\\n\',1)\n                def pairs(items):\n                    value={}\n                    for key,item in items:\n                        require(key not in value,\'Celluloid fixture transition IPC duplicate field\')\n                        value[key]=item\n                    return value\n                message=json.loads(line,object_pairs_hook=pairs)\n                require(type(message) is dict,\'Celluloid fixture transition IPC reply is not an object\')\n                if message.get(\'request_id\')==request_id:\n                    require(type(message[\'request_id\']) is int and message.get(\'error\')==\'success\'\n                            and message.get(\'data\') is None,\'Celluloid fixture transition IPC command failed\')\n                    return dict(schema=\'arctic-native-fixture-transition-v1\',\n                        transport=\'owned mpv IPC SO_PEERCRED\',source=str(source),target=str(target),\n                        command=command,request_id=request_id,acknowledgement=message,\n                        same_process_renderer_required=True,release_acceptance=False)\n        raise RuntimeError(\'Celluloid fixture transition IPC acknowledgement timed out\')\n\n\n', '')]
+PLAYER_REUSE_GUEST=[("        player = self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],\n            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),\n", "        player = self.fresh_window(lambda:self.launch_protocol_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),\n"), ("                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; the same visibly proved renderer is reused for the sequential static oracle')\n        reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=player,\n                   ipc=str(ipc),moving_fixture=str(fixture),moving_screenshot_sha256=moving_shot['sha256'],\n                   same_process_renderer_required=True,release_acceptance=False)\n        moving_proof['static_oracle_reuse']=reuse\n", "                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')\n        moving_proof['retirement_before_static_oracle']=None\n"), ("        if getattr(self,'gui_v6',False): self.player_fullscreen(player,False,ipc)\n        visual=self.visual_media(reuse if getattr(self,'gui_v6',False) else None)\n", "        if getattr(self,'gui_v6',False):\n            self.player_fullscreen(player,False,ipc)\n            self.finish_native_protocol()\n            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)\n            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))\n        visual=self.visual_media()\n"), ("                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; one owned product player proves the original moving fixture and then an authenticated exact-file transition to the strict static oracle; motion/perceived audio/hardware remain unqualified')\n", "                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')\n"), ('    def visual_media(self,reuse=None):\n', '    def visual_media(self):\n'), ("        transition=None\n        if getattr(self,'gui_v6',False):\n            require(type(reuse) is dict and set(reuse)=={'schema','player','ipc','moving_fixture',\n                    'moving_screenshot_sha256','same_process_renderer_required','release_acceptance'}\n                    and reuse['schema']=='arctic-native-player-fixture-continuity-v1'\n                    and reuse['same_process_renderer_required'] is True and reuse['release_acceptance'] is False,\n                    'visual oracle requires exact moving-player continuity')\n            player=reuse['player'];renderer=self.product_renderer_contract(player)\n            old_ipc=Path(reuse['ipc'])\n            require(old_ipc==self.root/'celluloid-ipc.sock' and old_ipc.is_socket()\n                    and reuse['moving_fixture']==str(self.root/'open-codec-fixture.mkv')\n                    and re.fullmatch(r'[0-9a-f]{64}',reuse['moving_screenshot_sha256']) is not None,\n                    'moving-player continuity paths/evidence differ')\n            ipc=old_ipc\n            before=self.alive(player)\n            require(before.get('is_fullscreen') is False and before.get('is_focused') is True,\n                    'moving player was not restored before static fixture transition')\n            source_path=mpv_property(ipc,'path',player['pid'],self.uid)\n            require(source_path==reuse['moving_fixture'],'moving player source changed before static transition')\n            transition=mpv_replace_fixture(ipc,player['pid'],self.uid,Path(source_path),fixture)\n        else:\n            require(reuse is None,'non-GUI visual fixture cannot reuse a GUI player')\n            player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],self.launch),\n                'celluloid',r'celluloid')\n            renderer=None\n            self.wait(lambda:ipc.is_socket())\n", "        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',\n            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],\n            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),\n            'celluloid',r'celluloid')\n        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None\n        self.wait(lambda:ipc.is_socket())\n"), ("                return (mpv_property(ipc,'path',player['pid'],self.uid)==str(fixture)\n                        and mpv_property(ipc,'video-params',player['pid'],self.uid))\n", "                return mpv_property(ipc,'video-params',player['pid'],self.uid)\n"), ('                  product_renderer=renderer,fixture_transition=transition,fixture_cadence=visual_reference_cadence(),\n', '                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),\n'), ("            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer','fixture_transition')}\n", "            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}\n"), ("            self.player_fullscreen(player,False,ipc)\n            self.finish_native_protocol()\n        require(info['oracle']['status']=='matched',\n", "            self.player_fullscreen(player,False,ipc)\n        require(info['oracle']['status']=='matched',\n"), ('\n\ndef mpv_replace_fixture(path, expected_pid, expected_uid, source, target):\n    """Replace one exact owned fixture on the already presented Celluloid player."""\n    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0\n            and isinstance(source,Path) and isinstance(target,Path)\n            and source.is_absolute() and target.is_absolute() and source.parent==target.parent\n            and source.name==\'open-codec-fixture.mkv\' and target.name==\'visual-reference.mkv\',\n            \'Celluloid fixture transition identity/path is invalid\')\n    info=Path(path).lstat()\n    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,\n            \'Celluloid fixture transition IPC path owner/type differs\')\n    request_id=48;command=[\'loadfile\',str(target),\'replace\']\n    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:\n        peer.settimeout(2);peer.connect(str(path))\n        pid,uid,_=struct.unpack(\'3i\',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))\n        require((pid,uid)==(expected_pid,expected_uid),\'Celluloid fixture transition IPC peer differs\')\n        peer.sendall(json.dumps(dict(command=command,request_id=request_id),separators=(\',\',\':\')).encode()+b\'\\n\')\n        data=b\'\';deadline=time.monotonic()+3\n        while time.monotonic()<deadline:\n            chunk=peer.recv(4096)\n            require(chunk,\'Celluloid fixture transition IPC disconnected before acknowledgement\')\n            data+=chunk;require(len(data)<=4096,\'Celluloid fixture transition IPC reply exceeded bound\')\n            while b\'\\n\' in data:\n                line,data=data.split(b\'\\n\',1)\n                def pairs(items):\n                    value={}\n                    for key,item in items:\n                        require(key not in value,\'Celluloid fixture transition IPC duplicate field\')\n                        value[key]=item\n                    return value\n                message=json.loads(line,object_pairs_hook=pairs)\n                require(type(message) is dict,\'Celluloid fixture transition IPC reply is not an object\')\n                if message.get(\'request_id\')==request_id:\n                    require(type(message[\'request_id\']) is int and message.get(\'error\')==\'success\'\n                            and message.get(\'data\') is None,\'Celluloid fixture transition IPC command failed\')\n                    return dict(schema=\'arctic-native-fixture-transition-v1\',\n                        transport=\'owned mpv IPC SO_PEERCRED\',source=str(source),target=str(target),\n                        command=command,request_id=request_id,acknowledgement=message,\n                        same_process_renderer_required=True,release_acceptance=False)\n        raise RuntimeError(\'Celluloid fixture transition IPC acknowledgement timed out\')\n', '')]
+
+def restore_same_player_static_oracle(source):
+    """Reverse only the same-player sequential static-oracle control change."""
+    # The continuity receipt carries the already attested renderer object so a
+    # later snapshot cannot drift after more protocol traffic. Normalize that
+    # binding before applying the generated inverse to the exact prior source.
+    renderer_pairs=(
+        ("        # The GUI release gate admits only the already proved product-wrapper\n        # player. A failed or unmatched capture cannot create another path.\n",
+         "        # This release gate admits exactly one fresh product-wrapper player.\n        # A failed or unmatched capture cannot create another acceptance path.\n"),
+        ("                   ipc=str(ipc),moving_fixture=str(fixture),moving_screenshot_sha256=moving_shot['sha256'],\n                   product_renderer=renderer,\n                   same_process_renderer_required=True,release_acceptance=False)\n",
+         "                   ipc=str(ipc),moving_fixture=str(fixture),moving_screenshot_sha256=moving_shot['sha256'],\n                   same_process_renderer_required=True,release_acceptance=False)\n"),
+        ("                    'moving_screenshot_sha256','product_renderer','same_process_renderer_required','release_acceptance'}\n",
+         "                    'moving_screenshot_sha256','same_process_renderer_required','release_acceptance'}\n"),
+        ("                    and type(reuse['product_renderer']) is dict\n",''),
+        ("            player=reuse['player'];renderer=reuse['product_renderer']\n",
+         "            player=reuse['player'];renderer=self.product_renderer_contract(player)\n"),
+    )
+    for index,(current,previous) in enumerate(renderer_pairs):
+        if source.count(current)!=1:raise AssertionError(f'Player renderer binding inverse occurrence differs at {index}')
+        source=source.replace(current,previous,1)
+    guest='    def host_frame_diagnostic(self,player,expected,primary):\n' in source
+    pairs=PLAYER_REUSE_GUEST if guest else PLAYER_REUSE_NATIVE
+    for index,(current,previous) in enumerate(pairs):
+        if source.count(current)!=1:raise AssertionError(f'Player reuse inverse occurrence differs at {index}')
+        source=source.replace(current,previous,1)
+    return source
+
+
+def restore_celluloid_fullscreen_action(source):
+    """Reverse only the owned Celluloid fullscreen-action control correction."""
+    current="""    def player_fullscreen(self, proof, enabled, ipc):
+"""
+    previous="""    def player_fullscreen(self, proof, enabled):
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen method signature differs')
+    source=source.replace(current,previous,1)
+    current="""        action=mpv_celluloid_fullscreen(ipc,proof['pid'],self.uid,enabled)
+"""
+    previous="""        argv=['mmsg','dispatch','togglefullscreen','client,'+proof['client_id']]
+        response=self.cmd(argv)
+        require(response[0]==0 and json.loads(response[1])=={'success':True},'owned fullscreen action failed')
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen invocation differs')
+    source=source.replace(current,previous,1)
+    current="""            monitors_before=monitors_before,monitors_after=monitors_after,action=action,
+"""
+    previous="""            monitors_before=monitors_before,monitors_after=monitors_after,
+            action=dict(argv=argv,returncode=response[0],stdout=response[1],stderr=response[2]),
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen receipt differs')
+    source=source.replace(current,previous,1)
+    source=source.replace('self.player_fullscreen(player,True,ipc)','self.player_fullscreen(player,True)')
+    source=source.replace('self.player_fullscreen(player,False,ipc)','self.player_fullscreen(player,False)')
+    begin='def mpv_celluloid_fullscreen(path, expected_pid, expected_uid, enabled):\n'
+    end='def mpv_hide_reference_controls(path, expected_pid, expected_uid):\n'
+    if source.count(begin)!=1 or source.count(end)!=1:raise AssertionError('Celluloid fullscreen helper differs')
+    first=source.index(begin);last=source.index(end,first)
+    return source[:first]+source[last:]
+
+def restore_host_frame_diagnostic(source):
+    """Remove only the failure-only same-frame host observation."""
+    begin='    # BEGIN HOST_FRAME_DIAGNOSTIC\n';end='    # END HOST_FRAME_DIAGNOSTIC\n\n'
+    if source.count(begin)!=1 or source.count(end)!=1:
+        raise AssertionError('Host frame diagnostic inverse block differs')
+    first=source.index(begin);last=source.index(end,first)+len(end)
+    source=source[:first]+source[last:]
+    current="""        if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
+        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None) in ('live','installed')
+                and info['oracle']['status']=='unmatched'):
+            self.host_frame_diagnostic(player,expected,info)
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False)
+"""
+    previous="""        if getattr(self,'gui_v6',False):
+            self.native_protocol_diagnostic(player,state,screenshot,client)
+            self.player_fullscreen(player,False)
+"""
+    if source.count(current)!=1:
+        raise AssertionError('Host frame diagnostic inverse invocation differs')
+    return source.replace(current,previous,1)
+
+
+def restore_paused_visual_capture(source):
+    """Reverse only the one-player paused-frame capture stabilization."""
+    helper_start='def mpv_pause_reference(path, expected_pid, expected_uid):\n'
+    helper_end='def mpv_property(path, key, expected_pid, expected_uid):\n'
+    if source.count(helper_start)!=1 or source.count(helper_end)!=1:
+        raise AssertionError('Paused capture helper inverse occurrence differs')
+    first=source.index(helper_start);last=source.index(helper_end,first)
+    source=source[:first]+source[last:]
+    current="""        # The pulsed fixture above proves post-fullscreen presentation work, but
+        # capturing while the software GL path is replacing that texture can
+        # expose a transient tiled buffer rather than one complete frame. Pause
+        # this same proved player, require the clock to settle, and keep the
+        # sole screenshot/oracle and every acceptance threshold unchanged.
+        mpv_pause_reference(ipc,player['pid'],self.uid)
+        def paused_reference():
+            value=mpv_property(ipc,'pause',player['pid'],self.uid)
+            require(type(value) is bool, 'visual pause state is not Boolean')
+            return value
+        self.wait(paused_reference,3,'owned visual playback pause')
+        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
+                and math.isfinite(paused_time) and 0<=paused_time<=2,
+                'paused visual playback clock is invalid')
+        time.sleep(.5)
+        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
+                and math.isfinite(settled_time) and 0<=settled_time<=2
+                and abs(settled_time-paused_time)<=.05,
+                'paused visual playback clock did not settle')
+"""
+    previous="""        time.sleep(.5)
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture sequence inverse occurrence differs')
+    source=source.replace(current,previous,1)
+    current="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
+                                      settled_seconds=settled_time,capture_paused=True,
+                                      presentation_refresh='frame-step',
+                                      maximum_settled_drift_seconds=.05,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    previous="""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+"""
+    if source.count(current)!=1:raise AssertionError('Paused capture receipt inverse occurrence differs')
+    return source.replace(current,previous,1)
+
+
+def restore_pulsed_visual_native(source):
+    """Reverse only the continuous-damage visual fixture correction."""
+    source=restore_paused_visual_capture(source)
+    current="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+
+
+def visual_reference_stream():
+    \"\"\"Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    \"\"\"
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+"""
+    previous="""def visual_reference_frame():
+    \"\"\"16 distinct flat color cells; diagnostic fixture, no motion-render claim.\"\"\"
+    palette = ((224,24,192),(24,208,48),(24,48,224),(232,208,24),
+               (32,208,216),(224,48,32),(120,48,208),(208,128,24),
+               (48,128,24),(24,128,176),(176,24,88),(176,176,176),
+               (88,176,208),(208,88,152),(120,208,88),(208,208,88))
+    return bytes(channel for y in range(120) for x in range(160)
+                 for channel in palette[(y//30)*4+x//40])
+"""
+    replacements=((current,previous),
+                  ("        source=self.write('visual-reference-input.raw',visual_reference_stream())\n",
+                   "        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)\n"),
+                  ("                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')\n",
+                   "                  product_renderer=renderer,\n                  command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],\n                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')\n"))
+    for index,(new,old) in enumerate(replacements):
+        if source.count(new)!=1:raise AssertionError(f'Pulsed visual inverse occurrence differs at {index}')
+        source=source.replace(new,old,1)
+    if hashlib.sha256(source.encode()).hexdigest()!=PRE_PULSE_NATIVE_SHA:
+        raise AssertionError('Pre-pulsed visual Native source differs')
+    return source
 
 
 def restore_epiphany_product_route(source):
@@ -106,8 +299,46 @@ def restore_runtime_failure_fix(source):
     return source
 
 
+def restore_post_geometry_readiness(source):
+    """Remove only the post-fullscreen playback readiness correction."""
+    replacements=(("""        pre_geometry_time=state['time-pos']
+        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
+                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
+                'pre-geometry visual playback clock is invalid')
+        # Anchor readiness after the fullscreen and controls transitions.  A
+        # clock sampled before those transitions can satisfy the old delta as
+        # soon as the window enters fullscreen, while its GL content is still
+        # unpainted.  The exact same owned player must advance for a bounded
+        # interval in its final capture geometry before the sole screenshot.
+        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'post-geometry visual playback clock is invalid')
+        minimum_post_geometry_advance=.5
+""","""        initial_time=state['time-pos']
+        require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
+                and math.isfinite(initial_time) and 0<=initial_time<=2,
+                'initial visual playback clock is invalid')
+"""),
+        ("            return observed if delta>=minimum_post_geometry_advance else None\n",
+         "            return observed if delta>=.05 else None\n"),
+        ("""                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
+""","""                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+"""))
+    for index,(current,previous) in enumerate(replacements):
+        if source.count(current)!=1:
+            raise AssertionError(f'Post-geometry readiness inverse occurrence differs at {index}')
+        source=source.replace(current,previous,1)
+    return source
+
+
 def restore_single_player_native(source):
     """Reverse only the one-player hard-fail gate for historical byte proofs."""
+    source=restore_pulsed_visual_native(source)
+    source=restore_post_geometry_readiness(source)
     source=restore_epiphany_product_route(source)
     source=restore_moving_player_retirement(source)
     source=restore_runtime_failure_fix(source)
@@ -354,6 +585,11 @@ def restore_fresh_player_restart_native(source):
 
 
 def restore_bounded_retry_native(source):
+    if '    def visual_media(self,reuse=None):\n' in source:
+        source=restore_same_player_static_oracle(source)
+    if '    def player_fullscreen(self, proof, enabled, ipc):\n' in source:
+        source=restore_celluloid_fullscreen_action(source)
+    source=restore_moving_capture_settle(source)
     source=restore_fresh_player_restart_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
         raise AssertionError('Bounded retry Native source differs')
@@ -405,7 +641,44 @@ def restore_security_stream_native(source):
     return source
 
 
+def restore_moving_capture_settle(source):
+    """Reverse only the final existing moving-player settle relocation."""
+    current="""        for sample_index in range(8):
+            sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
+                      for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
+            samples.append(sample)
+            self.alive(player)
+            # Preserve all seven sample-to-sample intervals.  The eighth sleep
+            # never contributed another sample, so retain that exact bounded
+            # settle below after the final fullscreen geometry is established.
+            if sample_index < 7: time.sleep(.35)
+"""
+    previous="""        for _ in range(8):
+            sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
+                      for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
+            samples.append(sample)
+            self.alive(player)
+            time.sleep(.35)
+"""
+    final_current="""        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,True)
+            moving_before=self.alive(player)
+        time.sleep(.35)
+        moving_shot=self.screenshot('celluloid-playing')
+"""
+    final_previous="""        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,True)
+            moving_before=self.alive(player)
+        moving_shot=self.screenshot('celluloid-playing')
+"""
+    if source.count(current)!=1 or source.count(final_current)!=1:
+        raise AssertionError('Moving capture settle inverse occurrence differs')
+    return source.replace(current,previous,1).replace(final_current,final_previous,1)
+
+
 def restore_controls_native(source):
+    source=restore_same_player_static_oracle(source)
+    source=restore_celluloid_fullscreen_action(source)
     source=restore_security_stream_native(source)
     for start,end in (
         ('    # BEGIN CONTROLLED_CONTROLS_INVOCATION\n','    # END CONTROLLED_CONTROLS_INVOCATION\n\n'),
@@ -421,6 +694,12 @@ def restore_controls_native(source):
 
 
 def restore_controls_guest(source):
+    source=restore_same_player_static_oracle(source)
+    source=restore_celluloid_fullscreen_action(source)
+    source=restore_host_frame_diagnostic(source)
+    host_inventory="    '0-host-frame-request.json',\n"
+    if source.count(host_inventory)!=1:raise AssertionError('Host frame public inventory inverse differs')
+    source=source.replace(host_inventory,'',1)
     failure_headroom="""                    # A failed gate adds one owned failure screenshot after the
                     # normal navigation diagnostics.  Keep the strict 16 MiB
                     # transport ceiling and prioritize that failure frame plus
@@ -435,9 +714,11 @@ def restore_controls_guest(source):
     if source.count(failure_headroom)!=1:
         raise AssertionError('Failure evidence headroom inverse occurrence differs')
     source=source.replace(failure_headroom,'',1)
-    native=(HERE/'native_smoke.py').read_text()
+    native_current=(HERE/'native_smoke.py').read_text()
+    native=restore_same_player_static_oracle(native_current)
+    native=restore_celluloid_fullscreen_action(native)
     boundary='\n\n# BEGIN NATIVE_BULK_TRANSPORT\n'
-    original=restore_controls_native(native)
+    original=restore_controls_native(native_current)
     if not source.startswith(native[:native.index('def main():\n')]):raise AssertionError('Controls guest prefix differs')
     # The bundle inherits the original Native prefix through run_checks, then
     # the original bulk/export entrypoint. No off-branch Git object is required.
@@ -450,7 +731,7 @@ def restore_controls_guest(source):
         ('0-controls-state-trials.json','0-controlled-renderer-trials.json'),
         ('controls-trial-transition/reference.png','renderer-trial-default/reference.png'),
         ('controls-trial-hidden/reference.png','renderer-trial-gl/reference.png'),
-        (hashlib.sha256(native.encode()).hexdigest(),BASE_NATIVE_SHA),
+        (hashlib.sha256(native_current.encode()).hexdigest(),BASE_NATIVE_SHA),
     )
     for index,(new,old) in enumerate(substitutions):
         if source.count(new)!=1:raise AssertionError(f'Controls guest inverse occurrence differs at {index}')
@@ -524,7 +805,9 @@ class ControlsStateTrials(unittest.TestCase):
             self.assertEqual(segment(new,name,'Smoke'),segment(old,name,'Smoke'))
         bounded=restore_bounded_retry_native(new)
         self.assertEqual(segment(bounded,'visual_media','Smoke').replace('self.controlled_controls_trials(', 'self.controlled_renderer_trials('),segment(old,'visual_media','Smoke'))
-        for text in (new.replace("time.sleep(.5)","time.sleep(.6)",1),
+        for text in (new.replace("pulse=bytes(channel+4 for channel in base)",
+                                  "pulse=bytes(channel+5 for channel in base)",1),
+                     new.replace("time.sleep(.5)","time.sleep(.6)",1),
                      new.replace('(attempt_limit-1) * retry_settle_seconds + 3.5',
                                  '(attempt_limit-1) * retry_settle_seconds + 4.5',1),
                      new.replace("schema='arctic-native-visual-attempts-v1'",
@@ -706,17 +989,21 @@ class ControlsStateTrials(unittest.TestCase):
 
     def test_actual_primary_capture_hard_fails_without_acceptance_diagnostics(self):
         with tempfile.TemporaryDirectory() as temporary:
-            root=Path(temporary);fixture=root/'fixture';fixture.write_bytes(b'source-fixed-synthetic-media')
+            root=Path(temporary);fixture=root/'visual-reference.mkv';fixture.write_bytes(b'source-fixed-synthetic-media')
             expected=root/'expected';expected.write_bytes(N.visual_reference_frame())
             smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.gui_v6=True;smoke.owned=[]
             smoke.visual_fixture=Mock(return_value=(fixture,expected,'c'*64));smoke.trace=Mock()
             players=[dict(pid=71,start_ticks=3,client_id='10',executable='/usr/bin/celluloid',
-                          executable_sha256='a'*64)]
+                          executable_sha256='a'*64)];smoke.owned=list(players);(root/'open-codec-fixture.mkv').write_bytes(b'moving')
             def client(player):return dict(id=int(player['client_id']),pid=player['pid'],x=0,y=0,width=160,height=120,
-                        monitor='synthetic-monitor',is_focused=True,is_visible=True,is_fullscreen=True)
+                        monitor='synthetic-monitor',is_focused=True,is_visible=True,is_fullscreen=False)
             monitors=dict(monitors=[dict(name='synthetic-monitor',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)])
-            smoke.fresh_window=Mock(side_effect=lambda *args:(smoke.owned.append(players.pop(0)) or smoke.owned[-1]));smoke.alive=Mock(side_effect=lambda player:client(player))
-            smoke.player_fullscreen=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
+            smoke.fresh_window=Mock();state={'fullscreen':False}
+            def alive(player):
+                value=client(player);value['is_fullscreen']=state['fullscreen'];return value
+            smoke.alive=Mock(side_effect=alive)
+            def fullscreen(player,enabled,ipc):state['fullscreen']=enabled
+            smoke.player_fullscreen=Mock(side_effect=fullscreen);smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock();smoke.finish_native_protocol=Mock()
             smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
             smoke.hide_reference_controls=Mock(return_value=dict(before_visible=True,after_visible=False))
             smoke.controlled_controls_trials=Mock(return_value=dict(oracle=dict(status='matched'),release_acceptance=False))
@@ -732,18 +1019,23 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_calls={71:0}
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(fixture),str(fixture)))
             def prop(path,key,pid,uid):
+                if key=='pause':return next(pause_values)
+                if key=='path':return next(path_values)
                 if key!='time-pos':return media[key]
-                time_calls[pid]+=1
-                return 0 if time_calls[pid]==1 else .2
+                return next(time_values)
             endpoints=[socket.socket(socket.AF_UNIX)]
-            endpoints[0].bind(str(root/'visual-reference-ipc.sock'))
+            endpoints[0].bind(str(root/'celluloid-ipc.sock'))
             try:
-                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
+                transition=dict(schema='arctic-native-fixture-transition-v1',transport='owned mpv IPC SO_PEERCRED',source=str(root/'open-codec-fixture.mkv'),target=str(fixture),command=['loadfile',str(fixture),'replace'],request_id=48,acknowledgement={'data':None,'error':'success','request_id':48},same_process_renderer_required=True,release_acceptance=False)
+                reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=players[0],ipc=str(root/'celluloid-ipc.sock'),moving_fixture=str(root/'open-codec-fixture.mkv'),moving_screenshot_sha256='9'*64,product_renderer=smoke.product_renderer_contract.return_value,same_process_renderer_required=True,release_acceptance=False)
+                with patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'mpv_replace_fixture',return_value=transition),patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
-                        smoke.visual_media()
+                        smoke.visual_media(reuse)
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+                pause.assert_called_once_with(root/'celluloid-ipc.sock',smoke.owned[0]['pid'],smoke.uid)
                 smoke.controlled_controls_trials.assert_not_called()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())
@@ -751,7 +1043,7 @@ class ControlsStateTrials(unittest.TestCase):
                 self.assertEqual((actual['player_attempt_limit'],actual['capture_attempt_limit']),(1,1))
                 self.assertEqual(len(actual['player_attempts']),1)
                 smoke.native_protocol_diagnostic.assert_called_once()
-                self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(smoke.owned[0],False))
+                self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(smoke.owned[0],False,root/'celluloid-ipc.sock'))
             finally:
                 for endpoint in endpoints:endpoint.close()
 
@@ -805,7 +1097,8 @@ class ControlsStateTrials(unittest.TestCase):
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
         removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        added={'0-controls-state-trials.json','0-host-frame-request.json',
+               'controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
         current_labels={'failure-fresh-defaults-and-isolation','failure-archive-content-roundtrips',
             'failure-actual-role-file-manager-terminal-editor','failure-open-codec-content-and-player-state',
             'failure-portal-and-accessibility-reachability','failure-owned-process-cleanup-config-preservation',

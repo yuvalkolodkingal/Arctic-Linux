@@ -36,6 +36,16 @@ class InstallerIdentityChanged(RuntimeError):
     """The unique installer IPC endpoint changed after controller input began."""
 
 
+class InstallerIpcFailure(c.Invalid):
+    """Carry one reviewed, content-free installer readiness failure category."""
+
+    def __init__(self, reason: str):
+        c.require(reason in c.INSTALLER_IPC_FAILURE_REASONS,
+                  "installer IPC failure category differs")
+        self.reason = reason
+        super().__init__(reason)
+
+
 class Channel:
     def __init__(self, timeout: int, *, require_nonroot: bool):
         path = (Path("/dev/virtio-ports") / c.VM_CHANNEL).resolve(strict=True)
@@ -87,10 +97,12 @@ class InstallProgress:
         self.sequence = 0
         self.stage = None
 
-    def emit(self, stage: str, status: str):
+    def emit(self, stage: str, status: str, failure_reason=None):
         value = {"schema": "arctic-showcase-install-progress-v1",
                  "sequence": self.sequence, "stage": stage, "status": status,
                  "release_acceptance": False}
+        if failure_reason is not None:
+            value["failure_reason"] = failure_reason
         c.install_progress(value)
         self.channel.write(c.INSTALL_PROGRESS_PREFIX
                            + json.dumps(value, sort_keys=True, separators=(",", ":")))
@@ -104,9 +116,9 @@ class InstallProgress:
         c.require(self.stage == stage, "installation progress stage differs")
         self.emit(stage, "passed")
 
-    def fail(self):
+    def fail(self, failure_reason=None):
         if self.stage is not None and self.sequence < 64:
-            self.emit(self.stage, "failed")
+            self.emit(self.stage, "failed", failure_reason)
 
 
 def _run(argv, *, env=None, timeout=30, maximum=256_000, check=True):
@@ -194,27 +206,64 @@ def _as_user(account, environment, argv, *, timeout=30, check=True):
     return _run(command, timeout=timeout, check=check)
 
 
-def _find_ipc(account, environment, target: str, method: str):
-    pids = _run(["/usr/bin/pgrep", "-u", str(account.pw_uid), "-x", "quickshell"],
-                check=False, maximum=16_384).stdout.decode().split()
-    matches = []
-    for pid in pids:
-        if not re.fullmatch(r"[1-9][0-9]{0,9}", pid):
+def _find_ipc(account, environment, target: str, method: str, proc_root=Path("/proc")):
+    """Call only the one exact packaged Quickshell process.
+
+    Probing every Quickshell PID makes readiness depend on unrelated shell IPC
+    servers and lets one slow server consume most of the outer wait budget.
+    Exact argv and executable matching gives each bounded readiness sample one
+    candidate and still fails closed if two installer instances exist.
+    """
+    packaged_argv = {
+        "installer": ["-p", "/usr/share/arctic/installer-ui"],
+        "settings": ["-n", "-d", "-p", "/usr/share/arctic/settings"],
+    }
+    c.require(target in packaged_argv and re.fullmatch(r"[a-z]+", method),
+              "IPC target or method differs")
+    candidates = []
+    for process in proc_root.glob("[0-9]*"):
+        try:
+            if (not re.fullmatch(r"[1-9][0-9]{0,9}", process.name)
+                    or process.stat().st_uid != account.pw_uid
+                    or (process / "comm").read_text().strip() != "quickshell"
+                    or os.readlink(process / "exe") != "/usr/bin/quickshell"):
+                continue
+            raw = (process / "cmdline").read_bytes()
+            c.require(0 < len(raw) <= 16_384, "Quickshell command line is oversized")
+            argv = [value.decode("utf-8", "strict")
+                    for value in raw.rstrip(b"\0").split(b"\0")]
+            if argv and Path(argv[0]).name == "quickshell" \
+                    and argv[1:] == packaged_argv[target]:
+                candidates.append(process.name)
+        except (FileNotFoundError, ProcessLookupError, OSError, UnicodeError):
             continue
+    if not candidates:
+        raise InstallerIpcFailure("installer-process-absent")
+    if len(candidates) != 1:
+        raise InstallerIpcFailure("installer-process-ambiguous")
+    pid = candidates[0]
+    try:
+        before = _process_start_ticks(account, pid, proc_root)
         result = _as_user(account, environment,
-                          ["/usr/bin/quickshell", "ipc", "--pid", pid, "call", target, method],
-                          check=False)
-        if result.returncode == 0:
-            matches.append((pid, result.stdout.decode("utf-8", "strict").strip()))
-    c.require(len(matches) == 1, "IPC target is absent or ambiguous")
-    return matches[0]
+                          ["/usr/bin/quickshell", "ipc", "--pid", pid,
+                           "call", target, method], timeout=15, check=False)
+        unchanged = _process_start_ticks(account, pid, proc_root) == before
+    except (c.Invalid, OSError, ValueError, UnicodeError) as error:
+        raise InstallerIpcFailure("installer-ipc-call-failed") from error
+    if result.returncode != 0 or not unchanged:
+        raise InstallerIpcFailure("installer-ipc-call-failed")
+    try:
+        output = result.stdout.decode("utf-8", "strict").strip()
+    except UnicodeError as error:
+        raise InstallerIpcFailure("installer-ipc-response-invalid") from error
+    return pid, output
 
 
-def _process_start_ticks(account, pid: str):
+def _process_start_ticks(account, pid: str, proc_root=Path("/proc")):
     """Return a PID-reuse-safe identity component for one owned process."""
     c.require(re.fullmatch(r"[1-9][0-9]{0,9}", pid) is not None,
               "installer process identity differs")
-    process = Path("/proc") / pid
+    process = proc_root / pid
     info = process.stat()
     c.require(info.st_uid == account.pw_uid, "installer process owner differs")
     raw = (process / "stat").read_text(encoding="utf-8")
@@ -228,8 +277,60 @@ def _process_start_ticks(account, pid: str):
 
 def _installer_endpoint(account, environment):
     """Find the one live installer IPC target and bind it to process start time."""
-    pid, _ = _find_ipc(account, environment, "installer", "state")
-    return pid, _process_start_ticks(account, pid)
+    pid, raw = _find_ipc(account, environment, "installer", "state")
+    _installer_response(raw)
+    try:
+        return pid, _process_start_ticks(account, pid)
+    except (c.Invalid, OSError, ValueError) as error:
+        raise InstallerIpcFailure("installer-ipc-call-failed") from error
+
+
+def _installer_response(raw):
+    """Validate one state reply without retaining or surfacing its text."""
+    try:
+        value = c.strict_json(raw)
+        c.require(type(value) is dict
+                  and {"page", "current", "ready", "connected", "busy", "failure"} <= set(value),
+                  "installer IPC readiness response differs")
+    except (c.Invalid, ValueError, TypeError, UnicodeError) as error:
+        raise InstallerIpcFailure("installer-ipc-response-invalid") from error
+    return value
+
+
+def _stable_installer_endpoint(account, environment):
+    """Require two consecutive ready observations of the same owned endpoint."""
+    previous = None
+    last_failure = "installer-never-ready"
+
+    def stable():
+        nonlocal previous, last_failure
+        try:
+            endpoint, value = _installer_state(account, environment)
+        except InstallerIpcFailure as error:
+            previous = None
+            last_failure = error.reason
+            return None
+        except (c.Invalid, OSError, ValueError, KeyError):
+            previous = None
+            last_failure = "installer-ipc-response-invalid"
+            return None
+        ready = value.get("page") == value.get("current") == "welcome" \
+            and value.get("ready") is True and value.get("connected") is True \
+            and not value.get("busy") and not value.get("failure")
+        if not ready:
+            previous = None
+            last_failure = "installer-never-ready"
+            return None
+        if endpoint != previous:
+            previous = endpoint
+            last_failure = "installer-never-ready"
+            return None
+        return endpoint
+
+    try:
+        return _wait(stable, 180, "stable real installer IPC unavailable")
+    except c.Invalid as error:
+        raise InstallerIpcFailure(last_failure) from error
 
 
 def _installer_call(account, environment, pid: str, method: str, payload=None):
@@ -237,8 +338,14 @@ def _installer_call(account, environment, pid: str, method: str, payload=None):
     argv = ["/usr/bin/quickshell", "ipc", "--pid", pid, "call", "installer", method]
     if payload is not None:
         argv.append(json.dumps(payload, sort_keys=True, separators=(",", ":")))
-    result = _as_user(account, environment, argv, timeout=45)
-    return result.stdout.decode("utf-8", "strict").strip()
+    try:
+        result = _as_user(account, environment, argv, timeout=45)
+    except (c.Invalid, OSError, ValueError) as error:
+        raise InstallerIpcFailure("installer-ipc-call-failed") from error
+    try:
+        return result.stdout.decode("utf-8", "strict").strip()
+    except (AttributeError, UnicodeError) as error:
+        raise InstallerIpcFailure("installer-ipc-response-invalid") from error
 
 
 def _installer_state(account, environment, binding=None):
@@ -246,12 +353,14 @@ def _installer_state(account, environment, binding=None):
     endpoint = _installer_endpoint(account, environment)
     if binding is not None and endpoint != binding:
         raise InstallerIdentityChanged("installer IPC identity changed after input")
-    value = c.strict_json(_installer_call(account, environment, endpoint[0], "state"))
+    value = _installer_response(_installer_call(
+        account, environment, endpoint[0], "state"))
     try:
         unchanged = _process_start_ticks(account, endpoint[0]) == endpoint[1]
-    except OSError as error:
-        raise c.Invalid("installer process disappeared during state read") from error
-    c.require(unchanged, "installer process changed during state read")
+    except (c.Invalid, OSError, ValueError) as error:
+        raise InstallerIpcFailure("installer-ipc-call-failed") from error
+    if not unchanged:
+        raise InstallerIpcFailure("installer-ipc-call-failed")
     return endpoint, value
 
 
@@ -330,8 +439,7 @@ def live_install(timeout: int):
         _run(["/usr/bin/chvt", str(vt)])
         progress.pass_stage("graphical-session")
         progress.start("installer-ipc")
-        _wait(lambda: _installer_endpoint(account, environment), 180,
-              "real installer IPC unavailable")
+        _stable_installer_endpoint(account, environment)
         progress.pass_stage("installer-ipc")
         # The first IPC reply can race Quickshell/output settling after the
         # private-VT transition. Do not pin that early probe. Before the first
@@ -342,6 +450,10 @@ def live_install(timeout: int):
         pages = ("welcome", "keyboard", "timezone", "disk", "encryption",
                  "account", "apps", "summary")
         values = {
+            # Select the language explicitly.  The exact image can expose the
+            # Welcome page before its suggested locale has reached the QML
+            # page, so page readiness alone does not imply a valid choice.
+            "welcome": {"language": "en_US.UTF-8"},
             "keyboard": {"layout": "us", "variant": ""},
             "network": {"offline": False},
             "disk": {"disk": "/dev/vda", "mode": "erase"},
@@ -418,9 +530,12 @@ def live_install(timeout: int):
         progress.start("host-handoff")
         channel.write(c.INSTALL_PREFIX + json.dumps(seal, sort_keys=True, separators=(",", ":")))
         c.require(channel.read() == c.INSTALL_ACK, "host did not authorize installed boot")
-    except Exception:
+    except Exception as error:
         try:
-            progress.fail()
+            reason = error.reason if (
+                progress.stage == "installer-ipc" and isinstance(error, InstallerIpcFailure)
+            ) else None
+            progress.fail(reason)
         except Exception:
             pass
         raise

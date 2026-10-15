@@ -3,7 +3,7 @@
   "update_id": "package-build",
   "title": "What’s new in Arctic Linux",
   "items": [
-    {"icon": "microphone", "title": "Local dictation", "text": "Set up private on-device Hebrew and English dictation in Settings. Audio stays on this computer."},
+    {"icon": "microphone", "title": "Official VoxType dictation", "text": "VoxType runs multilingual Whisper locally for Hebrew and English. Its model loads after your first shortcut and stays ready for reliable repeat dictation; audio stays on this computer."},
     {"icon": "image", "title": "A growing photo collection", "text": "Arctic’s photo wallpapers now replace the old stock backgrounds, while your own wallpaper choice stays yours."},
     {"icon": "folder", "title": "Lighter everyday apps", "text": "Epiphany, Foot, PCManFM, XArchiver, Celluloid and FeatherPad keep the default desktop quick and focused."},
     {"icon": "download", "title": "Updates you can trust", "text": "Update checks report repository failures clearly, keep valid queued downloads, and retain signed stable repositories."},

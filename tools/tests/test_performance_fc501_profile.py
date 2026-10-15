@@ -157,9 +157,21 @@ class ReleaseImageMangoProfileControls(unittest.TestCase):
         self.assertTrue(gates['zero_event_loss_required'])
         self.assertFalse(gates['samples_dropped'])
         manifest = json.loads((ROOT / 'tools/performance/execution-manifest.json').read_text())
-        self.assertIs(manifest['ready'], False)
-        self.assertIsNone(manifest['image'])
+        self.assertIs(manifest['ready'], True)
+        self.assertEqual(manifest['image'], {
+            'run_id': 38735141923,
+            'artifact_id': 11976239386,
+            'archive_bytes': 1936454966,
+            'archive_sha256': '86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee',
+            'source_sha': '14ba50a70783fec583a288d34ea233a5d7c9941a',
+            'name': 'Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso',
+            'bytes': 1936267264,
+            'sha256': '1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a',
+            'producer_mode': 'frozen-external-paired-v1',
+            'producer_receipt_sha256': 'f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c',
+        })
         self.assertIs(manifest['release_acceptance'], False)
+        self.assertFalse((ROOT / '.github/qualification-20261010.performance').exists())
         source = (ROOT / 'tools/performance/compare.py').read_text()
         self.assertIn('limit = min(.005, sample * .025)', source)
         self.assertIn("if set(runs) != {'baseline', 'candidate'} or any(len(group) != 3", source)

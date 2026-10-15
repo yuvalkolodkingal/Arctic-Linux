@@ -1,16 +1,107 @@
 #!/bin/sh
 # Activation guard only. Official VoxType owns recording and transcription;
-# this helper exposes fixed setup guidance instead of its potentially sensitive stderr.
+# this helper starts the verified daemon lazily and exposes only fixed status.
 set -eu
-notify_not_ready() {
-    notify-send -a 'Arctic Dictation' -i dialog-warning 'Dictation is not ready' \
-        'Open Settings → Dictation to finish setup or resolve the reported error.' >/dev/null 2>&1 || :
+
+notify_fixed() {
+    notify-send -a 'Arctic Dictation' -i "$1" "$2" "$3" >/dev/null 2>&1 || :
 }
+notify_not_ready() {
+    notify_fixed dialog-warning 'Dictation is not ready' \
+        'Open Settings → Dictation to finish setup or resolve the reported error.'
+}
+private_runtime() {
+    uid=$(id -u)
+    base=${XDG_RUNTIME_DIR:-/run/user/$uid}
+    if [ -z "$base" ] || [ ! -d "$base" ] || [ -L "$base" ] \
+            || [ "$(stat -c %u:%a "$base" 2>/dev/null || true)" != "$uid:700" ]; then
+        runtime=/tmp/arctic-$uid
+    else
+        runtime=$base/arctic
+    fi
+    if [ ! -e "$runtime" ] && [ ! -L "$runtime" ]; then mkdir -m 0700 "$runtime" 2>/dev/null || return 1; fi
+    [ ! -L "$runtime" ] && [ -d "$runtime" ] \
+        && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    printf '%s\n' "$runtime"
+}
+
 snapshot=$(arctic-dictation status 2>/dev/null || :)
 case "$snapshot" in
-    *'"state":"ready"'*|*'"state":"recording"'*) ;;
+    *'"ready":true'*) ;;
     *) notify_not_ready; exit 69 ;;
 esac
+runtime=$(private_runtime 2>/dev/null) || { notify_not_ready; exit 69; }
+session_marker=$runtime/voxtype-session-started-v1
+starting_marker=$runtime/voxtype-starting
+lock_file=$runtime/voxtype-activation.lock
+umask 077
+if [ ! -e "$lock_file" ] && [ ! -L "$lock_file" ]; then
+    ( set -C; : >"$lock_file" ) 2>/dev/null || :
+fi
+[ ! -L "$lock_file" ] && [ -f "$lock_file" ] \
+    && [ "$(stat -c %u:%a "$lock_file" 2>/dev/null || true)" = "$(id -u):600" ] \
+    || { notify_not_ready; exit 69; }
+exec 9<>"$lock_file"
+if ! flock --exclusive --nonblock 9; then
+    notify_fixed audio-input-microphone 'Loading local dictation' \
+        'A recording activation is already in progress.'
+    exit 0
+fi
+
+if ! systemctl --user is-active --quiet voxtype.service; then
+    rm -f "$runtime/voxtype-error"
+    new_session_marker=false
+    activation_started=false
+    if [ ! -e "$session_marker" ] && [ ! -L "$session_marker" ]; then
+        mkdir -m 0700 "$session_marker" 2>/dev/null || { notify_not_ready; exit 69; }
+        new_session_marker=true
+    fi
+    [ ! -L "$session_marker" ] && [ -d "$session_marker" ] || { notify_not_ready; exit 69; }
+    rmdir "$starting_marker" 2>/dev/null || :
+    mkdir -m 0700 "$starting_marker" 2>/dev/null || { notify_not_ready; exit 69; }
+    cleanup_start() {
+        rmdir "$starting_marker" 2>/dev/null || :
+        if [ "$activation_started" != true ]; then
+            systemctl --user stop voxtype.service >/dev/null 2>&1 || :
+            if [ "$new_session_marker" = true ]; then
+                rmdir "$session_marker" 2>/dev/null || :
+            fi
+        fi
+    }
+    trap cleanup_start EXIT HUP INT TERM
+    notify_fixed audio-input-microphone 'Loading local dictation' \
+        'Starting VoxType and loading the local Whisper model…'
+    if ! systemctl --user start voxtype.service >/dev/null 2>&1; then
+        printf '%s\n' service-start >"$runtime/voxtype-error"
+        notify_fixed dialog-error 'Dictation could not start' \
+            'Open Settings → Dictation to verify the local app and model.'
+        exit 69
+    fi
+    attempts=0
+    while :; do
+        case "$(voxtype status 2>/dev/null || :)" in
+            idle) break ;;
+        esac
+        if ! systemctl --user is-active --quiet voxtype.service; then
+            printf '%s\n' service-start >"$runtime/voxtype-error"
+            notify_fixed dialog-error 'Dictation could not start' \
+                'Open Settings → Dictation to check the reported service error.'
+            exit 69
+        fi
+        attempts=$((attempts + 1))
+        if [ "$attempts" -ge 60 ]; then
+            systemctl --user stop voxtype.service >/dev/null 2>&1 || :
+            printf '%s\n' service-timeout >"$runtime/voxtype-error"
+            notify_fixed dialog-error 'Dictation took too long to load' \
+                'Open Settings → Dictation, verify the model, then try again.'
+            exit 69
+        fi
+        sleep 1
+    done
+    activation_started=true
+    cleanup_start
+    trap - EXIT HUP INT TERM
+fi
 if ! voxtype record toggle >/dev/null 2>&1; then
     notify_not_ready
     exit 69

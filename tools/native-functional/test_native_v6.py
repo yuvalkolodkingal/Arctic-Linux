@@ -177,17 +177,35 @@ class NewControls(unittest.TestCase):
                     retire.assert_not_called()
             finally: endpoint.close()
 
-    def test_media_preserves_moving_proof_then_retires_before_static_player(self):
+    def test_media_reuses_visibly_proved_player_for_authenticated_static_transition(self):
         source=(HERE/'native_smoke.py').read_text();tree=ast.parse(source)
         klass=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Smoke')
         method=ast.get_source_segment(source,next(node for node in klass.body
             if isinstance(node,ast.FunctionDef) and node.name=='media'))
         capture=method.index("self.screenshot('celluloid-playing')")
-        finish=method.index('self.finish_native_protocol()',capture)
-        retire=method.index('self.retire_moving_player(player,ipc)',finish)
-        static=method.index('self.visual_media()',retire)
-        self.assertLess(capture,finish);self.assertLess(finish,retire);self.assertLess(retire,static)
-        self.assertEqual(method.count('self.retire_moving_player(player,ipc)'),1)
+        restore=method.index('self.player_fullscreen(player,False,ipc)',capture)
+        reuse=method.index("schema='arctic-native-player-fixture-continuity-v1'",capture)
+        static=method.index("self.visual_media(reuse if getattr(self,'gui_v6',False) else None)",reuse)
+        self.assertLess(capture,reuse);self.assertLess(reuse,restore);self.assertLess(restore,static)
+        self.assertNotIn('self.retire_moving_player(player,ipc)',method)
+        self.assertNotIn('self.finish_native_protocol()',method)
+
+    def test_moving_capture_reorders_only_the_final_existing_sample_settle(self):
+        source=(HERE/'native_smoke.py').read_text();tree=ast.parse(source)
+        klass=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Smoke')
+        method=ast.get_source_segment(source,next(node for node in klass.body
+            if isinstance(node,ast.FunctionDef) and node.name=='media'))
+        sample_loop=method.index('for sample_index in range(8):')
+        retained_intervals=method.index('if sample_index < 7: time.sleep(.35)',sample_loop)
+        fullscreen=method.index('self.player_fullscreen(player,True,ipc)',retained_intervals)
+        final_settle=method.index('time.sleep(.35)',fullscreen)
+        capture=method.index("self.screenshot('celluloid-playing')",final_settle)
+        self.assertLess(sample_loop,retained_intervals)
+        self.assertLess(retained_intervals,fullscreen)
+        self.assertLess(fullscreen,final_settle)
+        self.assertLess(final_settle,capture)
+        self.assertEqual(method.count('time.sleep(.35)'),2)
+        self.assertNotIn('range(9)',method)
 
     def test_known_static_pattern_and_scaled_offset_match(self):
         ref=N.visual_reference_frame()
@@ -318,7 +336,7 @@ class NewControls(unittest.TestCase):
             root=Path(t);smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.user=pwd.getpwuid(os.getuid())
             smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[];smoke.owned=[];smoke.gui_v6=True;smoke.stage='live'
             smoke.trace=Mock();smoke.fullscreen_capture_pair=Mock();smoke.native_protocol_diagnostic=Mock()
-            smoke.controlled_controls_trials=Mock();smoke.finish_native_protocol=Mock();smoke.player_fullscreen=Mock()
+            smoke.controlled_controls_trials=Mock();smoke.finish_native_protocol=Mock()
             smoke.hide_reference_controls=Mock(return_value=dict(after_visible=False,release_acceptance=False))
             smoke.product_renderer_contract=Mock(return_value=dict(requested_renderer='gl',realized_renderer='gl'))
             proof=dict(client_id='1',pid=123,start_ticks=1,executable='/usr/bin/celluloid',
@@ -328,16 +346,18 @@ class NewControls(unittest.TestCase):
             def fresh(trigger,*args):
                 trigger();smoke.owned.append(proof);return proof
             smoke.fresh_window=Mock(side_effect=fresh)
-            client=dict(id=1,pid=123,is_visible=True,is_focused=True,is_fullscreen=True,
+            client=dict(id=1,pid=123,is_visible=True,is_focused=True,is_fullscreen=False,
                         monitor='FIXTURE',x=0,y=0,width=160,height=120)
-            smoke.alive=Mock(return_value=client)
+            smoke.alive=Mock(side_effect=lambda _:dict(client))
+            def fullscreen(player,enabled,ipc):client['is_fullscreen']=enabled
+            smoke.player_fullscreen=Mock(side_effect=fullscreen)
             def wait(fn,*args,**kwargs):
                 value=fn()
                 if not value:raise RuntimeError('synthetic bounded wait failure')
                 return value
             smoke.wait=Mock(side_effect=wait)
             monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
-            props={'path':str(root/'visual-reference.mkv'),'pause':False,
+            props={'pause':False,
                    'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
             raw_good=root/'fake-good.raw';raw_good.write_bytes(N.visual_reference_frame())
             raw_bad=root/'fake-bad.raw';raw_bad.write_bytes(b'\0'*(160*120*3))
@@ -356,42 +376,64 @@ class NewControls(unittest.TestCase):
                     grim_calls.append(list(argv));shutil.copyfile(bad_capture if case!='positive' else good_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_calls=0
+            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(root/'visual-reference.mkv'),str(root/'visual-reference.mkv')))
             def prop(path,key,*args):
-                nonlocal time_calls
+                if key=='pause':return next(pause_values)
+                if key=='path':return next(path_values)
                 if key!='time-pos':return props[key]
-                time_calls+=1;return 0 if time_calls==1 else .2
+                return next(time_values)
             oracle_control=(patch.object(N,'evaluate_reference_rgb',side_effect=ValueError('synthetic oracle failure'))
                             if case=='oracle-failed' else contextlib.nullcontext())
             with socket.socket(socket.AF_UNIX) as peer:
-                peer.bind(str(root/'visual-reference-ipc.sock'))
-                # Rebind only this tested module.  Patching time.sleep on the
-                # shared stdlib module also records sleeps from unrelated
-                # background tests on slower CI runners.
+                peer.bind(str(root/'celluloid-ipc.sock'))
+                # Rebind only this tested module. Patching time.sleep on the
+                # shared stdlib module also records unrelated background sleeps.
                 sleep=Mock()
                 tested_time=SimpleNamespace(sleep=sleep,monotonic=N.time.monotonic)
-                with oracle_control,patch.object(N,'mpv_property',side_effect=prop),patch.object(N,'time',tested_time):
+                transition=dict(schema='arctic-native-fixture-transition-v1',transport='owned mpv IPC SO_PEERCRED',
+                    source=str(root/'open-codec-fixture.mkv'),target=str(root/'visual-reference.mkv'),
+                    command=['loadfile',str(root/'visual-reference.mkv'),'replace'],request_id=48,
+                    acknowledgement={'data':None,'error':'success','request_id':48},
+                    same_process_renderer_required=True,release_acceptance=False)
+                reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=proof,
+                    ipc=str(root/'celluloid-ipc.sock'),moving_fixture=str(root/'open-codec-fixture.mkv'),
+                    moving_screenshot_sha256='9'*64,product_renderer=smoke.product_renderer_contract.return_value,
+                    same_process_renderer_required=True,release_acceptance=False)
+                with oracle_control,patch.object(N,'mpv_property',side_effect=prop), \
+                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'mpv_replace_fixture',return_value=transition) as replace,patch.object(N,'time',tested_time):
                     if case=='positive':
-                        value=smoke.visual_media();self.assertEqual(value['oracle']['status'],'matched')
+                        value=smoke.visual_media(reuse);self.assertEqual(value['oracle']['status'],'matched')
                     else:
                         with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
-                            smoke.visual_media()
-            self.assertEqual(smoke.fresh_window.call_count,1)
-            self.assertEqual(len(launched),1);self.assertEqual(len(grim_calls),1)
-            self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
+                            smoke.visual_media(reuse)
+                replace.assert_called_once_with(root/'celluloid-ipc.sock',proof['pid'],smoke.uid,
+                    root/'open-codec-fixture.mkv',root/'visual-reference.mkv')
+            self.assertEqual(smoke.fresh_window.call_count,0)
+            self.assertEqual(len(launched),0);self.assertEqual(len(grim_calls),1)
+            delays=[call.args[0] for call in sleep.call_args_list]
+            self.assertEqual(delays.count(.5),1)
+            self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
             self.assertEqual((receipt['player_attempt'],receipt['player_attempt_limit']),(1,1))
+            self.assertEqual(receipt['fixture_cadence'],N.visual_reference_cadence())
             self.assertEqual(receipt['accepted_player_attempt'],1 if case=='positive' else None)
             self.assertEqual(len(receipt['player_attempts']),1)
             row=receipt['player_attempts'][0]
             self.assertEqual((row['capture_attempt_limit'],len(row['capture_attempts'])),(1,1))
+            self.assertEqual(row['playback_clock'],dict(pre_geometry_seconds=0,initial_seconds=.2,
+                advanced_seconds=.8,paused_seconds=.8,settled_seconds=.8,capture_paused=True,
+                presentation_refresh='frame-step',
+                maximum_settled_drift_seconds=.05,minimum_advance_seconds=.5,
+                anchor='after fullscreen and controls transitions'))
+            pause.assert_called_once_with(root/'celluloid-ipc.sock',proof['pid'],smoke.uid)
             self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
             self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
             self.assertFalse((root/'celluloid-reference-player-2.png').exists())
             smoke.controlled_controls_trials.assert_not_called()
             smoke.native_protocol_diagnostic.assert_called_once()
             self.assertEqual(smoke.player_fullscreen.call_args_list,
-                             [unittest.mock.call(proof,True),unittest.mock.call(proof,False)])
+                             [unittest.mock.call(proof,True,root/'celluloid-ipc.sock'),
+                              unittest.mock.call(proof,False,root/'celluloid-ipc.sock')])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

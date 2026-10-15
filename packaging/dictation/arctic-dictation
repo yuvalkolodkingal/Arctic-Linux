@@ -124,12 +124,6 @@ status() {
             fi
         fi
         if [ "$integrity_ready" = true ]; then
-            upstream=$(voxtype status 2>/dev/null || true)
-            case "$upstream" in
-                idle) state=ready ;;
-                recording|transcribing) state=$upstream ;;
-                *) state=error; error='VoxType is installed but its user service is stopped. Start it in Dictation settings.' ;;
-            esac
             configured=$(voxtype config get whisper.language 2>/dev/null || true)
             case "$configured" in
                 he,en|en,he) language=auto ;;
@@ -139,9 +133,29 @@ status() {
             if ! runtime=$(private_runtime); then
                 state=error
                 error='The private dictation runtime directory is unsafe. Sign out and back in before trying again.'
-            elif [ "$state" = recording ] || [ "$state" = transcribing ]; then
-                rm -f "$runtime/voxtype-error"
             else
+                upstream=$(voxtype status 2>/dev/null || true)
+                case "$upstream" in
+                    idle) state=ready ;;
+                    recording|transcribing) state=$upstream ;;
+                    *)
+                        if [ -d "$runtime/voxtype-starting" ] \
+                                && [ ! -L "$runtime/voxtype-starting" ]; then
+                            state=starting
+                        elif systemctl --user is-active --quiet voxtype.service; then
+                            state=error
+                            error='VoxType started but did not publish a usable state. Stop it and retry setup.'
+                        else
+                            # Installed and ready for an explicit first activation.
+                            # The resident model consumes no login memory yet.
+                            state=ready
+                        fi
+                        ;;
+                esac
+            fi
+            if [ "$state" = recording ] || [ "$state" = transcribing ]; then
+                rm -f "$runtime/voxtype-error"
+            elif [ "$state" != starting ] && [ -n "${runtime:-}" ]; then
                 recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
                     --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
                 case "$recent" in
@@ -159,6 +173,8 @@ status() {
                     transcription:vulkan) state=error; error='Vulkan transcription failed. Select CPU acceleration in Dictation settings, then try again.' ;;
                     transcription:*) state=error; error='Local transcription failed. Try a shorter recording; if it repeats, retry setup.' ;;
                     output:*) state=error; error='VoxType could not insert text. Focus a writable text field; the app may reject Wayland text insertion.' ;;
+                    service-start:*) state=error; error='VoxType could not start. Verify or repair the signed app and model in Dictation settings, then retry.' ;;
+                    service-timeout:*) state=error; error='VoxType took too long to load the local model. Verify or repair setup, then retry.' ;;
                 esac
             fi
         fi
@@ -188,7 +204,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --retry; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user enable --now voxtype.service || :
+            systemctl --user try-restart voxtype.service || :
         fi
         status
         ;;
@@ -203,7 +219,7 @@ case ${1:-} in
             chmod 0600 "$temporary"; mv -f "$temporary" "$config"
             voxtype --config "$config" config get whisper.language --json >/dev/null
         fi
-        systemctl --user restart voxtype.service || :
+        systemctl --user try-restart voxtype.service || :
         clear_runtime_error
         status
         ;;
@@ -213,8 +229,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --backend "$2"; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user enable voxtype.service || :
-            systemctl --user restart voxtype.service || :
+            systemctl --user try-restart voxtype.service || :
         fi
         status
         ;;

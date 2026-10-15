@@ -95,10 +95,73 @@ OBSERVATIONS = {
     'sha256', 'snapshot_sha256', 'file_count', 'drained', 'restored',
     'automatic_ready', 'gpu_supported', 'explicit_cpu_selected',
     'failed_attempt_inserted', 'audit_lost', 'audit_enabled',
+    'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
+    'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
+TRANSCRIPTION_FAILURE_STAGES = {
+    'fixture-selection': 1,
+    'receiver-clear': 2,
+    'focus-before': 3,
+    'language-selection': 4,
+    'record-start': 5,
+    'recording-state': 6,
+    'engine-profile': 7,
+    'capture-link': 8,
+    'fixture-play-start': 9,
+    'fixture-playback': 10,
+    'record-stop': 11,
+    'transcribing-state': 12,
+    'terminal-state': 13,
+    'text-delivery': 14,
+    'text-shape': 15,
+    'focus-after': 16,
+    'language-script': 17,
+    'accuracy-metrics': 18,
+    'sample-record': 19,
+}
+MICROPHONE_FAILURE_STAGES = {
+    'receiver-clear': 101,
+    'cpu-backend': 102,
+    'initial-status': 103,
+    'source-selection': 104,
+    'pinned-daemon-restart': 105,
+    'pinned-daemon-ready': 106,
+    'record-start': 107,
+    'recording-state': 108,
+    'capture-link': 109,
+    'route-destroy': 110,
+    'source-isolation': 111,
+    'interrupted-cancel': 112,
+    'disconnected-daemon-restart': 113,
+    'disconnected-daemon-ready': 114,
+    'failed-record-start': 115,
+    'actionable-error': 116,
+    'idle-state': 117,
+    'receiver-empty': 118,
+    'cleanup-cancel': 119,
+    'route-restore': 120,
+    'default-source-restore': 121,
+    'language-restore': 122,
+    'error-clear': 123,
+}
+TRANSCRIPTION_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+    MODERN_GPU_GATE,
+    LEGACY_GPU_GATE,
+}
+FAILURE_STAGE_GATES = {
+    **{gate: frozenset(TRANSCRIPTION_FAILURE_STAGES.values())
+       for gate in TRANSCRIPTION_GATES},
+    'microphone-disconnect-error': frozenset(MICROPHONE_FAILURE_STAGES.values()),
+}
+TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
@@ -119,8 +182,10 @@ EXPECTED_KINDS[LEGACY_GPU_GATE] = 'actual-session'
 REQUIRED_OBSERVATIONS = {
     'selinux-enforcing': {'ready': True}, 'encrypted-installed-boot': {'ready': True},
     'live-payload-model-absent': {'file_count': 0}, 'live-voxtype-unavailable': {'ready': False},
-    'online-installer-ready': {'ready': True, 'pending': False},
-    'recovered-ready': {'ready': True, 'pending': False},
+    'online-installer-ready': {'ready': True, 'pending': False,
+                               'pre_activation_engine_count': 0},
+    'recovered-ready': {'ready': True, 'pending': False,
+                        'pre_activation_engine_count': 0},
     'explicit-service-recovery-ready': {'ready': True, 'pending': False},
     'offline-setup-pending': {'ready': False, 'pending': True},
     'offline-os-healthy': {'ready': True},
@@ -232,6 +297,12 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
     require(len(ids) == len(report['gates']) == len(set(ids))
             and set(ids) == gates(expected['phase'], profile),
             'report-missing-duplicate-extra-gates')
+    # The guest collector completes the fixed gate inventory after a checked
+    # gate aborts a dependent sequence.  These placeholders are useful only
+    # when a source-owned, concrete failed gate already explains the failure;
+    # an all-placeholder report remains a collector failure and is rejected.
+    concrete_failure = any(isinstance(gate, dict) and gate.get('status') == 'failed'
+                           for gate in report['gates'])
     for gate in report['gates']:
         require(set(gate) == {'id', 'status', 'evidence_kind', 'code', 'observations'},
                 'gate-fields')
@@ -246,8 +317,14 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                 'gate-' + gate['id'] + '-' + label for label in ERROR_LABELS},
                 'gate-code-status')
         else:
-            require(gate['id'] == 'microphone-disconnect-error'
-                    and gate['code'] == 'gate-microphone-disconnect-error-isolation-unavailable',
+            isolated_microphone = (gate['id'] == 'microphone-disconnect-error'
+                                   and gate['code'] ==
+                                   'gate-microphone-disconnect-error-isolation-unavailable')
+            dependent_unrun = (gate['code'] == 'prerequisite-or-collector-failed'
+                               and report['status'] == 'failed'
+                               and report['release_acceptance'] is False
+                               and concrete_failure)
+            require(isolated_microphone or dependent_unrun,
                     'gate-code-status')
         observed = gate['observations']
         require(isinstance(observed, dict) and set(observed) <= OBSERVATIONS,
@@ -258,11 +335,25 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             else:
                 require(type(value) in (int, bool) and (type(value) is bool or value >= 0),
                         'gate-observation-scalar')
+        if 'failure_stage' in observed:
+            require(gate['status'] == 'failed' and gate['id'] in FAILURE_STAGE_GATES,
+                    'gate-failure-stage-scope')
+            require(type(observed['failure_stage']) is int
+                    and observed['failure_stage'] in FAILURE_STAGE_GATES.get(gate['id'], ()),
+                    'gate-failure-stage-value')
+        elif (gate['status'] == 'failed'
+              and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
+                                 | {'microphone-disconnect-error'})):
+            require(False, 'gate-failure-stage-missing')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value
                         for key, value in required.items()),
                     'gate-contradictory-or-missing-observations')
+            if gate['id'] in ('online-installer-ready', 'recovered-ready'):
+                require(type(observed.get('resident_rss_bytes')) is int
+                        and observed['resident_rss_bytes'] > 0,
+                        'gate-resident-rss-missing')
             if gate['id'] == 'installed-payload-integrity':
                 require(observed.get('file_count') == len(PROFILE_ASSETS[profile])
                         and type(observed.get('file_count')) is int
@@ -271,6 +362,12 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             if gate['id'] == 'recording-status-published':
                 require(digest(observed.get('snapshot_sha256')) and digest(observed.get('sha256')),
                         'recording-indicator-evidence-missing')
+            if gate['id'] == MODERN_GPU_GATE:
+                require(digest(observed.get('gpu_failure_capture_ack_sha256'))
+                        and digest(observed.get('cpu_ready_capture_ack_sha256'))
+                        and observed['gpu_failure_capture_ack_sha256'] !=
+                            observed['cpu_ready_capture_ack_sha256'],
+                        'recovery-screen-evidence-missing')
             if gate['id'] == 'transcript-log-notification-leak-scan':
                 require(type(observed.get('count')) is int and observed['count'] >= 12,
                         'leak-scan-coverage')

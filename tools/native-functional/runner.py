@@ -154,7 +154,8 @@ class R(E.R):
                         copied[path.name] = dict(retained=False, reason='closed-record-rejected', release_acceptance=False)
                     continue
                 if path.is_file() and not path.is_symlink() and (path.suffix in ('.log', '.png', '.txt')
-                        or path.name in ('taskbar-display-install.json', 'taskbar-display-boot.json')):
+                        or path.name in ('taskbar-display-install.json', 'taskbar-display-boot.json',
+                                         'native-host-frame-live.json', 'native-host-frame-installed.json')):
                     if path.name in ('taskbar-install.log', 'taskbar-boot.log'):
                         R.require(path.stat().st_size <= 210 * 1024 * 1024, 'Oversized taskbar port transport')
                         output = target / (path.name + '.bounded-prefix.bin')

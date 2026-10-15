@@ -31,7 +31,13 @@ PROFILES = {
         'files': (['arctic-open', 'files'], r'pcmanfm'),
         'browser': (['arctic-open', 'browser'], r'org\.gnome\.Epiphany'),
         'editor': (['arctic-open', 'editor'], r'(?:org\.qt-project\.)?featherpad'),
-        'media': (['gtk-launch', 'io.github.celluloid_player.Celluloid'], r'io\.github\.celluloid_player\.Celluloid'),
+        # Invoke Arctic's renderer wrapper directly.  A launch by application
+        # ID can hand off to a registered/D-Bus-activated Celluloid process and
+        # leave the exact ELF proof intact while bypassing the wrapper's
+        # initial environment.  Desktop/MIME routing is covered independently.
+        'media': (['/usr/libexec/arctic/arctic-celluloid',
+                   '--no-existing-session', '--new-window'],
+                  r'io\.github\.celluloid_player\.Celluloid'),
     },
 }
 

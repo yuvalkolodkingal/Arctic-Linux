@@ -40,10 +40,12 @@ jobs:
           image, stable = manifest['image'], manifest['stable']
           assert re.fullmatch('[0-9a-f]{40}', image['source_sha'])
           assert re.fullmatch('[0-9a-f]{40}', stable['source_sha'])
+          assert re.fullmatch('[0-9A-F]{40}', stable['gpg_fingerprint'])
           assert image['name'] == f"Arctic-Linux-1.2-candidate-{image['run_id']}-1-x86_64.iso"
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('source=' + image['source_sha'] + '\n')
               output.write('stable=' + stable['source_sha'] + '\n')
+              output.write('fingerprint=' + stable['gpg_fingerprint'] + '\n')
               output.write('iso=' + image['name'] + '\n')
           PY
       - uses: actions/checkout@v4
@@ -73,7 +75,8 @@ jobs:
           inputs="$RUNNER_TEMP/arctic-update/inputs"
           mkdir -p out/test/qualified-update-payload
           python3 -B tools/performance/compose-nix-probe.py out/test/qualified-update-payload/guest.py \
-            --expected-stable-source "$EXPECTED_STABLE"
+            --expected-stable-source "$EXPECTED_STABLE" \
+            --expected-stable-fingerprint "${{ steps.manifest.outputs.fingerprint }}"
           python3 -B tools/image-update/guard.py --source "$GITHUB_WORKSPACE/source" \
             --manifest tools/image-update/execution-manifest.json --inputs "$inputs" --proof "$evidence/pre-provision.json"
           container="arctic-paired-update-$(python3 -c 'import uuid;print(uuid.uuid4().hex)')"

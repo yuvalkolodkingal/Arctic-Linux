@@ -39,7 +39,8 @@ def driver_functions(names, env):
     nodes = [node for node in ast.parse(DRIVER).body
              if (isinstance(node, ast.FunctionDef) and node.name in names)
              or (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name)
-                     and t.id == 'DICTATION_HOST_STAGES' for t in node.targets))]
+                     and t.id in {'DICTATION_HOST_STAGES', 'dictation_indicator_seen',
+                                  'dictation_recovery_seen'} for t in node.targets))]
     exec(compile(ast.Module(body=nodes, type_ignores=[]), '<actual host driver>', 'exec'), env)
     return env
 
@@ -147,6 +148,59 @@ class HostDiagnostics(unittest.TestCase):
         result = subprocess.run(['bash', '-c', program + '\nexec 1>&-\ndictation_host_stage host-data\n'],
             env=dict(os.environ, ARCTIC_DICTATION_HOST_TOKEN='a' * 32), capture_output=True, timeout=5)
         self.assertEqual(result.returncode, 0)
+
+    def test_actual_live_serial_snapshot_ignores_only_unfinished_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            log = Path(tmp) / 'serial-boot.log'
+            env = driver_functions({'dictation_serial_snapshot'}, {'serial': lambda name: str(log)})
+            self.assertEqual(env['dictation_serial_snapshot'](), '')
+            prefix = b'ARCTIC-DICTATION-RECORDING-INDICATOR-REQUESTED '
+            log.write_bytes(b'complete-ascii-record\n' + prefix + b'{"private transcript"')
+            self.assertEqual(env['dictation_serial_snapshot'](), 'complete-ascii-record\n')
+            log.write_bytes(b'complete-ascii-record\n' + prefix + b'{"hebrew":"\xd7')
+            self.assertEqual(env['dictation_serial_snapshot'](), 'complete-ascii-record\n')
+            log.write_bytes(b'complete-ascii-record\n' + prefix + b'{"private transcript"')
+            log.write_bytes(log.read_bytes() + b'}\n')
+            self.assertEqual(env['dictation_serial_snapshot'](),
+                             'complete-ascii-record\n' + prefix.decode() + '{"private transcript"}\n')
+            log.write_bytes(b'x' * 65537)
+            with self.assertRaisesRegex(RuntimeError, '^Dictation unfinished line bound exceeded$'):
+                env['dictation_serial_snapshot']()
+
+    def test_actual_poll_boundary_rethrows_and_exports_only_closed_type(self):
+        class QMPError(Exception):
+            pass
+        env = driver_functions({'dictation_host_stage', 'dictation_poll'}, {
+            'E': {'ARCTIC_DICTATION_HOST_TOKEN': 'a' * 32},
+            'vmtest': SimpleNamespace(QMPError=QMPError)})
+        cases = ((PrivateError('private transcript'), 'other-error'),
+                 (json.JSONDecodeError('private transcript', 'private document', 0), 'json-error'),
+                 (QMPError('private QMP response'), 'qmp-error'),
+                 (RuntimeError('private transcript'), 'runtime-error'))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            for error, code in cases:
+                def fail(vm, selected=error):
+                    raise selected
+                with self.assertRaises(type(error)) as caught:
+                    env['dictation_poll']('indicator', fail, object())
+                self.assertIs(caught.exception, error)
+        self.assertNotIn('private', out.getvalue())
+        self.assertEqual(out.getvalue(), ''.join(
+            'ARCTIC-DICTATION-HOST-STAGE ' + 'a' * 32 + ' boot-indicator-poll-' + code + '\n'
+            for error, code in cases))
+
+    def test_actual_boot_loop_routes_both_dictation_pollers_through_failure_boundary(self):
+        stage = next(node for node in ast.parse(DRIVER).body
+                     if isinstance(node, ast.FunctionDef) and node.name == 'stage_boot')
+        calls = [(node.func.id, ast.literal_eval(node.args[0]))
+                 for node in ast.walk(stage) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Name) and node.func.id == 'dictation_poll']
+        self.assertEqual(calls, [('dictation_poll', 'indicator'), ('dictation_poll', 'recovery')])
+        direct = [node.func.id for node in ast.walk(stage) if isinstance(node, ast.Call)
+                  and isinstance(node.func, ast.Name)
+                  and node.func.id in {'dictation_indicator_poll', 'dictation_recovery_poll'}]
+        self.assertEqual(direct, [])
 
     def test_actual_install_loop_distinguishes_process_exit_from_budget_without_changing_rc(self):
         for dead in (False, True):

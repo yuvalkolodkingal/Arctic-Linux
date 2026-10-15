@@ -94,7 +94,9 @@ before administrator authorization.
 Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop
 and insert. `Super + Ctrl + Backspace` cancels. The visible state comes from
 VoxType's native runtime file. Language choices are **Detect language**,
-**Hebrew · עברית** and **English**. Models load on demand to save idle memory.
+**Hebrew · עברית** and **English**. VoxType loads the selected model during
+daemon startup and keeps it resident until the service stops or restarts,
+matching the upstream default.
 
 CPU is the recovery path after a Vulkan error, but it is never assumed or
 selected automatically: choose **CPU** and make a new recording. Audio remains

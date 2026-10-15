@@ -223,6 +223,20 @@ format/filter, precision and paired-boot checks remain necessary. A rebuilt ISO
 with changed code, packaging notes or build ID needs a separate exact audit;
 neither identical source nor a matching map function admits an unknown ELF.
 
+The final external candidate from producer `38735141923` received that separate
+audit. Its RPMDB-verified Mango ELF is
+`11471553075f17b05411a8511b106a91d506100544d6f76400ce139c2ce0c99c`
+(`mangowm-0.17.3-1.preview.38735141923.1.git14ba50a.fc44.x86_64`, build ID
+`aebf5d21049f11a19bbdb10a2cf23d6daf0f274d`). The whole ELF differs from the
+earlier diagnostic producer, while the complete 4109-byte mapping function,
+1234-byte original app-ID getter, five probe instruction sites and production
+wlroots ELF are byte-identical to their audited counterparts. The candidate
+therefore has its own whole-ELF profile and audit at
+`tools/performance/mango-audits/11471553075f17b05411a8511b106a91d506100544d6f76400ce139c2ce0c99c.json`.
+This static admission does not claim a runtime result: all six paired boots,
+precision bounds, the 10% regression limit, role identity and zero-loss checks
+remain mandatory.
+
 The type-specific upper receipt records the kernel's literal instruction
 address, the client and handle pointers, the handle's owner, the same foreign
 identifier, the original application ID and the foreign-handle copy. Linux's
@@ -437,5 +451,6 @@ numbers, reruns, omitted boots or redacted/truncated inputs cannot qualify.
 The legacy in-producer paired mode continues requiring its successful paired
 step and same producer/source binding. The external mode is an explicit
 alternative evidence contract; it does not weaken the legacy contract or claim
-optimization from a regression pass. The prepared manifest is disabled until
-actual images, admitted executable profiles and reviewed source are available.
+optimization from a regression pass. The final candidate manifest is byte-bound
+and ready for a separate marker-only activation; the marker remains absent and
+every receipt remains `release_acceptance:false`.

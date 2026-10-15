@@ -1,12 +1,39 @@
 {
-  "ready": false,
-  "release_acceptance": false,
-  "image": null,
-  "fixture_manifest_sha256": null,
-  "fixture_decoder": null,
-  "execution_files": {},
+  "execution_files": {
+    ".github/workflows/dictation-candidate-20261009.yml": "a2e4b9e7d95e0084b6983d02aded9e9a52a9302a1f1be84e185e70fa07143de3",
+    "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
+    "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
+    "tools/dictation-qualification/contract.py": "bcc2c002391ec8465cd12786b3df048363fb9c275b26ad3f62f349083877e512",
+    "tools/dictation-qualification/guest_check.py": "5089e562496b243d15c6e665e62d056e8ddff994466025ed37e28ec34084110e",
+    "tools/dictation-qualification/runner.py": "e1dca582167c5a855f84b839899e068fef99cc2f44a44ff8a7d2fe0c0190ec21",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
+  },
+  "fixture_decoder": {
+    "libsndfile": "1.2.2",
+    "pyarrow": "20.0.0",
+    "soundfile": "0.13.1"
+  },
+  "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
   "hardware_profiles": [
     "small-v2",
     "turbo-q5-v3"
-  ]
+  ],
+  "image": {
+    "archive_bytes": 1936454966,
+    "archive_sha256": "86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee",
+    "artifact_id": 11976239386,
+    "bytes": 1936267264,
+    "name": "Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c",
+    "run_id": 38735141923,
+    "sha256": "1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a",
+    "source_sha": "14ba50a70783fec583a288d34ea233a5d7c9941a"
+  },
+  "ready": true,
+  "release_acceptance": false
 }

@@ -185,6 +185,70 @@ class Controls(unittest.TestCase):
                 s.mpv_property(path,'path',os.getpid()+1,os.getuid())
             thread.join(3);self.assertFalse(thread.is_alive())
 
+    def test_celluloid_fullscreen_uses_exact_owned_supported_actions(self):
+        for enabled,request_id,name in ((True,46,'win.enter-fullscreen'),(False,47,'win.leave-fullscreen')):
+            with self.subTest(enabled=enabled):
+                path=self.root/('fullscreen-'+str(enabled)+'.sock');observed=[]
+                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+                    server.bind(str(path));server.listen(1)
+                    def accept():
+                        peer,_=server.accept()
+                        with peer:
+                            data=b''
+                            while b'\n' not in data:data+=peer.recv(4096)
+                            observed.append(json.loads(data.splitlines()[0]))
+                            peer.sendall(json.dumps(dict(data=None,error='success',request_id=request_id)).encode()+b'\n')
+                    thread=threading.Thread(target=accept);thread.start()
+                    receipt=s.mpv_celluloid_fullscreen(path,os.getpid(),os.getuid(),enabled)
+                    thread.join(3);self.assertFalse(thread.is_alive())
+                command=['script-message','celluloid-action',name]
+                self.assertEqual(observed,[dict(command=command,request_id=request_id)])
+                self.assertEqual(receipt,dict(transport='owned mpv IPC SO_PEERCRED',command=command,
+                    request_id=request_id,acknowledgement=dict(data=None,error='success',request_id=request_id)))
+
+    def test_reference_pause_and_frame_step_use_exact_owned_ipc_commands(self):
+        path=self.root/'pause.sock'; observed=[]
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            def accept():
+                peer,_=server.accept()
+                with peer:
+                    data=b''
+                    while data.count(b'\n')<2:data+=peer.recv(4096)
+                    observed.extend(json.loads(line) for line in data.splitlines())
+                    # Replies need not arrive in request order; both exact
+                    # acknowledgements are required before the helper returns.
+                    peer.sendall(b'{"data":null,"error":"success","request_id":45}\n'
+                                 b'{"data":null,"error":"success","request_id":44}\n')
+            thread=threading.Thread(target=accept);thread.start()
+            s.mpv_pause_reference(path,os.getpid(),os.getuid())
+            thread.join(3);self.assertFalse(thread.is_alive())
+        self.assertEqual(observed,[dict(command=['set_property','pause',True],request_id=44),
+                                   dict(command=['frame-step'],request_id=45)])
+
+    def test_static_fixture_replaces_exact_file_on_same_owned_player(self):
+        path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
+        target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')
+        observed=[]
+        with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+            server.bind(str(path));server.listen(1)
+            def accept():
+                peer,_=server.accept()
+                with peer:
+                    data=b''
+                    while b'\n' not in data:data+=peer.recv(4096)
+                    observed.append(json.loads(data.splitlines()[0]))
+                    peer.sendall(b'{"data":null,"error":"success","request_id":48}\n')
+            thread=threading.Thread(target=accept);thread.start()
+            receipt=s.mpv_replace_fixture(path,os.getpid(),os.getuid(),source,target)
+            thread.join(3);self.assertFalse(thread.is_alive())
+        command=['loadfile',str(target),'replace']
+        self.assertEqual(observed,[dict(command=command,request_id=48)])
+        self.assertEqual(receipt,dict(schema='arctic-native-fixture-transition-v1',
+            transport='owned mpv IPC SO_PEERCRED',source=str(source),target=str(target),command=command,
+            request_id=48,acknowledgement=dict(data=None,error='success',request_id=48),
+            same_process_renderer_required=True,release_acceptance=False))
+
     def test_nonzero_command_fails_without_shell(self):
         with self.assertRaisesRegex(RuntimeError,'command failed'):
             s.execute(['python3','-c','raise SystemExit(4)'])
@@ -219,11 +283,29 @@ class Controls(unittest.TestCase):
         self.assertEqual(len(decoder['audio_sha256']),64)
 
     @unittest.skipUnless(shutil.which('ffmpeg'),'host lacks ffmpeg; guest visual fixture remains mandatory')
-    def test_actual_static_ffv1_rgb_reference_matches_known_palette(self):
+    def test_actual_pulsed_ffv1_rgb_reference_matches_known_palette(self):
         fixture,reference,source_hash=self.host_smoke().visual_fixture()
         self.assertTrue(fixture.is_file());self.assertEqual(len(source_hash),64)
-        result=s.evaluate_reference_rgb(reference.read_bytes(),160,120,reference.read_bytes())
-        self.assertEqual(result['status'],'matched')
+        raw=(self.root/'visual-reference-input.raw').read_bytes();size=160*120*3
+        base=s.visual_reference_frame();pulse=bytes(value+4 for value in base)
+        self.assertEqual(len(raw),20*size)
+        self.assertEqual([raw[index*size:(index+1)*size] for index in range(20)],
+                         [base if index%2==0 else pulse for index in range(20)])
+        self.assertNotEqual(hashlib.sha256(base).digest(),hashlib.sha256(pulse).digest())
+        expected=reference.read_bytes()
+        decoded=self.root/'visual-reference-decoded.raw'
+        s.execute(['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y','-i',str(fixture),
+                   '-pix_fmt','rgb24','-f','rawvideo',str(decoded)])
+        decoded_raw=decoded.read_bytes();self.assertEqual(len(decoded_raw),20*size)
+        decoded_frames=[decoded_raw[index*size:(index+1)*size] for index in range(20)]
+        self.assertTrue(all(left!=right for left,right in zip(decoded_frames,decoded_frames[1:])))
+        self.assertEqual(len({hashlib.sha256(frame).digest() for frame in decoded_frames}),2)
+        self.assertTrue(all(s.evaluate_reference_rgb(frame,160,120,expected)['status']=='matched'
+                            for frame in decoded_frames))
+        self.assertEqual(s.evaluate_reference_rgb(expected,160,120,expected)['status'],'matched')
+        self.assertEqual(s.visual_reference_cadence(),dict(schema='arctic-native-visual-cadence-v1',
+            frames=20,frames_per_second=10,alternating_rgb_delta=4,changes_every_frame=True,
+            oracle_thresholds_unchanged=True,release_acceptance=False))
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

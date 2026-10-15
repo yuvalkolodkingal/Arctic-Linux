@@ -121,9 +121,36 @@ language samples, reused boots/disks and a single hardware profile all fail the
 contract.
 
 Only validated transcript-free JSON, fixture provenance, execution identities
-and the two empty-receiver indicator PNGs per hardware lane may be uploaded.
-Raw serial logs, journals, audio, references, GTK receiver files and hypotheses
-remain private.
+and two empty-receiver indicator PNGs per hardware lane may be uploaded. The
+modern lane additionally uploads four transcript-free Arctic Settings PNGs:
+the actionable Vulkan error and explicit CPU-ready state from both installed
+sessions. Every image is bound to the exact ISO, installation, boot and checked
+gate, and publication requires a separate visual review. Raw serial logs,
+journals, audio, references, GTK receiver files and hypotheses remain private.
+
+A failed CPU transcription gate includes one source-owned numeric
+`failure_stage` so a retained report can locate the failed operation without
+retaining exception text, command output or transcript data. The fixed mapping
+is: 1 fixture selection, 2 receiver clear, 3 pre-recording focus, 4 language
+selection, 5 record start, 6 recording state, 7 engine profile, 8 capture link,
+9 playback start, 10 playback completion, 11 record stop, 12 transcribing state,
+13 terminal idle state, 14 text delivery, 15 text shape, 16 post-insertion focus,
+17 language script, 18 accuracy metrics and 19 sample record. The same field is
+allowed on GPU gates only when their CPU retry transcription fails. Every audio
+sample is still attempted once: the checker does not retry a recording or
+transcription. Consecutive samples in one language reuse the already verified
+language selection instead of restarting the official daemon between samples;
+backend setup invalidates that cache because it regenerates the config.
+
+The microphone-disconnect gate uses the same bounded mechanism with IDs
+101–123 for, in order: receiver clear, CPU selection, initial status, source
+selection, pinned restart/readiness, record start/state/link, route removal,
+source isolation, interrupted cancel, disconnected restart/readiness, failed
+record start, actionable error, idle state, receiver check, cleanup cancel,
+route restoration, default-source restoration, language restoration and error
+clearance. Its cleanup attempts every restoration step and then reports the
+first fixed cleanup stage if any failed, so one failed cleanup operation cannot
+silently skip the remaining restoration work or publish private failure text.
 
 Run source controls with:
 
