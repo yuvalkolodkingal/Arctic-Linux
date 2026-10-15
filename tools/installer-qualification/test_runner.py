@@ -1,7 +1,9 @@
 """Disabled dispatch, source pins, bounded diagnostics and container ownership controls."""
+import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import signal
 import subprocess
 from pathlib import Path
@@ -30,6 +32,52 @@ class Controls(unittest.TestCase):
         self.assertIn('host/serial.log',R.C.ARCHIVE_FILES)
         self.assertTrue(set(R.C.REQUIRED_IMAGES)<=set(R.C.ARCHIVE_FILES))
         self.assertNotIn('data.iso',R.C.ARCHIVE_FILES)
+
+    def test_real_verify_accepts_shipped_installer_manifests_against_execution_checkout(self):
+        repository=HERE.resolve().parents[1]
+        def git(root,*args):
+            return subprocess.check_output(['git','-C',str(root),*args],text=True).strip()
+        def commit(root):
+            subprocess.run(['git','init','-q',str(root)],check=True)
+            git(root,'config','user.name','Arctic qualification fixture')
+            git(root,'config','user.email','qualification@arctic.invalid')
+            git(root,'add','.')
+            git(root,'commit','-qm','Exact verification fixture')
+            return git(root,'rev-parse','HEAD')
+        with tempfile.TemporaryDirectory() as temporary:
+            root=Path(temporary);source=root/'source';execution=root/'execution';inputs=root/'inputs'
+            source.mkdir();execution.mkdir();(inputs/'iso').mkdir(parents=True)
+            # Candidate source is a separate checkout. Deliberately give its
+            # same-named observer different bytes: the workflow copies and
+            # executes the reviewed qualification checkout's observer.
+            source_observer=source/'tools/native-functional/native_smoke.py'
+            source_observer.parent.mkdir(parents=True)
+            source_observer.write_text('candidate image source observer\n')
+            source_sha=commit(source)
+            inventories=set(R.C.EXECUTION_FILES)|set(R.E.active_contract().EXECUTION_FILES)
+            for name in inventories:
+                destination=execution/name;destination.parent.mkdir(parents=True,exist_ok=True)
+                shutil.copyfile(repository/name,destination)
+            execution_sha=commit(execution)
+            iso_bytes=b'exact installer verify fixture\n'
+            iso_name='Arctic-Linux-1.2-candidate-1-1-x86_64.iso'
+            (inputs/'iso'/iso_name).write_bytes(iso_bytes)
+            environment=dict(GITHUB_ACTIONS='true',RUNNER_ENVIRONMENT='github-hosted',
+                GITHUB_REPOSITORY='yuvalkolodkingal/Arctic-Linux',
+                GITHUB_REF='refs/heads/codex/qualification-dispatch-20261010',
+                GITHUB_EVENT_NAME='push',GITHUB_RUN_ATTEMPT='1',GITHUB_SHA=execution_sha)
+            profiles=((False,'execution-manifest.json','Candidate installer restoration qualification'),
+                      (True,'active-execution-manifest.json','Candidate active installer restoration qualification'))
+            for active,name,workflow in profiles:
+                manifest=json.loads((HERE/name).read_text())
+                manifest['image'].update(source_sha=source_sha,name=iso_name,bytes=len(iso_bytes),
+                    sha256=hashlib.sha256(iso_bytes).hexdigest())
+                manifest_path=root/name;manifest_path.write_text(json.dumps(manifest))
+                args=types.SimpleNamespace(manifest=manifest_path,source=source,inputs=inputs,active_profile=active)
+                with self.subTest(active=active),patch.dict(os.environ,environment|{'GITHUB_WORKFLOW':workflow},clear=False):
+                    verified,iso=R.verify(args,execution)
+                    self.assertEqual(verified,manifest)
+                    self.assertEqual(iso,inputs/'iso'/iso_name)
 
     def test_preserve_keeps_private_uart_out_and_prefixes_only_other_streams(self):
         with tempfile.TemporaryDirectory() as root:
