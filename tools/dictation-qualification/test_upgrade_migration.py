@@ -39,6 +39,16 @@ PRODUCTION = {
     "small": (487601967, "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
     "turbo": (574041195, "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
 }
+CURRENT_ASSETS = {
+    "cpu": ("voxtype-baseline", b"baseline-1.1.1-fixture\n", 0o755),
+    "avx2": ("voxtype-avx2", b"avx2-1.1.1-fixture\n", 0o755),
+    "vulkan": ("voxtype-vulkan", b"vulkan-1.1.1-fixture\n", 0o755),
+}
+CURRENT_PRODUCTION = {
+    "cpu": (18838904, "cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af"),
+    "avx2": (19415936, "3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770"),
+    "vulkan": (66575872, "102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"),
+}
 
 
 def digest(data):
@@ -52,6 +62,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.state_root = self.root / "var/lib"
         self.state = self.state_root / "arctic/dictation"
         self.payload = self.root / "payload"
+        self.current_payload = self.root / "current-payload"
+        self.current_assets = self.root / "current-assets"
         self.models = self.root / "models"
         self.cache = self.root / "cache"
         self.bin = self.root / "bin"
@@ -61,7 +73,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.state.mkdir(parents=True, mode=0o755)
         for path in (self.root / "var", self.state_root, self.state.parent, self.state):
             path.chmod(0o755)
-        for path in (self.payload, self.cache, self.bin):
+        for path in (self.payload, self.current_payload, self.current_assets, self.cache, self.bin):
             path.mkdir(mode=0o755)
         self.user = pwd.getpwuid(os.getuid()).pw_name
         self.uid = os.getuid()
@@ -81,6 +93,11 @@ class UpgradeMigrationExecution(unittest.TestCase):
         )
         for name, data, mode in ASSETS.values():
             self._write(self.payload / name, data, mode)
+        for variant, old_key in (("baseline", "cpu"), ("avx2", "avx2"), ("vulkan", "vulkan")):
+            _name, data, mode = ASSETS[old_key]
+            self._write(self.payload / ("voxtype-" + variant), data, mode)
+        for name, data, mode in CURRENT_ASSETS.values():
+            self._write(self.current_assets / name, data, mode)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -118,6 +135,30 @@ class UpgradeMigrationExecution(unittest.TestCase):
         path.write_text(json.dumps(value, separators=(",", ":")) + "\n")
         path.chmod(0o644)
 
+    def _direct_receipt(self, profile, backend="cpu"):
+        cpu = "baseline" if profile == "small-v2" else "avx2"
+        binary_key = "cpu" if cpu == "baseline" else "avx2"
+        model_key = "small" if profile == "small-v2" else "turbo"
+        model_name, model_data, _mode = ASSETS[model_key]
+        _old_name, binary_data, _mode = ASSETS[binary_key]
+        receipt = {
+            "integration": "upstream-direct-v1", "version": "1.1.0",
+            "source_commit": SOURCE_COMMIT,
+            "release_signing_fingerprint": "9CCF7915B750CAE8B095ED1AA3FC9F33FD209279",
+            "user": self.user, "profile": profile, "binary": "voxtype-" + cpu,
+            "binary_bytes": len(binary_data), "binary_sha256": digest(binary_data),
+            "model_path": str(self.models / model_name),
+            "model": model_name.removeprefix("ggml-"),
+            "model_bytes": len(model_data), "model_sha256": digest(model_data),
+            "backend": backend,
+        }
+        if backend == "vulkan":
+            vulkan_data = ASSETS["vulkan"][1]
+            receipt.update(vulkan_binary="voxtype-vulkan",
+                           vulkan_binary_bytes=len(vulkan_data),
+                           vulkan_binary_sha256=digest(vulkan_data))
+        return receipt
+
     def _fixture_setup(self, crash_before_marker=False, online_failure=False):
         text = SETUP.read_text()
         replacements = {}
@@ -125,11 +166,18 @@ class UpgradeMigrationExecution(unittest.TestCase):
             old_size, old_sha = PRODUCTION[key]
             replacements[str(old_size)] = str(len(data))
             replacements[old_sha] = digest(data)
+        for key, (_name, data, _mode) in CURRENT_ASSETS.items():
+            old_size, old_sha = CURRENT_PRODUCTION[key]
+            replacements[str(old_size)] = str(len(data))
+            replacements[old_sha] = digest(data)
         for old, new in replacements.items():
             text = text.replace(old, new)
         text = text.replace(
-            "readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.0 MODELS=/opt/arctic/voxtype/models",
-            f"readonly STATE={self.state} DEST={self.payload} MODELS={self.models}",
+            "readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.1 MODELS=/opt/arctic/voxtype/models",
+            f"readonly STATE={self.state} DEST={self.current_payload} MODELS={self.models}",
+        ).replace(
+            "readonly PREVIOUS_DEST=/opt/arctic/voxtype/1.1.0",
+            f"readonly PREVIOUS_DEST={self.payload}",
         ).replace(
             "readonly CACHE=/var/cache/arctic/voxtype", f"readonly CACHE={self.cache}"
         ).replace(
@@ -191,6 +239,16 @@ class UpgradeMigrationExecution(unittest.TestCase):
 }
 """
         text = text[:start] + online + text[end:]
+        start = text.index("install_asset() {")
+        end = text.index("\n}\n", start) + 3
+        install_asset = """install_asset() {
+    local variant=$1 target="$DEST/voxtype-$1"
+    cp -- "$ARCTIC_CURRENT_ASSETS/voxtype-$variant" "$target.new"
+    chmod 0755 "$target.new"
+    mv -f -- "$target.new" "$target"
+}
+"""
+        text = text[:start] + install_asset + text[end:]
         sync_tree = 'durable_sync_tree() {\n'
         self.assertIn(sync_tree, text)
         text = text.replace(
@@ -209,7 +267,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
 
     def _run(self, script, check=True, verb="--migrate-legacy"):
         env = dict(os.environ, PATH=str(self.bin) + ":/usr/bin:/bin",
-                   ARCTIC_MIGRATION_TRACE=str(self.trace), PKEXEC_UID=str(self.uid))
+                   ARCTIC_MIGRATION_TRACE=str(self.trace),
+                   ARCTIC_CURRENT_ASSETS=str(self.current_assets), PKEXEC_UID=str(self.uid))
         if verb == "--install-offline":
             argv = [str(script), "--install", self.user, "--offline"]
         else:
@@ -229,7 +288,13 @@ class UpgradeMigrationExecution(unittest.TestCase):
     def test_old_stable_profile_wins_and_crash_retries_without_network(self):
         self._json("verified.json", self._legacy_receipt("small-v2"))
         self._json("profile-selection.json", {"selection": "recommended"})
-        crashed = self._run(self._fixture_setup(crash_before_marker=True), check=False)
+        queued = self._run(self._fixture_setup(), check=False)
+        self.assertNotEqual(queued.returncode, 0)
+        self.assertTrue((self.state / "pending").is_file())
+        self.assertFalse((self.state / "upstream-direct-v1").exists())
+        self._assert_legacy_present()
+
+        crashed = self._run(self._fixture_setup(crash_before_marker=True), check=False, verb="--resume")
         self.assertEqual(crashed.returncode, 91, crashed.stderr.decode())
         self.assertTrue((self.state / "pending").is_file())
         self.assertFalse((self.state / "upstream-direct-v1").exists())
@@ -238,29 +303,62 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertTrue((self.models / "ggml-small.bin").is_file())
         self.assertEqual(json.loads((self.state / "verified.json").read_text())["profile"], "small-v2")
 
-        self._run(self._fixture_setup())
+        network_count = self.trace.read_text().splitlines().count("network")
+        self._run(self._fixture_setup(), verb="--resume")
         self.assertEqual((self.state / "upstream-direct-v1").read_text(), "upstream-direct-v1\n")
         self.assertFalse((self.state / "pending").exists())
+        self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
         self._assert_legacy_removed()
         receipt = json.loads((self.state / "verified.json").read_text())
         self.assertEqual((receipt["profile"], receipt["binary"]), ("small-v2", "voxtype-baseline"))
-        self.assertTrue((self.payload / "voxtype-baseline").is_file())
+        self.assertTrue((self.current_payload / "voxtype-baseline").is_file())
         self.assertTrue((self.models / "ggml-small.bin").is_file())
-        self.assertNotIn("network", self.trace.read_text())
+        self.assertEqual(self.trace.read_text().splitlines().count("network"), network_count)
 
     def test_verified_turbo_wins_over_interrupted_compatibility_change(self):
         self._json("verified.json", self._legacy_receipt("turbo-q5-v3"))
         self._json("profile-selection.json", {"selection": "compatibility"})
-        self._run(self._fixture_setup())
+        self.assertNotEqual(self._run(self._fixture_setup(), check=False).returncode, 0)
+        self._run(self._fixture_setup(), verb="--resume")
         receipt = json.loads((self.state / "verified.json").read_text())
         self.assertEqual((receipt["profile"], receipt["binary"]), ("turbo-q5-v3", "voxtype-avx2"))
-        self.assertTrue((self.payload / "voxtype-avx2").is_file())
+        self.assertTrue((self.current_payload / "voxtype-avx2").is_file())
         self.assertTrue((self.models / "ggml-large-v3-turbo-q5_0.bin").is_file())
         self._assert_legacy_removed()
 
+    def test_direct_1_1_0_cpu_upgrade_preserves_profile_and_reuses_model(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-small.bin", ASSETS["small"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("small-v2"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        self.assertNotEqual(self._run(self._fixture_setup(), check=False).returncode, 0)
+        self._run(self._fixture_setup(), verb="--resume")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual((receipt["version"], receipt["profile"], receipt["backend"]),
+                         ("1.1.1", "small-v2", "cpu"))
+        self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
+        self.assertTrue((self.current_payload / "voxtype-baseline").is_file())
+        self.assertFalse((self.payload / "voxtype-baseline").exists())
+
+    def test_direct_1_1_0_vulkan_upgrade_is_reverified_on_cpu(self):
+        self.models.mkdir(mode=0o755)
+        self._write(self.models / "ggml-large-v3-turbo-q5_0.bin", ASSETS["turbo"][1], 0o644)
+        self._json("verified.json", self._direct_receipt("turbo-q5-v3", "vulkan"))
+        self._write(self.state / "upstream-direct-v1", b"upstream-direct-v1\n", 0o644)
+        self.assertNotEqual(self._run(self._fixture_setup(), check=False).returncode, 0)
+        self._run(self._fixture_setup(), verb="--resume")
+        receipt = json.loads((self.state / "verified.json").read_text())
+        self.assertEqual((receipt["version"], receipt["profile"], receipt["backend"]),
+                         ("1.1.1", "turbo-q5-v3", "cpu"))
+        self.assertNotIn("vulkan_binary", receipt)
+        self.assertFalse((self.state / "verified.json.rejected-upstream-direct-v1").exists())
+        self.assertTrue((self.current_payload / "voxtype-avx2").is_file())
+        self.assertFalse((self.payload / "voxtype-vulkan").exists())
+
     def test_trusted_profile_selection_is_used_without_receipt(self):
         self._json("profile-selection.json", {"selection": "compatibility"})
-        self._run(self._fixture_setup())
+        self.assertNotEqual(self._run(self._fixture_setup(), check=False).returncode, 0)
+        self._run(self._fixture_setup(), verb="--resume")
         receipt = json.loads((self.state / "verified.json").read_text())
         self.assertEqual(receipt["profile"], "small-v2")
         self.assertTrue((self.models / "ggml-small.bin").is_file())
@@ -273,7 +371,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertTrue((self.state / "pending").is_file())
         self.assertFalse((self.state / "upstream-direct-v1").exists())
         self._assert_legacy_present()
-        self.assertFalse((self.payload / "voxtype-baseline").exists())
+        self.assertFalse((self.current_payload / "voxtype-baseline").exists())
         self.assertNotIn("network", self.trace.read_text())
         self.assertNotIn("provenance", self.trace.read_text())
 
@@ -288,7 +386,8 @@ class UpgradeMigrationExecution(unittest.TestCase):
 
     def test_postcommit_user_service_failure_keeps_ready_commit(self):
         self._json("verified.json", self._legacy_receipt("small-v2"))
-        self._run(self._fixture_setup())
+        self.assertNotEqual(self._run(self._fixture_setup(), check=False).returncode, 0)
+        self._run(self._fixture_setup(), verb="--resume")
         self.assertTrue((self.state / "upstream-direct-v1").is_file())
         self.assertEqual((self.state / "setup.state").read_text(), "ready\n")
         self.assertFalse((self.state / "setup.error").exists())
@@ -325,7 +424,7 @@ class UpgradeMigrationExecution(unittest.TestCase):
         self.assertTrue(self.state_root.is_dir())
         self._run(self._fixture_setup(), verb="--install-offline")
         self.assertEqual((self.state / "user").read_text(), self.user + "\n")
-        self.assertEqual((self.state / "pending").read_text(), "1.1.0\n")
+        self.assertEqual((self.state / "pending").read_text(), "1.1.1\n")
         self.assertEqual((self.state / "setup.state").read_text(), "queued\n")
         for path in (self.state.parent, self.state):
             self.assertTrue(path.is_dir())

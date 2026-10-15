@@ -8,9 +8,9 @@ vm.createContext(context);
 vm.runInContext(fs.readFileSync(__dirname + '/../DictationStatus.js', 'utf8').replace('.pragma library', ''), context);
 
 const small = { profile: 'small-v2', model: 'small', model_download_bytes: 487601967,
-                download_bytes: 506181191, vulkan_download_bytes: 66342968 };
+                download_bytes: 506440871, vulkan_download_bytes: 66575872 };
 const turbo = { profile: 'turbo-q5-v3', model: 'large-v3-turbo-q5_0', model_download_bytes: 574041195,
-                download_bytes: 593194923, vulkan_download_bytes: 66342968 };
+                download_bytes: 593457131, vulkan_download_bytes: 66575872 };
 for (const input of ['', '{', 'null', '[]', '42', '"ready"']) {
     const state = context.parse(input);
     assert.equal(state.ready, false, input);
@@ -33,13 +33,13 @@ const state = context.parse(JSON.stringify({
 assert.equal(state.language, 'he');
 assert.equal(state.backend, 'vulkan');
 assert.equal(state.model_download_bytes, 574041195);
-assert.equal(state.download_bytes, 593194923);
+assert.equal(state.download_bytes, 593457131);
 for (const key of ['transcript', 'text', 'audio']) assert.equal(key in state, false);
 assert.equal(JSON.stringify(state).includes('private'), false);
 assert.equal(context.parse(JSON.stringify({ ...small, state: 'ready', ready: 'true', language: 'en', backend: 'cpu' })).ready, false);
 assert.equal(context.parse('{"language":"unknown","backend":"unknown"}').language, 'auto');
 assert.equal(context.parse('{"language":"unknown","backend":"unknown"}').backend, 'cpu');
-assert.equal(context.size(593194923), '593.2 MB');
+assert.equal(context.size(593457131), '593.5 MB');
 assert.equal(context.detail(context.parse(JSON.stringify({ ...small, state: 'queued' }))).includes('Connect to the internet'), true);
 assert.equal(context.detail(context.parse(JSON.stringify({ ...turbo, state: 'transcribing' }))).includes('processing audio'), true);
 
@@ -53,7 +53,7 @@ for (const profile of [small, turbo]) {
 }
 for (const patch of [{ profile: 'unknown' }, { model: 'unknown' }, { model: turbo.model },
                      { model_download_bytes: -1 }, { download_bytes: 1 },
-                     { download_bytes: '506181191' }, { model_download_bytes: true }]) {
+                     { download_bytes: '506440871' }, { model_download_bytes: true }]) {
     const snapshot = context.parse(JSON.stringify({ ...small, state: 'ready', ready: true, ...patch }));
     assert.equal(context.profileKnown(snapshot), false);
     assert.equal(context.setupConsent(snapshot).includes('Refresh status'), true);

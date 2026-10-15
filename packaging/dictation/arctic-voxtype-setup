@@ -1,28 +1,29 @@
 #!/bin/bash
-# Fetch signed official VoxType 1.1.0 binaries plus one pinned local Whisper
+# Fetch signed official VoxType 1.1.1 binaries plus one pinned local Whisper
 # model. This setup bootstrap never records audio or handles transcripts.
 set -Eeuo pipefail
 umask 077
-readonly VERSION=1.1.0 SOURCE_COMMIT=e2638ca63f566f1682bcedc0abea8e4b25211c21
-readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.0
+readonly VERSION=1.1.1 SOURCE_COMMIT=014c56105b2f071bb3457c51a95c38be380e5124
+readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.1
 readonly FINGERPRINT=9CCF7915B750CAE8B095ED1AA3FC9F33FD209279
-readonly SUMS_BYTES=2931 SUMS_SHA=3a2fa8661ac2dceeb0b52d4de85b71361de122a09298f3a85ca596ff0428fe4b
-readonly SUMS_SIG_BYTES=228 SUMS_SIG_SHA=63155a999853a5816912a586610ab831273d2d493ca8e08679f817a7e383d455
-readonly BASELINE_BYTES=18579224 BASELINE_SHA=1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
-readonly BASELINE_SIG_BYTES=228 BASELINE_SIG_SHA=41b8b14315f55c9ffb03ccb28e99dfd115c7e5a7e7953ef158213d38b4162ed8
-readonly AVX2_BYTES=19153728 AVX2_SHA=e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
-readonly AVX2_SIG_BYTES=228 AVX2_SIG_SHA=fdf2c35826ea7590a703993c5bdf69804672a5a0c76312e66bc4f14399d8f2ce
-readonly VULKAN_BYTES=66342968 VULKAN_SHA=db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2
-readonly VULKAN_SIG_BYTES=228 VULKAN_SIG_SHA=2b6b6afbaecd0c8adff536db4c5e0ea50b8781ad6f2643344e96c8cba2ea672a
+readonly SUMS_BYTES=2931 SUMS_SHA=a93de5d79f6180626181aaf2315cc8415b084914b9f69a71e71bfb56bae1a32e
+readonly SUMS_SIG_BYTES=228 SUMS_SIG_SHA=2bce1ff42615d322b1e686f05373c99889d506e230d5f5512aeb22d728510af8
+readonly BASELINE_BYTES=18838904 BASELINE_SHA=cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af
+readonly BASELINE_SIG_BYTES=228 BASELINE_SIG_SHA=abd5e8b0c7b50987c6094105732ada464a2699f9b64f4e3fb47e3d005a30794e
+readonly AVX2_BYTES=19415936 AVX2_SHA=3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770
+readonly AVX2_SIG_BYTES=228 AVX2_SIG_SHA=e1c8606f7b54535193fe23f6c08808a1b60470e24b6641b1d3e4da5259991ead
+readonly VULKAN_BYTES=66575872 VULKAN_SHA=102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863
+readonly VULKAN_SIG_BYTES=228 VULKAN_SIG_SHA=aaf15615b5f7f5d18e5df132fd6a1ade754991162108b1a3990b303dd1a9109b
 readonly SMALL_NAME=ggml-small.bin SMALL_BYTES=487601967 SMALL_SHA=1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
 readonly SMALL_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8bfee42b0e836fc3a9890373e5defc00a6/ggml-small.bin
 readonly TURBO_NAME=ggml-large-v3-turbo-q5_0.bin TURBO_BYTES=574041195 TURBO_SHA=394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
 readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin
-readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.0 MODELS=/opt/arctic/voxtype/models
+readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.1 MODELS=/opt/arctic/voxtype/models
+readonly PREVIOUS_DEST=/opt/arctic/voxtype/1.1.0
 readonly STATE_ROOT=/var/lib STORAGE_ROOT=/opt
 readonly CACHE=/var/cache/arctic/voxtype
 readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
-readonly PROVENANCE=/usr/share/arctic/dictation/provenance/1.1.0
+readonly PROVENANCE=/usr/share/arctic/dictation/provenance/1.1.1
 cleanup_tmp=
 cleanup() { [ -z "$cleanup_tmp" ] || rm -rf -- "$cleanup_tmp"; }
 prepare_state_dir() {
@@ -280,10 +281,10 @@ legacy_binary_path() {
 }
 legacy_profile() {
     local host_profile=$1
-    python3 - "$STATE" "$DEST" "$host_profile" <<'PY'
+    python3 - "$STATE" "$PREVIOUS_DEST" "$DEST" "$host_profile" <<'PY'
 import json, os, re, stat, sys
 
-state, payload, host_profile = sys.argv[1:]
+state, previous_payload, current_payload, host_profile = sys.argv[1:]
 profiles = {
     'small-v2': {
         'profile_sha256': 'd4b9326169fe0773b36857ce4b2c52d31294c4c421933c5fbb41422227e92756',
@@ -352,6 +353,7 @@ if receipt_exists:
     direct_keys = {'integration', 'version', 'source_commit', 'release_signing_fingerprint',
                    'user', 'profile', 'binary', 'binary_bytes', 'binary_sha256',
                    'model_path', 'model', 'model_bytes', 'model_sha256', 'backend'}
+    vulkan_keys = {'vulkan_binary', 'vulkan_binary_bytes', 'vulkan_binary_sha256'}
     if set(receipt) == legacy_keys:
         fixed = {key: expected[key] for key in ('profile_sha256', 'model', 'cpu_variant',
                                                 'model_download_bytes', 'download_bytes')}
@@ -362,7 +364,7 @@ if receipt_exists:
         if type(files) is not dict or set(files) != set(expected['files']):
             raise SystemExit(1)
         for key, (name, size, digest, mode) in expected['files'].items():
-            path = os.path.join(payload, name)
+            path = os.path.join(previous_payload, name)
             try:
                 info = os.lstat(path)
             except OSError:
@@ -373,25 +375,61 @@ if receipt_exists:
                     or set(recorded) != {'sha256', 'size', 'mtime_ns'}
                     or recorded != {'sha256': digest, 'size': size, 'mtime_ns': info.st_mtime_ns}):
                 raise SystemExit(1)
-    elif set(receipt) == direct_keys:
+    elif set(receipt) in (direct_keys, direct_keys | vulkan_keys):
         cpu = expected['cpu_variant']
-        binary_size = 18579224 if cpu == 'baseline' else 19153728
-        binary_sha = ('1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'
-                      if cpu == 'baseline' else 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28')
+        releases = {
+            '1.1.0': {
+                'source': 'e2638ca63f566f1682bcedc0abea8e4b25211c21',
+                'baseline': (18579224, '1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'),
+                'avx2': (19153728, 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28'),
+                'vulkan': (66342968, 'db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2'),
+            },
+            '1.1.1': {
+                'source': '014c56105b2f071bb3457c51a95c38be380e5124',
+                'baseline': (18838904, 'cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af'),
+                'avx2': (19415936, '3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770'),
+                'vulkan': (66575872, '102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863'),
+            },
+        }
+        release = releases.get(receipt.get('version'))
+        if release is None:
+            raise SystemExit(1)
+        payload = previous_payload if receipt['version'] == '1.1.0' else current_payload
+        binary_size, binary_sha = release[cpu]
         model_name = 'ggml-' + expected['model'] + '.bin'
         model_size = expected['model_download_bytes']
         model_sha = expected['files']['model'][2]
-        fixed = dict(integration='upstream-direct-v1', version='1.1.0',
-                     source_commit='e2638ca63f566f1682bcedc0abea8e4b25211c21',
+        fixed = dict(integration='upstream-direct-v1', version=receipt['version'],
+                     source_commit=release['source'],
                      release_signing_fingerprint='9CCF7915B750CAE8B095ED1AA3FC9F33FD209279',
                      profile=profile, binary='voxtype-' + cpu, binary_bytes=binary_size,
                      binary_sha256=binary_sha, model_path='/opt/arctic/voxtype/models/' + model_name,
                      model=expected['model'] + '.bin', model_bytes=model_size,
-                     model_sha256=model_sha, backend='cpu')
+                     model_sha256=model_sha, backend=receipt.get('backend'))
         if any(receipt.get(key) != value for key, value in fixed.items()):
+            raise SystemExit(1)
+        if receipt['backend'] == 'cpu':
+            if set(receipt) != direct_keys:
+                raise SystemExit(1)
+        elif receipt['backend'] == 'vulkan':
+            vulkan_size, vulkan_sha = release['vulkan']
+            if (set(receipt) != direct_keys | vulkan_keys
+                    or receipt.get('vulkan_binary') != 'voxtype-vulkan'
+                    or receipt.get('vulkan_binary_bytes') != vulkan_size
+                    or receipt.get('vulkan_binary_sha256') != vulkan_sha):
+                raise SystemExit(1)
+        else:
             raise SystemExit(1)
         user = receipt.get('user')
         if type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None:
+            raise SystemExit(1)
+        try:
+            info = os.lstat(os.path.join(payload, receipt['binary']))
+        except OSError:
+            raise SystemExit(1) from None
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or stat.S_IMODE(info.st_mode) != 0o755
+                or info.st_size != receipt['binary_bytes']):
             raise SystemExit(1)
     else:
         raise SystemExit(1)
@@ -477,7 +515,7 @@ configure_user() {
 }
 
 reuse_legacy_model() {
-    local name=$1 bytes=$2 sha=$3 source="$DEST/$1" target="$MODELS/$1"
+    local name=$1 bytes=$2 sha=$3 source="$PREVIOUS_DEST/$1" target="$MODELS/$1"
     trusted_exact_file "$target" 644 "$bytes" "$sha" && return 0
     trusted_exact_file "$source" 644 "$bytes" "$sha" || return 1
     prepare_storage_dir "$MODELS"
@@ -491,9 +529,20 @@ cleanup_legacy_payload() {
     # are both durable. Exact compatible bytes were copied/reflinked above.
     [[ -f $STATE/verified.json && ! -L $STATE/verified.json && $(stat -c %u:%a "$STATE/verified.json") == 0:644 ]] || return
     trusted_exact_file "$STATE/upstream-direct-v1" 644 19 f488e43c61459fd06e37fe8d5590ed9bc844806f1e703fba8a2de65dd945e8d8 || return
-    rm -f -- "$DEST/voxtype-cpu" "$DEST/voxtype-cpu-avx2" "$DEST/voxtype-vulkan" \
-        "$DEST/$SMALL_NAME" "$DEST/$TURBO_NAME"
-    durable_sync_dir "$DEST"
+    local path mode bytes sha
+    while read -r path mode bytes sha; do
+        trusted_exact_file "$PREVIOUS_DEST/$path" "$mode" "$bytes" "$sha" || continue
+        rm -f -- "$PREVIOUS_DEST/$path"
+    done <<'EOF'
+voxtype-cpu 755 18579224 1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
+voxtype-cpu-avx2 755 19153728 e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
+voxtype-vulkan 755 66342968 db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2
+voxtype-baseline 755 18579224 1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
+voxtype-avx2 755 19153728 e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
+ggml-small.bin 644 487601967 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
+ggml-large-v3-turbo-q5_0.bin 644 574041195 394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+EOF
+    [[ ! -d $PREVIOUS_DEST || -L $PREVIOUS_DEST ]] || durable_sync_dir "$PREVIOUS_DEST"
 }
 
 setup_user() {
@@ -534,9 +583,8 @@ setup_user() {
         packaged=1
     fi
     if [[ $packaged == 1 ]]; then
-        # An update from Arctic's former controller already has these exact
-        # upstream bytes. Authenticate the binary with provenance shipped in
-        # the signed RPM and complete the direct migration without a network.
+        # A retry after the current signed binary was already installed can
+        # authenticate it from RPM provenance and finish without a network.
         prepare_packaged_release_metadata "$tmp" "$keyring" "$cpu"
     else
         [[ $mode != legacy-only ]] || return 1
@@ -577,6 +625,8 @@ setup_user() {
     if [ -S "/run/user/$uid/bus" ]; then
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user daemon-reload >/dev/null 2>&1 || :
+        runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+            systemctl --user try-restart voxtype.service >/dev/null 2>&1 || :
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :
     fi

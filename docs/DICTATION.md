@@ -1,8 +1,8 @@
 # Local dictation
 
 Arctic integrates the official [VoxType](https://github.com/peteonrails/voxtype)
-1.1.0 release (source commit
-`e2638ca63f566f1682bcedc0abea8e4b25211c21`) with its local Whisper engine.
+1.1.1 release (source commit
+`014c56105b2f071bb3457c51a95c38be380e5124`) with its local Whisper engine.
 VoxType records, transcribes and inserts text; Arctic supplies installation,
 safe defaults, compositor shortcuts, status presentation and lock integration.
 Automatic language detection is constrained to Hebrew and English.
@@ -24,20 +24,20 @@ Setup chooses one CPU path conservatively:
 
 | CPU path | Official binary and model | Fixed download |
 |---|---|---:|
-| Compatibility | baseline binary and multilingual Whisper Small | 506,181,191 bytes (506.2 MB) |
-| Modern | AVX2 binary and multilingual Whisper Large v3 Turbo Q5 | 593,194,923 bytes (593.2 MB) |
+| Compatibility | baseline binary and multilingual Whisper Small | 506,440,871 bytes (506.4 MB) |
+| Modern | AVX2 binary and multilingual Whisper Large v3 Turbo Q5 | 593,457,131 bytes (593.5 MB) |
 
 Missing RPM dependencies add to those totals. Vulkan is a later, explicit
-choice in Settings and adds **66,342,968 bytes (66.3 MB)**. It is not included in
+choice in Settings and adds **66,575,872 bytes (66.6 MB)**. It is not included in
 the initial modern CPU total. Enabling Vulkan runs `vulkaninfo` and a real local
 model initialization before changing the selected backend. Failure leaves CPU
 selected and records an actionable error.
 
 | File | Bytes | SHA-256 |
 |---|---:|---|
-| VoxType CPU baseline | 18,579,224 | `1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a` |
-| VoxType CPU AVX2 | 19,153,728 | `e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28` |
-| VoxType Vulkan | 66,342,968 | `db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2` |
+| VoxType CPU baseline | 18,838,904 | `cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af` |
+| VoxType CPU AVX2 | 19,415,936 | `3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770` |
+| VoxType Vulkan | 66,575,872 | `102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863` |
 | Whisper multilingual Small | 487,601,967 | `1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b` |
 | Whisper multilingual Turbo Q5 | 574,041,195 | `394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2` |
 
@@ -48,15 +48,16 @@ every binary. Models come from immutable Whisper.cpp revisions and receive the
 same byte-count and SHA-256 checks. Downloads use root-owned resumable partial
 files and are published atomically only after verification.
 
-An update from Arctic's retired controller reuses its exact official VoxType
-binary and model when they still match these pins. The RPM carries the signed
-1.1.0 release manifest and detached CPU signatures, so this migration does not
-need GitHub or Hugging Face to be reachable. The direct-integration receipt and
-`upstream-direct-v1` marker are written only after the reused binary signature,
-model hash and new per-user configuration verify. Legacy payload files remain
-in place if that local migration fails; the normal online repair queue is then
-enabled without deleting them. A trusted, root-owned legacy receipt selects the
-previously working profile even when both payload sets exist or a later profile
+A system with VoxType 1.1.0 keeps its verified model and selected hardware
+profile. The stable RPM update queues a background download of only the new
+signed executable; until that succeeds, Settings accurately reports setup as
+pending. The RPM carries the 1.1.1 signed manifest and detached CPU signatures
+for verification and crash recovery. The direct-integration receipt and
+`upstream-direct-v1` marker are committed only after the new executable,
+existing model hash and per-user configuration verify. A failed download leaves
+the previous payload intact and the setup retryable. A trusted, root-owned
+legacy receipt selects the previously working profile even when both payload
+sets exist or a later profile
 change was interrupted; the trusted profile-selection file is used only when
 there is no receipt. The pending queue, config, receipt and marker are published
 with file and directory fsyncs. The marker is the durable commit point, and
@@ -70,7 +71,7 @@ A current-session systemd activation failure after the durable marker does not
 roll the completed migration back; readiness reports the stopped service and it
 starts through the globally enabled unit at the next graphical session.
 
-Installed binaries are under `/opt/arctic/voxtype/1.1.0`; models are under
+Installed binaries are under `/opt/arctic/voxtype/1.1.1`; models are under
 `/opt/arctic/voxtype/models`. `/usr/bin/voxtype` selects the verified CPU or
 Vulkan binary. Public setup state is under `/var/lib/arctic/dictation`:
 
@@ -110,13 +111,18 @@ fixed, transcript-free messages:
 |---|---|
 | Model or binary missing/damaged | Dictation remains unready; run setup repair. |
 | Microphone cannot open | Select and unmute an input in Sound, then record again. |
-| Vulkan initialization or inference fails | The phrase is not retried automatically. Select CPU in Dictation settings, then make a new recording. |
+| Vulkan cannot start | VoxType's Vulkan build may start on CPU. Arctic reports that fallback as an error; explicitly select CPU, or fix the driver and enable Vulkan again. |
+| Vulkan inference fails | The phrase is not retried automatically. Select CPU in Dictation settings, then make a new recording. |
 | Text insertion fails | Focus a writable field and try again; some apps can reject Wayland virtual-keyboard input. |
 | Service is stopped | Start or repair VoxType from Dictation settings. |
 
-CPU is always the explicit recovery path after a Vulkan failure. Arctic does
-not claim that upstream automatically falls back, does not retranscribe failed
-audio, and does not download a different model in response to a runtime error.
+The official 1.1.1 Vulkan binary has no setting that requires GPU execution or
+disables whisper.cpp's model-start fallback. When a render node is still absent
+after its configured wait, upstream can load the model on CPU and stay there
+until restart. Arctic surfaces the upstream warning instead of treating that as
+successful acceleration. CPU remains the explicit recovery path after a Vulkan
+failure. Arctic does not assume a failed inference was retried, retranscribe
+failed audio, or download a different model in response to a runtime error.
 
 The model is configured for on-demand loading. It loads when recording starts
 and unloads after transcription, avoiding a permanently resident Small or

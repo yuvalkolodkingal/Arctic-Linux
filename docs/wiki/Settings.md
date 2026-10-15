@@ -80,15 +80,15 @@ resolution.
 
 ## Dictation
 
-Local dictation runs the official **VoxType 1.1.0** daemon with multilingual
+Local dictation runs the official **VoxType 1.1.1** daemon with multilingual
 Whisper for Hebrew and English. Online installation prepares it; offline
 installation queues first-boot setup. The page remains **not ready** until its
 signed executable and pinned model pass exact size and SHA-256 checks.
 
-The initial fixed download is **506,181,191 bytes** (506.2 MB) for
-baseline/Small or **593,194,923 bytes** (593.2 MB) for AVX2/Turbo Q5, plus any
+The initial fixed download is **506,440,871 bytes** (506.4 MB) for
+baseline/Small or **593,457,131 bytes** (593.5 MB) for AVX2/Turbo Q5, plus any
 missing system packages. Optional Vulkan is selected separately and adds
-**66,342,968 bytes** (66.3 MB). The confirmation discloses the selected size
+**66,575,872 bytes** (66.6 MB). The confirmation discloses the selected size
 before administrator authorization.
 
 Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop

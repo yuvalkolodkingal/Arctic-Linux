@@ -18,7 +18,9 @@ fi
 # Cancel upstream recording, then stop the daemon so a queued start cannot win
 # while the compositor is acquiring the secure lock.
 if command -v voxtype >/dev/null 2>&1; then
-  timeout 1s voxtype record cancel >/dev/null 2>&1 || true
+  # VoxType 1.1.1 allows two seconds for the daemon to acknowledge that active
+  # audio and pending output were discarded. Keep the outer guard beyond it.
+  timeout 3s voxtype record cancel >/dev/null 2>&1 || true
   timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || true
 fi
 start_dictation_after_unlock() {

@@ -368,23 +368,24 @@ Installer finalization writes a target queue, enables the background timer and
 makes a bounded, nonfatal online setup attempt. Offline installations retain an
 explicit unready first-boot queue. The timer first runs about 90–120 seconds
 after boot and retries about every 15 minutes. Setup verifies the signed official
-VoxType 1.1.0 release, exact bytes and SHA-256, then installs one CPU binary and
-one multilingual model atomically: baseline/Small is 506,181,191 bytes; the
-conservatively selected AVX2/Turbo Q5 path is 593,194,923 bytes. Optional Vulkan
-is an explicit later 66,342,968-byte download and must pass real local model
+VoxType 1.1.1 release, exact bytes and SHA-256, then installs one CPU binary and
+one multilingual model atomically: baseline/Small is 506,440,871 bytes; the
+conservatively selected AVX2/Turbo Q5 path is 593,457,131 bytes. Optional Vulkan
+is an explicit later 66,575,872-byte download and must pass real local model
 initialization before selection.
 
-Upgrades from the retired Arctic controller first attempt an offline migration
-from its exact pinned payload. The RPM ships the signed upstream 1.1.0 manifest
-and detached CPU signatures for that purpose. It verifies the reused binary and
-model, writes the new user configuration, then publishes the direct receipt and
-marker before deleting legacy payload names. If any check fails, every legacy
-payload byte is retained and the ordinary online retry queue is enabled. The
+Upgrades from VoxType 1.1.0 preserve the verified model and hardware profile,
+then queue the new signed executable without blocking the RPM transaction. The
+RPM ships the upstream 1.1.1 manifest and detached CPU signatures for
+verification and crash recovery. It verifies the new binary and retained model,
+writes the user configuration, then publishes the direct receipt and marker
+before deleting exact previous payloads. If any check fails, the previous
+payload remains and the ordinary online retry queue stays enabled. The
 root-owned verified receipt is authoritative over a conflicting pending profile
 choice. File and parent-directory fsyncs make the queue-to-marker transition
 crash durable; the marker is committed before cleanup and the queue is removed
 afterward. A malformed but structurally trusted legacy receipt fails the first
-offline attempt closed, then the normal online resume quarantines it and uses
+transaction attempt closed, then the normal online resume quarantines it and uses
 fresh signed metadata for repair. Current-session user-service activation is
 best effort after the commit point and cannot rewrite a completed migration as
 a pre-commit setup failure.

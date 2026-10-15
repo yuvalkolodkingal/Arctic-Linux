@@ -75,10 +75,10 @@ def session(scene, facts, random=lambda size: b"\x55" * size):
 
 def dictation_facts():
     return {"phase": "online-installed",
-            "status": {"ok": True, "ready": True, "state": "ready", "version": "1.1.0",
+            "status": {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
                        "profile": "turbo-q5-v3", "model": "large-v3-turbo-q5_0",
                        "cpu_variant": "avx2", "model_download_bytes": 574041195,
-                       "download_bytes": 678117115, "compatibility_required": False},
+                       "download_bytes": 593457131, "compatibility_required": False},
             "settings_ready": True, "settings_page": "dictation", "settings_clients": 1,
             "recording": False, "transcribing": False, "receiver_empty": True, "transcript_files": 0}
 
@@ -224,7 +224,7 @@ class DiagnosticChecks(unittest.TestCase):
     def test_dictation_rejects_recording_and_small_download(self):
         for mutate in (lambda value: value.update(recording=True),
                        lambda value: value["status"].update(download_bytes=9),
-                       lambda value: value["status"].update(download_bytes=678117115.0),
+                       lambda value: value["status"].update(download_bytes=593457131.0),
                        lambda value: value["status"].update(model_download_bytes=574041195.0)):
             value = dictation_facts(); mutate(value)
             with self.assertRaises(c.Invalid): guest.dictation(value)

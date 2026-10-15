@@ -1,8 +1,8 @@
 #!/bin/sh
-# Select a verified official VoxType 1.1.0 binary. All runtime operations are
+# Select a verified official VoxType 1.1.1 binary. All runtime operations are
 # handled by that upstream binary; this launcher only chooses a host variant.
 set -eu
-lib=/opt/arctic/voxtype/1.1.0
+lib=/opt/arctic/voxtype/1.1.1
 backend=cpu
 if [ -r /var/lib/arctic/dictation/backend ]; then
     IFS= read -r selected < /var/lib/arctic/dictation/backend || :
