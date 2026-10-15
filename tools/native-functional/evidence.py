@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = '70eac5d33452aee1693ade35fdcfc1a3f58565d87c58212a396394c9e96cec9b'
+NATIVE_SOURCE_SHA = '705fff32be8cd5e88c08743a4f9729d5de2e27c8dde4ed1c433dce63236e2afe'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', '7037dd8ffbbf4917ef3e385f2d23f25afaff77568d64c3bfed959c05390a07f0')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', '1898c91983e4582bba2bdd780a5b2d2fb61b4c4e6b1cdb672812834920c58573')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -458,9 +458,15 @@ def check_fullscreen(target,report,uid):
                                  and all(type(p[k]) is int and p[k]>1 for k in ('pid','start_ticks')),'Fullscreen native PID/start differs')
         clocks=[turn['monotonic_ns'],turn['completed_monotonic_ns']]
         R.require(all(type(x) is int and x>0 for x in clocks) and clocks[0]<=clocks[1],'Fullscreen action clocks invalid')
-        action=turn['action'];R.require(action['argv']==['mmsg','dispatch','togglefullscreen','client,'+p['client_id']]
-            and type(action['returncode']) is int and action['returncode']==0
-            and C.strict_json(action['stdout'])=={'success':True} and action['stderr']=='','Fullscreen supported action/response differs')
+        action=turn['action'];request_id=46 if enabled else 47
+        expected_action='win.enter-fullscreen' if enabled else 'win.leave-fullscreen'
+        R.require(type(action) is dict
+            and set(action)=={'transport','command','request_id','acknowledgement'}
+            and action['transport']=='owned mpv IPC SO_PEERCRED'
+            and action['command']==['script-message','celluloid-action',expected_action]
+            and type(action['request_id']) is int and action['request_id']==request_id
+            and action['acknowledgement']=={'data':None,'error':'success','request_id':request_id},
+            'Fullscreen supported Celluloid action/response differs')
         before,after=turn['before'],turn['after']
         bm,_,_=native.visual_capture_geometry(before,turn['monitors_before'])
         am,_,crop=native.visual_capture_geometry(after,turn['monitors_after'])

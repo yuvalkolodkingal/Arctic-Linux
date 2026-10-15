@@ -45,7 +45,7 @@ def fullscreen_fixture(value,visual,moving_shot):
   owned.append(p);full=dict(id=7+i,pid=70+i,appid='celluloid',foreign_toplevel_id='owned-'+str(i),monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=True,x=0,y=0,width=160,height=120)
   tiled=dict(full,is_fullscreen=False,x=0,y=0,width=160,height=120)
   for j,enabled in enumerate((True,False)):
-   turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(argv=['mmsg','dispatch','togglefullscreen','client,'+p['client_id']],returncode=0,stdout='{"success":true}',stderr=''),monotonic_ns=100+i*100+j*20,completed_monotonic_ns=110+i*100+j*20,release_acceptance=False))
+   turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=46 if enabled else 47,acknowledgement={'data':None,'error':'success','request_id':46 if enabled else 47}),monotonic_ns=100+i*100+j*20,completed_monotonic_ns=110+i*100+j*20,release_acceptance=False))
   shot=moving_shot if i==0 else visual['screenshot'];caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
  visual.update(player=owned[1],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
   capture_deadline_seconds=42,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
@@ -151,25 +151,34 @@ class FullscreenControls(unittest.TestCase):
    s.alive=lambda _:copy.deepcopy(current);s.wait=lambda fn,*a:fn()
    def cmd(argv):
     calls.append(argv)
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[monitor])),''
-    self.assertEqual(argv,['mmsg','dispatch','togglefullscreen','client,7']);current['is_fullscreen']=not current['is_fullscreen'];current.update(width=640 if current['is_fullscreen'] else 160,height=480 if current['is_fullscreen'] else 120);return 0,'{"success":true}',''
-   s.cmd=cmd;s.player_fullscreen(p,True);self.assertTrue(current['is_fullscreen']);s.player_fullscreen(p,False);self.assertFalse(current['is_fullscreen'])
-   self.assertFalse(any('focusid' in x for x in calls))
+    self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[monitor])),''
+   actions=[]
+   def fullscreen(path,pid,uid,enabled):
+    self.assertEqual((path,pid,uid),('/tmp/owned.sock',70,1000));actions.append(enabled)
+    current['is_fullscreen']=enabled;current.update(width=640 if enabled else 160,height=480 if enabled else 120)
+    request_id=46 if enabled else 47
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=request_id,acknowledgement={'data':None,'error':'success','request_id':request_id})
+   s.cmd=cmd
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    s.player_fullscreen(p,True,'/tmp/owned.sock');self.assertTrue(current['is_fullscreen']);s.player_fullscreen(p,False,'/tmp/owned.sock');self.assertFalse(current['is_fullscreen'])
+   self.assertEqual(actions,[True,False]);self.assertFalse(any('focusid' in x for x in calls))
  def test_fullscreen_unfocused_or_incomplete_viewport_rejects(self):
   with tempfile.TemporaryDirectory() as d:
    s=S.Smoke.__new__(S.Smoke);s.root=Path(d);s.uid=1000;s.trace=lambda *a,**k:None
    p=dict(executable='/usr/bin/celluloid',is_xwayland=False,client_id='7',pid=70,start_ticks=700)
    c=dict(id=7,pid=70,appid='celluloid',foreign_toplevel_id='own',monitor='M',is_focused=False,is_visible=True,is_fullscreen=False,x=0,y=0,width=160,height=120)
    m=dict(name='M',x=0,y=0,width=640,height=480,scale=1,is_hdr=False);calls=[];s.alive=lambda _:c;s.cmd=lambda a:(calls.append(a) or (0,json.dumps(dict(monitors=[m])),''))
-   with self.assertRaises(RuntimeError):s.player_fullscreen(p,True)
+   with self.assertRaises(RuntimeError):s.player_fullscreen(p,True,'/tmp/owned.sock')
    self.assertFalse(any('dispatch' in a for a in calls))
    c['is_focused']=True
    def dispatch(argv):
-    calls.append(argv)
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[m])),''
-    c['is_fullscreen']=True;return 0,'{"success":true}',''
+    calls.append(argv);self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[m])),''
    s.cmd=dispatch;s.wait=lambda fn,*a:fn()
-   with self.assertRaisesRegex(RuntimeError,'complete'):s.player_fullscreen(p,True)
+   def fullscreen(*args):
+    c['is_fullscreen']=True
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen'],request_id=46,acknowledgement={'data':None,'error':'success','request_id':46})
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    with self.assertRaisesRegex(RuntimeError,'complete'):s.player_fullscreen(p,True,'/tmp/owned.sock')
 
  def test_capture_pair_rejects_focus_identity_geometry_and_failed_restore(self):
   with tempfile.TemporaryDirectory() as d:
@@ -184,7 +193,8 @@ class FullscreenControls(unittest.TestCase):
    self.assertEqual(len(s.fullscreen_captures),1)
    monitor=dict(name='M',x=0,y=0,width=640,height=480,scale=1,is_hdr=False);s.alive=lambda _:c
    s.cmd=lambda argv:(0,json.dumps(dict(monitors=[monitor])),'') if argv==['mmsg','get','all-monitors'] else (1,'{"success":false}','explicit synthetic failure')
-   with self.assertRaises(RuntimeError):s.player_fullscreen(p,False)
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=RuntimeError('explicit synthetic failure')):
+    with self.assertRaises(RuntimeError):s.player_fullscreen(p,False,'/tmp/owned.sock')
 
  def test_actual_host_fullscreen_raw_pairing_and_adverses(self):
   N=load('desktop_host_fullscreen','evidence.py')
@@ -200,7 +210,7 @@ class FullscreenControls(unittest.TestCase):
     trace=[dict(event='owned-player-fullscreen',receipt=x) for x in ts]+[dict(event='owned-fullscreen-capture',receipt=x) for x in cs]
     (d/'fullscreen-player-receipts.json').write_text(json.dumps(ts));(d/'fullscreen-player-captures.json').write_text(json.dumps(cs));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,v,1000)
-   for mutate in [lambda v,t,c:t[0]['action'].update(argv=['mmsg','dispatch','focusid','client,7']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action'].update(returncode=1)]:rerun(mutate)
+   for mutate in [lambda v,t,c:t[0]['action'].update(command=['script-message','celluloid-action','win.toggle-fullscreen']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action']['acknowledgement'].update(error='failure')]:rerun(mutate)
 
  def test_actual_fullscreen_validator_requires_one_fresh_first_launch(self):
   N=load('desktop_host_fullscreen_single','evidence.py')
@@ -216,16 +226,19 @@ class FullscreenControls(unittest.TestCase):
           x=0,y=0,width=160,height=120) for i,p in enumerate(players)}
    smoke.alive=lambda proof:copy.deepcopy(states[proof['pid']]);smoke.wait=lambda fn,*a:fn()
    def command(argv):
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[monitor])),''
-    client=int(argv[-1].split(',')[-1]);state=next(x for x in states.values() if x['id']==client)
-    state['is_fullscreen']=not state['is_fullscreen'];return 0,'{"success":true}',''
+    self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[monitor])),''
    smoke.cmd=command
+   def fullscreen(path,pid,uid,enabled):
+    self.assertEqual((path,uid),('/tmp/owned.sock',1000));state=states[pid];state['is_fullscreen']=enabled
+    request_id=46 if enabled else 47
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=request_id,acknowledgement={'data':None,'error':'success','request_id':request_id})
    names=('moving.png','celluloid-reference.png');shots=[]
    for index,name in enumerate(names):
     png=b'\x89PNG\r\n\x1a\nsingle-player-validator-'+bytes([index]);(d/name).write_bytes(png)
     shots.append(dict(path=root+'/'+name,sha256=hashlib.sha256(png).hexdigest()))
-   for player,shot in zip(players,shots):
-    smoke.player_fullscreen(player,True);full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False)
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    for player,shot in zip(players,shots):
+     smoke.player_fullscreen(player,True,'/tmp/owned.sock');full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False,'/tmp/owned.sock')
    matched=dict(status='matched',mismatched_pixels=0)
    hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
    capture=dict(attempt=1,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,

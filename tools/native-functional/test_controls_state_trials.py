@@ -33,6 +33,38 @@ TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd6
 PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
 
 
+
+def restore_celluloid_fullscreen_action(source):
+    """Reverse only the owned Celluloid fullscreen-action control correction."""
+    current="""    def player_fullscreen(self, proof, enabled, ipc):
+"""
+    previous="""    def player_fullscreen(self, proof, enabled):
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen method signature differs')
+    source=source.replace(current,previous,1)
+    current="""        action=mpv_celluloid_fullscreen(ipc,proof['pid'],self.uid,enabled)
+"""
+    previous="""        argv=['mmsg','dispatch','togglefullscreen','client,'+proof['client_id']]
+        response=self.cmd(argv)
+        require(response[0]==0 and json.loads(response[1])=={'success':True},'owned fullscreen action failed')
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen invocation differs')
+    source=source.replace(current,previous,1)
+    current="""            monitors_before=monitors_before,monitors_after=monitors_after,action=action,
+"""
+    previous="""            monitors_before=monitors_before,monitors_after=monitors_after,
+            action=dict(argv=argv,returncode=response[0],stdout=response[1],stderr=response[2]),
+"""
+    if source.count(current)!=1:raise AssertionError('Celluloid fullscreen receipt differs')
+    source=source.replace(current,previous,1)
+    source=source.replace('self.player_fullscreen(player,True,ipc)','self.player_fullscreen(player,True)')
+    source=source.replace('self.player_fullscreen(player,False,ipc)','self.player_fullscreen(player,False)')
+    begin='def mpv_celluloid_fullscreen(path, expected_pid, expected_uid, enabled):\n'
+    end='def mpv_hide_reference_controls(path, expected_pid, expected_uid):\n'
+    if source.count(begin)!=1 or source.count(end)!=1:raise AssertionError('Celluloid fullscreen helper differs')
+    first=source.index(begin);last=source.index(end,first)
+    return source[:first]+source[last:]
+
 def restore_host_frame_diagnostic(source):
     """Remove only the failure-only same-frame host observation."""
     begin='    # BEGIN HOST_FRAME_DIAGNOSTIC\n';end='    # END HOST_FRAME_DIAGNOSTIC\n\n'
@@ -523,6 +555,8 @@ def restore_fresh_player_restart_native(source):
 
 
 def restore_bounded_retry_native(source):
+    if '    def player_fullscreen(self, proof, enabled, ipc):\n' in source:
+        source=restore_celluloid_fullscreen_action(source)
     source=restore_moving_capture_settle(source)
     source=restore_fresh_player_restart_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
@@ -611,6 +645,7 @@ def restore_moving_capture_settle(source):
 
 
 def restore_controls_native(source):
+    source=restore_celluloid_fullscreen_action(source)
     source=restore_security_stream_native(source)
     for start,end in (
         ('    # BEGIN CONTROLLED_CONTROLS_INVOCATION\n','    # END CONTROLLED_CONTROLS_INVOCATION\n\n'),
@@ -626,6 +661,7 @@ def restore_controls_native(source):
 
 
 def restore_controls_guest(source):
+    source=restore_celluloid_fullscreen_action(source)
     source=restore_host_frame_diagnostic(source)
     host_inventory="    '0-host-frame-request.json',\n"
     if source.count(host_inventory)!=1:raise AssertionError('Host frame public inventory inverse differs')
@@ -644,9 +680,10 @@ def restore_controls_guest(source):
     if source.count(failure_headroom)!=1:
         raise AssertionError('Failure evidence headroom inverse occurrence differs')
     source=source.replace(failure_headroom,'',1)
-    native=(HERE/'native_smoke.py').read_text()
+    native_current=(HERE/'native_smoke.py').read_text()
+    native=restore_celluloid_fullscreen_action(native_current)
     boundary='\n\n# BEGIN NATIVE_BULK_TRANSPORT\n'
-    original=restore_controls_native(native)
+    original=restore_controls_native(native_current)
     if not source.startswith(native[:native.index('def main():\n')]):raise AssertionError('Controls guest prefix differs')
     # The bundle inherits the original Native prefix through run_checks, then
     # the original bulk/export entrypoint. No off-branch Git object is required.
@@ -659,7 +696,7 @@ def restore_controls_guest(source):
         ('0-controls-state-trials.json','0-controlled-renderer-trials.json'),
         ('controls-trial-transition/reference.png','renderer-trial-default/reference.png'),
         ('controls-trial-hidden/reference.png','renderer-trial-gl/reference.png'),
-        (hashlib.sha256(native.encode()).hexdigest(),BASE_NATIVE_SHA),
+        (hashlib.sha256(native_current.encode()).hexdigest(),BASE_NATIVE_SHA),
     )
     for index,(new,old) in enumerate(substitutions):
         if source.count(new)!=1:raise AssertionError(f'Controls guest inverse occurrence differs at {index}')
@@ -964,7 +1001,7 @@ class ControlsStateTrials(unittest.TestCase):
                 self.assertEqual((actual['player_attempt_limit'],actual['capture_attempt_limit']),(1,1))
                 self.assertEqual(len(actual['player_attempts']),1)
                 smoke.native_protocol_diagnostic.assert_called_once()
-                self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(smoke.owned[0],False))
+                self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(smoke.owned[0],False,root/'visual-reference-ipc.sock'))
             finally:
                 for endpoint in endpoints:endpoint.close()
 

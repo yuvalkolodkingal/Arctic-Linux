@@ -1494,7 +1494,7 @@ class Smoke:
         self.trace('editor-physical-request',request=request)
         print('ARCTIC-NATIVE-EDITOR-PHYSICAL '+json.dumps(request,sort_keys=True),flush=True)
 
-    def player_fullscreen(self, proof, enabled):
+    def player_fullscreen(self, proof, enabled, ipc):
         require(type(enabled) is bool and proof['executable']=='/usr/bin/celluloid'
                 and proof['is_xwayland'] is False,'owned native player fullscreen only')
         before=self.alive(proof)
@@ -1502,9 +1502,7 @@ class Smoke:
         visual_capture_geometry(before,monitors_before)
         require(before.get('is_fullscreen') is (not enabled),'fullscreen must change exactly once')
         origin=time.monotonic_ns()
-        argv=['mmsg','dispatch','togglefullscreen','client,'+proof['client_id']]
-        response=self.cmd(argv)
-        require(response[0]==0 and json.loads(response[1])=={'success':True},'owned fullscreen action failed')
+        action=mpv_celluloid_fullscreen(ipc,proof['pid'],self.uid,enabled)
         self.wait(lambda:self.alive(proof).get('is_fullscreen') is enabled,10,'owned player fullscreen state')
         after=self.alive(proof)
         monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -1515,8 +1513,7 @@ class Smoke:
             require(crop==dict(x=0,y=0,width=monitor['width'],height=monitor['height']),
                     'fullscreen did not provide the complete observed monitor viewport')
         receipt=dict(player=dict(proof,uid=self.uid),enabled=enabled,before=before,after=after,
-            monitors_before=monitors_before,monitors_after=monitors_after,
-            action=dict(argv=argv,returncode=response[0],stdout=response[1],stderr=response[2]),
+            monitors_before=monitors_before,monitors_after=monitors_after,action=action,
             monotonic_ns=origin,completed_monotonic_ns=time.monotonic_ns(),release_acceptance=False)
         self.trace('owned-player-fullscreen',receipt=receipt)
         self.fullscreen_receipts=getattr(self,'fullscreen_receipts',[])+[receipt]
@@ -1802,7 +1799,7 @@ class Smoke:
         maps = Path('/proc')/str(player['pid'])/'maps'
         require('libmpv.so' in maps.read_text(), 'Celluloid PID has no mapped libmpv')
         if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,True)
+            self.player_fullscreen(player,True,ipc)
             moving_before=self.alive(player)
         time.sleep(.35)
         moving_shot=self.screenshot('celluloid-playing')
@@ -1814,7 +1811,7 @@ class Smoke:
         moving_proof['retirement_before_static_oracle']=None
         (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
         if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,False)
+            self.player_fullscreen(player,False,ipc)
             self.finish_native_protocol()
             moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
             (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
@@ -1934,7 +1931,7 @@ class Smoke:
         require(json.loads(response).get('success') is True,'visual player focus failed')
         self.wait(lambda:self.alive(player).get('is_focused') is True,10)
         if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,True)
+            self.player_fullscreen(player,True,ipc)
             controls=self.hide_reference_controls(player,ipc)
         pre_geometry_time=state['time-pos']
         require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
@@ -2081,7 +2078,7 @@ class Smoke:
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
             self.native_protocol_diagnostic(player,state,screenshot,client)
-            self.player_fullscreen(player,False)
+            self.player_fullscreen(player,False,ipc)
         require(info['oracle']['status']=='matched',
                 'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
@@ -2456,6 +2453,46 @@ class ControlsTrialSmoke(RendererTrialSmoke):
             value['capture']['path']='controls-trial-'+self.state+'/reference.png'
         return value
 # END CONTROLLED_CONTROLS_STUDY
+
+
+def mpv_celluloid_fullscreen(path, expected_pid, expected_uid, enabled):
+    """Use Celluloid's supported per-window fullscreen action on its owned IPC."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0
+            and type(enabled) is bool, 'Celluloid fullscreen IPC identity/state is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'Celluloid fullscreen IPC path owner/type differs')
+    request_id=46 if enabled else 47
+    action='win.enter-fullscreen' if enabled else 'win.leave-fullscreen'
+    command=['script-message','celluloid-action',action]
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'Celluloid fullscreen IPC peer differs')
+        peer.sendall(json.dumps(dict(command=command,request_id=request_id),separators=(',',':')).encode()+b'\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'Celluloid fullscreen IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'Celluloid fullscreen IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'Celluloid fullscreen IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'Celluloid fullscreen IPC reply is not an object')
+                if message.get('request_id')==request_id:
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'Celluloid fullscreen IPC command failed')
+                    return dict(transport='owned mpv IPC SO_PEERCRED',command=command,
+                                request_id=request_id,acknowledgement=message)
+        raise RuntimeError('Celluloid fullscreen IPC acknowledgement timed out')
 
 
 def mpv_hide_reference_controls(path, expected_pid, expected_uid):

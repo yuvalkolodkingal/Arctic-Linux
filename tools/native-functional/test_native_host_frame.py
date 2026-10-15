@@ -49,7 +49,7 @@ class GuestRequestControls(unittest.TestCase):
                 primary=source.rindex("info['oracle']=oracle")
                 protocol=source.rindex('            self.native_protocol_diagnostic(player,state,screenshot,client)')
                 host=source.rindex('            self.host_frame_diagnostic(player,expected,info)')
-                fullscreen_exit=source.rindex('            self.player_fullscreen(player,False)')
+                fullscreen_exit=source.rindex('            self.player_fullscreen(player,False,ipc)')
                 failure=source.rindex("        require(info['oracle']['status']=='matched',")
                 self.assertLess(primary,protocol);self.assertLess(protocol,host)
                 self.assertLess(host,fullscreen_exit);self.assertLess(fullscreen_exit,failure)

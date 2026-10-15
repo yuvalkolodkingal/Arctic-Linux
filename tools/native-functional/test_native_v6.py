@@ -196,7 +196,7 @@ class NewControls(unittest.TestCase):
             if isinstance(node,ast.FunctionDef) and node.name=='media'))
         sample_loop=method.index('for sample_index in range(8):')
         retained_intervals=method.index('if sample_index < 7: time.sleep(.35)',sample_loop)
-        fullscreen=method.index('self.player_fullscreen(player,True)',retained_intervals)
+        fullscreen=method.index('self.player_fullscreen(player,True,ipc)',retained_intervals)
         final_settle=method.index('time.sleep(.35)',fullscreen)
         capture=method.index("self.screenshot('celluloid-playing')",final_settle)
         self.assertLess(sample_loop,retained_intervals)
@@ -417,7 +417,8 @@ class NewControls(unittest.TestCase):
             smoke.controlled_controls_trials.assert_not_called()
             smoke.native_protocol_diagnostic.assert_called_once()
             self.assertEqual(smoke.player_fullscreen.call_args_list,
-                             [unittest.mock.call(proof,True),unittest.mock.call(proof,False)])
+                             [unittest.mock.call(proof,True,root/'visual-reference-ipc.sock'),
+                              unittest.mock.call(proof,False,root/'visual-reference-ipc.sock')])
 
 
 if __name__=='__main__':unittest.main(verbosity=2)

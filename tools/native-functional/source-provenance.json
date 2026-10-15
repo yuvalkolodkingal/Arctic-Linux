@@ -1,18 +1,18 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "eef5c1d06ff4f238ec99fd036ea789379247b49f85ec5b2a535013962791c888",
+    "test_controls_state_trials.py": "75dfd9befe16a003047101244fe5d711a1eb46228b0a8ab33b8ab49955a10036",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
-    "test_native_desktop_v6.py": "cca264bf12a7d7a789c29bfb98c8cd319cfeeaab059d62a5a9acd2997a98e841",
+    "test_native_desktop_v6.py": "20e40033857d397f4763f0ac2638ef2f8f57f9432593228d7813f64a2c066a3e",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_protocol_diagnostics.py": "ef4c1fb6e3f89a400aca3b6de852ef8b6512a539ccbd1ed808a12ba744202b1f",
+    "test_native_protocol_diagnostics.py": "b0f3a68e25a012a1b1eb4968e57cccb29bfa37741b937256526e391e09213ac6",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "38df8ca6824b1c996c03fea8cbd8f65ca1a0f4fea73b9052e5735a57b1b45243",
-    "test_native_v6.py": "27b625db541b76d2114b66e107ee13bf5b9f041d8463aadc90a105f90279950a",
+    "test_native_smoke.py": "f150a104142f63bad6962c00d248baaa3dc63779ee9e9f17a29e471707cc0f94",
+    "test_native_v6.py": "c460b2f1033f811184de6d9ce559545e2df8c929ab32c2ed76c5f81120641747",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
-    "test_native_host_frame.py": "561d8756e2f01e5121c46752333bdb4d228b243273efdc6449c6d473f028b133"
+    "test_native_host_frame.py": "780a1ce63d16cecdcc429e93dc791c6e15c7cd949d542504ddd1e783cf741d42"
   },
   "audit_file_interval_streaming": {
     "diagnosis": "the completed 24-case taskbar matrix accumulated an audit interval above the prior 4 MiB aggregate cap, so the reader rejected it before scanning that interval",
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "7037dd8ffbbf4917ef3e385f2d23f25afaff77568d64c3bfed959c05390a07f0",
+    "guest-check-native-v6.py": "1898c91983e4582bba2bdd780a5b2d2fb61b4c4e6b1cdb672812834920c58573",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
-    "native_smoke.py": "70eac5d33452aee1693ade35fdcfc1a3f58565d87c58212a396394c9e96cec9b"
+    "native_smoke.py": "705fff32be8cd5e88c08743a4f9729d5de2e27c8dde4ed1c433dce63236e2afe"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,7 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "70eac5d33452aee1693ade35fdcfc1a3f58565d87c58212a396394c9e96cec9b",
+  "native_source_sha256": "705fff32be8cd5e88c08743a4f9729d5de2e27c8dde4ed1c433dce63236e2afe",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -341,7 +341,7 @@
     "validate_harness_serial"
   ],
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
-  "validators_source_sha256": "da5648fd6f962ae2ce81ee72270e7203747da97e486183ba2e6fed58e3dad8f0",
+  "validators_source_sha256": "77a05e7336620e963f23a3860e7b309ed11b9220ce59735d12330bcf419b5d5c",
   "paused_visual_capture": {
     "failure_run": 38715355526,
     "failure_artifact_id": 11962563734,
@@ -365,11 +365,15 @@
     "diagnosis": "the exact owned live Celluloid GL player decoded and advanced the pulsed 16-color fixture, then remained paused with unchanged identity and fullscreen geometry, but both its sole guest screencopy and the same held host scanout showed a black video surface; a settled paused clock did not cause a post-pause GL presentation",
     "moving_capture_correction_verified": "the separate required live moving screenshot visibly contained the fullscreen testsrc2 frame after the prior reordered 0.35 second settle",
     "change": "send one frame-step immediately after pause=true on the same authenticated ordered mpv IPC connection, then retain the existing 0.5 second paused settle and sole capture",
-    "control_acknowledgements": [44, 45],
+    "control_acknowledgements": [
+      44,
+      45
+    ],
     "player_capture_fixture_renderer_geometry_and_oracle_unchanged": true,
     "timeouts_and_acceptance_limits_unchanged": true,
     "release_acceptance": false,
-    "scope": "control-only paused-frame presentation refresh; no retry, restart, alternate renderer, extra capture, timeout extension or failed-frame acceptance path"
+    "scope": "control-only paused-frame presentation refresh; no retry, restart, alternate renderer, extra capture, timeout extension or failed-frame acceptance path",
+    "observed_outcome_run_38768893300": "frame-step was acknowledged and advanced the paused clock from 1.1 to 1.2 seconds, but the sole guest screencopy and held host scanout remained black; the correction did not solve presentation and is not release evidence"
   },
   "host_frame_diagnostic": {
     "comparison": "the exact guest expected 16-color palette is carried as 16 RGB triplets and evaluated by the identical pinned evaluate_reference_rgb implementation and thresholds",
@@ -413,6 +417,38 @@
     "sample_gate_fixture_player_renderer_screenshot_count_and_timeouts_unchanged": true,
     "product_or_iso_bytes_changed": false,
     "release_acceptance": false,
-    "scope": "observer scheduling only; final human content review remains required"
+    "scope": "observer scheduling only; final human content review remains required",
+    "observed_outcome_run_38768893300": "the exact moving player again produced a black required screenshot after the 0.35 second settle; timing alone is not a reliable presentation correction"
+  },
+  "celluloid_owned_fullscreen_transition": {
+    "failure_run": 38768893300,
+    "failure_artifact_id": 11991975314,
+    "failure_artifact_sha256": "673485b6c71a00b817c309a874172ddced76d7975398ee43bb3466f200c1d01f",
+    "moving_screenshot_sha256": "1abeaefb633551996ff40073a9677a82a199c81f83edcadcb5f5c336a9a3a55a",
+    "static_screenshot_sha256": "f7d7666742e1eff55eeb546ced024b5a42a6c92f4973bcf73537f5031c3a7758",
+    "host_exact_client_crop_sha256": "033d2d7961fc686a9d362e0f434cac78bc83dde95aa91dfa636fb0d3f165ad5b",
+    "observed_failure": "both distinct fresh live Celluloid players decoded through libmpv with valid advancing clocks and exact fullscreen Mango geometry, while moving, static guest screencopy and the held host scanout showed black video surfaces",
+    "prior_control_defect": "the release harness requested fullscreen directly from Mango with dispatch togglefullscreen, bypassing Celluloid\u2019s supported enter/leave fullscreen actions and its application-owned GTK/libmpv transition sequence",
+    "change": "use fixed win.enter-fullscreen and win.leave-fullscreen Celluloid actions over each exact player\u2019s SO_PEERCRED-authenticated mpv IPC socket; retain Mango state, identity and complete-viewport verification",
+    "commands": [
+      "script-message celluloid-action win.enter-fullscreen",
+      "script-message celluloid-action win.leave-fullscreen"
+    ],
+    "request_ids": [
+      46,
+      47
+    ],
+    "single_player_single_capture_policy_unchanged": true,
+    "fixtures_renderer_geometry_oracle_and_acceptance_limits_unchanged": true,
+    "timeouts_and_settles_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "rendering_cause_proven": false,
+    "requires_exact_image_rerun": true,
+    "release_acceptance": false,
+    "upstream_celluloid_version": "0.30",
+    "upstream_source_sha256": {
+      "celluloid-controller-actions.c": "fa5cbbacbbbb165176776504279c89da2081a614496d425fb2922690b04079f3",
+      "celluloid-def.h": "bd43da2ba6274aeca36728f535cdf3d6cb501199b1b3e293c7f299374acacf40"
+    }
   }
 }

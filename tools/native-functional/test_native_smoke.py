@@ -185,6 +185,27 @@ class Controls(unittest.TestCase):
                 s.mpv_property(path,'path',os.getpid()+1,os.getuid())
             thread.join(3);self.assertFalse(thread.is_alive())
 
+    def test_celluloid_fullscreen_uses_exact_owned_supported_actions(self):
+        for enabled,request_id,name in ((True,46,'win.enter-fullscreen'),(False,47,'win.leave-fullscreen')):
+            with self.subTest(enabled=enabled):
+                path=self.root/('fullscreen-'+str(enabled)+'.sock');observed=[]
+                with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
+                    server.bind(str(path));server.listen(1)
+                    def accept():
+                        peer,_=server.accept()
+                        with peer:
+                            data=b''
+                            while b'\n' not in data:data+=peer.recv(4096)
+                            observed.append(json.loads(data.splitlines()[0]))
+                            peer.sendall(json.dumps(dict(data=None,error='success',request_id=request_id)).encode()+b'\n')
+                    thread=threading.Thread(target=accept);thread.start()
+                    receipt=s.mpv_celluloid_fullscreen(path,os.getpid(),os.getuid(),enabled)
+                    thread.join(3);self.assertFalse(thread.is_alive())
+                command=['script-message','celluloid-action',name]
+                self.assertEqual(observed,[dict(command=command,request_id=request_id)])
+                self.assertEqual(receipt,dict(transport='owned mpv IPC SO_PEERCRED',command=command,
+                    request_id=request_id,acknowledgement=dict(data=None,error='success',request_id=request_id)))
+
     def test_reference_pause_and_frame_step_use_exact_owned_ipc_commands(self):
         path=self.root/'pause.sock'; observed=[]
         with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as server:
