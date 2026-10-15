@@ -135,7 +135,6 @@ on_transcription = false
         checker.empty = Mock()
         checker.select = Mock()
         checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
-        checker.clear_fixture_error = Mock()
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
@@ -145,7 +144,7 @@ on_transcription = false
         checker.state = Mock(side_effect=['idle', 'recording', 'idle'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
         checker.adapter = Mock(side_effect=[
-            {'state': 'ready', 'error': ''},
+            {'state': 'ready', 'ready': True, 'error': '', 'language': 'en'},
             {'state': 'error', 'error': 'VoxType could not open the microphone.'},
         ])
         observed = []
@@ -160,7 +159,15 @@ on_transcription = false
         checker.observe = Mock(side_effect=observe)
         with tempfile.TemporaryDirectory() as temp:
             checker.root = Path(temp)
+            checker.runtime = checker.root
             (checker.root / 'received.private').write_bytes(b'')
+            error_path = checker.runtime / 'arctic/voxtype-error'
+            error_path.parent.mkdir()
+            error_path.write_text('microphone\n')
+            def selection(**choice):
+                if choice == {'language': 'en'}:
+                    error_path.unlink()
+            checker.select.side_effect = selection
             def command(argv, check=True):
                 if argv == ['/usr/bin/pw-dump']:
                     output = b'[]'
@@ -174,9 +181,9 @@ on_transcription = false
                              {'count': 0, 'drained': True, 'restored': True})
         self.assertIn('microphone-actionable-error', observed)
         self.assertEqual([call.args[0] for call in checker.daemon_ready.call_args_list],
-                         ['microphone-pinned-daemon', 'microphone-disconnected-daemon',
-                          'microphone-daemon-restored'])
-        checker.clear_fixture_error.assert_called_once_with()
+                         ['microphone-pinned-daemon', 'microphone-disconnected-daemon'])
+        self.assertEqual([call.kwargs for call in checker.select.call_args_list],
+                         [{'backend': 'cpu'}, {'language': 'en'}])
         self.assertEqual(checker.adapter.call_count, 2)
         self.assertEqual([call.args[0] for call in checker.record.call_args_list],
                          ['start', 'cancel', 'start', 'cancel'])
@@ -196,7 +203,6 @@ on_transcription = false
         checker.empty = Mock()
         checker.select = Mock()
         checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
-        checker.clear_fixture_error = Mock()
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
@@ -205,7 +211,8 @@ on_transcription = false
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
         checker.state = Mock(side_effect=['recording'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
-        checker.adapter = Mock(return_value={'state': 'ready', 'error': ''})
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'en'})
         def observe(target, fn, _seconds=20):
             value = fn()
             if target == 'microphone-actionable-error':
@@ -216,6 +223,7 @@ on_transcription = false
         checker.observe = Mock(side_effect=observe)
         with tempfile.TemporaryDirectory() as temp:
             checker.root = Path(temp)
+            checker.runtime = checker.root
             (checker.root / 'received.private').write_bytes(b'')
             checker.cmd = Mock(side_effect=lambda argv, check=True: SimpleNamespace(
                 stdout=(b'[]' if argv == ['/usr/bin/pw-dump'] else
@@ -227,14 +235,13 @@ on_transcription = false
         checker.route.assert_called_once_with()
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
-        checker.clear_fixture_error.assert_called_once_with()
+        checker.select.assert_called_with(language='en')
 
     def test_microphone_pre_disconnect_failure_restores_config_without_duplicate_route(self):
         checker = self.checker()
         checker.empty = Mock()
         checker.select = Mock()
         checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
-        checker.clear_fixture_error = Mock()
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
         checker.capture_link = Mock(return_value=False)
         checker.destroy_route = Mock()
@@ -242,6 +249,8 @@ on_transcription = false
         checker.loop = object()
         checker.source_name = 'ArcticVoxtypeFixtureSource-test'
         checker.state = Mock(return_value='recording')
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'he'})
         checker.observe = Mock(side_effect=lambda target, fn, _seconds=20: (
             (_ for _ in ()).throw(guest.Invalid('observation-timeout'))
             if target == 'capture-link' else fn()))
@@ -257,8 +266,7 @@ on_transcription = false
                             for call in checker.cmd.call_args_list))
         self.assertEqual([call.args[0] for call in checker.record.call_args_list],
                          ['start', 'cancel'])
-        checker.daemon_ready.assert_any_call('microphone-daemon-restored', 30)
-        checker.clear_fixture_error.assert_called_once_with()
+        checker.select.assert_called_with(language='he')
 
     def test_failed_lock_assertion_unlocks_and_restores_service_for_later_gates(self):
         checker = self.checker()
@@ -332,23 +340,37 @@ on_transcription = false
         self.assertEqual(observed, ['fixture-ready', 17])
         self.assertEqual(checker.engines.call_count, 5)
 
-    def test_fixture_error_cleanup_accepts_only_private_known_projection(self):
+    def test_missing_model_uses_actionable_guard_without_entering_upstream_recording(self):
         checker = self.checker()
+        checker.names = {'model': 'ggml-small.bin'}
+        checker.assets = {'model': {'sha256': hashlib.sha256(b'model').hexdigest()}}
+        checker.player = None
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.select = Mock()
+        checker.adapter = Mock(return_value={
+            'state': 'error', 'ready': False,
+            'error': 'The verified local Whisper model is missing. Retry setup to repair it.',
+        })
+        checker.kill = Mock()
+        checker.daemon_ready = Mock()
         with tempfile.TemporaryDirectory() as temp:
-            runtime = Path(temp)
-            (runtime / 'arctic').mkdir(mode=0o700)
-            checker.runtime = runtime
-            path = runtime / 'arctic/voxtype-error'
-            path.write_text('model\n'); path.chmod(0o600)
-            checker.cmd = Mock(side_effect=lambda argv: (
-                path.unlink(), SimpleNamespace(stdout=b'', stderr=b'', returncode=0))[1])
-            checker.clear_fixture_error()
-            self.assertFalse(path.exists())
-            checker.cmd.assert_called_once_with(['/usr/bin/rm', '-f', '--', str(path)])
-
-            path.write_text('unreviewed\n'); path.chmod(0o600)
-            with self.assertRaisesRegex(guest.Invalid, '^fixture-error-projection-invalid$'):
-                checker.clear_fixture_error()
+            checker.root = Path(temp)
+            (checker.root / 'received.private').write_bytes(b'')
+            models = checker.root / 'models'
+            models.mkdir()
+            target = models / 'ggml-small.bin'
+            target.write_bytes(b'model')
+            with patch.object(guest, 'MODELS', models):
+                def command(argv, check=True):
+                    return SimpleNamespace(stdout=b'', stderr=b'',
+                                           returncode=69 if argv == [str(guest.TOGGLE)] else 0)
+                checker.cmd = Mock(side_effect=command)
+                self.assertEqual(checker.missing(), {'ready': False, 'restored': True})
+        checker.record.assert_called_once_with('cancel', check=False)
+        checker.adapter.assert_called_once_with('status')
+        checker.select.assert_called_once_with(backend='cpu')
+        checker.cmd.assert_any_call([str(guest.TOGGLE)], check=False)
+        checker.daemon_ready.assert_called_once_with('model-restored', 30)
 
     def test_gpu_error_projection_is_bounded_observation_before_cpu_recovery(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
@@ -622,6 +644,7 @@ on_transcription = false
             'language': 'auto', 'backend': 'cpu', 'profile': 'small-v2',
             'model': 'small', 'model_download_bytes': 487601967,
             'download_bytes': 506440871, 'vulkan_download_bytes': 66575872,
+            'upgrade_pending': False,
         }
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
@@ -631,6 +654,13 @@ on_transcription = false
             stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
         with self.assertRaisesRegex(guest.Invalid, '^adapter-status-contract$'):
             checker.adapter('status')
+        value.pop('private')
+        for invalid in (True, None, 0, 'false'):
+            value['upgrade_pending'] = invalid
+            checker.cmd = Mock(return_value=SimpleNamespace(
+                stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
+            with self.assertRaisesRegex(guest.Invalid, '^adapter-status-contract$'):
+                checker.adapter('status')
 
     def test_payload_binds_split_paths_and_flat_receipt(self):
         checker = self.checker()

@@ -559,7 +559,7 @@ class Checker:
             require(type(value) is dict and set(value) == {
                         'state', 'ready', 'error', 'version', 'language', 'backend',
                         'profile', 'model', 'model_download_bytes', 'download_bytes',
-                        'vulkan_download_bytes'}
+                        'vulkan_download_bytes', 'upgrade_pending'}
                     and value.get('state') in {
                         'unavailable', 'queued', 'downloading', 'ready', 'recording',
                         'transcribing', 'error'}
@@ -567,6 +567,7 @@ class Checker:
                     and type(value.get('error')) is str
                     and len(value.get('error')) <= 512
                     and value.get('version') == '1.1.1'
+                    and value.get('upgrade_pending') is False
                     and value.get('language') in ('auto', 'he', 'en')
                     and value.get('backend') in ('cpu', 'vulkan')
                     and value.get('profile') in PROFILES
@@ -912,34 +913,6 @@ class Checker:
             return current if stable >= 3 else None
         return self.observe(target, ready, seconds)
 
-    def clear_fixture_error(self):
-        """Clear one already-proved fixture error before inducing another."""
-        path = self.runtime / 'arctic/voxtype-error'
-        try:
-            parent = path.parent.lstat()
-            fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
-        except FileNotFoundError:
-            return
-        try:
-            info = os.fstat(fd)
-            require(stat.S_ISDIR(parent.st_mode) and parent.st_uid == self.account.pw_uid
-                    and not parent.st_mode & 0o077
-                    and stat.S_ISREG(info.st_mode) and info.st_uid == self.account.pw_uid
-                    and not info.st_mode & 0o077 and 0 < info.st_size <= 32,
-                    'fixture-error-projection-unsafe')
-            raw = os.read(fd, 33)
-            require(len(raw) == info.st_size, 'fixture-error-projection-unsafe')
-        finally:
-            os.close(fd)
-        try:
-            value = raw.decode('ascii').strip()
-        except UnicodeError:
-            raise Invalid('fixture-error-projection-invalid') from None
-        require(value in ('microphone', 'model', 'gpu-fallback', 'transcription', 'output'),
-                'fixture-error-projection-invalid')
-        self.cmd(['/usr/bin/rm', '-f', '--', str(path)])
-        require(not path.exists(), 'fixture-error-projection-retained')
-
     def transcribe(self, sample, purpose='cpu-session'):
         self.empty()
         require(self.focused(), 'receiver-focus-lost')
@@ -1025,30 +998,26 @@ class Checker:
         target.rename(hidden)
         try:
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.record('start', check=False)
-            if self.state(allow_absent=True) == 'recording':
-                self.play(self.fixtures[0])
-                self.player.wait(timeout=self.fixtures[0]['audio_seconds'] + 20)
-                self.record('stop', check=False)
-            self.observe('missing-model-idle',
-                         lambda: self.state(allow_absent=True) == 'idle', 30)
             status = self.adapter('status')
-            require(status.get('ready') is False and bool(status.get('error')),
+            error = str(status.get('error', '')).lower()
+            require(status.get('state') == 'error' and status.get('ready') is False
+                    and any(word in error for word in ('model', 'whisper'))
+                    and any(word in error for word in ('repair', 'retry')),
                     'missing-model-not-actionable')
+            # Exercise the same guarded Mango activation path users receive.
+            # Bypassing it with `voxtype record start` asks upstream to enter a
+            # recording/transcribing transition after Arctic has already
+            # rejected the missing model, and does not describe product use.
+            activation = self.cmd([str(TOGGLE)], check=False)
+            require(activation.returncode == 69, 'missing-model-activation-not-blocked')
             require((self.root / 'received.private').read_bytes() == b'',
                     'missing-model-inserted-text')
-            self.record('cancel', check=False)
         finally:
             self.kill(self.player)
             self.player = None
             hidden.rename(target)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
             self.daemon_ready('model-restored', 30)
-            # The fixture repaired the model without going through Arctic's
-            # user-facing retry command. Remove only the already-observed,
-            # private projection so the next independent fault must publish
-            # fresh evidence of its own.
-            self.clear_fixture_error()
         require(sha(target) == self.assets['model']['sha256'],
                 'missing-model-restore-integrity')
         return {'ready': False, 'restored': True}
@@ -1056,6 +1025,10 @@ class Checker:
     def microphone(self):
         self.empty()
         self.select(backend='cpu')
+        initial = self.adapter('status')
+        restore_language = initial.get('language')
+        require(initial.get('ready') is True and restore_language in ('auto', 'he', 'en'),
+                'microphone-initial-state-invalid')
         try:
             # Pin the owned source instead of relying on PipeWire's default. A
             # virtual source which disappears while CPAL already has it open
@@ -1105,10 +1078,14 @@ class Checker:
                      check=False)
             # Removing a PipeWire source is intentionally destructive. A
             # daemon which still owns that dead CPAL stream must not influence
-            # the independent lock, GPU and privacy gates which follow.
-            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-            self.daemon_ready('microphone-daemon-restored', 30)
-            self.clear_fixture_error()
+            # the independent lock, GPU and privacy gates which follow. Use
+            # Arctic's supported settings operation to restart the daemon and
+            # clear the already-observed error, rather than mutating its
+            # private runtime projection from the qualification client.
+            self.select(language=restore_language)
+            error_path = self.runtime / 'arctic/voxtype-error'
+            require(not error_path.exists() and not error_path.is_symlink(),
+                    'microphone-error-not-cleared')
         return {'count': 0, 'drained': True, 'restored': True}
 
     def locked(self):
