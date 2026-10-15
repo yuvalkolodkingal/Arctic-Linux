@@ -132,6 +132,27 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     return bool(lines) and lines[-1] in accepted
 
 
+def _fixed_shell_marker_match(text: str):
+    """Find only the fixed proof marker, allowing OCR space around hyphens."""
+    if type(text) is not str:
+        return None
+    return re.search(
+        r"(?im)^[ \t]*ARCTIC[ \t]*-[ \t]*SHOWCASE[ \t]*-[ \t]*SHELL"
+        r"[ \t]*-[ \t]*READY[ \t]*$", text)
+
+
+def _fixed_shell_transport_visual_present(text: str, suffixes) -> bool:
+    """Require the fixed marker followed only by the final Fish suffix row."""
+    if type(text) is not str or type(suffixes) not in (tuple, list) or not suffixes:
+        return False
+    marker = _fixed_shell_marker_match(text)
+    if marker is None:
+        return False
+    lines = [line.strip().rstrip("_| ")
+             for line in text[marker.end():].splitlines() if line.strip()]
+    return len(lines) == 1 and lines[0] in suffixes
+
+
 LIVE_SURFACES = (
     "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
     "boot-menu", "boot-progress", "live-desktop", "installer-partial",
@@ -256,7 +277,7 @@ class LiveStartupDiagnostic:
 
 INSTALLED_SHELL_SURFACES = (
     "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
-    "fetch-greeting", "prompt-exact", "prompt-not-final", "account-only",
+    "fetch-greeting", "proof-marker", "prompt-exact", "prompt-not-final", "account-only",
     "suffix-only", "login-or-password", "other-text",
 )
 
@@ -271,6 +292,8 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     folded = text.casefold().strip()
     if not folded:
         return "ocr-empty"
+    if _fixed_shell_transport_visual_present(text, suffixes):
+        return "proof-marker"
     if _fixed_fish_prompt_present(text, account, suffixes):
         return "prompt-exact"
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
@@ -309,6 +332,8 @@ class InstalledStartupDiagnostic:
         self.samples = 0
         self.last = "capture-error"
         self.first = {item: None for item in INSTALLED_SHELL_SURFACES}
+        self.session_status = "not-proved"
+        self.session_challenge_sha256 = None
         self.interrupt_status = "not-run"
 
     @staticmethod
@@ -336,6 +361,13 @@ class InstalledStartupDiagnostic:
     def gate_start(self):
         self.gate_status = "waiting"
         self.gate_started = time.monotonic()
+
+    def session_proved(self, nonce):
+        c.require(self.session_status == "not-proved"
+                  and type(nonce) is str and c.HEX32.fullmatch(nonce) is not None,
+                  "installed shell session proof state differs")
+        self.session_status = "proved"
+        self.session_challenge_sha256 = hashlib.sha256(nonce.encode()).hexdigest()
 
     def observe(self, surface):
         c.require(surface in INSTALLED_SHELL_SURFACES,
@@ -367,6 +399,12 @@ class InstalledStartupDiagnostic:
             "fetch": {"status": self.fetch_status,
                       "elapsed_seconds": self.fetch_seconds},
             "dismissal": self.dismissal,
+            "session_transport": {
+                "status": self.session_status,
+                "transport": "owned-root-virtio-serial",
+                "challenge_sha256": self.session_challenge_sha256,
+                "identity": "uid-1000-arcticshowcase-at-arctic-showcase-fish",
+            },
             "shell_ready_gate": {
                 "expectation": "installed-shell-ready", "timeout_seconds": 90,
                 "status": self.gate_status, "elapsed_seconds": self.gate_seconds,
@@ -403,11 +441,28 @@ class Controller:
         "chown -R 1000:1000 $d; cd $d; exec python3 unattended.py installed-root-launch --timeout 5400'"
     )
     PASSWORD = "ArcticShowcase-Disposable-2026-Only!!!"
-    # The typed command deliberately does not contain the OCR marker; only an
-    # initialized shell executing printf can assemble the visible proof.
-    SHELL_PROOF = ("printf '\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
-                   "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
-                   "\\105\\101\\104\\131\\n'")
+    # A fresh host nonce must be read by the authenticated installed Fish. The
+    # guarded branch proves the exact account, host, UID, shell and root-owned
+    # character device before it emits a response. The prompt itself contains
+    # only the suffix; identity comes from the nonce-bound response, not OCR.
+    SHELL_PROOF = (
+        "read -l arctic_challenge </dev/virtio-ports/org.arctic.showcase.capture; "
+        "if string match -qr '^ARCTIC-SHOWCASE-SHELL-CHALLENGE [0-9a-f]{32}$' "
+        "-- $arctic_challenge; and test (id -u) -eq 1000; "
+        "and test (id -un) = arcticshowcase; and test (hostname) = arctic-showcase; "
+        "and status is-interactive; "
+        "and test -c /dev/virtio-ports/org.arctic.showcase.capture; "
+        "and test (stat -Lc %u -- /dev/virtio-ports/org.arctic.showcase.capture) -eq 0; "
+        "set -l arctic_nonce (string replace 'ARCTIC-SHOWCASE-SHELL-CHALLENGE ' '' "
+        "-- $arctic_challenge); "
+        "printf 'ARCTIC-SHOWCASE-INSTALLED-SHELL-V1 %s %s %s %s fish\\n' "
+        "$arctic_nonce (id -u) (id -un) (hostname) "
+        ">/dev/virtio-ports/org.arctic.showcase.capture; "
+        "function fish_prompt; set_color brwhite; printf ' ~> '; "
+        "set_color normal; end; "
+        "printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
+        "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
+        "\\105\\101\\104\\131\\033[0m\\n'; end")
     LIVE_STARTUP_PROBE = (
         "m=other; grep -qw arctic.mode=install /proc/cmdline && m=install; "
         "s=absent; pgrep -x mango >/dev/null 2>&1 && s=running; "
@@ -489,7 +544,7 @@ class Controller:
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
                     visible=False, retain=False, exact_output=False, ordered=False,
-                    prompt_contract=None):
+                    prompt_contract=None, transport_prompt=False):
         startup_gate = expectation == "live-installer-visible"
         installed_gate = expectation == "installed-shell-ready"
         if startup_gate:
@@ -511,8 +566,17 @@ class Controller:
                     self.installed_startup.observe(
                         _installed_shell_surface_class(image, text, account, suffixes))
                 prompt_ok = (prompt_contract is None
-                             or _fixed_fish_prompt_present(text, *prompt_contract))
-                if ((not phrases or _phrases_present(text, phrases, ordered=ordered))
+                             or (_fixed_shell_transport_visual_present(
+                                    text, prompt_contract[1])
+                                 if transport_prompt else
+                                 _fixed_fish_prompt_present(text, *prompt_contract)))
+                phrase_ok = (not phrases or _phrases_present(
+                    text, phrases, ordered=ordered))
+                if (expectation in {"installed-shell-ready", "installed-shell"}
+                        and prompt_contract is not None and transport_prompt):
+                    phrase_ok = _fixed_shell_transport_visual_present(
+                        text, prompt_contract[1])
+                if (phrase_ok
                         and prompt_ok
                         and (not exact_output or image.size == (1280, 800))
                         and (not visible or nonblank)):
@@ -665,12 +729,22 @@ class Controller:
         c.require(match is not None, "live startup diagnostic response differs")
         self.live_startup.probe("completed", *match.groups())
 
+    def accept_installed_shell_session(self, nonce, line):
+        c.installed_shell_session_proof(nonce, line)
+        self.installed_startup.session_proved(nonce)
+        self.record("installed-console", "session", {
+            "transport": "owned-root-virtio-serial",
+            "challenge_sha256": hashlib.sha256(nonce.encode()).hexdigest(),
+            "identity": "uid-1000-arcticshowcase-at-arctic-showcase-fish",
+        })
+
     def verify_install_complete(self):
         self.wait_screen("install-complete", "installer-done",
                          ("Arctic Linux is ready", "Remove the USB stick"), seconds=5400,
                          exact_output=True)
 
-    def boot_installed_and_start(self):
+    def boot_installed_and_start(self, session_exchange):
+        c.require(callable(session_exchange), "installed shell session exchange differs")
         self.installed_startup.start()
         # A generic nonblank frame can be firmware or Plymouth. Retry the fixed
         # VT chord until OCR sees the installed system's real login prompt.
@@ -714,10 +788,20 @@ class Controller:
                         + c.CONTROLLER["account"]["hostname"])
         prompt_contract = c.CONTROLLER["account"]["prompt"]
         installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
+        self.wait_screen("installed-console", "installed-prompt-ready",
+                         (), seconds=90, exact_output=True,
+                         prompt_contract=installed_prompt)
+        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
+        self.press("installed-console", "ret")
+        nonce, response = session_exchange()
+        self.accept_installed_shell_session(nonce, response)
+        # Require the nonce-authenticated session's marker and suffix twice on
+        # independent exact frames before entering the longer sudo launcher.
         try:
             self.wait_screen("installed-console", "installed-shell-ready",
-                             (), seconds=90, exact_output=True,
-                             prompt_contract=installed_prompt)
+                             ("ARCTIC-SHOWCASE-SHELL-READY",),
+                             seconds=90, exact_output=True, ordered=True,
+                             prompt_contract=installed_prompt, transport_prompt=True)
         except InstalledShellReadyTimeout as error:
             try:
                 self.press("installed-diagnostic", "ctrl-c")
@@ -727,20 +811,16 @@ class Controller:
             try:
                 self.wait_screen("installed-diagnostic", "installed-diagnostic-shell-ready",
                                  (), seconds=30, exact_output=True,
-                                 prompt_contract=installed_prompt)
+                                 prompt_contract=installed_prompt,
+                                 transport_prompt=True)
                 self.installed_startup.interrupt("recovered-prompt")
             except (c.Invalid, OSError):
                 self.installed_startup.interrupt("sent-no-prompt")
             raise error
-        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
-        self.press("installed-console", "ret")
-        # The executed marker can reach the VT before Fish has drawn its next
-        # prompt and resumed its line editor.  Do not type the longer sudo
-        # launcher into that interval: require the fixed account's real prompt
-        # in the same exact output after the marker.
         self.wait_screen("installed-console", "installed-shell",
-                         ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
-                         seconds=90, exact_output=True, ordered=True)
+                         ("ARCTIC-SHOWCASE-SHELL-READY",),
+                         seconds=90, exact_output=True, ordered=True,
+                         prompt_contract=installed_prompt, transport_prompt=True)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)
         self.press("installed-scenes", "ret")
         self.wait_screen("installed-console", "installed-sudo-password",

@@ -10,24 +10,24 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-The preparation is bound to the reviewed candidate from producer run
-`38735141923`, attempt 1, source
-`14ba50a70783fec583a288d34ea233a5d7c9941a`: ISO
-`Arctic-Linux-1.2-candidate-38735141923-1-x86_64.iso`, size `1936267264`,
+The last reviewed predecessor candidate came from producer run `38808271154`,
+attempt 1, source `10b94bf1f6aef4950889d4a498c9e1138cf7973d`: ISO
+`Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso`, size `1936328704`,
 SHA-256
-`1e76b747f3ec7f50adc84c3d36d46e9a40a1759ab97a41aebc9ca92609cf697a`.
-The retained artifact is `11976239386`, archive size `1936454966`, archive
+`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`.
+The retained artifact is `12011000602`, archive size `1936516406`, archive
 SHA-256
-`86b5f15a6eb3cfa467c1cd05531637915aee521364a1f0b83a7dc20b5e0462ee`,
+`4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`f21f1c1688c9e04c0a8a8d8a6f8b42fadaff59ff102ef03c4376e425614d956c`.
-The execution manifest is ready for a later marker-only activation and remains
-`release_acceptance:false`.
+`85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6`.
+That image predates the current product changes and is historical evidence,
+not an active capture target. The execution manifest therefore remains
+fail-closed with `ready:false`, `image:null`, no execution file hashes and
+`release_acceptance:false` until a new exact candidate exists and is reviewed.
 
-The producer ran from the reviewed marker-only source
-`14ba50a70783fec583a288d34ea233a5d7c9941a` by `workflow_dispatch` and passed
-UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
-absent from this preparation.
+The historical producer ran by `workflow_dispatch` and passed UEFI Try, BIOS
+Install and UEFI Safe startup. Those results do not qualify the current source.
+The showcase activation marker is absent from this preparation.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
@@ -90,17 +90,29 @@ typing even its nonsecret proof command. The host accepts only a complete final
 OCR line for that account with the two spellings already admitted by the
 successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
 suffix on separate rows, or the greeting's own `user@host` info row, cannot
-satisfy this gate. It then proves the Fish session with the fixed
-`ARCTIC-SHOWCASE-SHELL-READY` command and requires another fixed prompt in the
-same exact output after the marker before typing the sudo launcher. An earlier
-echoed prompt, a fixed settling delay or marker output alone cannot authorize
-that input.
+satisfy this precondition.
 
-The installed prompt remains an authoritative 90-second gate. Its failure
+The proof then blocks on the root-owned virtio-serial character device while
+the host sends a fresh 128-bit challenge. The installed interactive Fish emits
+a response only after checking UID 1000, the exact account and hostname,
+interactive Fish state, the device type and root ownership. The response binds
+those facts to the nonce. The reviewed tooling archive is withheld until this
+exchange passes, so a guest helper cannot answer it. The same guarded branch
+defines only a bright `~>` prompt for the disposable session, clears and homes
+the VT, and prints `ARCTIC-SHOWCASE-SHELL-READY`. Two independent exact frames
+must contain that marker followed only by the suffix. The nonce response proves
+identity without relying on OCR for the account token. A missing marker,
+alternate suffix, reversed order, extra line, wrong nonce or different session
+identity fails closed before the sudo launcher.
+
+The installed session and visual prompt remain authoritative bounded gates.
+The channel response has a 30-second limit and the visual gate has a 90-second
+limit. Its failure
 projection reduces private frames to closed enums for fetch still visible,
-exact prompt on a nonfinal row, account-only or suffix-only OCR, login/password,
-blank output, geometry mismatch, OCR-empty, and other text, plus bounded integer
-timings. Only after a timeout, the controller sends one interrupt and records
+the fixed proof marker, exact prompt on a nonfinal row, account-only or
+suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty, and
+other text, plus bounded integer timings. Only the challenge SHA-256 and a fixed
+identity enum enter the trace. Only after a timeout, the controller sends one interrupt and records
 whether the exact prompt becomes visible within 30 seconds. That post-failure
 probe cannot promote the attempt or authorize the proof or sudo commands. Its
 screens and OCR strings stay private and are deleted with the runtime.

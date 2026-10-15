@@ -21,6 +21,15 @@ import unattended
 from test_capture import controller_trace
 
 
+SHELL_NONCE = "1" * 32
+
+
+def shell_session_exchange():
+    return (SHELL_NONCE,
+            c.SHELL_SESSION_PREFIX + SHELL_NONCE
+            + " 1000 arcticshowcase arctic-showcase fish")
+
+
 class QMP:
     def __init__(self):
         self.commands = []
@@ -252,6 +261,7 @@ class UnattendedController(unittest.TestCase):
         account = "arcticshowcase@arctic-showcase"
         suffixes = ("~>", "~ >")
         cases = {
+            "ARCTIC-SHOWCASE-SHELL-READY\n~>": "proof-marker",
             account + " ~>": "prompt-exact",
             account + " ~>\ntrailing fetch row": "prompt-not-final",
             "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
@@ -279,6 +289,7 @@ class UnattendedController(unittest.TestCase):
         diagnostic.authentication_sent()
         diagnostic.fetch_observed()
         diagnostic.dismissal_sent()
+        diagnostic.session_proved(SHELL_NONCE)
         diagnostic.gate_start()
         diagnostic.observe("fetch-greeting")
         diagnostic.observe("account-only")
@@ -288,6 +299,12 @@ class UnattendedController(unittest.TestCase):
         c.installed_startup_diagnostic(value)
         self.assertEqual(value["shell_ready_gate"]["timeout_seconds"], 90)
         self.assertLessEqual(value["shell_ready_gate"]["samples"], 46)
+        self.assertEqual(value["session_transport"], {
+            "status": "proved", "transport": "owned-root-virtio-serial",
+            "challenge_sha256": __import__("hashlib").sha256(
+                SHELL_NONCE.encode()).hexdigest(),
+            "identity": "uid-1000-arcticshowcase-at-arctic-showcase-fish",
+        })
         forged = copy.deepcopy(value)
         forged["shell_ready_gate"]["private_ocr"] = "do not export"
         with self.assertRaises(c.Invalid):
@@ -297,7 +314,7 @@ class UnattendedController(unittest.TestCase):
         with self.assertRaises(c.Invalid):
             c.installed_startup_diagnostic(forged)
 
-    def test_installed_prompt_timeout_interrupts_only_after_failure_and_never_types_proof(self):
+    def test_installed_visual_timeout_interrupts_only_after_nonce_proof(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -319,21 +336,44 @@ class UnattendedController(unittest.TestCase):
         self.controller.type_secret = mock.Mock()
         with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
                 automation.InstalledShellReadyTimeout, "installed-shell-ready absent"):
-            self.controller.boot_installed_and_start()
+            self.controller.boot_installed_and_start(shell_session_exchange)
         timeout_at = operations.index((
-            "screen", "installed-shell-ready", (),
-            {"seconds": 90, "exact_output": True,
-             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >"))},
+            "screen", "installed-shell-ready", ("ARCTIC-SHOWCASE-SHELL-READY",),
+            {"seconds": 90, "exact_output": True, "ordered": True,
+             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >")),
+             "transport_prompt": True},
         ))
         self.assertEqual(operations[timeout_at + 1], ("keys", ("ctrl-c",)))
         self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
-        self.assertNotIn(("text", "installed-shell-proof"), operations)
+        self.assertLess(operations.index(("text", "installed-shell-proof")), timeout_at)
         self.assertEqual(self.controller.installed_startup.interrupt_status,
                          "recovered-prompt")
 
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
-        self.assertEqual(len(automation.Controller.SHELL_PROOF), 119)
+        prefix, rendered_command = automation.Controller.SHELL_PROOF.rsplit("printf ", 1)
+        self.assertIn("read -l arctic_challenge </dev/virtio-ports/"
+                      "org.arctic.showcase.capture; ", prefix)
+        self.assertIn("status is-interactive", prefix)
+        self.assertIn("test (id -u) -eq 1000", prefix)
+        self.assertIn("test (id -un) = arcticshowcase", prefix)
+        self.assertIn("test (hostname) = arctic-showcase", prefix)
+        self.assertIn("test -c /dev/virtio-ports/org.arctic.showcase.capture", prefix)
+        self.assertIn("stat -Lc %u -- /dev/virtio-ports/"
+                      "org.arctic.showcase.capture", prefix)
+        self.assertIn("ARCTIC-SHOWCASE-INSTALLED-SHELL-V1", prefix)
+        self.assertNotIn("ARCTICSHOWCASE@ARCTIC-SHOWCASE", prefix)
+        prompt_definition = ("function fish_prompt; set_color brwhite; printf ' "
+                             + c.CONTROLLER["account"]["prompt"]["rendered"]
+                             + " '; set_color normal; end; ")
+        self.assertEqual(prefix.count(prompt_definition), 1)
+        self.assertTrue(rendered_command.endswith("; end"))
+        rendered = subprocess.run(
+            ["/bin/sh", "-c", "printf " + rendered_command.removesuffix("; end")],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE, timeout=5, check=True,
+        )
+        self.assertIn(b"ARCTIC-SHOWCASE-SHELL-READY", rendered.stdout)
 
     def test_shell_proof_waits_for_fixed_fish_prompt_before_proof_and_sudo_launcher(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
@@ -341,25 +381,31 @@ class UnattendedController(unittest.TestCase):
         self.controller.type_text = mock.Mock()
         self.controller.type_secret = mock.Mock()
         with mock.patch.object(automation.time, "sleep"):
-            self.controller.boot_installed_and_start()
+            self.controller.boot_installed_and_start(shell_session_exchange)
 
+        prompt_ready = [call for call in self.controller.wait_screen.call_args_list
+                        if call.args[1] == "installed-prompt-ready"]
         ready = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell-ready"]
         shell = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell"]
-        self.assertEqual((len(ready), len(shell)), (1, 1))
+        self.assertEqual((len(prompt_ready), len(ready), len(shell)), (1, 1, 1))
         prompt = (c.CONTROLLER["account"]["username"] + "@"
                   + c.CONTROLLER["account"]["hostname"])
-        self.assertEqual(ready[0].args[2], ())
-        self.assertEqual(ready[0].kwargs,
+        self.assertEqual(prompt_ready[0].args[2], ())
+        self.assertEqual(prompt_ready[0].kwargs,
                          {"seconds": 90, "exact_output": True,
                           "prompt_contract": (prompt, ("~>", "~ >"))})
-        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
+        self.assertEqual(ready[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY",))
+        self.assertEqual(ready[0].kwargs,
+                         {"seconds": 90, "exact_output": True, "ordered": True,
+                          "prompt_contract": (prompt, ("~>", "~ >")),
+                          "transport_prompt": True})
+        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY",))
         self.assertEqual(shell[0].kwargs,
-                         {"seconds": 90, "exact_output": True, "ordered": True})
-        self.assertFalse(all(phrase.casefold()
-                             in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
-                             for phrase in shell[0].args[2]))
+                         {"seconds": 90, "exact_output": True, "ordered": True,
+                          "prompt_contract": (prompt, ("~>", "~ >")),
+                          "transport_prompt": True})
 
     def test_preproof_prompt_gate_rejects_realistic_full_fetch_greeting(self):
         account = "arcticshowcase@arctic-showcase"
@@ -412,6 +458,75 @@ uptime   2 mins
         self.assertTrue(automation._phrases_present(
             old_prompt_only, (marker, prompt), ordered=False))
 
+    def test_transport_visual_proof_keeps_exact_marker_order_and_suffix(self):
+        marker = "ARCTIC-SHOWCASE-SHELL-READY"
+        suffixes = ("~>", "~ >")
+        for valid in (marker + "\n~>",
+                      "ARCTIC - SHOWCASE - SHELL - READY\n~ > _|"):
+            self.assertTrue(automation._fixed_shell_transport_visual_present(
+                valid, suffixes))
+        for forged in (
+            "~>\n" + marker,
+            marker,
+            marker + "\n$>",
+            marker + "\n~>\ntrailing",
+            "ARCTIC-SHOWCASE-SHELL-WRONG\n~>",
+            marker + "\naccount\n~>",
+            marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>",
+        ):
+            with self.subTest(forged=forged):
+                self.assertFalse(automation._fixed_shell_transport_visual_present(
+                    forged, suffixes))
+
+    def test_installed_session_proof_is_exact_nonce_bound_identity(self):
+        response = (c.SHELL_SESSION_PREFIX + SHELL_NONCE
+                    + " 1000 arcticshowcase arctic-showcase fish")
+        c.installed_shell_session_proof(SHELL_NONCE, response)
+        self.controller.installed_startup.start()
+        self.controller.accept_installed_shell_session(SHELL_NONCE, response)
+        self.assertEqual(self.controller.events[-1], {
+            "index": 0, "stage": "installed-console", "kind": "session",
+            "detail": {
+                "transport": "owned-root-virtio-serial",
+                "challenge_sha256": __import__("hashlib").sha256(
+                    SHELL_NONCE.encode()).hexdigest(),
+                "identity": "uid-1000-arcticshowcase-at-arctic-showcase-fish",
+            },
+        })
+        for nonce, forged in (
+            ("2" * 32, response),
+            (SHELL_NONCE, response.replace(" 1000 ", " 0 ")),
+            (SHELL_NONCE, response.replace(" arcticshowcase ", " other ")),
+            (SHELL_NONCE, response.replace(" arctic-showcase ", " other-host ")),
+            (SHELL_NONCE, response.removesuffix("fish") + "bash"),
+            ("not-a-nonce", response),
+        ):
+            with self.subTest(forged=forged), self.assertRaises(c.Invalid):
+                c.installed_shell_session_proof(nonce, forged)
+
+    def test_wrong_session_response_blocks_visual_gate_and_sudo_input(self):
+        expectations = []
+
+        def wait(_stage, expectation, _phrases=(), **_kwargs):
+            expectations.append(expectation)
+            return None, ""
+
+        self.controller.wait_screen = wait
+        self.controller.press = mock.Mock()
+        self.controller.type_text = mock.Mock()
+        self.controller.type_secret = mock.Mock()
+        wrong = (SHELL_NONCE,
+                 c.SHELL_SESSION_PREFIX + SHELL_NONCE
+                 + " 0 root arctic-showcase fish")
+        with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
+                c.Invalid, "installed shell session proof differs"):
+            self.controller.boot_installed_and_start(lambda: wrong)
+        self.assertNotIn("installed-shell-ready", expectations)
+        self.assertNotIn("installed-shell", expectations)
+        self.assertNotIn("installed-sudo-password", expectations)
+        self.assertFalse(any(call.args[1] == "installed-scenes"
+                             for call in self.controller.type_text.call_args_list))
+
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
         marker = "ARCTIC-SHOWCASE-AUTH-READY"
         self.assertNotIn(marker, automation.Controller.INSTALLED_COMMAND)
@@ -427,7 +542,7 @@ uptime   2 mins
         self.controller.type_text = mock.Mock()
         self.controller.type_secret = mock.Mock()
         with mock.patch.object(automation.time, "sleep"):
-            self.controller.boot_installed_and_start()
+            self.controller.boot_installed_and_start(shell_session_exchange)
         sudo = [call for call in self.controller.wait_screen.call_args_list
                 if call.args[1] == "installed-sudo-password"]
         self.assertEqual(len(sudo), 1)
@@ -455,11 +570,11 @@ uptime   2 mins
         self.controller.type_text = text
         self.controller.type_secret = secret
         with mock.patch.object(automation.time, "sleep"):
-            self.controller.boot_installed_and_start()
+            self.controller.boot_installed_and_start(shell_session_exchange)
 
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
                     {"seconds": 90})
-        ready = ("screen", "installed-shell-ready",
+        ready = ("screen", "installed-prompt-ready",
                  (), {"seconds": 90, "exact_output": True,
                       "prompt_contract": ("arcticshowcase@arctic-showcase",
                                           ("~>", "~ >"))})
@@ -470,12 +585,17 @@ uptime   2 mins
         self.assertEqual(operations[at + 3], proof)
         self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
         self.assertLess(operations.index(("secret",)), at)
+        transport = {"seconds": 90, "exact_output": True, "ordered": True,
+                     "prompt_contract": ("arcticshowcase@arctic-showcase",
+                                         ("~>", "~ >")),
+                     "transport_prompt": True}
         self.assertEqual(operations[at + 5],
+                         ("screen", "installed-shell-ready",
+                          ("ARCTIC-SHOWCASE-SHELL-READY",), transport))
+        self.assertEqual(operations[at + 6],
                          ("screen", "installed-shell",
-                          ("ARCTIC-SHOWCASE-SHELL-READY",
-                           "arcticshowcase@arctic-showcase"),
-                          {"seconds": 90, "exact_output": True, "ordered": True}))
-        self.assertEqual(operations[at + 6], ("text", "installed-scenes"))
+                          ("ARCTIC-SHOWCASE-SHELL-READY",), transport))
+        self.assertEqual(operations[at + 7], ("text", "installed-scenes"))
 
 
 class TraceContract(unittest.TestCase):
