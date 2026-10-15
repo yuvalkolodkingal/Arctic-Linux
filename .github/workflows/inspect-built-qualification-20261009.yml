@@ -119,7 +119,8 @@ jobs:
                   archive_path = root / f'{label}.zip'
                   with archive_path.open('xb') as output:
                       subprocess.run(
-                          ['gh', 'api', endpoint + '/zip'], stdout=output, check=True, timeout=60)
+                          ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}/zip'],
+                          stdout=output, check=True, timeout=60)
                   assert archive_path.stat().st_size == expected['bytes']
                   assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == expected['sha256']
                   archives[label] = archive_path
