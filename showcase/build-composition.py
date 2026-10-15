@@ -172,11 +172,11 @@ window.__timelines['arctic-showcase']=tl;
 # render workflow separately requires voice-timing.json.ready_for_render=true.
 audio='' if args.static or not timing.get('render_ready', True) else f'<audio id="narration" src="audio/narration.mp3" data-start="0" data-duration="{timing["duration"]}" data-track-index="3" data-volume="1"></audio>'
 page=f'''<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><title>Arctic Linux — installer and daily-use showcase</title><script src="assets/gsap.min.js"></script><style>{css}</style></head>
+<html lang="en"><head><meta charset="UTF-8"><title>Arctic Linux 1.2.1 — installer and daily-use showcase</title><script src="assets/gsap.min.js"></script><style>{css}</style></head>
 <body><div id="arctic-showcase" data-composition-id="arctic-showcase" data-width="1920" data-height="1080" data-start="0" data-duration="{timing['duration']}" data-fps="30">
 {''.join(markup)}
 {''.join(captions) if not args.static else ''}
-<div class="footer-note">Arctic Linux · Installer and daily-use showcase</div><div class="progress-track" data-layout-ignore><div class="progress-fill"></div></div>
+<div class="footer-note">Arctic Linux 1.2.1 · Installer and daily-use showcase</div><div class="progress-track" data-layout-ignore><div class="progress-fill"></div></div>
 {audio}
 </div><script>{script}</script></body></html>'''
 dest=ROOT/('.hyperframes/layout.html' if args.static else 'index.html')

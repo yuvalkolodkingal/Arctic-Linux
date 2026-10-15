@@ -1,21 +1,58 @@
 #!/bin/sh
-# Select a verified official VoxType 1.1.0 binary. All runtime operations are
+# Select a verified official VoxType 1.1.1 binary. All runtime operations are
 # handled by that upstream binary; this launcher only chooses a host variant.
 set -eu
-lib=/opt/arctic/voxtype/1.1.0
-backend=cpu
+lib=/opt/arctic/voxtype/1.1.1
+backend=
+receipt=/var/lib/arctic/dictation/verified.json
 if [ -r /var/lib/arctic/dictation/backend ]; then
     IFS= read -r selected < /var/lib/arctic/dictation/backend || :
-    [ "$selected" = vulkan ] && backend=vulkan
+    case "$selected" in cpu|vulkan) backend=$selected ;; esac
+fi
+receipt_backend=
+cpu_binary=
+if [ -r /var/lib/arctic/dictation/upstream-direct-v1 ] && [ -r "$receipt" ] \
+        && grep -Fq '"integration":"upstream-direct-v1"' "$receipt" \
+        && grep -Fq '"version":"1.1.1"' "$receipt"; then
+    if grep -Fq '"backend":"cpu"' "$receipt" \
+            && ! grep -Fq '"backend":"vulkan"' "$receipt" \
+            && ! grep -Fq '"vulkan_binary"' "$receipt"; then
+        receipt_backend=cpu
+    elif grep -Fq '"backend":"vulkan"' "$receipt" \
+            && ! grep -Fq '"backend":"cpu"' "$receipt" \
+            && grep -Fq '"vulkan_binary":"voxtype-vulkan"' "$receipt" \
+            && grep -Fq '"vulkan_binary_bytes":66575872' "$receipt" \
+            && grep -Fq '"vulkan_binary_sha256":"102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863"' "$receipt"; then
+        receipt_backend=vulkan
+    fi
+    if grep -Fq '"profile":"small-v2"' "$receipt" \
+            && ! grep -Fq '"profile":"turbo-q5-v3"' "$receipt" \
+            && grep -Fq '"binary":"voxtype-baseline"' "$receipt" \
+            && grep -Fq '"binary_bytes":18838904' "$receipt" \
+            && grep -Fq '"binary_sha256":"cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af"' "$receipt"; then
+        cpu_binary=voxtype-baseline
+    elif grep -Fq '"profile":"turbo-q5-v3"' "$receipt" \
+            && ! grep -Fq '"profile":"small-v2"' "$receipt" \
+            && grep -Fq '"binary":"voxtype-avx2"' "$receipt" \
+            && grep -Fq '"binary_bytes":19415936' "$receipt" \
+            && grep -Fq '"binary_sha256":"3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770"' "$receipt"; then
+        cpu_binary=voxtype-avx2
+    fi
+fi
+if [ -z "$receipt_backend" ] || [ -z "$cpu_binary" ] || [ "$backend" != "$receipt_backend" ]; then
+    echo "VoxType backend state is incomplete. Open Settings -> Dictation and select CPU or Vulkan again." >&2
+    exit 69
+fi
+if [ "$cpu_binary" = voxtype-avx2 ] \
+        && [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" != turbo-q5-v3 ]; then
+    echo "VoxType's verified AVX2 profile is unsafe on this CPU. Open Settings -> Dictation and retry setup." >&2
+    exit 69
 fi
 if [ "$backend" = vulkan ] && [ -x "$lib/voxtype-vulkan" ]; then
     exec "$lib/voxtype-vulkan" "$@"
 fi
-if [ "$(/usr/libexec/arctic/arctic-voxtype-host-profile)" = turbo-q5-v3 ] && [ -x "$lib/voxtype-avx2" ]; then
-    exec "$lib/voxtype-avx2" "$@"
-fi
-if [ -x "$lib/voxtype-baseline" ]; then
-    exec "$lib/voxtype-baseline" "$@"
+if [ -x "$lib/$cpu_binary" ]; then
+    exec "$lib/$cpu_binary" "$@"
 fi
 echo "VoxType is not ready. Open Settings -> Dictation to finish setup." >&2
 exit 69

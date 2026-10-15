@@ -33,9 +33,9 @@ OUTPUTS = {
 }
 DICTATION_PROFILES = {
     "small-v2": {"model": "small", "cpu_variant": "baseline",
-                 "model_download_bytes": 487_601_967, "download_bytes": 506_181_191},
+                 "model_download_bytes": 487_601_967, "download_bytes": 506_440_871},
     "turbo-q5-v3": {"model": "large-v3-turbo-q5_0", "cpu_variant": "avx2",
-                    "model_download_bytes": 574_041_195, "download_bytes": 678_117_115},
+                    "model_download_bytes": 574_041_195, "download_bytes": 593_457_131},
 }
 WALLPAPER_SHA256 = "7c5d713468aff0be216a3f1c10c18492d495ce9d329fd7f18e674740f572e5fb"
 WHATS_NEW_SHA256 = "ac4575f4505b2e82094e7bc1aa3f38b74ce3277db37e33b02c9f9366c5c74b12"

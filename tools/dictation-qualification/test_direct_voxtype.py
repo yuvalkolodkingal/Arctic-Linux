@@ -307,10 +307,10 @@ on_transcription = false
                     'packaging/dictation/arctic-voxtype-host-profile',
                     'packaging/dictation/arctic-voxtype-configure',
                     'packaging/dictation/voxtype-release-key.asc',
-                    'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt',
-                    'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc',
-                    'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc',
-                    'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc',
+                    'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt',
+                    'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt.asc',
+                    'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-baseline.asc',
+                    'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-avx2.asc',
                     'packaging/dictation/org.arcticlinux.dictation.policy',
                     'packaging/systemd/voxtype.service',
                     'packaging/systemd/arctic-dictation-setup.service',
@@ -341,10 +341,10 @@ on_transcription = false
         checker = self.checker()
         checker.snapshots = []
         value = {
-            'state': 'ready', 'ready': True, 'error': '', 'version': '1.1.0',
+            'state': 'ready', 'ready': True, 'error': '', 'version': '1.1.1',
             'language': 'auto', 'backend': 'cpu', 'profile': 'small-v2',
             'model': 'small', 'model_download_bytes': 487601967,
-            'download_bytes': 506181191, 'vulkan_download_bytes': 66342968,
+            'download_bytes': 506440871, 'vulkan_download_bytes': 66575872,
         }
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=(json.dumps(value) + '\n').encode(), stderr=b'', returncode=0))
@@ -363,7 +363,7 @@ on_transcription = false
         binary = checker.assets['cpu']
         model = checker.assets['model']
         receipt = {
-            'integration': 'upstream-direct-v1', 'version': '1.1.0',
+            'integration': 'upstream-direct-v1', 'version': '1.1.1',
             'source_commit': guest.UPSTREAM['source_commit'],
             'release_signing_fingerprint': guest.UPSTREAM['signed_sums_fingerprint'],
             'user': checker.account.pw_name, 'profile': 'small-v2',
@@ -379,7 +379,7 @@ on_transcription = false
                 patch.object(guest, 'owned_file', return_value=SimpleNamespace(st_mode=0o100755)), \
                 patch.object(guest, 'sha', side_effect=installed_hash):
             self.assertEqual(checker.payload(), {'file_count': 2})
-        changed = dict(receipt, model_path='/opt/arctic/voxtype/1.1.0/' + model['name'])
+        changed = dict(receipt, model_path='/opt/arctic/voxtype/1.1.1/' + model['name'])
         with patch.object(guest, 'read', return_value=changed), \
                 patch.object(guest, 'owned_file', return_value=SimpleNamespace(st_mode=0o100755)), \
                 patch.object(guest, 'sha', side_effect=installed_hash), \
@@ -399,7 +399,7 @@ on_transcription = false
                                  for call in command.call_args_list))
         with tempfile.TemporaryDirectory() as temp, patch.object(guest, 'SYSTEM', Path(temp)), \
                 patch.object(guest, 'run', return_value=enabled) as command:
-            (Path(temp) / 'pending').write_text('1.1.0\n')
+            (Path(temp) / 'pending').write_text('1.1.1\n')
             def status(*_args, **_kwargs):
                 if any(call.args[0][:2] == ['systemctl', 'start']
                        for call in command.call_args_list):

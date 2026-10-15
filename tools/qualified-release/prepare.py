@@ -449,10 +449,10 @@ def dictation_lane_proof(archive, manifest, hardware_profile):
         'packaging/dictation/arctic-voxtype-host-profile',
         'packaging/dictation/arctic-voxtype-configure',
         'packaging/dictation/voxtype-release-key.asc',
-        'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt',
-        'packaging/dictation/provenance/v1.1.0/SHA256SUMS.txt.asc',
-        'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-baseline.asc',
-        'packaging/dictation/provenance/v1.1.0/voxtype-1.1.0-linux-x86_64-avx2.asc',
+        'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt',
+        'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt.asc',
+        'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-baseline.asc',
+        'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-avx2.asc',
         'packaging/dictation/org.arcticlinux.dictation.policy',
         'packaging/systemd/voxtype.service',
         'packaging/systemd/arctic-dictation-setup.service',
@@ -1106,7 +1106,7 @@ def release_notes(proof, comparison):
         'with offline apply and subsequent reboot.', '',
         f"ISO size: **{image['bytes']:,} bytes**. SHA-256: `{image['sha256']}`.", '',
         '## Local dictation', '',
-        'Voxtype **1.1.0** runs multilingual Whisper locally in Hebrew or English. Audio is not sent to a transcription service. '
+        'VoxType **1.1.1** runs multilingual Whisper locally in Hebrew or English. Audio is not sent to a transcription service. '
         'The live ISO excludes Voxtype binaries and model weights. An online OS installation downloads the pinned payload and verifies '
         'its byte sizes and SHA-256 checksums. The online setup attempt is bounded to 600 seconds '
         '(the enclosing installer command has an 11-minute timeout). An offline installation queues retryable first-boot setup '

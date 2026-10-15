@@ -5,7 +5,7 @@ function parse(text) {
     try { data = JSON.parse(String(text || '')); } catch (_) { data = null; }
     const out = { state: 'unavailable', ready: false, error: '', language: 'auto', backend: 'cpu',
                   profile: '', model: '', model_download_bytes: 0, download_bytes: 0,
-                  vulkan_download_bytes: 66342968 };
+                  vulkan_download_bytes: 66575872 };
     if (!data || typeof data !== 'object' || Array.isArray(data)) return out;
     if (['unavailable', 'queued', 'downloading', 'ready', 'recording', 'transcribing', 'error'].includes(data.state)) out.state = data.state;
     if (typeof data.error === 'string') out.error = data.error.slice(0, 500);
@@ -20,8 +20,8 @@ function parse(text) {
     return out;
 }
 function profileKnown(s) {
-    return (s.profile === 'small-v2' && s.model === 'small' && s.model_download_bytes === 487601967 && s.download_bytes === 506181191)
-        || (s.profile === 'turbo-q5-v3' && s.model === 'large-v3-turbo-q5_0' && s.model_download_bytes === 574041195 && s.download_bytes === 593194923);
+    return (s.profile === 'small-v2' && s.model === 'small' && s.model_download_bytes === 487601967 && s.download_bytes === 506440871)
+        || (s.profile === 'turbo-q5-v3' && s.model === 'large-v3-turbo-q5_0' && s.model_download_bytes === 574041195 && s.download_bytes === 593457131);
 }
 function modelTitle(s) { return s.profile === 'small-v2' ? 'Whisper Small multilingual' : s.profile === 'turbo-q5-v3' ? 'Whisper Large v3 Turbo Q5 multilingual' : 'Whisper model'; }
 function setupDescription(s) {
@@ -30,7 +30,7 @@ function setupDescription(s) {
 }
 function setupConsent(s) {
     if (!profileKnown(s)) return 'Refresh status before setup.';
-    return 'Download ' + size(s.download_bytes) + ' (' + s.download_bytes + ' bytes) for signed VoxType 1.1.0 and ' + modelTitle(s) + '. Files are verified before use; failure remains retryable.';
+    return 'Download ' + size(s.download_bytes) + ' (' + s.download_bytes + ' bytes) for signed VoxType 1.1.1 and ' + modelTitle(s) + '. Files are verified before use; failure remains retryable.';
 }
 function setupTarget(s, action) { return action === 'retry' ? s : parse(''); }
 function accelerationDetail(s) {

@@ -1609,7 +1609,7 @@ func (in *Installer) finishDictation(ctx context.Context) {
 	for _, file := range []struct {
 		name, data string
 		perm       uint32
-	}{{"pending", "1.1.0\n", 0o644}, {"setup.state", "queued\n", 0o644}, {"user", in.Job.Data.Account.Username + "\n", 0o600}} {
+	}{{"pending", "1.1.1\n", 0o644}, {"setup.state", "queued\n", 0o644}, {"user", in.Job.Data.Account.Username + "\n", 0o600}} {
 		if err := in.write(in.tgt("/var/lib/arctic/dictation/"+file.name), file.data, file.perm); err != nil {
 			in.Rep.Logf("dictation queue could not be saved (continuing): %v", err)
 			in.Job.Outcome.Notes = append(in.Job.Outcome.Notes, NoteDictationPending)

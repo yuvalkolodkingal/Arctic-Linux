@@ -2,7 +2,7 @@
 """Supplemental direct VoxType missing-microphone probe, never ISO qualification.
 
 Run in an isolated Fedora container with no audio devices or session sockets.
-Mount the selected official VoxType 1.1.0 binary and model at their production
+Mount the selected official VoxType 1.1.1 binary and model at their production
 paths. Raw runtime output remains private and is projected to fixed categories.
 """
 import argparse
@@ -19,15 +19,15 @@ import time
 
 PINS = {
     "small-v2": {
-        "binary": ("voxtype-baseline", 18579224,
-                   "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a"),
+        "binary": ("voxtype-baseline", 18838904,
+                   "cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af"),
         "model": ("ggml-small.bin", 487601967,
                   "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b"),
         "model_id": "small",
     },
     "turbo-q5-v3": {
-        "binary": ("voxtype-avx2", 19153728,
-                   "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28"),
+        "binary": ("voxtype-avx2", 19415936,
+                   "3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770"),
         "model": ("ggml-large-v3-turbo-q5_0.bin", 574041195,
                   "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2"),
         "model_id": "large-v3-turbo-q5_0",
@@ -127,7 +127,7 @@ def main():
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
     profile = PINS[args.profile]
-    binary = args.binary or Path("/opt/arctic/voxtype/1.1.0") / profile["binary"][0]
+    binary = args.binary or Path("/opt/arctic/voxtype/1.1.1") / profile["binary"][0]
     model = args.model or Path("/opt/arctic/voxtype/models") / profile["model"][0]
     verify_file(binary, profile["binary"], executable=True)
     verify_file(model, profile["model"])
@@ -139,7 +139,7 @@ def main():
 
     result = {
         "schema": 2, "qualification": "supplemental-direct-upstream-runtime",
-        "voxtype_version": "1.1.0", "profile": args.profile,
+        "voxtype_version": "1.1.1", "profile": args.profile,
         "binary_sha256": profile["binary"][2], "model": profile["model_id"],
         "model_sha256": profile["model"][2], "microphone": "intentionally-absent",
         "gpu_tested": False, "iso_tested": False, "transcript_published": False,

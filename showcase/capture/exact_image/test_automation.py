@@ -533,9 +533,9 @@ class GuestAutomation(unittest.TestCase):
                        "/dev/vda3", str(target)], calls)
 
     def test_dictation_readiness_is_exact_and_never_substituted(self):
-        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.0",
+        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
                 "profile": "small-v2", "model": "small", "cpu_variant": "baseline",
-                "model_download_bytes": 487601967, "download_bytes": 506181191,
+                "model_download_bytes": 487601967, "download_bytes": 506440871,
                 "compatibility_required": False}
         result = types.SimpleNamespace(returncode=0, stdout=json.dumps(good).encode())
         with mock.patch.object(unattended, "_run", return_value=result):

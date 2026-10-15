@@ -1,13 +1,13 @@
 # Direct VoxType image qualification
 
-This lane qualifies Arctic's integration of the official VoxType 1.1.0 release.
+This lane qualifies Arctic's integration of the official VoxType 1.1.1 release.
 Arctic may select, verify and configure the upstream binaries, but it does not own
 recording, transcription or insertion. Every recording control in this checker
 invokes `/usr/bin/voxtype record start|stop|toggle|cancel` and every state check
 reads `$XDG_RUNTIME_DIR/voxtype/state`.
 
 The exact upstream release is fixed to source commit
-`e2638ca63f566f1682bcedc0abea8e4b25211c21`. Release checksums must have a valid
+`014c56105b2f071bb3457c51a95c38be380e5124`. Release checksums must have a valid
 signature from fingerprint `9CCF7915B750CAE8B095ED1AA3FC9F33FD209279`.
 The contract pins every selected binary and model by byte size and SHA-256. The
 qualification CD contains public FLEURS audio and private references only. It
@@ -23,7 +23,7 @@ acceptance.
 The installed integration must provide:
 
 - `/usr/bin/voxtype`, a small selector for the verified official binary.
-- `/opt/arctic/voxtype/1.1.0/voxtype-{baseline,avx2,vulkan}` for selected,
+- `/opt/arctic/voxtype/1.1.1/voxtype-{baseline,avx2,vulkan}` for selected,
   verified upstream executables and `/opt/arctic/voxtype/models/` for the
   selected verified multilingual model. Initial setup installs one CPU binary
   and one model; Vulkan remains an explicit later opt-in.
@@ -107,6 +107,10 @@ recordings. A GPU error never counts as automatic CPU fallback. This VM fixture
 does not certify physical GPU acceleration or a physical driver failure. The
 legacy lane separately proves that Vulkan selection is rejected and that an
 explicit CPU selection succeeds.
+
+The official Vulkan build may fall back at model start when no GPU is available;
+VoxType 1.1.1 has no configuration switch that requires GPU execution. That
+fallback is an error for this gate and cannot satisfy the Vulkan requirement.
 
 ## Evidence and privacy
 

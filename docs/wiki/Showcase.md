@@ -2,7 +2,7 @@
 
 The video below is the published **3 October 2026** edition. A replacement English walkthrough
 with ElevenLabs River narration and the current default apps and photo wallpapers is being
-prepared. Its locked script now covers Arctic's direct integration of official VoxType 1.1.0:
+prepared. Its locked script now covers Arctic's direct integration of official VoxType 1.1.1:
 verified automatic online setup, a clear offline first-boot retry, local Hebrew and English
 Whisper, Mango shortcuts and Arctic's VoxType-backed indicator. The source reports the hosted Westmere
 CPU measurements honestly: 7.77% English word error, 42.0% Hebrew word error, and slower-than-real-

@@ -1,28 +1,29 @@
 #!/bin/bash
-# Fetch signed official VoxType 1.1.0 binaries plus one pinned local Whisper
+# Fetch signed official VoxType 1.1.1 binaries plus one pinned local Whisper
 # model. This setup bootstrap never records audio or handles transcripts.
 set -Eeuo pipefail
 umask 077
-readonly VERSION=1.1.0 SOURCE_COMMIT=e2638ca63f566f1682bcedc0abea8e4b25211c21
-readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.0
+readonly VERSION=1.1.1 SOURCE_COMMIT=014c56105b2f071bb3457c51a95c38be380e5124
+readonly RELEASE=https://github.com/peteonrails/voxtype/releases/download/v1.1.1
 readonly FINGERPRINT=9CCF7915B750CAE8B095ED1AA3FC9F33FD209279
-readonly SUMS_BYTES=2931 SUMS_SHA=3a2fa8661ac2dceeb0b52d4de85b71361de122a09298f3a85ca596ff0428fe4b
-readonly SUMS_SIG_BYTES=228 SUMS_SIG_SHA=63155a999853a5816912a586610ab831273d2d493ca8e08679f817a7e383d455
-readonly BASELINE_BYTES=18579224 BASELINE_SHA=1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
-readonly BASELINE_SIG_BYTES=228 BASELINE_SIG_SHA=41b8b14315f55c9ffb03ccb28e99dfd115c7e5a7e7953ef158213d38b4162ed8
-readonly AVX2_BYTES=19153728 AVX2_SHA=e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
-readonly AVX2_SIG_BYTES=228 AVX2_SIG_SHA=fdf2c35826ea7590a703993c5bdf69804672a5a0c76312e66bc4f14399d8f2ce
-readonly VULKAN_BYTES=66342968 VULKAN_SHA=db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2
-readonly VULKAN_SIG_BYTES=228 VULKAN_SIG_SHA=2b6b6afbaecd0c8adff536db4c5e0ea50b8781ad6f2643344e96c8cba2ea672a
+readonly SUMS_BYTES=2931 SUMS_SHA=a93de5d79f6180626181aaf2315cc8415b084914b9f69a71e71bfb56bae1a32e
+readonly SUMS_SIG_BYTES=228 SUMS_SIG_SHA=2bce1ff42615d322b1e686f05373c99889d506e230d5f5512aeb22d728510af8
+readonly BASELINE_BYTES=18838904 BASELINE_SHA=cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af
+readonly BASELINE_SIG_BYTES=228 BASELINE_SIG_SHA=abd5e8b0c7b50987c6094105732ada464a2699f9b64f4e3fb47e3d005a30794e
+readonly AVX2_BYTES=19415936 AVX2_SHA=3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770
+readonly AVX2_SIG_BYTES=228 AVX2_SIG_SHA=e1c8606f7b54535193fe23f6c08808a1b60470e24b6641b1d3e4da5259991ead
+readonly VULKAN_BYTES=66575872 VULKAN_SHA=102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863
+readonly VULKAN_SIG_BYTES=228 VULKAN_SIG_SHA=aaf15615b5f7f5d18e5df132fd6a1ade754991162108b1a3990b303dd1a9109b
 readonly SMALL_NAME=ggml-small.bin SMALL_BYTES=487601967 SMALL_SHA=1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
 readonly SMALL_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/80da2d8bfee42b0e836fc3a9890373e5defc00a6/ggml-small.bin
 readonly TURBO_NAME=ggml-large-v3-turbo-q5_0.bin TURBO_BYTES=574041195 TURBO_SHA=394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
 readonly TURBO_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/98aa99a0a9db05ae2342309f5096248665f7cba3/ggml-large-v3-turbo-q5_0.bin
-readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.0 MODELS=/opt/arctic/voxtype/models
+readonly STATE=/var/lib/arctic/dictation DEST=/opt/arctic/voxtype/1.1.1 MODELS=/opt/arctic/voxtype/models
+readonly PREVIOUS_DEST=/opt/arctic/voxtype/1.1.0
 readonly STATE_ROOT=/var/lib STORAGE_ROOT=/opt
 readonly CACHE=/var/cache/arctic/voxtype
 readonly KEY=/usr/share/arctic/dictation/voxtype-release-key.asc
-readonly PROVENANCE=/usr/share/arctic/dictation/provenance/1.1.0
+readonly PROVENANCE=/usr/share/arctic/dictation/provenance/1.1.1
 cleanup_tmp=
 cleanup() { [ -z "$cleanup_tmp" ] || rm -rf -- "$cleanup_tmp"; }
 prepare_state_dir() {
@@ -140,6 +141,13 @@ fail() {
 backend_fail() {
     trap - ERR
     prepare_state_dir
+    # A failed re-enable must leave the runtime on CPU. Best-effort receipt
+    # normalization also repairs an ordinary write failure after Vulkan was
+    # attested but before the backend selector was published. A power loss in
+    # that narrow interval is handled fail-closed by the launcher and status
+    # adapter until the user retries either backend.
+    durable_atomic_text "$STATE/backend" 0644 cpu || :
+    [[ ! -r $STATE/verified.json ]] || update_receipt_backend cpu || :
     durable_atomic_text "$STATE/setup.error" 0644 backend-vulkan
     printf '%s\n' 'Vulkan could not initialize the verified local model. CPU remains selected.' >&2
     exit 1
@@ -178,6 +186,10 @@ user_from_uid() {
 }
 queue_user() {
     prepare_state_dir
+    # A package transaction can intentionally defer a failed online migration
+    # to first boot. Clear that stale failure durably before publishing the new
+    # retry queue, so status cannot override queued with the earlier error.
+    durable_remove "$STATE/setup.error"
     durable_atomic_text "$STATE/user" 0600 "$1"
     # Pending is durable before setup starts. Until the direct marker is also
     # durable, a crash therefore leaves both a retry and every legacy byte.
@@ -280,10 +292,10 @@ legacy_binary_path() {
 }
 legacy_profile() {
     local host_profile=$1
-    python3 - "$STATE" "$DEST" "$host_profile" <<'PY'
+    python3 - "$STATE" "$PREVIOUS_DEST" "$DEST" "$host_profile" <<'PY'
 import json, os, re, stat, sys
 
-state, payload, host_profile = sys.argv[1:]
+state, previous_payload, current_payload, host_profile = sys.argv[1:]
 profiles = {
     'small-v2': {
         'profile_sha256': 'd4b9326169fe0773b36857ce4b2c52d31294c4c421933c5fbb41422227e92756',
@@ -352,6 +364,7 @@ if receipt_exists:
     direct_keys = {'integration', 'version', 'source_commit', 'release_signing_fingerprint',
                    'user', 'profile', 'binary', 'binary_bytes', 'binary_sha256',
                    'model_path', 'model', 'model_bytes', 'model_sha256', 'backend'}
+    vulkan_keys = {'vulkan_binary', 'vulkan_binary_bytes', 'vulkan_binary_sha256'}
     if set(receipt) == legacy_keys:
         fixed = {key: expected[key] for key in ('profile_sha256', 'model', 'cpu_variant',
                                                 'model_download_bytes', 'download_bytes')}
@@ -362,7 +375,7 @@ if receipt_exists:
         if type(files) is not dict or set(files) != set(expected['files']):
             raise SystemExit(1)
         for key, (name, size, digest, mode) in expected['files'].items():
-            path = os.path.join(payload, name)
+            path = os.path.join(previous_payload, name)
             try:
                 info = os.lstat(path)
             except OSError:
@@ -373,29 +386,68 @@ if receipt_exists:
                     or set(recorded) != {'sha256', 'size', 'mtime_ns'}
                     or recorded != {'sha256': digest, 'size': size, 'mtime_ns': info.st_mtime_ns}):
                 raise SystemExit(1)
-    elif set(receipt) == direct_keys:
+    elif set(receipt) in (direct_keys, direct_keys | vulkan_keys):
         cpu = expected['cpu_variant']
-        binary_size = 18579224 if cpu == 'baseline' else 19153728
-        binary_sha = ('1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'
-                      if cpu == 'baseline' else 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28')
+        releases = {
+            '1.1.0': {
+                'source': 'e2638ca63f566f1682bcedc0abea8e4b25211c21',
+                'baseline': (18579224, '1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a'),
+                'avx2': (19153728, 'e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28'),
+                'vulkan': (66342968, 'db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2'),
+            },
+            '1.1.1': {
+                'source': '014c56105b2f071bb3457c51a95c38be380e5124',
+                'baseline': (18838904, 'cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af'),
+                'avx2': (19415936, '3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770'),
+                'vulkan': (66575872, '102a7caa22facc5c257c526ae4a9e63c04c027297fec4ca370209a1f94ae9863'),
+            },
+        }
+        release = releases.get(receipt.get('version'))
+        if release is None:
+            raise SystemExit(1)
+        payload = previous_payload if receipt['version'] == '1.1.0' else current_payload
+        binary_size, binary_sha = release[cpu]
         model_name = 'ggml-' + expected['model'] + '.bin'
         model_size = expected['model_download_bytes']
         model_sha = expected['files']['model'][2]
-        fixed = dict(integration='upstream-direct-v1', version='1.1.0',
-                     source_commit='e2638ca63f566f1682bcedc0abea8e4b25211c21',
+        fixed = dict(integration='upstream-direct-v1', version=receipt['version'],
+                     source_commit=release['source'],
                      release_signing_fingerprint='9CCF7915B750CAE8B095ED1AA3FC9F33FD209279',
                      profile=profile, binary='voxtype-' + cpu, binary_bytes=binary_size,
                      binary_sha256=binary_sha, model_path='/opt/arctic/voxtype/models/' + model_name,
                      model=expected['model'] + '.bin', model_bytes=model_size,
-                     model_sha256=model_sha, backend='cpu')
+                     model_sha256=model_sha, backend=receipt.get('backend'))
         if any(receipt.get(key) != value for key, value in fixed.items()):
+            raise SystemExit(1)
+        if receipt['backend'] == 'cpu':
+            if set(receipt) != direct_keys:
+                raise SystemExit(1)
+        elif receipt['backend'] == 'vulkan':
+            vulkan_size, vulkan_sha = release['vulkan']
+            if (set(receipt) != direct_keys | vulkan_keys
+                    or receipt.get('vulkan_binary') != 'voxtype-vulkan'
+                    or receipt.get('vulkan_binary_bytes') != vulkan_size
+                    or receipt.get('vulkan_binary_sha256') != vulkan_sha):
+                raise SystemExit(1)
+        else:
             raise SystemExit(1)
         user = receipt.get('user')
         if type(user) is not str or re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', user) is None:
             raise SystemExit(1)
+        try:
+            info = os.lstat(os.path.join(payload, receipt['binary']))
+        except OSError:
+            raise SystemExit(1) from None
+        if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                or stat.S_IMODE(info.st_mode) != 0o755
+                or info.st_size != receipt['binary_bytes']):
+            raise SystemExit(1)
     else:
         raise SystemExit(1)
-    print(profile)
+    if set(receipt) in (direct_keys, direct_keys | vulkan_keys):
+        print(profile + '\t' + user)
+    else:
+        print(profile)
     raise SystemExit(0)
 
 selection, selection_exists = root_json(os.path.join(state, 'profile-selection.json'))
@@ -472,12 +524,12 @@ as_user() {
     runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" XDG_DATA_HOME="$home/.local/share" "$@"
 }
 configure_user() {
-    local user=$1 home=$2 model=$3
-    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model"
+    local user=$1 home=$2 model=$3 binary=$4
+    as_user "$user" "$home" /usr/libexec/arctic/arctic-voxtype-configure "$model" "$binary"
 }
 
 reuse_legacy_model() {
-    local name=$1 bytes=$2 sha=$3 source="$DEST/$1" target="$MODELS/$1"
+    local name=$1 bytes=$2 sha=$3 source="$PREVIOUS_DEST/$1" target="$MODELS/$1"
     trusted_exact_file "$target" 644 "$bytes" "$sha" && return 0
     trusted_exact_file "$source" 644 "$bytes" "$sha" || return 1
     prepare_storage_dir "$MODELS"
@@ -491,19 +543,36 @@ cleanup_legacy_payload() {
     # are both durable. Exact compatible bytes were copied/reflinked above.
     [[ -f $STATE/verified.json && ! -L $STATE/verified.json && $(stat -c %u:%a "$STATE/verified.json") == 0:644 ]] || return
     trusted_exact_file "$STATE/upstream-direct-v1" 644 19 f488e43c61459fd06e37fe8d5590ed9bc844806f1e703fba8a2de65dd945e8d8 || return
-    rm -f -- "$DEST/voxtype-cpu" "$DEST/voxtype-cpu-avx2" "$DEST/voxtype-vulkan" \
-        "$DEST/$SMALL_NAME" "$DEST/$TURBO_NAME"
-    durable_sync_dir "$DEST"
+    local path mode bytes sha
+    while read -r path mode bytes sha; do
+        trusted_exact_file "$PREVIOUS_DEST/$path" "$mode" "$bytes" "$sha" || continue
+        rm -f -- "$PREVIOUS_DEST/$path"
+    done <<'EOF'
+voxtype-cpu 755 18579224 1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
+voxtype-cpu-avx2 755 19153728 e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
+voxtype-vulkan 755 66342968 db2c7938392ff08ec8b50b8afb90f8bd3d0111eccf5943df2f51c40a0368fec2
+voxtype-baseline 755 18579224 1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a
+voxtype-avx2 755 19153728 e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28
+ggml-small.bin 644 487601967 1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b
+ggml-large-v3-turbo-q5_0.bin 644 574041195 394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2
+EOF
+    [[ ! -d $PREVIOUS_DEST || -L $PREVIOUS_DEST ]] || durable_sync_dir "$PREVIOUS_DEST"
 }
 
 setup_user() {
-    local user=$1 mode=${2:-online} home tmp keyring host_profile selected_profile profile_status legacy_state=valid cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha packaged=0 receipt_json uid
-    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
+    local user=$1 mode=${2:-online} home tmp keyring host_profile legacy_selection selected_profile receipt_user profile_status legacy_state=valid cpu profile model_name model_bytes model_sha model_url model_path binary_bytes binary_sha packaged=0 receipt_json uid
     durable_atomic_text "$STATE/setup.state" 0644 downloading
     tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
     host_profile=$(/usr/libexec/arctic/arctic-voxtype-host-profile)
-    if selected_profile=$(legacy_profile "$host_profile"); then
-        :
+    if legacy_selection=$(legacy_profile "$host_profile"); then
+        IFS=$'\t' read -r selected_profile receipt_user <<<"$legacy_selection"
+        if [[ -n $receipt_user ]]; then
+            # A strictly validated direct receipt owns the installed user's
+            # private config. RPM account enumeration is only a fallback when
+            # no trusted direct receipt exists.
+            valid_user "$receipt_user" || return 1
+            user=$receipt_user
+        fi
     else
         profile_status=$?
         if [[ $profile_status == 2 ]]; then
@@ -521,6 +590,7 @@ setup_user() {
         fi
         selected_profile=$host_profile
     fi
+    home=$(getent passwd "$user" | cut -d: -f6); [[ -n "$home" && "$home" = /* ]]
     if [[ $selected_profile == turbo-q5-v3 ]]; then
         cpu=avx2; profile=turbo-q5-v3; model_name=$TURBO_NAME; model_bytes=$TURBO_BYTES; model_sha=$TURBO_SHA; model_url=$TURBO_URL
         binary_bytes=$AVX2_BYTES; binary_sha=$AVX2_SHA
@@ -534,9 +604,8 @@ setup_user() {
         packaged=1
     fi
     if [[ $packaged == 1 ]]; then
-        # An update from Arctic's former controller already has these exact
-        # upstream bytes. Authenticate the binary with provenance shipped in
-        # the signed RPM and complete the direct migration without a network.
+        # A retry after the current signed binary was already installed can
+        # authenticate it from RPM provenance and finish without a network.
         prepare_packaged_release_metadata "$tmp" "$keyring" "$cpu"
     else
         [[ $mode != legacy-only ]] || return 1
@@ -558,7 +627,10 @@ setup_user() {
     durable_sync_file "$model_path"
     durable_sync_tree "$DEST" "$STORAGE_ROOT"
     durable_sync_tree "$MODELS" "$STORAGE_ROOT"
-    configure_user "$user" "$home" "$model_path"
+    # The runtime launcher correctly rejects the not-yet-committed receipt.
+    # Validate the temporary config with the exact signed CPU binary whose
+    # bytes were just checked and synced instead of weakening that guard.
+    configure_user "$user" "$home" "$model_path" "$DEST/voxtype-$cpu"
     systemctl --global enable voxtype.service >/dev/null
     uid=$(id -u "$user")
     durable_atomic_text "$STATE/backend" 0644 cpu
@@ -578,43 +650,108 @@ setup_user() {
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user daemon-reload >/dev/null 2>&1 || :
         runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+            systemctl --user try-restart voxtype.service >/dev/null 2>&1 || :
+        runuser -u "$user" -- env XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
             systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :
     fi
     return 0
 }
 update_receipt_backend() {
-    python3 - "$STATE/verified.json" "$1" <<'PY'
+    python3 - "$STATE/verified.json" "$@" <<'PY'
 import json, os, sys, tempfile
-path, backend = sys.argv[1:]
+path, backend, *attestation = sys.argv[1:]
 with open(path, encoding='utf-8') as src:
     data = json.load(src)
 data['backend'] = backend
+if backend == 'cpu':
+    # Vulkan attestation is valid only while Vulkan is selected. Keeping these
+    # fields on a CPU receipt violates the strict receipt schema used by the
+    # next package migration and can turn a safe fallback into a repair.
+    for key in ('vulkan_binary', 'vulkan_binary_bytes', 'vulkan_binary_sha256'):
+        data.pop(key, None)
+elif backend == 'vulkan' and len(attestation) == 2:
+    size, sha = attestation
+    data.update(vulkan_binary='voxtype-vulkan', vulkan_binary_bytes=int(size),
+                vulkan_binary_sha256=sha)
+else:
+    raise SystemExit(2)
 fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
-with os.fdopen(fd, 'w', encoding='utf-8') as out:
-    json.dump(data, out, separators=(',', ':')); out.write('\n')
-os.chmod(tmp, 0o644); os.replace(tmp, path)
+try:
+    with os.fdopen(fd, 'w', encoding='utf-8') as out:
+        os.fchmod(out.fileno(), 0o644)
+        json.dump(data, out, separators=(',', ':')); out.write('\n')
+        out.flush(); os.fsync(out.fileno())
+    os.replace(tmp, path)
+    directory = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+except BaseException:
+    try:
+        os.unlink(tmp)
+    except FileNotFoundError:
+        pass
+    raise
 PY
 }
+vulkan_acceleration_proven() {
+    # The official 1.1.1 `info accel` implementation treats these
+    # whisper_backend_init_gpu outcome lines as positive GPU evidence. It
+    # explicitly treats `use gpu = 1` as intent and unknown as unknown. Stream
+    # stderr through a bounded, non-persistent parser; stdout (which contains
+    # the transcript) is discarded by the caller.
+    python3 -c '
+import sys
+limit = 1024 * 1024
+kept = bytearray()
+total = 0
+while True:
+    chunk = sys.stdin.buffer.read(65536)
+    if not chunk:
+        break
+    total += len(chunk)
+    if len(kept) < limit:
+        kept.extend(chunk[:limit - len(kept)])
+if total > limit:
+    raise SystemExit(1)
+positive = False
+negative = False
+for raw in kept.decode("utf-8", "replace").splitlines():
+    line = " ".join(raw.lower().split())
+    if "use gpu = 0" in line:
+        negative = True
+    if "whisper_backend_init_gpu:" in line and "no gpu found" in line:
+        negative = True
+    if "ggml_vulkan" in line and "found 0" in line:
+        negative = True
+    if "whisper_backend_init_gpu:" not in line or "vulkan" not in line:
+        continue
+    if "found gpu device" in line or ("using" in line and "backend" in line):
+        positive = True
+raise SystemExit(0 if positive and not negative else 1)
+'
+}
 set_backend() {
-    local backend=$1 user tmp keyring uid home config fixture receipt
+    local backend=$1 user tmp keyring uid home config fixture
     trap backend_fail ERR
     user=$(user_from_uid) || usage; valid_user "$user" || usage; [[ -r "$STATE/verified.json" ]] || fail
     case "$backend" in
         cpu)
-            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            durable_atomic_text "$STATE/backend" 0644 cpu
             update_receipt_backend cpu
-            rm -f "$STATE/setup.error"
+            durable_remove "$STATE/setup.error"
             ;;
         vulkan)
             # Selection remains CPU until both the driver probe and real local
             # model initialization through the official Vulkan binary pass.
-            printf '%s\n' cpu | install -m 0644 /dev/stdin "$STATE/backend"
+            durable_atomic_text "$STATE/backend" 0644 cpu
             update_receipt_backend cpu
             tmp=$(mktemp -d /var/tmp/arctic-voxtype.XXXXXX); cleanup_tmp=$tmp; keyring="$tmp/release-key.gpg"
             prepare_release_metadata "$tmp" "$keyring"; install_asset vulkan "$tmp" "$keyring"
             command -v vulkaninfo >/dev/null
             uid=$(id -u "$user"); home=$(getent passwd "$user" | cut -d: -f6)
-            runuser -u "$user" -- env HOME="$home" vulkaninfo --summary >/dev/null
+            runuser -u "$user" -- env HOME="$home" timeout 15 vulkaninfo --summary >/dev/null
             config="$home/.config/voxtype/config.toml"; fixture="$tmp/silence.wav"
             python3 - "$fixture" <<'PY'
 import struct, sys, wave
@@ -622,22 +759,15 @@ with wave.open(sys.argv[1], 'wb') as out:
     out.setnchannels(1); out.setsampwidth(2); out.setframerate(16000)
     out.writeframes(struct.pack('<16000h', *([0] * 16000)))
 PY
-            runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" RUST_LOG=error \
-                timeout 120 "$DEST/voxtype-vulkan" -q --config "$config" transcribe "$fixture" >/dev/null 2>&1
-            printf '%s\n' vulkan | install -m 0644 /dev/stdin "$STATE/backend"
-            receipt="$STATE/verified.json"
-            python3 - "$receipt" "$VULKAN_BYTES" "$VULKAN_SHA" <<'PY'
-import json, os, sys, tempfile
-path, size, sha = sys.argv[1:]
-with open(path, encoding='utf-8') as src:
-    data = json.load(src)
-data.update(backend='vulkan', vulkan_binary='voxtype-vulkan', vulkan_binary_bytes=int(size), vulkan_binary_sha256=sha)
-fd, tmp = tempfile.mkstemp(prefix='verified.json.', dir=os.path.dirname(path))
-with os.fdopen(fd, 'w', encoding='utf-8') as out:
-    json.dump(data, out, separators=(',', ':')); out.write('\n')
-os.chmod(tmp, 0o644); os.replace(tmp, path)
-PY
-            rm -f "$STATE/setup.error"
+            runuser -u "$user" -- env HOME="$home" XDG_CONFIG_HOME="$home/.config" RUST_LOG=info \
+                timeout 120 "$DEST/voxtype-vulkan" --config "$config" transcribe "$fixture" \
+                2>&1 >/dev/null | vulkan_acceleration_proven
+            # Attest the positive model-init result before publishing Vulkan
+            # as the runtime selector. A crash between these durable writes is
+            # a mismatch, which the launcher and status adapter reject.
+            update_receipt_backend vulkan "$VULKAN_BYTES" "$VULKAN_SHA"
+            durable_atomic_text "$STATE/backend" 0644 vulkan
+            durable_remove "$STATE/setup.error"
             ;;
         *) usage ;;
     esac

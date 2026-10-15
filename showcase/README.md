@@ -10,11 +10,11 @@ It uses Kokoro's `af_heart` narration and documents the earlier app set.
 ## River replacement source
 
 The [current source and receipts](revision-2026-10-12/) describe the native app set, project
-photo backgrounds, separate Remove apps, official VoxType 1.1.0 local dictation, signed stable updates,
+photo backgrounds, separate Remove apps, official VoxType 1.1.1 local dictation, signed stable updates,
 the one-time What's New summary, and per-account hide/restore for packaged wallpapers.
 
 The script has 38 scenes and 130 caption cues. Every time window is aligned to the verified
-549.987846-second direct-VoxType River master. Rendering remains blocked by human listening,
+582.356463-second direct-VoxType 1.1.1 River master. Rendering remains blocked by human listening,
 qualified final-image captures and release binding.
 
 The prior faster-whisper results are preserved as evidence for the superseded master only. The
@@ -22,10 +22,10 @@ first full-script River request failed because the connector caps one request at
 the locked script is 9,093 characters. That attempt has no renderable audio. The exact script is
 now pinned as two minimum-count inputs of 4,451 and 4,642 characters, split between the Get apps
 and Remove apps paragraphs. Both one-take River generations completed. Their verified sample-exact
-assembly is 549.987846 seconds and has SHA-256
-`90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5`. The audio is preserved
+assembly is 582.356463 seconds and has SHA-256
+`f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`. The audio is preserved
 outside Git and remains unpublished. Two offline faster-whisper 1.2.1 alignment runs produced
-byte-identical outputs. The measured WER is 3.9375%, exact-token coverage is 97.3523%, and no cue
+byte-identical outputs. The measured WER is 4.1412%, exact-token coverage is 97.4202%, and no cue
 falls below half exact-token coverage. Human listening review remains pending.
 
 The new source has **not** been rendered or published. Final-image captures for direct VoxType,
@@ -37,7 +37,7 @@ link above therefore continues to point to the 3 October edition.
 ## What the source shows
 
 The app scenes cover GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
-Fish/Bash. Arctic downloads signature-checked official VoxType 1.1.0 binaries and uses a small
+Fish/Bash. Arctic downloads signature-checked official VoxType 1.1.1 binaries and uses a small
 setup and status adapter around VoxType's public commands. Online installation automatically
 downloads and verifies the compatible CPU engine and multilingual model. Offline installation
 reports that dictation is not ready and leaves a clear first-boot retry. Mango's readiness helper
@@ -78,13 +78,13 @@ committed GSAP 3.14.2 file only at 72,777 bytes and SHA-256
 `19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee`. The two showcase workflows
 also pin each official GitHub Action to a reviewed full commit SHA.
 
-The prior River master remains recorded with its exact SHA-256, duration and generation receipts
+The superseded custom-controller River master remains recorded with its exact SHA-256, duration and generation receipts
 in [`voice-timing.json`](revision-2026-10-12/voice-timing.json). It is superseded because it speaks
 about the removed custom controller. The render and alignment workflows fail before downloading
 or using it. Each pinned English River text file was generated exactly once with the pinned voice
 and model. `revision-2026-10-12/assemble-river-segments.py` verified both immutable receipts,
 decoded the inputs to 44.1 kHz mono PCM and appended the second at the first segment's exact final
-sample. The resulting MP3 decoded to the exact sum of 24,254,464 input samples. Its emitted size,
+sample. The resulting MP3 decoded to the exact sum of 25,681,920 input samples. Its emitted size,
 SHA-256 and PyAV duration are pinned, and all 130 cues are aligned to that exact master.
 
 After final captures are admitted, use the source workflow to rebuild the composition, run

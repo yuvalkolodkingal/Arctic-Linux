@@ -244,9 +244,9 @@ class VoiceReceiptTest(unittest.TestCase):
 
     def test_current_assembled_master_receipt_is_exact(self):
         values = MODULE.validate_assembled_master(RECEIPT)
-        self.assertEqual(values["master_bytes"], "13201492")
-        self.assertEqual(values["master_sha256"], "90d573f80bba1365b97ac0162be5028ded235e481665b58acbcedbb8792507d5")
-        self.assertEqual(values["master_duration"], "549.987846")
+        self.assertEqual(values["master_bytes"], "13978270")
+        self.assertEqual(values["master_sha256"], "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b")
+        self.assertEqual(values["master_duration"], "582.356463")
 
     def test_two_segments_reproduce_locked_narration_exactly(self):
         plan = MODULE.validate_segment_plan(RECEIPT)
@@ -266,8 +266,8 @@ class VoiceReceiptTest(unittest.TestCase):
         receipt = approved_receipt()
         root = self.ready_repository(receipt)
         values = MODULE.resolve(receipt, root)
-        self.assertEqual(values["master_bytes"], "13201492")
-        self.assertEqual(values["master_duration"], "549.987846")
+        self.assertEqual(values["master_bytes"], "13978270")
+        self.assertEqual(values["master_duration"], "582.356463")
         self.assertEqual(values["admission"], "private_render")
 
     def test_ready_receipt_rejects_pending_human_listening(self):

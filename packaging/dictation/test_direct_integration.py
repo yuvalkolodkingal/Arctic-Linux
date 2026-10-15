@@ -44,7 +44,7 @@ class DirectUpstreamIntegration(unittest.TestCase):
         setup = (D / "arctic-voxtype-setup").read_text()
         config = (D / "arctic-voxtype-configure").read_text()
         for value in (
-            "e2638ca63f566f1682bcedc0abea8e4b25211c21",
+            "014c56105b2f071bb3457c51a95c38be380e5124",
             "9CCF7915B750CAE8B095ED1AA3FC9F33FD209279",
             "394221709cd5ad1f40c46e6031ca61bce88931e6e088c188294c6d5a55ffa7e2",
             "1be3a9b2063867b937e64e2ec7483364a79917e157fa98c5d94b5c1fffea987b",
@@ -103,13 +103,15 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertIn('integrity_ready=false', adapter)
         self.assertIn('ready=$integrity_ready', adapter)
         for value in (
-            '/opt/arctic/voxtype/1.1.0/voxtype-baseline', '18579224',
-            '/opt/arctic/voxtype/1.1.0/voxtype-avx2', '19153728',
-            '/opt/arctic/voxtype/1.1.0/voxtype-vulkan', '66342968',
+            '/opt/arctic/voxtype/1.1.1/voxtype-baseline', '18838904',
+            '/opt/arctic/voxtype/1.1.1/voxtype-avx2', '19415936',
+            '/opt/arctic/voxtype/1.1.1/voxtype-vulkan', '66575872',
             '/opt/arctic/voxtype/models/ggml-small.bin', '487601967',
             '/opt/arctic/voxtype/models/ggml-large-v3-turbo-q5_0.bin', '574041195',
             'The verified local Whisper model is missing or damaged.',
             'Dictation is not prepared for this account.',
+            'This build has Vulkan support, so transcription will fall back to CPU',
+            'VoxType could not start on Vulkan and is using CPU.',
         ):
             self.assertIn(value, adapter)
 
@@ -131,12 +133,12 @@ class DirectUpstreamIntegration(unittest.TestCase):
     def test_offline_upgrade_uses_shipped_signed_provenance_before_switching(self):
         setup = (D / "arctic-voxtype-setup").read_text()
         spec = (ROOT / "packaging/arctic-linux.spec").read_text()
-        provenance = D / "provenance/v1.1.0"
+        provenance = D / "provenance/v1.1.1"
         expected = {
-            "SHA256SUMS.txt": (2931, "3a2fa8661ac2dceeb0b52d4de85b71361de122a09298f3a85ca596ff0428fe4b"),
-            "SHA256SUMS.txt.asc": (228, "63155a999853a5816912a586610ab831273d2d493ca8e08679f817a7e383d455"),
-            "voxtype-1.1.0-linux-x86_64-baseline.asc": (228, "41b8b14315f55c9ffb03ccb28e99dfd115c7e5a7e7953ef158213d38b4162ed8"),
-            "voxtype-1.1.0-linux-x86_64-avx2.asc": (228, "fdf2c35826ea7590a703993c5bdf69804672a5a0c76312e66bc4f14399d8f2ce"),
+            "SHA256SUMS.txt": (2931, "a93de5d79f6180626181aaf2315cc8415b084914b9f69a71e71bfb56bae1a32e"),
+            "SHA256SUMS.txt.asc": (228, "2bce1ff42615d322b1e686f05373c99889d506e230d5f5512aeb22d728510af8"),
+            "voxtype-1.1.1-linux-x86_64-baseline.asc": (228, "abd5e8b0c7b50987c6094105732ada464a2699f9b64f4e3fb47e3d005a30794e"),
+            "voxtype-1.1.1-linux-x86_64-avx2.asc": (228, "e1c8606f7b54535193fe23f6c08808a1b60470e24b6641b1d3e4da5259991ead"),
         }
         for name, (size, digest) in expected.items():
             payload = (provenance / name).read_bytes()
@@ -152,8 +154,8 @@ class DirectUpstreamIntegration(unittest.TestCase):
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         sums = (provenance / "SHA256SUMS.txt").read_text()
         for line in (
-            "1c9d78b4f6805e4f12ba3670949d3c22788269bdbc54215afffa42cafd0b4a7a  voxtype-1.1.0-linux-x86_64-baseline",
-            "e7d5de68cc8fc610c3c961c47f879451db9bee4a2df152e9a66f1078072e7f28  voxtype-1.1.0-linux-x86_64-avx2",
+            "cc051aac0870e21d7378edbcde3ceff10238af12a11650ab897d0ad9195225af  voxtype-1.1.1-linux-x86_64-baseline",
+            "3462262980e5a75391ffdeb7d3b63f9f638d6261df042f04f9119dfb7aab7770  voxtype-1.1.1-linux-x86_64-avx2",
         ):
             self.assertIn(line, sums)
         packaged = setup[setup.index("prepare_packaged_release_metadata() {"):
@@ -166,7 +168,11 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertIn('setup_user "$2" legacy-only', migration)
         setup_user = setup[setup.index("setup_user() {"):setup.index("\n}\n", setup.index("setup_user() {")) + 3]
         self.assertLess(setup_user.index("legacy_payload_usable"), setup_user.index("prepare_release_metadata"))
-        self.assertIn('selected_profile=$(legacy_profile "$host_profile")', setup_user)
+        self.assertIn('legacy_selection=$(legacy_profile "$host_profile")', setup_user)
+        self.assertIn("read -r selected_profile receipt_user", setup_user)
+        self.assertIn('valid_user "$receipt_user"', setup_user)
+        self.assertLess(setup_user.index('user=$receipt_user'),
+                        setup_user.index('home=$(getent passwd "$user"'))
         self.assertIn('quarantine_invalid_legacy_state', setup_user)
         self.assertIn('[[ $legacy_state == valid ]] && legacy_payload_usable', setup_user)
         self.assertIn('[[ $mode != legacy-only ]] || return 1', setup_user)
@@ -175,8 +181,12 @@ class DirectUpstreamIntegration(unittest.TestCase):
         prepare_state = setup[setup.index("prepare_state_dir() {"):
                               setup.index("\n}\n", setup.index("prepare_state_dir() {")) + 3]
         self.assertIn('durable_sync_tree "$STATE" "$STATE_ROOT"', prepare_state)
-        self.assertLess(setup.index('prepare_state_dir\n    durable_atomic_text "$STATE/user"'),
-                        setup.index('durable_atomic_text "$STATE/pending"'))
+        queue = setup[setup.index("queue_user() {"):
+                      setup.index("\n}\n", setup.index("queue_user() {")) + 3]
+        self.assertLess(queue.index("prepare_state_dir"),
+                        queue.index('durable_remove "$STATE/setup.error"'))
+        self.assertLess(queue.index('durable_remove "$STATE/setup.error"'),
+                        queue.index('durable_atomic_text "$STATE/pending"'))
         posttrans = spec[spec.index("# Direct-upstream dictation replaced"):
                          spec.index("# Migrate old boot-wanted", spec.index("# Direct-upstream dictation replaced"))]
         self.assertIn('arctic-voxtype-setup --migrate-legacy "$user"', posttrans)
@@ -195,6 +205,17 @@ class DirectUpstreamIntegration(unittest.TestCase):
                         setup.index('durable_remove "$STATE/pending"'))
         self.assertIn('systemctl --user daemon-reload >/dev/null 2>&1 || :', setup_user)
         self.assertIn('systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :', setup_user)
+
+        # Vulkan is published only after the official post-init marker is
+        # observed; intent, exit zero, and device enumeration are insufficient.
+        self.assertIn('whisper_backend_init_gpu:', setup)
+        self.assertIn('found gpu device', setup)
+        self.assertIn('"using" in line and "backend" in line', setup)
+        self.assertLess(setup.index('update_receipt_backend vulkan'),
+                        setup.index('durable_atomic_text "$STATE/backend" 0644 vulkan'))
+        launcher = (D / "voxtype").read_text()
+        self.assertIn('backend state is incomplete', launcher)
+        self.assertIn('[ "$backend" != "$receipt_backend" ]', launcher)
 
     def test_runtime_error_cache_is_per_uid_and_no_follow(self):
         adapter = (D / "arctic-dictation").read_text()
@@ -254,6 +275,8 @@ class DirectUpstreamIntegration(unittest.TestCase):
         configure_start = setup.index("configure_user() {")
         configure = setup[configure_start:setup.index("\n}\n", configure_start) + 3]
         self.assertIn("as_user", configure)
+        self.assertIn('"$DEST/voxtype-$cpu"', setup)
+        self.assertIn('"$validator" --config', helper.read_text())
         for root_operation in ("install ", "chown", "mktemp", "mv "):
             self.assertNotIn(root_operation, configure)
 
