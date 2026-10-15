@@ -1883,18 +1883,22 @@ class Smoke:
                 raise
         self.wait(ready)
         samples = []
-        for _ in range(8):
+        for sample_index in range(8):
             sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
                       for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
             samples.append(sample)
             self.alive(player)
-            time.sleep(.35)
+            # Preserve all seven sample-to-sample intervals.  The eighth sleep
+            # never contributed another sample, so retain that exact bounded
+            # settle below after the final fullscreen geometry is established.
+            if sample_index < 7: time.sleep(.35)
         validate_player_samples(samples,str(fixture))
         maps = Path('/proc')/str(player['pid'])/'maps'
         require('libmpv.so' in maps.read_text(), 'Celluloid PID has no mapped libmpv')
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             moving_before=self.alive(player)
+        time.sleep(.35)
         moving_shot=self.screenshot('celluloid-playing')
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,moving_before,self.alive(player),moving_shot)
@@ -2860,7 +2864,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151'
+    native_source_sha = '51730a3413773c0fd9804a5fccbacdbcd199aa741226c09e221779a339733759'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

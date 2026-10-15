@@ -522,6 +522,7 @@ def restore_fresh_player_restart_native(source):
 
 
 def restore_bounded_retry_native(source):
+    source=restore_moving_capture_settle(source)
     source=restore_fresh_player_restart_native(source)
     if hashlib.sha256(source.encode()).hexdigest()!=BOUNDED_RETRY_NATIVE_SHA:
         raise AssertionError('Bounded retry Native source differs')
@@ -571,6 +572,41 @@ def restore_security_stream_native(source):
     if hashlib.sha256(source.encode()).hexdigest()!=PRE_STREAM_NATIVE_SHA:
         raise AssertionError('Pre-streaming Native source differs')
     return source
+
+
+def restore_moving_capture_settle(source):
+    """Reverse only the final existing moving-player settle relocation."""
+    current="""        for sample_index in range(8):
+            sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
+                      for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
+            samples.append(sample)
+            self.alive(player)
+            # Preserve all seven sample-to-sample intervals.  The eighth sleep
+            # never contributed another sample, so retain that exact bounded
+            # settle below after the final fullscreen geometry is established.
+            if sample_index < 7: time.sleep(.35)
+"""
+    previous="""        for _ in range(8):
+            sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
+                      for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
+            samples.append(sample)
+            self.alive(player)
+            time.sleep(.35)
+"""
+    final_current="""        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,True)
+            moving_before=self.alive(player)
+        time.sleep(.35)
+        moving_shot=self.screenshot('celluloid-playing')
+"""
+    final_previous="""        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,True)
+            moving_before=self.alive(player)
+        moving_shot=self.screenshot('celluloid-playing')
+"""
+    if source.count(current)!=1 or source.count(final_current)!=1:
+        raise AssertionError('Moving capture settle inverse occurrence differs')
+    return source.replace(current,previous,1).replace(final_current,final_previous,1)
 
 
 def restore_controls_native(source):

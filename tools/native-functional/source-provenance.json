@@ -1,6 +1,6 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "321e03e9514160139bb6701dc7ab35e0229f90286cfbff11b0d163974b24a6d0",
+    "test_controls_state_trials.py": "42a629eb6ecab546ac036628f8fe5c023629e296b37c1a37445717c732775de1",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "1cc2cecbda473713c4ddbbbe5aed044332f01f539262fc51b0335feadee47a56",
     "test_native_desktop_v6.py": "cca264bf12a7d7a789c29bfb98c8cd319cfeeaab059d62a5a9acd2997a98e841",
@@ -8,7 +8,7 @@
     "test_native_protocol_diagnostics.py": "ef4c1fb6e3f89a400aca3b6de852ef8b6512a539ccbd1ed808a12ba744202b1f",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
     "test_native_smoke.py": "3243823c0cf35e8976724e482f79424f677211942ad9eeee829ba64e39676b8e",
-    "test_native_v6.py": "960878317845337f35f45e5231eb6290720923dd54f3edbc5f8a9e31367d8c96",
+    "test_native_v6.py": "978e6e3197dbdd2b475713a074565f1692a8e7051232a97bc72dfa8cf401e064",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "2528ca2509fcfd76889e67b743c9f0dcfe1652bba4e0154f40bda9bf61064550",
+    "guest-check-native-v6.py": "9f565ab8375b55ab99aa11aeeeff364adb940ce46907f7b0c6af816e5178d4a0",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
-    "native_smoke.py": "e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151"
+    "native_smoke.py": "51730a3413773c0fd9804a5fccbacdbcd199aa741226c09e221779a339733759"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,7 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151",
+  "native_source_sha256": "51730a3413773c0fd9804a5fccbacdbcd199aa741226c09e221779a339733759",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -386,5 +386,20 @@
       "celluloid-video-area.c": "122e35df95e24b41fe4b407b3f8e0e57d2121ace799a6d3d4d9b565cf5146cbf",
       "io.github.celluloid_player.Celluloid.gschema.xml": "b54d4e8d9633ba4cb7a5915414f718f65f26b568094646119320f55ac00ec2e1"
     }
+  },
+  "moving_player_fullscreen_settle": {
+    "failure_run": 38753831453,
+    "failure_artifact_id": 11985476095,
+    "failure_artifact_sha256": "21b1810e583af5898fed1949f9c322ab87e4884bd2b36f8eb7dfead29e59756b",
+    "failed_frame_sha256": "b1001282153d804e3ced731fc794c1e6610c2be94c4ad3009d3b288073a23a67",
+    "diagnosis": "the exact live moving player decoded with an advancing unpaused clock, but its required screencopy was taken immediately after Mango reported fullscreen geometry and retained a black pre-presentation buffer",
+    "sample_count": 8,
+    "sample_to_sample_intervals": 7,
+    "existing_final_settle_seconds": 0.35,
+    "change": "move only the eighth existing 0.35 second sleep from after the last pre-fullscreen sample to after the owned fullscreen geometry proof and before the sole moving screenshot",
+    "sample_gate_fixture_player_renderer_screenshot_count_and_timeouts_unchanged": true,
+    "product_or_iso_bytes_changed": false,
+    "release_acceptance": false,
+    "scope": "observer scheduling only; final human content review remains required"
   }
 }

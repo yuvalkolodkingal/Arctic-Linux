@@ -189,6 +189,23 @@ class NewControls(unittest.TestCase):
         self.assertLess(capture,finish);self.assertLess(finish,retire);self.assertLess(retire,static)
         self.assertEqual(method.count('self.retire_moving_player(player,ipc)'),1)
 
+    def test_moving_capture_reorders_only_the_final_existing_sample_settle(self):
+        source=(HERE/'native_smoke.py').read_text();tree=ast.parse(source)
+        klass=next(node for node in tree.body if isinstance(node,ast.ClassDef) and node.name=='Smoke')
+        method=ast.get_source_segment(source,next(node for node in klass.body
+            if isinstance(node,ast.FunctionDef) and node.name=='media'))
+        sample_loop=method.index('for sample_index in range(8):')
+        retained_intervals=method.index('if sample_index < 7: time.sleep(.35)',sample_loop)
+        fullscreen=method.index('self.player_fullscreen(player,True)',retained_intervals)
+        final_settle=method.index('time.sleep(.35)',fullscreen)
+        capture=method.index("self.screenshot('celluloid-playing')",final_settle)
+        self.assertLess(sample_loop,retained_intervals)
+        self.assertLess(retained_intervals,fullscreen)
+        self.assertLess(fullscreen,final_settle)
+        self.assertLess(final_settle,capture)
+        self.assertEqual(method.count('time.sleep(.35)'),2)
+        self.assertNotIn('range(9)',method)
+
     def test_known_static_pattern_and_scaled_offset_match(self):
         ref=N.visual_reference_frame()
         for scale in (1,2):
