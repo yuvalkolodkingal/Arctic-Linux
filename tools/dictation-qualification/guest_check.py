@@ -1003,6 +1003,14 @@ class Checker:
     def microphone(self):
         self.empty()
         self.select(backend='cpu')
+        # Pin the owned source instead of relying on PipeWire's default. A
+        # virtual source which disappears while CPAL already has it open can
+        # leave the stream suspended without an error callback; that does not
+        # reproduce a device which is absent when VoxType opens it again.
+        self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', self.source_name])
+        self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
+        self.observe('microphone-pinned-daemon',
+                     lambda: self.state(allow_absent=True) == 'idle', 20)
         self.record('start')
         self.observe('recording-state', lambda: self.state() == 'recording', 10)
         self.observe('capture-link', self.capture_link, 10)
@@ -1013,7 +1021,16 @@ class Checker:
                          and row.get('info', {}).get('props', {}).get('media.class', '').startswith('Audio/Source')]
             if remaining:
                 raise MicrophoneIsolationUnavailable()
-            self.record('stop', check=False)
+            # Discard the interrupted session, then make the official daemon
+            # reopen the same selected microphone while it is still absent.
+            # That produces VoxType's supported, deterministic device-open
+            # error instead of assuming PipeWire turns a removed virtual node
+            # into a CPAL hot-unplug callback.
+            self.record('cancel', check=False)
+            self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
+            self.observe('microphone-disconnected-daemon',
+                         lambda: self.state(allow_absent=True) == 'idle', 20)
+            self.record('start', check=False)
             self.observe('microphone-idle', lambda: self.state() == 'idle', 30)
             require((self.root / 'received.private').read_bytes() == b'',
                     'microphone-failure-inserted-text')
@@ -1030,6 +1047,8 @@ class Checker:
         finally:
             self.record('cancel', check=False)
             self.route()
+            self.cmd([str(VOXTYPE), 'config', 'set', 'audio.device', 'default'],
+                     check=False)
             # Removing a PipeWire source is intentionally destructive. A
             # daemon which still owns that dead CPAL stream must not influence
             # the independent lock, GPU and privacy gates which follow.
@@ -1105,6 +1124,16 @@ class Checker:
     def gpu_failure(self):
         require(self.profile_id == 'turbo-q5-v3', 'gpu-gate-requires-modern-profile')
         self.empty()
+        # First prove the signed Vulkan payload and Arctic's real local model
+        # preflight on the VM's available Vulkan implementation.
+        run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+             str(SETUP), '--backend', 'vulkan'], 750)
+        vulkan = PAYLOAD / ASSETS['vulkan']['name']
+        owned_file(vulkan, ASSETS['vulkan']['bytes'])
+        require(sha(vulkan) == ASSETS['vulkan']['sha256'],
+                'installed-vulkan-payload-sha256')
+        self.select(backend='cpu')
+
         # Make the visible language selection deterministic for both recovery screens.
         self.select(language='he')
         icd = self.root / 'bad-icd.json'
@@ -1114,44 +1143,30 @@ class Checker:
             sort_keys=True) + '\n')
         os.chmod(icd, 0o600)
         os.chown(icd, self.account.pw_uid, self.account.pw_gid)
-        # The root helper exposes only this fixed setup operation; the test CD
-        # supplies no binary, key, checksum or cache.
-        run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-             str(SETUP), '--backend', 'vulkan'], 750)
-        vulkan = PAYLOAD / ASSETS['vulkan']['name']
-        owned_file(vulkan, ASSETS['vulkan']['bytes'])
-        require(sha(vulkan) == ASSETS['vulkan']['sha256'],
-                'installed-vulkan-payload-sha256')
-        self.cmd(['systemctl', '--user', 'set-environment',
-                  'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error'])
-        self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
-        self.observe('vulkan-daemon', lambda: bool(self.engines()), 20)
-        try:
-            self.record('start', check=False)
-            if self.state(allow_absent=True) == 'recording':
-                self.observe('gpu-capture-link', self.capture_link, 10)
-                sample = next(row for row in self.fixtures
-                              if row['language'] == 'en' and row['source_row'] == 0)
-                self.play(sample)
-                require(self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
-                        'gpu-failure-playback-failed')
-                self.player = None
-                self.record('stop', check=False)
-            self.observe('gpu-failure-idle', lambda: self.state(allow_absent=True) == 'idle', 60)
-            require((self.root / 'received.private').read_bytes() == b'',
-                    'gpu-failure-inserted-text')
-            def actionable():
-                status = self.adapter('status')
-                error = str(status.get('error', '')).lower()
-                return status if (status.get('state') == 'error'
-                    and ('vulkan' in error or 'gpu' in error)) else None
-            status = self.observe('gpu-failure-actionable-error', actionable, 10)
-            gpu_failure_capture_ack_sha256 = self.recovery_screen(
-                'gpu_failure', status, expected_language='he')
-        finally:
-            self.record('cancel', check=False)
-            self.cmd(['systemctl', '--user', 'unset-environment',
-                      'VK_DRIVER_FILES', 'VK_LOADER_DEBUG'])
+        # Exercise Arctic's guarded selection with a loader configuration that
+        # cannot open an ICD. Upstream Vulkan deliberately supports automatic
+        # CPU fallback, so running a recording under this fixture cannot prove
+        # an error and may insert CPU-produced text. Arctic instead must reject
+        # the switch, preserve CPU, and publish an actionable error before any
+        # recording can start on the requested backend.
+        failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                      'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error',
+                      str(SETUP), '--backend', 'vulkan'], 750, check=False)
+        require(failed.returncode != 0, 'gpu-failure-preflight-succeeded')
+        require((SYSTEM / 'backend').read_text().strip() == 'cpu'
+                and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
+                'gpu-failure-did-not-preserve-cpu')
+        require((self.root / 'received.private').read_bytes() == b'',
+                'gpu-failure-inserted-text')
+        def actionable():
+            status = self.adapter('status')
+            error = str(status.get('error', '')).lower()
+            return status if (status.get('state') == 'error'
+                and status.get('backend') == 'cpu'
+                and ('vulkan' in error or 'gpu' in error)) else None
+        status = self.observe('gpu-failure-actionable-error', actionable, 10)
+        gpu_failure_capture_ack_sha256 = self.recovery_screen(
+            'gpu_failure', status, expected_language='he')
         self.select(backend='cpu')
         for language in ('en', 'he'):
             sample = next(row for row in self.fixtures
@@ -1171,7 +1186,7 @@ class Checker:
         """Bind an exact host screenshot to the visible, transcript-free Settings state."""
         require(stage in ('gpu_failure', 'cpu_ready'), 'recovery-screen-stage')
         require((status.get('state'), status.get('backend')) ==
-                (('error', 'vulkan') if stage == 'gpu_failure' else ('ready', 'cpu')),
+                (('error', 'cpu') if stage == 'gpu_failure' else ('ready', 'cpu')),
                 'recovery-screen-status')
         require(expected_language is None or status.get('language') == expected_language,
                 'recovery-screen-language')

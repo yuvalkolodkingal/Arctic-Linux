@@ -212,7 +212,7 @@ class HarnessControls(unittest.TestCase):
 
     @staticmethod
     def recovery_request(stage):
-        state, backend, language, nonce = (('error', 'vulkan', 'en', 'a' * 32)
+        state, backend, language, nonce = (('error', 'cpu', 'en', 'a' * 32)
                                             if stage == 'gpu_failure'
                                             else ('ready', 'cpu', 'he', 'b' * 32))
         return dict(phase='online-installed',

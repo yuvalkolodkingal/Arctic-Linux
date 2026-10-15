@@ -44,7 +44,7 @@ class RunnerGuards(unittest.TestCase):
         (evidence / (phase + '.json')).write_text(json.dumps(report))
         proofs = []
         for stage in ('gpu_failure', 'cpu_ready'):
-            state, backend, language = (('error', 'vulkan', 'en') if stage == 'gpu_failure'
+            state, backend, language = (('error', 'cpu', 'en') if stage == 'gpu_failure'
                                         else ('ready', 'cpu', 'he'))
             name = 'dictation-recovery-' + phase + '-' + stage.replace('_', '-') + '.png'
             data = self.png(pixel=(b'\x12\x17\x1e' if stage == 'gpu_failure'

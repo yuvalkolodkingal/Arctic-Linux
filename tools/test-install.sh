@@ -904,7 +904,7 @@ def dictation_recovery_poll(vm):
         stage = request.get("stage")
         if stage in dictation_recovery_seen:
             continue
-        expected = (("error", "vulkan") if stage == "gpu_failure" else ("ready", "cpu"))
+        expected = (("error", "cpu") if stage == "gpu_failure" else ("ready", "cpu"))
         if (set(request) != {"boot_id", "installation_id", "phase", "desktop_uid", "receiver_empty",
                             "stage", "state", "backend", "language", "capture_nonce"}
             or request["phase"] not in ("online-installed", "recovered-offline")

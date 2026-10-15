@@ -138,7 +138,8 @@ on_transcription = false
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
         checker.route = Mock()
-        checker.state = Mock(side_effect=['recording', 'idle', 'idle'])
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.state = Mock(side_effect=['idle', 'recording', 'idle', 'idle', 'idle'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
         checker.adapter = Mock(side_effect=[
             {'state': 'ready', 'error': ''},
@@ -171,8 +172,16 @@ on_transcription = false
         self.assertIn('microphone-actionable-error', observed)
         self.assertIn('microphone-daemon-restored', observed)
         self.assertEqual(checker.adapter.call_count, 2)
+        self.assertEqual([call.args[0] for call in checker.record.call_args_list],
+                         ['start', 'cancel', 'start', 'cancel'])
         checker.destroy_route.assert_called_once_with(restore=False)
         checker.route.assert_called_once_with()
+        configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
+        self.assertTrue(any(call.args == (configure + [checker.source_name],)
+                            for call in checker.cmd.call_args_list))
+        self.assertTrue(any(call.args == (configure + ['default'],)
+                            and call.kwargs == {'check': False}
+                            for call in checker.cmd.call_args_list))
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
 
@@ -184,7 +193,8 @@ on_transcription = false
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
         checker.route = Mock()
-        checker.state = Mock(side_effect=['recording', 'idle', 'idle'])
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.state = Mock(side_effect=['idle', 'recording', 'idle', 'idle', 'idle'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
         checker.adapter = Mock(return_value={'state': 'ready', 'error': ''})
         def observe(target, fn, _seconds=20):
@@ -264,8 +274,13 @@ on_transcription = false
                    and isinstance(call.args[0], ast.Constant)]
         self.assertIn('gpu-failure-actionable-error', targets)
         source = ast.get_source_segment((HERE / 'guest_check.py').read_text(), method)
+        self.assertIn("'VK_DRIVER_FILES=' + str(icd)", source)
+        self.assertIn("failed.returncode != 0", source)
+        self.assertIn("(SYSTEM / 'backend').read_text().strip() == 'cpu'", source)
+        self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
+        self.assertIn("status.get('backend') == 'cpu'", source)
         self.assertLess(source.index("gpu-failure-actionable-error"),
-                        source.index("self.select(backend='cpu')"))
+                        source.rindex("self.select(backend='cpu')"))
 
     def test_command_contract_requires_direct_mango_binds_and_rejecting_adapter(self):
         checker = self.checker()

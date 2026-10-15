@@ -509,7 +509,7 @@ def recovery_screens(vm, ctx, evidence):
     result = {}
     for proof, stage in zip(proofs, ('gpu_failure', 'cpu_ready')):
         request = proof['request']
-        expected_state, expected_backend = (('error', 'vulkan') if stage == 'gpu_failure'
+        expected_state, expected_backend = (('error', 'cpu') if stage == 'gpu_failure'
                                             else ('ready', 'cpu'))
         name = 'dictation-recovery-' + ctx['phase'] + '-' + stage.replace('_', '-') + '.png'
         ack_key = stage + '_capture_ack_sha256'
