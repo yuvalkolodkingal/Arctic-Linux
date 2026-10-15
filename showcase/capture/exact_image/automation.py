@@ -132,6 +132,24 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     return bool(lines) and lines[-1] in accepted
 
 
+def _fixed_shell_marker_match(text: str):
+    """Find only the fixed proof marker, allowing OCR space around hyphens."""
+    if type(text) is not str:
+        return None
+    return re.search(
+        r"(?im)^[ \t]*ARCTIC[ \t]*-[ \t]*SHOWCASE[ \t]*-[ \t]*SHELL"
+        r"[ \t]*-[ \t]*READY[ \t]*$", text)
+
+
+def _fixed_shell_proof_present(text: str, account: str) -> bool:
+    """Require the fixed marker before the real account text."""
+    if type(account) is not str or not account:
+        return False
+    marker = _fixed_shell_marker_match(text)
+    return marker is not None and text.casefold().find(
+        account.casefold(), marker.end()) >= 0
+
+
 def _boot_entry_selected(image, entry: str) -> bool:
     """Recognize one immutable ISO GRUB highlight row, not OCR alone."""
     if entry not in ("try", "install"):
@@ -299,7 +317,7 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     accepted = {account + " " + suffix for suffix in suffixes}
     if any(line in accepted for line in lines):
         return "prompt-not-final"
-    if "arctic-showcase-shell-ready" in folded:
+    if _fixed_shell_marker_match(text) is not None:
         return "proof-marker"
     if "arctic linux" in folded and "fish 4.6" in folded:
         return "fetch-greeting"
@@ -518,7 +536,7 @@ class Controller:
         self.record(stage, "secret", {"source": "reviewed-disposable-controller-constant",
                     "characters": 38})
 
-    def _shot(self, label, before_ocr=None):
+    def _shot(self, label, before_ocr=None, *, shell_ocr_focus=False):
         self.counter += 1
         path = self.runtime / f"controller-{self.counter:03d}-{label}.png"
         c.require(not path.exists(), "controller screenshot path reused")
@@ -527,7 +545,25 @@ class Controller:
         image = controller_decode(path)
         if before_ocr is not None:
             before_ocr(image)
-        text = self.ocr(path)
+        full_text = self.ocr(path)
+        c.privacy_text(full_text, self.fragments)
+        if shell_ocr_focus:
+            # The exact Linux VT draws the cleared proof in its first few
+            # 8x16-cell rows.  Whole-frame sparse-text OCR missed every fixed
+            # string in three exact runs.  OCR a deterministic private nearest-
+            # neighbour enlargement while retaining the original 1280x800
+            # frame as the sole screen evidence and acceptance geometry.
+            focus = self.runtime / f"controller-{self.counter:03d}-{label}-ocr.png"
+            c.require(not focus.exists(), "controller OCR focus path reused")
+            try:
+                image.crop((0, 0, 1280, 128)).resize(
+                    (3840, 384), Image.Resampling.NEAREST).save(focus, format="PNG")
+                host._regular_new(focus, host.MAX_PNG_BYTES)
+                text = self.ocr(focus)
+            finally:
+                focus.unlink(missing_ok=True)
+        else:
+            text = full_text
         c.privacy_text(text, self.fragments)
         return path, info, image, text
 
@@ -545,7 +581,13 @@ class Controller:
         while time.monotonic() < deadline:
             path = None
             try:
-                path, info, image, text = self._shot(expectation, before_ocr=before_ocr)
+                shell_ocr_focus = expectation in {
+                    "installed-shell-ready", "installed-shell",
+                    "installed-diagnostic-shell-ready",
+                }
+                path, info, image, text = self._shot(
+                    expectation, before_ocr=before_ocr,
+                    shell_ocr_focus=shell_ocr_focus)
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
                 if startup_gate:
@@ -556,7 +598,12 @@ class Controller:
                         _installed_shell_surface_class(image, text, account, suffixes))
                 prompt_ok = (prompt_contract is None
                              or _fixed_fish_prompt_present(text, *prompt_contract))
-                if ((not phrases or _phrases_present(text, phrases, ordered=ordered))
+                phrase_ok = (not phrases or _phrases_present(
+                    text, phrases, ordered=ordered))
+                if (expectation in {"installed-shell-ready", "installed-shell"}
+                        and prompt_contract is not None):
+                    phrase_ok = _fixed_shell_proof_present(text, prompt_contract[0])
+                if (phrase_ok
                         and prompt_ok
                         and (not exact_output or image.size == (1280, 800))
                         and (not visible or nonblank)):

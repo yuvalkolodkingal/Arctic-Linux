@@ -129,6 +129,28 @@ class UnattendedController(unittest.TestCase):
         self.assertEqual(event["kind"], "screen")
         self.assertEqual(event["detail"]["expectation"], "installer-done")
 
+    def test_installed_shell_ocr_focus_is_fixed_private_and_does_not_replace_frame(self):
+        observations = []
+
+        def ocr(path):
+            with Image.open(path) as image:
+                observations.append((path.name, image.size, image.getpixel((0, 0))))
+            return ("ARCTIC - SHOWCASE - SHELL - READY\n"
+                    "arcticshowcase@arctic-showcase ~>")
+
+        self.controller.ocr = ocr
+        path, info, image, text = self.controller._shot(
+            "installed-shell-ready", shell_ocr_focus=True)
+        self.assertEqual(observations, [
+            ("controller-001-installed-shell-ready.png", (1280, 800), (35, 48, 65)),
+            ("controller-001-installed-shell-ready-ocr.png", (3840, 384), (35, 48, 65)),
+        ])
+        self.assertEqual((path.stat().st_size, info.st_size, image.size),
+                         (info.st_size, info.st_size, (1280, 800)))
+        self.assertEqual(text.splitlines()[-1], "arcticshowcase@arctic-showcase ~>")
+        self.assertFalse((self.root / "controller-001-installed-shell-ready-ocr.png").exists())
+        path.unlink()
+
     def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
         order = []
         image = Image.new("RGB", (1920, 1080), "#101820")
@@ -355,6 +377,7 @@ class UnattendedController(unittest.TestCase):
             account + " ~>": "prompt-exact",
             account + " ~>\ntrailing fetch row": "prompt-not-final",
             "ARCTIC-SHOWCASE-SHELL-READY": "proof-marker",
+            "ARCTIC - SHOWCASE- SHELL -READY": "proof-marker",
             "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
             account: "account-only",
             "~ >": "suffix-only",
@@ -374,7 +397,7 @@ class UnattendedController(unittest.TestCase):
             "prompt-exact")
         low_color_cases = {
             account + " ~>\ntrailing row": "prompt-not-final",
-            "ARCTIC-SHOWCASE-SHELL-READY": "proof-marker",
+            "ARCTIC - SHOWCASE- SHELL -READY": "proof-marker",
             "Arctic Linux\nshell fish 4.6": "fetch-greeting",
             account: "account-only",
             "~ >": "suffix-only",
@@ -540,17 +563,36 @@ uptime   2 mins
                 self.assertTrue(automation._fixed_fish_prompt_present(
                     account + " " + spelling + " _|\n", account, suffixes))
 
-    def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
+    def test_fixed_shell_proof_accepts_only_marker_before_real_account(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
         prompt = "arcticshowcase@arctic-showcase"
         old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
         returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
-        self.assertFalse(automation._phrases_present(
-            old_prompt_only, (marker, prompt), ordered=True))
-        self.assertTrue(automation._phrases_present(
-            returned_prompt, (marker, prompt), ordered=True))
-        self.assertTrue(automation._phrases_present(
-            old_prompt_only, (marker, prompt), ordered=False))
+        spaced = "ARCTIC - SHOWCASE- SHELL -READY\n" + prompt + " ~>"
+        self.assertFalse(automation._fixed_shell_proof_present(old_prompt_only, prompt))
+        self.assertTrue(automation._fixed_shell_proof_present(returned_prompt, prompt))
+        self.assertTrue(automation._fixed_shell_proof_present(spaced, prompt))
+        for forged in (
+            "ARCTIC SHOWCASE SHELL READY\n" + prompt,
+            "ARCTIC-SHOWCASE-SHELL-READY extra\n" + prompt,
+            "ARCTIC-SHOWCASE-SHELL-WRONG\n" + prompt,
+            marker + "\nother@arctic-showcase ~>",
+        ):
+            with self.subTest(forged=forged):
+                self.assertFalse(automation._fixed_shell_proof_present(forged, prompt))
+
+    def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
+        prompt = "arcticshowcase@arctic-showcase"
+        self.controller.ocr = lambda _path: (
+            "ARCTIC - SHOWCASE - SHELL - READY\n" + prompt + " ~>")
+        path, text = self.controller.wait_screen(
+            "installed-console", "installed-shell-ready",
+            ("ARCTIC-SHOWCASE-SHELL-READY", prompt), seconds=1,
+            exact_output=True, ordered=True,
+            prompt_contract=(prompt, ("~>", "~ >")))
+        self.assertIsNone(path)
+        self.assertEqual(text.splitlines()[-1], prompt + " ~>")
+        self.assertEqual(list(self.root.glob("controller-*.png")), [])
 
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
         marker = "ARCTIC-SHOWCASE-AUTH-READY"

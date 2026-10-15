@@ -99,10 +99,15 @@ rich greeting remains visible. After a fixed three-second handoff interval, the
 host types one fixed nonsecret proof which cannot contain its required response.
 The proof clears and homes the VT itself before printing a bold marker, using
 the same pattern as the successful installed-image identity challenge. The host
-then requires `ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
+keeps full-frame OCR for privacy screening, then reads the fixed top 128 pixels
+through a private 3x nearest-neighbour enlargement; the original 1280x800 frame
+remains the screen evidence and geometry gate. It requires
+`ARCTIC-SHOWCASE-SHELL-READY` followed by the fixed
 account's real `arcticshowcase@arctic-showcase ~>` Fish prompt on an exact
-1280x800 frame. The host accepts only a complete final
-OCR line for that account with the two spellings already admitted by the
+1280x800 frame. Spaces that Tesseract inserts immediately around the marker's
+hyphens are admitted, while its four words and hyphens remain exact. The host
+accepts only a complete final OCR line for that account with the two spellings
+already admitted by the
 successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
 suffix on separate rows, or the greeting's own `user@host` info row, cannot
 satisfy this gate. It requires a second unchanged exact frame with the response
