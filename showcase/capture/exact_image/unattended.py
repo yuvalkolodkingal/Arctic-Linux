@@ -342,6 +342,10 @@ def live_install(timeout: int):
         pages = ("welcome", "keyboard", "timezone", "disk", "encryption",
                  "account", "apps", "summary")
         values = {
+            # Select the language explicitly.  The exact image can expose the
+            # Welcome page before its suggested locale has reached the QML
+            # page, so page readiness alone does not imply a valid choice.
+            "welcome": {"language": "en_US.UTF-8"},
             "keyboard": {"layout": "us", "variant": ""},
             "network": {"offline": False},
             "disk": {"disk": "/dev/vda", "mode": "erase"},

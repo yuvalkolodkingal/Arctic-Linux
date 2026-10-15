@@ -155,6 +155,7 @@ class GuestAutomation(unittest.TestCase):
         account = types.SimpleNamespace(pw_uid=1000, pw_name="liveuser", pw_dir="/home/liveuser")
         index = {"value": 0}
         fills = []
+        filled = set()
         channel_rows = []
 
         def ipc(_account, _environment, _pid, method, payload=None):
@@ -162,9 +163,14 @@ class GuestAutomation(unittest.TestCase):
                 page = pages[index["value"]]
                 return json.dumps({"page": page, "current": page, "ready": True,
                                    "connected": True, "busy": False, "failure": "",
-                                   "valid": True, "percent": 100 if page == "done" else 0})
+                                   # Reproduce the exact-image race: Welcome
+                                   # can be ready before its suggested locale
+                                   # makes the page valid.
+                                   "valid": page != "welcome" or page in filled,
+                                   "percent": 100 if page == "done" else 0})
             if method == "fill":
                 fills.append((pages[index["value"]], payload))
+                filled.add(pages[index["value"]])
                 return "ok"
             index["value"] += 1
             return "ok"
@@ -282,6 +288,7 @@ class GuestAutomation(unittest.TestCase):
                       "account", "apps", "summary", "done"))
         fills, rows = self._run_installer(pages)
         choices = dict(fills)
+        self.assertEqual(choices["welcome"], {"language": "en_US.UTF-8"})
         self.assertEqual(choices["network"], {"offline": False})
         self.assertEqual(choices["disk"], {"disk": "/dev/vda", "mode": "erase"})
         self.assertEqual(choices["encryption"], {"enabled": False})
