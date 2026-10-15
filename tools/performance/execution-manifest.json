@@ -1,14 +1,35 @@
 {
+  "schema": "arctic-external-paired-plan-v1",
+  "ready": true,
+  "release_acceptance": false,
+  "performance_mode": "frozen-external-paired-v1",
+  "image": {
+    "run_id": 38684683083,
+    "artifact_id": 11951877248,
+    "archive_bytes": 1936360758,
+    "archive_sha256": "b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182",
+    "source_sha": "3152dbfd7a1844117dfb15aa8dd160bb811e8b54",
+    "name": "Arctic-Linux-1.2-candidate-38684683083-1-x86_64.iso",
+    "bytes": 1936173056,
+    "sha256": "55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59"
+  },
   "baseline": {
-    "bytes": 2322073600,
     "name": "Arctic-Linux-1.2-x86_64.iso",
-    "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
-    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f"
+    "bytes": 2322073600,
+    "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f",
+    "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d"
   },
   "candidate_source_files": {
     "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
     "shell/AppsService.qml": "3d5c34c6a79fd5c24c1f733792ef56816089f38678a187337a13f2964c92116e",
     "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
+  },
+  "observer": {
+    "source_sha256": "ce98623d1048966bc3e9b29d2c5f7e432dfe2cf0881a591a44e3af0c68cd55a7",
+    "frozen_sha256": "aa9c19353cecc8780a769b36b80a0184328e0d52debb229802a0261f52dbf40d",
+    "comparator_sha256": "588cf0fe74e9035ed029c7865b042010806d487e9057f7bf3c7f2b25b46b6126"
   },
   "execution_files": {
     ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
@@ -27,16 +48,6 @@
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "79f54a55f7a5cc87ef5c9668163ce4f21985c15f4f3afee7a9afdcd28ee0fa23",
     "tools/performance/run-paired.py": "0cc758d08b28b5b67fb58e178e963ca4b513063c6c6160d9e08900b1e183496f",
-    "tools/test-install.sh": "1b95b20a9a8693e59b15b8d7d5db859f359083d79ca05bc707f50e00b9105080"
-  },
-  "image": null,
-  "observer": {
-    "comparator_sha256": "588cf0fe74e9035ed029c7865b042010806d487e9057f7bf3c7f2b25b46b6126",
-    "frozen_sha256": "aa9c19353cecc8780a769b36b80a0184328e0d52debb229802a0261f52dbf40d",
-    "source_sha256": "ce98623d1048966bc3e9b29d2c5f7e432dfe2cf0881a591a44e3af0c68cd55a7"
-  },
-  "performance_mode": "frozen-external-paired-v1",
-  "ready": false,
-  "release_acceptance": false,
-  "schema": "arctic-external-paired-plan-v1"
+    "tools/test-install.sh": "dabe05fe9d7decbbce01a0ce32e9d3aa75251da053a2a39f877bf2b759448ce5"
+  }
 }
