@@ -10,7 +10,7 @@
     "tools/reliability/guest.py": "d59c5ac1c40849a8c136788dc1c3fcd12298f76d4469c6240bdaaf7a97b367b5",
     "tools/reliability/profiles/lightweight.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
     "tools/reliability/report.py": "c1732ebc40779682ca839bd86ce22722fda6183554db08e8077e2bd5a1403900",
-    "tools/test-install.sh": "dabe05fe9d7decbbce01a0ce32e9d3aa75251da053a2a39f877bf2b759448ce5"
+    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
   },
   "image": {
     "archive_bytes": 1936360758,
