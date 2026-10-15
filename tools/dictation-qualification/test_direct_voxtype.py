@@ -116,6 +116,7 @@ enabled = false
 mode = "local"
 model = "/opt/arctic/voxtype/models/ggml-small.bin"
 language = ["he", "en"]
+on_demand_loading = false
 [output]
 mode = "type"
 driver_order = ["wtype"]
