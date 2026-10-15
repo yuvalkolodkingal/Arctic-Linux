@@ -121,12 +121,9 @@ language samples, reused boots/disks and a single hardware profile all fail the
 contract.
 
 Only validated transcript-free JSON, fixture provenance, execution identities
-and two empty-receiver indicator PNGs per hardware lane may be uploaded. The
-modern lane additionally uploads four transcript-free Arctic Settings PNGs:
-the actionable Vulkan error and explicit CPU-ready state from both installed
-sessions. Every image is bound to the exact ISO, installation, boot and checked
-gate, and publication requires a separate visual review. Raw serial logs,
-journals, audio, references, GTK receiver files and hypotheses remain private.
+and the two empty-receiver indicator PNGs per hardware lane may be uploaded.
+Raw serial logs, journals, audio, references, GTK receiver files and hypotheses
+remain private.
 
 Run source controls with:
 

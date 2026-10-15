@@ -65,9 +65,6 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
             observed['returncode'] = 7
         if name == 'recording-status-published':
             observed.update(snapshot_sha256='d' * 64, sha256='e' * 64)
-        if name == c.MODERN_GPU_GATE:
-            observed.update(gpu_failure_capture_ack_sha256='1' * 64,
-                            cpu_ready_capture_ack_sha256='2' * 64)
         if name == 'transcript-log-notification-leak-scan':
             observed['count'] = 12
         if name == 'no-new-avcs':
@@ -123,29 +120,11 @@ class ContractControls(unittest.TestCase):
         gate['observations']['failed_attempt_inserted'] = True
         self.rejects(report, 'gate-contradictory-or-missing-observations')
 
-    def test_modern_gpu_gate_requires_both_recovery_screen_acknowledgements(self):
-        for key in ('gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256'):
-            report = synthetic('online-installed')
-            gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
-            del gate['observations'][key]
-            self.rejects(report, 'recovery-screen-evidence-missing')
-        report = synthetic('online-installed')
-        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
-        gate['observations']['cpu_ready_capture_ack_sha256'] = 'not-a-digest'
-        self.rejects(report, 'gate-observation-hash')
-        report = synthetic('online-installed')
-        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
-        gate['observations']['cpu_ready_capture_ack_sha256'] = gate['observations']['gpu_failure_capture_ack_sha256']
-        self.rejects(report, 'recovery-screen-evidence-missing')
-
     def test_legacy_lane_cannot_claim_vulkan(self):
         report = synthetic('online-installed', profile='small-v2')
         ids = {gate['id'] for gate in report['gates']}
         self.assertIn(c.LEGACY_GPU_GATE, ids)
         self.assertNotIn(c.MODERN_GPU_GATE, ids)
-        legacy = next(gate for gate in report['gates'] if gate['id'] == c.LEGACY_GPU_GATE)
-        self.assertNotIn('gpu_failure_capture_ack_sha256', legacy['observations'])
-        self.assertNotIn('cpu_ready_capture_ack_sha256', legacy['observations'])
 
     def test_transcript_fields_and_arbitrary_codes_are_rejected(self):
         report = synthetic(); report['transcript'] = 'private sentence'
@@ -165,41 +144,6 @@ class ContractControls(unittest.TestCase):
         self.assertEqual(c.validate(report, report['context'])['status'], 'failed')
         gate.update(status='unrun', code='gate-' + gate['id'] + '-invalid')
         self.rejects(report, 'gate-code-status')
-
-    def test_dependent_unrun_gates_require_a_concrete_source_owned_failure(self):
-        report = synthetic('online-installed')
-        failed, dependent = report['gates'][:2]
-        failed.update(status='failed', code='gate-' + failed['id'] + '-invalid', observations={})
-        dependent.update(status='unrun', code='prerequisite-or-collector-failed', observations={})
-        report['status'] = 'failed'
-        result = c.validate(report, report['context'], fixture_manifest=FIXTURES)
-        self.assertEqual(result['status'], 'failed')
-        self.assertFalse(result['release_acceptance'])
-        with self.assertRaisesRegex(c.Invalid, '^image-dictation-gates-incomplete$'):
-            c.validate_report(report, report['context'], FIXTURES)
-
-        no_failure = synthetic('online-installed')
-        no_failure['gates'][0].update(
-            status='unrun', code='prerequisite-or-collector-failed', observations={})
-        no_failure['status'] = 'failed'
-        self.rejects(no_failure, 'gate-code-status')
-
-    def test_dependent_unrun_cannot_mask_hostile_or_accepting_reports(self):
-        for mutation, code in (
-                (lambda report: report.update(status='passed'), 'gate-code-status'),
-                (lambda report: report.update(release_acceptance=True), 'report-schema-scope'),
-                (lambda report: report['gates'][1].update(code='private-transcript'),
-                 'gate-code-status'),
-                (lambda report: report['gates'][0].update(code='attackercontrolledtoken'),
-                 'gate-code-status')):
-            report = synthetic('online-installed')
-            report['gates'][0].update(
-                status='failed', code='gate-' + report['gates'][0]['id'] + '-invalid', observations={})
-            report['gates'][1].update(
-                status='unrun', code='prerequisite-or-collector-failed', observations={})
-            report['status'] = 'failed'
-            mutation(report)
-            self.rejects(report, code)
 
     def test_exact_binary_model_and_fixture_pins_are_required(self):
         report = synthetic('online-installed')

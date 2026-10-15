@@ -733,10 +733,10 @@ MAPPING_PROFILES += (
 )
 # candidate-profile-315bc-end
 
-# candidate-profile-f19e-begin
+# candidate-profile-fe154-begin
 MAPPING_PROFILES += (
-    dict(executable_sha256='f19e61512a2dbfc97b470edc7ae302fd442c1bbaa03487453935c3ae24853b28',
-         native_audit_sha256='ac2f38f3095efcfeac1bf859d45fe1f8717c37566c55df1f75fbefd4c301059b',
+    dict(executable_sha256='fe1541fc78c09ff31dceddd98bcd47533d2ed02450e6b47a3ef3fc515ca9bf7c',
+         native_audit_sha256='58565fc381904752561f68b3246aeb38e85709b4d04b9f73282f01ada9e05646',
          function_file_offset=0x43110, function_size=4109,
          function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
          instruction_file_offset=0x4361e, client_ext_offset=1584,
@@ -748,55 +748,4 @@ MAPPING_PROFILES += (
          xwayland_type=2, xwayland_class_offset=144),
 
 )
-# candidate-profile-f19e-end
-
-# candidate-profile-9c442-begin
-MAPPING_PROFILES += (
-    dict(executable_sha256='9c44252b7651a3fac5251c93e9aa82999f1b3008b71aae9e53a81497e9168e71',
-         native_audit_sha256='9d26315c26453714c74004eae59b9c09a5fb2b5a4ab393c1846af521d5d4b5dc',
-         function_file_offset=0x43110, function_size=4109,
-         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
-         instruction_file_offset=0x4361e, client_ext_offset=1584,
-         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
-         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
-         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
-         client_type_offset=0, client_surface_offset=328, xdg_type=0,
-         xdg_toplevel_offset=56, xdg_appid_offset=192,
-         xwayland_type=2, xwayland_class_offset=144),
-
-)
-# candidate-profile-9c442-end
-
-# candidate-profile-9a88-begin
-MAPPING_PROFILES += (
-    dict(executable_sha256='9a88aa4b6e9bc47ee33a876e9f922af884f6d645abf063ef56874bdd30edee65',
-         native_audit_sha256='2c4aa538589935b4b23b68007bb0b2ef5c667c61c5c7ddda98e8ab6aaa1701b4',
-         function_file_offset=0x43110, function_size=4109,
-         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
-         instruction_file_offset=0x4361e, client_ext_offset=1584,
-         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
-         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
-         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
-         client_type_offset=0, client_surface_offset=328, xdg_type=0,
-         xdg_toplevel_offset=56, xdg_appid_offset=192,
-         xwayland_type=2, xwayland_class_offset=144),
-
-)
-# candidate-profile-9a88-end
-
-# candidate-profile-0d5fec-begin
-MAPPING_PROFILES += (
-    dict(executable_sha256='0d5fec706197207d735c0c5f640d049f334e1ea495f0005bcedfb27911afc51e',
-         native_audit_sha256='26c5b33251d2cfcf242d39762ca98ab70e3995062a2cb58c41729c6a2e121a04',
-         function_file_offset=0x43110, function_size=4109,
-         function_sha256='3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc',
-         instruction_file_offset=0x4361e, client_ext_offset=1584,
-         lower_instruction_file_offsets=dict(tail=0x43619, head=0x43773, scroller=0x43da3),
-         ipc_function_file_offset=0x6b00, ipc_function_size=1234,
-         ipc_function_sha256='11c0701eafb910c98f526a26d1926077f94bd411c7739db7066b6ba0742f7ead',
-         client_type_offset=0, client_surface_offset=328, xdg_type=0,
-         xdg_toplevel_offset=56, xdg_appid_offset=192,
-         xwayland_type=2, xwayland_class_offset=144),
-
-)
-# candidate-profile-0d5fec-end
+# candidate-profile-fe154-end

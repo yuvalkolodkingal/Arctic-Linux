@@ -205,12 +205,6 @@ class PublicEvidenceTests(unittest.TestCase):
                 ('zip', '7z', 'tar', 'tar.gz', 'tar.bz2', 'tar.xz', 'tar.zst', 'cpio', '7z-encrypted'))):
             self.assertIn(directory + '/nested directory/hello world.txt', G.NATIVE_PUBLIC_EVIDENCE_FILES)
             self.assertIn(directory + '/Unicode-\u05e9.txt', G.NATIVE_PUBLIC_EVIDENCE_FILES)
-        self.assertEqual(
-            {name for name in G.NATIVE_PUBLIC_EVIDENCE_FILES
-             if name == '0-controlled-renderer-trials.json' or name.startswith('renderer-trial-')},
-            {'0-controlled-renderer-trials.json',
-             'renderer-trial-gl/reference.png', 'renderer-trial-ngl/reference.png',
-             'renderer-trial-cairo/reference.png', 'renderer-trial-vulkan/reference.png'})
         self.assertEqual(hashlib.sha256((HERE / 'native_smoke.py').read_bytes()).hexdigest(), E.NATIVE_SOURCE_SHA)
 
     def test_unknown_public_names_aliases_and_private_symlinks_fail_before_bulk(self):

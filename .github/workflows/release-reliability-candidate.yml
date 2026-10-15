@@ -34,11 +34,10 @@ jobs:
           fetch-depth: 2
           persist-credentials: false
       - name: Verify marker-only activation and reviewed execution inventory
-        id: reviewed
-        run: python3 -B tools/reliability/exact-artifact.py verify --manifest tools/reliability/exact-artifact-manifest.json --github-output "$GITHUB_OUTPUT"
+        run: python3 -B tools/reliability/exact-artifact.py verify --manifest tools/reliability/exact-artifact-manifest.json
       - name: Require KVM and bounded host resources
         run: |
-          mkdir -p "$EVIDENCE/candidate"
+          mkdir -p "$EVIDENCE/candidate" "$EVIDENCE/candidate-iso"
           { df -h .; free -m; nproc; ls -l /dev/kvm; } > "$EVIDENCE/resources.txt" 2>&1
           test -c /dev/kvm
           sudo chmod a+rw /dev/kvm
@@ -49,10 +48,10 @@ jobs:
       - name: Live boot, blank disk install, installed boot and smoke checks
         timeout-minutes: 75
         run: |
-          iso="$EVIDENCE/candidate-iso/iso/${{ steps.reviewed.outputs.candidate_name }}"
-          test -f "$iso" && test ! -L "$iso"
+          iso=("$EVIDENCE"/candidate-iso/iso/*.iso)
+          test "${#iso[@]}" -eq 1
           timeout --signal=TERM --kill-after=60s 70m tools/test-install.sh \
-            --iso "$iso" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
+            --iso "${iso[0]}" --firmware "$FIRMWARE" --kvm --memory 4096 --smp 2 \
             --boot-append '' --boot-network online --install-timeout 2400 \
             --reliability-version 1.2 --reliability-app-profile lightweight \
             --out "$EVIDENCE/candidate"

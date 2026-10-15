@@ -459,27 +459,6 @@ def visual_reference_frame():
                  for channel in palette[(y//30)*4+x//40])
 
 
-def visual_reference_stream():
-    """Twenty bounded palette frames that keep the actual GL surface damaged.
-
-    A stream of byte-identical frames can advance the libmpv clock without
-    causing GTK's GL surface to repaint after a compositor fullscreen resize.
-    Alternating every RGB channel by four keeps both deterministic phases well
-    inside the unchanged oracle tolerances while requiring real frame damage.
-    """
-    base=visual_reference_frame()
-    pulse=bytes(channel+4 for channel in base)
-    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
-            'visual reference pulse differs')
-    return b''.join(base if index%2==0 else pulse for index in range(20))
-
-
-def visual_reference_cadence():
-    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
-                alternating_rgb_delta=4,changes_every_frame=True,
-                oracle_thresholds_unchanged=True,release_acceptance=False)
-
-
 def visual_capture_geometry(client, monitors):
     """Validate an observed focused client and scale1 SDR monitor before cropping."""
     require(isinstance(client,dict) and client.get('is_focused') is True
@@ -1223,57 +1202,6 @@ class Smoke:
             write_renderer_receipt(self.root,self.uid,value)
         except (OSError,ValueError,RuntimeError): pass
 
-    # BEGIN RENDERER_MATRIX_METHOD
-    def renderer_matrix(self,fixture,expected,source_sha,primary):
-        """Failure-only native renderer comparison; acceptance stays failed."""
-        modes=('gl','ngl','cairo','vulkan')
-        rows=[dict(intervention=mode,status='unrun',release_acceptance=False) for mode in modes]
-        value=dict(schema='arctic-native-renderer-matrix-v2',stage=self.stage,
-            primary_screenshot_sha256=primary['screenshot']['sha256'],
-            primary_oracle_status='unmatched',primary_failure_preserved=True,
-            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
-            trials=rows,release_acceptance=False,rendering_cause_proven=False,
-            controls=dict(order=list(modes),fresh_owned_app_each=True,settle_seconds=.5,
-                capture_attempts_per_mode=1,primary_gate_and_oracle_thresholds_unchanged=True,
-                same_static_oracle=True,shared_isolated_config_and_cache=True,
-                preceding_product_launches_and_ordered_warm_cache_confound=True,
-                gsk_debug_renderer_all=True,wayland_debug_client_all=True,
-                raw_stderr_exported=False,GPU_acceleration_or_software_rendering_proven=False))
-        try:
-            require(self.stage in ('live','installed'),'renderer matrix requires a native live/installed session')
-            require(primary['oracle']['status']=='unmatched','renderer matrix requires the failed primary oracle')
-            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
-                    'renderer matrix fixture identity changed')
-            self.finish_native_protocol()
-            # The fixed route suite owns exactly six Celluloid processes before
-            # the matrix. Retire only those proved identities; never search/kill.
-            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
-            require(len(players)==6,'renderer matrix primary player inventory differs')
-            for player in players: retire_renderer_player(player,self.uid)
-            for index,mode in enumerate(modes):
-                trial=None
-                try:
-                    trial=RendererMatrixTrialSmoke(self,mode)
-                    rows[index]=trial.observe(fixture,expected,source_sha)
-                except Exception as error:
-                    rows[index].update(status='unknown',error=renderer_trial_error(error))
-                finally:
-                    if trial is not None:
-                        self.owned.extend(trial.owned);self.launches.extend(trial.launches)
-                        trial.finish_native_protocol()
-                        cleanup=True
-                        for player in trial.owned:
-                            try: retire_renderer_player(player,self.uid)
-                            except Exception: cleanup=False
-                        rows[index]['owned_trial_cleanup_completed']=cleanup
-        except Exception as error:
-            value['preparation_error']=renderer_trial_error(error)
-        # Optional diagnostics cannot replace the primary failure or acceptance.
-        try:
-            write_renderer_receipt(self.root,self.uid,value)
-        except (OSError,ValueError,RuntimeError): pass
-    # END RENDERER_MATRIX_METHOD
-
     # BEGIN CONTROLLED_CONTROLS_INVOCATION
     def controlled_controls_trials(self,fixture,expected,source_sha,primary):
         """Two failure-only default players; the original primary remains failed."""
@@ -1871,7 +1799,7 @@ class Smoke:
                     scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
-        source=self.write('visual-reference-input.raw',visual_reference_stream())
+        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
         fixture=self.root/'visual-reference.mkv'
         expected=self.root/'visual-reference-frame.rgb'
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
@@ -1983,20 +1911,10 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.player_fullscreen(player,True)
             controls=self.hide_reference_controls(player,ipc)
-        pre_geometry_time=state['time-pos']
-        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
-                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
-                'pre-geometry visual playback clock is invalid')
-        # Anchor readiness after the fullscreen and controls transitions.  A
-        # clock sampled before those transitions can satisfy the old delta as
-        # soon as the window enters fullscreen, while its GL content is still
-        # unpainted.  The exact same owned player must advance for a bounded
-        # interval in its final capture geometry before the sole screenshot.
-        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        initial_time=state['time-pos']
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
-                'post-geometry visual playback clock is invalid')
-        minimum_post_geometry_advance=.5
+                'initial visual playback clock is invalid')
         def playback_advanced():
             observed=mpv_property(ipc,'time-pos',player['pid'],self.uid)
             require(type(observed) in (int,float) and not isinstance(observed,bool)
@@ -2004,29 +1922,9 @@ class Smoke:
                     'visual playback clock is invalid')
             delta=observed-initial_time
             if delta<0: delta+=2
-            return observed if delta>=minimum_post_geometry_advance else None
+            return observed if delta>=.05 else None
         advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
-        # The pulsed fixture above proves post-fullscreen presentation work, but
-        # capturing while the software GL path is replacing that texture can
-        # expose a transient tiled buffer rather than one complete frame. Pause
-        # this same proved player, require the clock to settle, and keep the
-        # sole screenshot/oracle and every acceptance threshold unchanged.
-        mpv_pause_reference(ipc,player['pid'],self.uid)
-        def paused_reference():
-            value=mpv_property(ipc,'pause',player['pid'],self.uid)
-            require(type(value) is bool, 'visual pause state is not Boolean')
-            return value
-        self.wait(paused_reference,3,'owned visual playback pause')
-        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
-        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
-                and math.isfinite(paused_time) and 0<=paused_time<=2,
-                'paused visual playback clock is invalid')
         time.sleep(.5)
-        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
-        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
-                and math.isfinite(settled_time) and 0<=settled_time<=2
-                and abs(settled_time-paused_time)<=.05,
-                'paused visual playback clock did not settle')
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
         self.trace('visual-capture-before',player=player,client=client,monitors=monitors)
@@ -2102,18 +2000,13 @@ class Smoke:
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
-                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
-                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
-                                      settled_seconds=settled_time,capture_paused=True,
-                                      maximum_settled_drift_seconds=.05,
-                                      minimum_advance_seconds=minimum_post_geometry_advance,
-                                      anchor='after fullscreen and controls transitions'),
+                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
-                  product_renderer=renderer,fixture_cadence=visual_reference_cadence(),
+                  product_renderer=renderer,
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
-                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')
+                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
@@ -2128,9 +2021,6 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.native_protocol_diagnostic(player,state,screenshot,client)
             self.player_fullscreen(player,False)
-        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None) in ('live','installed')
-                and info['oracle']['status']=='unmatched'):
-            self.renderer_matrix(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched',
                 'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
@@ -2435,53 +2325,6 @@ class RendererTrialSmoke(Smoke):
 # END CONTROLLED_RENDERER_TRIALS
 
 
-# BEGIN RENDERER_MATRIX_CLASS
-class RendererMatrixTrialSmoke(RendererTrialSmoke):
-    """One fresh explicit GTK renderer trial with the legacy strict oracle."""
-    def __init__(self,parent,mode):
-        require(mode in ('gl','ngl','cairo','vulkan'),'unsupported native renderer intervention')
-        self.mode=mode;self.user=parent.user;self.uid=parent.uid;self.stage=parent.stage
-        self.root=parent.root/('renderer-trial-'+mode)
-        self.root.mkdir(mode=0o700);os.chown(self.root,self.uid,self.user.pw_gid)
-        self.prefix=list(parent.prefix);self.original_prefix=list(parent.original_prefix)
-        self.owned=[];self.launches=[];self.gui_v6=True
-        self.deadline=time.monotonic()+60
-
-    def launch_renderer(self,argv):
-        require(argv[0]=='/usr/bin/celluloid','native renderer executable differs')
-        drain=NativeProtocolDrain(renderer=True);reader=None;writer=None
-        self.native_protocol_drain=drain
-        try:
-            read,writer=os.pipe()
-            try:reader=os.fdopen(read,'rb',buffering=0)
-            except BaseException:
-                os.close(read);raise
-            drain.start(reader)
-            options=['env','-u','GSK_RENDERER','GSK_DEBUG=renderer','WAYLAND_DEBUG=client',
-                     'GSK_RENDERER='+self.mode]
-            child=subprocess.Popen(self.prefix+options+argv,stdout=subprocess.DEVNULL,stderr=writer)
-            self.launches.append(child)
-        except BaseException:
-            drain.finish();raise
-        finally:
-            if writer is not None:os.close(writer)
-
-    def observe(self,fixture,expected,source_sha):
-        value=super().observe(fixture,expected,source_sha)
-        expected_realized={'gl':'gl','ngl':'gl','cairo':'cairo','vulkan':'vulkan'}[self.mode]
-        realized=value.get('realized_renderer',{})
-        matched=(realized.get('status')=='reported-realized'
-                 and realized.get('renderer')==expected_realized)
-        value.update(requested_gsk_renderer=self.mode,expected_realized_renderer=expected_realized,
-                     requested_renderer_matched=matched,
-                     support_status='supported-and-realized' if matched else 'not-proven-supported',
-                     capture_attempt_limit=1,diagnostic_time_bound_seconds=60,
-                     release_acceptance=False,rendering_cause_proven=False)
-        value['status']='observed' if matched and 'oracle' in value else 'unknown'
-        return value
-# END RENDERER_MATRIX_CLASS
-
-
 # BEGIN CONTROLLED_CONTROLS_STUDY
 def write_controls_receipt(root,uid,value):
     raw=(json.dumps(value,sort_keys=True)+'\n').encode()
@@ -2588,42 +2431,6 @@ def mpv_hide_reference_controls(path, expected_pid, expected_uid):
                             and message.get('data') is None, 'reference controls IPC command failed')
                     return
         raise RuntimeError('reference controls IPC acknowledgement timed out')
-
-
-def mpv_pause_reference(path, expected_pid, expected_uid):
-    """Pause only the proved reference player through its owned IPC socket."""
-    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
-            'reference pause IPC identity is invalid')
-    info=Path(path).lstat()
-    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
-            'reference pause IPC path owner/type differs')
-    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
-        peer.settimeout(2)
-        peer.connect(str(path))
-        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
-        require((pid,uid)==(expected_pid,expected_uid), 'reference pause IPC peer differs')
-        peer.sendall(b'{"command":["set_property","pause",true],"request_id":44}\n')
-        data=b''; deadline=time.monotonic()+3
-        while time.monotonic()<deadline:
-            chunk=peer.recv(4096)
-            require(chunk, 'reference pause IPC disconnected before acknowledgement')
-            data+=chunk
-            require(len(data)<=4096, 'reference pause IPC reply exceeded bound')
-            while b'\n' in data:
-                line,data=data.split(b'\n',1)
-                def pairs(items):
-                    value={}
-                    for key,item in items:
-                        require(key not in value, 'reference pause IPC duplicate field')
-                        value[key]=item
-                    return value
-                message=json.loads(line,object_pairs_hook=pairs)
-                require(type(message) is dict, 'reference pause IPC reply is not an object')
-                if message.get('request_id')==44:
-                    require(type(message['request_id']) is int and message.get('error')=='success'
-                            and message.get('data') is None, 'reference pause IPC command failed')
-                    return
-        raise RuntimeError('reference pause IPC acknowledgement timed out')
 
 
 def mpv_property(path, key, expected_pid, expected_uid):

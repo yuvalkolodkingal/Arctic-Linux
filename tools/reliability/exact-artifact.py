@@ -124,17 +124,6 @@ def validate_activation(manifest_path):
     return manifest, marker, head
 
 
-def write_github_output(path, manifest):
-    """Expose only the already validated, filename-safe candidate identity."""
-    image = manifest['image']
-    name = image['name']
-    require(name == f"Arctic-Linux-1.2-candidate-{image['run_id']}-1-x86_64.iso"
-            and Path(name).name == name,
-            'Pinned candidate filename is unsafe')
-    with Path(path).open('a', encoding='utf-8') as output:
-        output.write('candidate_name=' + name + '\n')
-
-
 def validate_results(value):
     require(type(value) is list and len(value) == len(AUTOMATED) + len(UNRUN),
             'Reliability result inventory differs')
@@ -231,7 +220,6 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     verify = sub.add_parser('verify')
     verify.add_argument('--manifest', type=Path, required=True)
-    verify.add_argument('--github-output', type=Path)
     collect_parser = sub.add_parser('collect')
     collect_parser.add_argument('--manifest', type=Path, required=True)
     collect_parser.add_argument('--results', type=Path, required=True)
@@ -241,8 +229,6 @@ def main():
     args = parser.parse_args()
     if args.command == 'verify':
         manifest, _, _ = validate_activation(args.manifest)
-        if args.github_output is not None:
-            write_github_output(args.github_output, manifest)
         print(manifest['image']['source_sha'])
     else:
         collect(args.manifest, args.results, args.public_results, args.out, args.firmware)

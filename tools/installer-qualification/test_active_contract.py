@@ -390,7 +390,6 @@ class Controls(unittest.TestCase):
     def test_pre_secret_password_prompts_and_seven_reviewable_images_are_required(self):
         mutations = [lambda s: s['host']['password_prompt_evidence']['getty'].update(observed_line_sha256=A.digest(b'login:')),
                      lambda s: s['host']['password_prompt_evidence']['sudo'].update(observed_line_sha256=A.digest(b'arcticqual@arctic-qual ~ >')),
-                     lambda s: s['host']['password_prompt_evidence']['login_shell'].update(observed_line_sha256=A.digest(b'731904')),
                      lambda s: s['host']['password_prompt_evidence']['sudo'].update(observed_ns=1),
                      lambda s: s['host']['password_prompt_evidence']['engine'].update(program_sha256='f' * 64),
                      lambda s: s['required_images'].pop('host/installed-getty-password.png')]

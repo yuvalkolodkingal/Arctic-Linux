@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static observer profile for producer 38684683083; runtime acceptance remains pending."""
+"""Static observer profile for diagnostic producer 38707130991; runtime acceptance remains pending."""
 import hashlib
 import importlib.util
 import json
@@ -7,9 +7,9 @@ from pathlib import Path
 import unittest
 
 ROOT = Path(__file__).parents[2]
-EXECUTABLE_SHA256 = '0d5fec706197207d735c0c5f640d049f334e1ea495f0005bcedfb27911afc51e'
+EXECUTABLE_SHA256 = 'fe1541fc78c09ff31dceddd98bcd47533d2ed02450e6b47a3ef3fc515ca9bf7c'
 AUDIT = ROOT / 'tools/performance/mango-audits' / (EXECUTABLE_SHA256 + '.json')
-AUDIT_SHA256 = '26c5b33251d2cfcf242d39762ca98ab70e3995062a2cb58c41729c6a2e121a04'
+AUDIT_SHA256 = '58565fc381904752561f68b3246aeb38e85709b4d04b9f73282f01ada9e05646'
 
 
 def load(name, relative):
@@ -36,14 +36,14 @@ class ReleaseImageMangoProfileControls(unittest.TestCase):
         self.assertEqual(record['status'],
                          'candidate-specific-static-profile-admitted-pending-runtime')
         self.assertEqual(record['candidate'], {
-            'build_id': '1e1f8b3767e99f77dbfe7a0e008f596daf0f274d',
-            'bytes': 530784,
+            'build_id': '279e666e61c0e40a15b4335301c36652af0f274d',
+            'bytes': 530776,
             'elf_class': 'ELF64',
             'executable_pt_load': {'file_bytes': 396989, 'file_offset': 0,
                 'flags': 'R E', 'memory_bytes': 396989, 'virtual_address': 0},
             'machine': 'x86_64',
             'path': '/usr/bin/mango',
-            'rpm_nevra': 'mangowm-0.17.3-1.preview.38684683083.1.git3152dbf.fc44.x86_64',
+            'rpm_nevra': 'mangowm-0.17.3-1.preview.38707130991.1.gitfc501fd.fc44.x86_64',
             'rpmdb_file_digest_verified': True,
             'sha256': EXECUTABLE_SHA256,
             'text': {'bytes': 375664, 'file_offset': 21312,
@@ -54,36 +54,36 @@ class ReleaseImageMangoProfileControls(unittest.TestCase):
             'producer_run_id', 'producer_run_attempt', 'producer_source_sha',
             'producer_artifact_id', 'producer_artifact_bytes', 'producer_artifact_sha256',
             'producer_receipt_sha256', 'iso_bytes', 'iso_sha256')}, {
-            'producer_run_id': 38684683083,
+            'producer_run_id': 38707130991,
             'producer_run_attempt': 1,
-            'producer_source_sha': '3152dbfd7a1844117dfb15aa8dd160bb811e8b54',
-            'producer_artifact_id': 11951877248,
-            'producer_artifact_bytes': 1936360758,
+            'producer_source_sha': 'fc501fdf90c17c617b15b8b13038d062d519fcc6',
+            'producer_artifact_id': 11961831325,
+            'producer_artifact_bytes': 1936373046,
             'producer_artifact_sha256':
-                'b632e49c06a6b2ac04b0ba1899aea7e5db0523799d51b0205cb6646683338182',
+                '1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3',
             'producer_receipt_sha256':
-                '73ebd64e72fe5ec39e705a517104f9970e36b0007379a35ebe40e718c83a3c59',
-            'iso_bytes': 1936173056,
+                '9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4',
+            'iso_bytes': 1936185344,
             'iso_sha256':
-                '55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4',
+                '92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66',
         })
         self.assertEqual({key: provenance[key] for key in (
             'static_run_id', 'static_run_attempt', 'static_execution_sha',
             'static_parent_sha', 'static_artifact_id', 'static_artifact_bytes',
             'static_artifact_sha256', 'static_report_sha256',
             'static_execution_manifest_sha256')}, {
-            'static_run_id': 38690632439,
+            'static_run_id': 38715312294,
             'static_run_attempt': 1,
-            'static_execution_sha': 'cb9e5dc5159339b58b8506ec4d257367e61b4b0e',
-            'static_parent_sha': '9376204abfcfa06eac58e14b9e5838af475fc724',
-            'static_artifact_id': 11951454279,
-            'static_artifact_bytes': 3731640,
+            'static_execution_sha': '0a1df4d9a24d8b21a0562b0bf3851feba2dffe6b',
+            'static_parent_sha': '365eebced619cb12f74ab95ed2da937d8ecea42c',
+            'static_artifact_id': 11962866705,
+            'static_artifact_bytes': 3731615,
             'static_artifact_sha256':
-                '93c46c5950e5bf97837ae2093f98b07c711cd9df91f0ff3fba8ceb542ab3153e',
+                '95eca61a5c358dc28756293bd08da6a9fbdf5d96379d49f185e1d40488c9a24b',
             'static_report_sha256':
-                '37893518dbb49f9b2e44c71869b1fcfc37aca7b05299ee3938fa9c97bd612160',
+                '3320a1d0c82184e0337fdbb1512f3eebc04bf3f166ea33698bc6d73c94fe243e',
             'static_execution_manifest_sha256':
-                'b0a8e90b9ef644f47e7c5944b93d3fea07679a0e6bdabfbc936285d6daa27165',
+                '99f0e5a8e9e1a61c6b86987fe802094ac7a1188d1f87747074e7e69fce7af932',
         })
 
     def test_machine_code_cfg_role_getter_and_abi_are_exact(self):
@@ -156,6 +156,10 @@ class ReleaseImageMangoProfileControls(unittest.TestCase):
         self.assertTrue(gates['exactly_six_boots_required'])
         self.assertTrue(gates['zero_event_loss_required'])
         self.assertFalse(gates['samples_dropped'])
+        manifest = json.loads((ROOT / 'tools/performance/execution-manifest.json').read_text())
+        self.assertIs(manifest['ready'], False)
+        self.assertIsNone(manifest['image'])
+        self.assertIs(manifest['release_acceptance'], False)
         source = (ROOT / 'tools/performance/compare.py').read_text()
         self.assertIn('limit = min(.005, sample * .025)', source)
         self.assertIn("if set(runs) != {'baseline', 'candidate'} or any(len(group) != 3", source)

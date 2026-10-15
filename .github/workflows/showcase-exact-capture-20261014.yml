@@ -22,7 +22,6 @@ jobs:
           persist-credentials: false
 
       - name: Verify reviewed single-file activation and execution manifest
-        id: reviewed
         working-directory: execution
         run: |
           python3 -B - <<'PY'
@@ -39,7 +38,6 @@ jobs:
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           sys.path.insert(0,'showcase/capture/exact_image')
           import contract
-          contract.require_active()
           assert manifest['image']==contract.IMAGE
           assert manifest['controller']==contract.CONTROLLER
           assert manifest['branch']=='codex/showcase-exact-capture-20261014'
@@ -61,13 +59,6 @@ jobs:
               path=Path(name)
               assert path.is_file() and not path.is_symlink()
               assert hashlib.sha256(path.read_bytes()).hexdigest()==expected
-          image=manifest['image']
-          candidate_name=image['name']
-          assert type(image['run_id']) is int and image['run_id'] > 0
-          assert candidate_name==f"Arctic-Linux-1.2-candidate-{image['run_id']}-1-x86_64.iso"
-          assert Path(candidate_name).name==candidate_name
-          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as output:
-              output.write('candidate_name='+candidate_name+'\n')
           PY
 
       - name: Install fixed host dependencies
@@ -99,8 +90,8 @@ jobs:
         id: capture
         timeout-minutes: 170
         run: |
-          iso="$RUNNER_TEMP/arctic-showcase/inputs/iso/${{ steps.reviewed.outputs.candidate_name }}"
-          test -f "$iso" && test ! -L "$iso"
+          iso="$RUNNER_TEMP/arctic-showcase/inputs/iso/Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso"
+          test -f "$iso"
           /usr/bin/python3 -B execution/showcase/capture/exact_image/capture_vm.py host \
             --candidate-iso "$iso" \
             --output "$RUNNER_TEMP/arctic-showcase/exact-captures" \

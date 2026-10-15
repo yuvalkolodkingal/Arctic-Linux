@@ -369,20 +369,18 @@ class DrainAndExportControls(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
-            time_values=iter((0,.2,.8,.8,.8,.8));pause_values=iter((False,True))
+            time_calls={100:0}
             def prop(path,key,pid,uid):
-                if key=='pause':return next(pause_values)
                 if key!='time-pos':return {'video-params':{'w':160,'h':120},'path':str(fixture),
-                    'current-vo':'libmpv'}[key]
-                return next(time_values)
+                    'pause':False,'current-vo':'libmpv'}[key]
+                time_calls[pid]+=1
+                return 0 if time_calls[pid]==1 else .2
             with socket.socket(socket.AF_UNIX) as endpoint:
                 endpoint.bind(str(smoke.root/'visual-reference-ipc.sock'))
-                with patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N.time,'sleep') as sleep:
+                with patch.object(N,'mpv_property',side_effect=prop),patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media()
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5)])
-            pause.assert_called_once_with(smoke.root/'visual-reference-ipc.sock',proofs[0]['pid'],smoke.uid)
             self.assertEqual(next(c for c in commands if c[0]=='grim')[:3],['grim','-o','fixture'])
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True))
             self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False))

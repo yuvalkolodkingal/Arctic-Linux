@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     # Sequential phase limits allow 8m host dependencies + 15m artifact fetch
     # + 20m VM provisioning + 15m taskbar tool compilation + 180m harness.
-    # The failure-only renderer matrix supplements either frozen native stage.
+    # The installed matrix supplements every frozen original native gate.
     # Leave time for verification,
     # cleanup and screened evidence without changing any acceptance limit.
     timeout-minutes: 270

@@ -40,22 +40,6 @@ def restore_native_bulk_driver(driver):
         if driver.count(addition) != 1:
             raise AssertionError('Native bulk rollback requires one exact addition')
         driver = driver.replace(addition, '', 1)
-    recovery_state = 'dictation_indicator_seen = False\ndictation_recovery_seen = set()\n'
-    recovery_state_original = 'dictation_indicator_seen = False\n'
-    recovery_call = '                dictation_poll("recovery", dictation_recovery_poll, vm)\n'
-    recovery_start = 'def dictation_recovery_poll(vm):\n'
-    recovery_end = 'taskbar_display_module = None\n'
-    if (driver.count(recovery_state) != 1 or driver.count(recovery_call) != 1
-            or driver.count(recovery_start) != 1 or driver.count(recovery_end) != 1):
-        raise AssertionError('Dictation recovery rollback requires exact additions')
-    start = driver.index(recovery_start)
-    end = driver.index(recovery_end, start)
-    recovery_block = driver[start:end]
-    if sha(recovery_block.encode()) != 'bcde3a47560330c3d1490c77c43fa25b41fcc283216d7105d4705fb6c1961791':
-        raise AssertionError('Dictation recovery rollback requires the exact helper block')
-    driver = driver[:start] + driver[end:]
-    driver = driver.replace(recovery_state, recovery_state_original, 1)
-    driver = driver.replace(recovery_call, '', 1)
     pending_current = '    if len(pending)>65536:\n        # The original functional report is a single complete JSON record and\n        # can legitimately grow beyond the controller request-line bound.\n        # Only that exact prefix gets a separate finite in-progress allowance;\n        # final parsing still requires valid JSON, one newline and the END receipt.\n        if pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL "):\n            if len(pending)>4*1024*1024:\n                raise RuntimeError("physical functional report pending bound exceeded")\n            return True\n        raise RuntimeError("physical unfinished line bound exceeded")\n'
     pending_original = '    if len(pending)>65536:raise RuntimeError("physical unfinished line bound exceeded")\n'
     if driver.count(pending_current) != 1:
@@ -117,7 +101,7 @@ class BulkTransportControls(unittest.TestCase):
         driver = shell.split("DRIVER <<'PY' || true\n", 1)[1].split('\nPY\n', 1)[0]
         restored = restore_native_bulk_driver(driver)
         original = shell.replace(driver, restored, 1)
-        self.assertEqual(sha(original.encode()), '5fae8fad9c4d4ad664967723044d3c764a48ece083fefc03dba3bc0e8a3c6223')
+        self.assertEqual(sha(original.encode()), '1b51c4242b2ace099af284aa01c8f1b5617c02049a42dbd5fad137767ba5b744')
         for before, after in [('name=arctic-native-evidence', 'name=arctic-native-evidence-mutated'),
                               ('def record_native_stop(', 'def record_native_stop_mutated('),
                               ('            record_native_stop(vm,"install",t,install_timeout,rc)\n', ''),
@@ -151,16 +135,7 @@ class BulkTransportControls(unittest.TestCase):
                               ('pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL ")',
                                'pending.startswith(b"ARCTIC-NATIVE-FUNCTIONAL-MUTATED ")'),
                               ('if len(pending)>4*1024*1024:',
-                               'if len(pending)>8*1024*1024:'),
-                              ('dictation_recovery_seen = set()',
-                               'dictation_recovery_seen = {}'),
-                              ('def dictation_recovery_poll(vm):',
-                               'def dictation_recovery_poll_mutated(vm):'),
-                              ('                dictation_poll("recovery", dictation_recovery_poll, vm)\n', ''),
-                              ('dictation_poll("recovery", dictation_recovery_poll, vm)',
-                               'dictation_poll("indicator", dictation_recovery_poll, vm)'),
-                              ('dictation_poll("recovery", dictation_recovery_poll, vm)',
-                               'dictation_poll("recovery", dictation_indicator_poll, vm)')]:
+                               'if len(pending)>8*1024*1024:')]:
             with self.subTest(mutation=before):
                 self.assertEqual(driver.count(before), 1)
                 with self.assertRaises(AssertionError):

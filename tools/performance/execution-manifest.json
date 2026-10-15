@@ -1,53 +1,16 @@
 {
   "schema": "arctic-external-paired-plan-v1",
-  "ready": true,
+  "ready": false,
   "release_acceptance": false,
   "performance_mode": "frozen-external-paired-v1",
-  "image": {
-    "run_id": 38707130991,
-    "artifact_id": 11961831325,
-    "archive_bytes": 1936373046,
-    "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
-    "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
-    "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
-    "bytes": 1936185344,
-    "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
-    "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4"
-  },
+  "image": null,
   "baseline": {
     "name": "Arctic-Linux-1.2-x86_64.iso",
     "bytes": 2322073600,
     "sha256": "054db5c43cae47fb60f8f43efc8e052b569aa1b14e8f15adcb15cdc48265182f",
     "profile_sha256": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d"
   },
-  "candidate_source_files": {
-    "profiles/ci/offline.toml": "6f65135a62c397c374f367de459aed784519c2040195ee41d88300996c9b7b2b",
-    "shell/AppsService.qml": "3d5c34c6a79fd5c24c1f733792ef56816089f38678a187337a13f2964c92116e",
-    "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
-  },
-  "observer": {
-    "source_sha256": "ce98623d1048966bc3e9b29d2c5f7e432dfe2cf0881a591a44e3af0c68cd55a7",
-    "frozen_sha256": "aa9c19353cecc8780a769b36b80a0184328e0d52debb229802a0261f52dbf40d",
-    "comparator_sha256": "588cf0fe74e9035ed029c7865b042010806d487e9057f7bf3c7f2b25b46b6126"
-  },
-  "execution_files": {
-    ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
-    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
-    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
-    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
-    "tools/native-functional/screen-evidence.py": "6b3cb466aa04d3305ee38ea825c683643c11547d4ad8a7d9cd68bb1c9d459c82",
-    "tools/performance/causal.py": "48380fa99b3e9097e9c2c9057680d72d8082a9c6acbd8964bc3e8b0fa5c2e7b1",
-    "tools/performance/compare.py": "588cf0fe74e9035ed029c7865b042010806d487e9057f7bf3c7f2b25b46b6126",
-    "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
-    "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
-    "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
-    "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
-    "tools/performance/guest.py": "69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73",
-    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
-    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
-    "tools/performance/qualification.py": "79f54a55f7a5cc87ef5c9668163ce4f21985c15f4f3afee7a9afdcd28ee0fa23",
-    "tools/performance/run-paired.py": "0cc758d08b28b5b67fb58e178e963ca4b513063c6c6160d9e08900b1e183496f",
-    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
-  }
+  "candidate_source_files": {},
+  "observer": {},
+  "execution_files": {}
 }

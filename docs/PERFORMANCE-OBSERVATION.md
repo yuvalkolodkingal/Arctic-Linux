@@ -365,6 +365,33 @@ also bind the new identity/pre/post fields and nine archived kernel readbacks
 before any new research run is interpreted. No activation or image qualification
 is implied by this source change.
 
+### First complete v13 six-boot result (superseded image)
+
+[Run 38694660254](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38694660254)
+completed the frozen external lane for source `3152dbfd` and candidate SHA-256
+`55ecbc54c12b0445c354d5c00aaab2ca97deee289003b65fc0da24f4a31a09a4`.
+All 72 application brackets were valid under the unchanged precision rule; the
+widest interval was 0.713 ms, below that sample's 1.515 ms limit. All six boots,
+the 10% regression/enclosure checks and zero-loss native-receipt checks passed.
+
+The three-boot point medians reported a 3.02% lower systemd startup time, 26.21%
+less root-filesystem allocation and 1.67% lower post-workload process PSS. The
+pristine PSS median differed by only -0.014%, and normalized CPU medians include
+collector/worker costs. Application-role medians were lower, but the images use
+different applications for those roles. Three samples per image provide no
+confidence interval, host storage and shared libraries may be warm, and virtual
+KVM graphics do not represent physical hardware or gaming. A passed regression
+gate therefore establishes neither causation nor general optimization.
+
+That result predates the final VoxType integration and cannot qualify a later
+image. Static inspection
+[run 38715312294](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38715312294)
+found the diagnostic `fc501fdf` candidate's complete Mango `.text`, mapping
+function, role getter and four probe sites byte-identical to the reviewed v13
+layout while retaining a separate whole-ELF pin. This is profile preparation
+only: no performance lane was activated, and the image still needs every fresh
+six-boot check after all product gates pass.
+
 ## Frozen external qualification of an unchanged ISO
 
 The artifact-only producer embeds its Actions run ID in preview RPM versions.

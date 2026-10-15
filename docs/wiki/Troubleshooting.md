@@ -374,6 +374,11 @@ select **CPU** in Dictation settings and make a new recording. If the executable
 missing or damaged, choose **Set up / retry…** to verify and repair it. See
 [Local dictation](Local-Dictation).
 
+For a command-line readiness check, run `arctic-dictation status`; `voxtype status` reports the
+official daemon's native state. Do not paste service logs into a public issue without reviewing
+them first. Arctic suppresses known INFO-level transcript excerpts, but a log from an unverified
+or locally modified configuration can still contain private speech.
+
 ### The bar hides at the wrong time
 
 Check **Settings → Appearance → Taskbar → Visibility**. **Dodge windows** uses the updated
