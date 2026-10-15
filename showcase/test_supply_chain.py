@@ -19,21 +19,21 @@ ACTIONS = {
 
 
 class SupplyChainTest(unittest.TestCase):
-    def test_exact_capture_execution_manifest_is_bound_but_fail_closed(self):
+    def test_exact_capture_execution_manifest_matches_repository_bytes(self):
         manifest_path = ROOT / "capture/exact_image/execution-manifest.json"
         manifest = json.loads(manifest_path.read_text())
-        self.assertFalse(manifest["ready"])
+        self.assertTrue(manifest["ready"])
         self.assertEqual(manifest["image"], {
             "name": "Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso",
             "bytes": 1936185344,
             "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
             "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
             "run_id": 38707130991,
-            "artifact_id": None,
-            "archive_bytes": None,
-            "archive_sha256": None,
-            "producer_mode": None,
-            "producer_receipt_sha256": None,
+            "artifact_id": 11961831325,
+            "archive_bytes": 1936373046,
+            "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+            "producer_mode": "frozen-external-paired-v1",
+            "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
         })
         self.assertFalse(manifest["release_acceptance"])
         expected_paths = {

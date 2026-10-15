@@ -10,22 +10,23 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-The preparation is bound to the observed ISO identity from producer run
+The preparation is bound to the reviewed candidate from producer run
 `38707130991`, attempt 1, source
 `fc501fdf90c17c617b15b8b13038d062d519fcc6`: ISO
 `Arctic-Linux-1.2-candidate-38707130991-1-x86_64.iso`, size `1936185344`,
 SHA-256
 `92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66`.
-The retained artifact ID, archive size and digest, producer mode, and producer
-receipt digest are still pending review. They remain JSON `null`, the manifest
-remains `ready:false`, and `contract.require_active()` rejects this preparation.
-Those values must be filled from reviewed evidence in a later non-activation
-commit before the marker-only activation child is created.
+The retained artifact is `11961831325`, archive size `1936373046`, archive
+SHA-256
+`1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3`,
+producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
+`9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4`.
+The execution manifest is ready for a later marker-only activation and remains
+`release_acceptance:false`.
 
 The producer ran directly from final `main`
 `fc501fdf90c17c617b15b8b13038d062d519fcc6` by `workflow_dispatch`.
-Artifact retention and the producer receipt have not been reviewed. The
-activation marker remains byte-for-byte identical to the fixed remote lane.
+The activation marker remains byte-for-byte identical to the fixed remote lane.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,

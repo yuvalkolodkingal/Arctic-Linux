@@ -19,17 +19,21 @@ IMAGE = {
     "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
     "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
     "run_id": 38_707_130_991,
-    "artifact_id": None,
-    "archive_bytes": None,
-    "archive_sha256": None,
-    "producer_mode": None,
-    "producer_receipt_sha256": None,
+    "artifact_id": 11_961_831_325,
+    "archive_bytes": 1_936_373_046,
+    "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4",
 }
-# Activation stays closed until the retained artifact identity and reviewed
-# producer receipt are available.  The partial IMAGE value binds only facts
-# already observed from the producer run; it is never accepted by
-# require_active().
-REVIEWED_EXECUTION = None
+REVIEWED_EXECUTION = {
+    "repository": "yuvalkolodkingal/Arctic-Linux",
+    "workflow": ".github/workflows/iso.yml",
+    "run_id": IMAGE["run_id"],
+    "source_sha": IMAGE["source_sha"],
+    "artifact_id": IMAGE["artifact_id"],
+    "artifact_digest": "sha256:" + IMAGE["archive_sha256"],
+    "evidence": "reviewed exact candidate build; capture remains human-review pending",
+}
 SCENES = ("dictationsetup", "winter", "updates")
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",

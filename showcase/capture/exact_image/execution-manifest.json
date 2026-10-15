@@ -30,7 +30,7 @@
     "showcase/capture/exact_image/bundle.py": "693179df8598e39973508cc18ea8062b414713a0c41c314f904e17f6fa1016e8",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "f38d0ecc510531217c68508c94bba4b7ec71b775d6b312a5b1d02041e62d93f1",
-    "showcase/capture/exact_image/contract.py": "24e267d3642fe2cc06aaef29260e90f01adfdf3b16b1709cebe263037ade8efe",
+    "showcase/capture/exact_image/contract.py": "68c521d7bbddce07900710a0cd9cbc5cce2670b1a9cdb7801a27097b0ffcd4b2",
     "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
     "showcase/capture/exact_image/unattended.py": "61f65ff246e2d1acbde8fa9831430e398967549ec47b00996862b05aa370aa84",
@@ -42,13 +42,13 @@
     "sha256": "92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66",
     "source_sha": "fc501fdf90c17c617b15b8b13038d062d519fcc6",
     "run_id": 38707130991,
-    "artifact_id": null,
-    "archive_bytes": null,
-    "archive_sha256": null,
-    "producer_mode": null,
-    "producer_receipt_sha256": null
+    "artifact_id": 11961831325,
+    "archive_bytes": 1936373046,
+    "archive_sha256": "1c1e3e34e240b9e6ec592e3bce23330378e6bc2a7815ab295080fa61925082c3",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "9d755876dc45d143506da8b52cf98d92205ab1d2f014355de612db0bb04bc9b4"
   },
-  "ready": false,
+  "ready": true,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }
