@@ -129,35 +129,39 @@ and the [official VoxType documentation](https://voxtype.io/docs/).
 
 ## What has been measured
 
-Historical Fedora 44 measurements used official VoxType 1.1.0 binaries and five
-fixed FLEURS clips per language (103 English reference words and 100 Hebrew
-reference words):
+[Exact-image run 38699057684](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38699057684)
+tested official VoxType 1.1.1 on both CPU profiles. It used the first five public
+FLEURS rows for each language, with explicit language selection and no retries.
+The English fixture contains 103 reference words and 40.86 seconds of audio; the
+Hebrew fixture contains 100 reference words and 59.82 seconds.
 
-| Model | English WER | Hebrew WER |
-|---|---:|---:|
-| Small | 8/103 (7.8%) | 42/100 (42.0%) |
-| Turbo Q5 | 8/103 (7.8%) | 23/100 (23.0%) |
+| CPU profile | English WER | English CER | Hebrew WER | Hebrew CER | Median elapsed, EN / HE |
+|---|---:|---:|---:|---:|---:|
+| Small v2 | 8/103 (7.77%) | 12/469 (2.56%) | 41/100 (41.0%) | 56/476 (11.76%) | 76.573 s / 84.000 s |
+| Turbo Q5 v3 | 7/103 (6.80%) | 12/469 (2.56%) | 21/100 (21.0%) | 27/476 (5.67%) | 37.260 s / 40.574 s |
 
-This small read-speech sample used explicit language selection. It does not
-establish general accuracy, Whisper parity, microphone performance or speed on
-your hardware. An older candidate VM run also measured online/offline paths,
-but it exercised the retired Arctic runtime controller. Its service, installer,
-cancellation, GPU recovery and privacy results cannot qualify the new direct
-integration.
+Elapsed time runs from recording through insertion, so it includes the clip's
+own duration and insertion overhead as well as local transcription. These are
+virtual-source public read-speech results from a small fixed sample. They do not
+establish general accuracy, Whisper parity, mixed-language behavior, physical-
+microphone performance, GPU acceleration or speed on your hardware.
 
-For v1.2.1, the final exact-image record remains deliberately blank until the
-retained image passes online and offline setup, Hebrew and English, CPU recovery
-after a controlled Vulkan failure, missing models, microphone failure,
-cancellation, insertion, locking and transcript-leakage checks:
+The CPU transcription and insertion sublane is complete. The run created both
+target disks but stopped during the online-installed microphone fixture, before
+an offline-installed recovery report was emitted. The broader v1.2.1 dictation
+record still requires online and offline setup recovery, CPU recovery after a
+controlled Vulkan failure, missing models, physical microphone failure,
+cancellation, locking and transcript-leakage checks:
 
 | Exact-image field | Result |
 |---|---|
-| Small profile run and artifact | **Pending final qualification** |
-| Turbo Q5 profile run and artifact | **Pending final qualification** |
+| Small v2 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
+| Turbo Q5 v3 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
 | Online setup and offline first-boot recovery | **Pending final qualification** |
-| English/Hebrew WER, CER and elapsed time | **Pending final measurement** |
+| Controlled Vulkan failure and explicit CPU recovery | **Pending final qualification** |
+| Physical microphone failure and cancellation | **Pending final qualification** |
 | Log, notification and status privacy audit | **Pending final qualification** |
 
-The published release notes will replace those fields with measured results and
-limitations. The historical table above remains background evidence and is not
-the acceptance result for the direct integration.
+An older candidate VM run measured online/offline paths through the retired
+Arctic runtime controller. Its service, installer, cancellation, GPU recovery
+and privacy results cannot qualify the direct official VoxType integration.
