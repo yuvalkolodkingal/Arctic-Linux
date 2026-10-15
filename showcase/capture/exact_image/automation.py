@@ -135,11 +135,7 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     # Linux-VT glyphs.  Keep every alphanumeric account/host byte exact and
     # admit spacing only around the fixed separators and inside an approved
     # suffix.  The complete prompt must still be the final OCR line.
-    account_pattern = "".join(
-        r"[ \t]*" + re.escape(character) + r"[ \t]*"
-        if character in "@-" else re.escape(character)
-        for character in account
-    )
+    account_pattern = _fixed_account_pattern(account)
     suffix_patterns = {
         "".join(r"[ \t]*" + re.escape(character) + r"[ \t]*"
                 if character in "~>" else re.escape(character)
@@ -149,6 +145,15 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
     pattern = (r"^[ \t]*" + account_pattern + r"[ \t]+(?:"
                + "|".join(sorted(suffix_patterns)) + r")[ \t]*$")
     return re.fullmatch(pattern, lines[-1]) is not None
+
+
+def _fixed_account_pattern(account: str) -> str:
+    """Return the acceptance regex for exact bytes and spaced punctuation."""
+    return "".join(
+        r"[ \t]*" + re.escape(character) + r"[ \t]*"
+        if character in "@-" else re.escape(character)
+        for character in account
+    )
 
 
 def _fixed_shell_marker_match(text: str):
@@ -334,6 +339,23 @@ INSTALLED_SHELL_SURFACES = (
     "fetch-greeting", "prompt-exact", "prompt-not-final", "proof-marker",
     "account-only", "suffix-only", "login-or-password", "other-text",
 )
+INSTALLED_SHELL_SIGNALS = ("marker", "account-pattern", "suffix", "exact")
+
+
+def _installed_shell_signals(text: str, account: str, suffixes) -> dict:
+    """Project fixed prompt strings to independent booleans, never OCR text."""
+    c.require(type(text) is str and type(account) is str and account
+              and type(suffixes) in (tuple, list) and suffixes,
+              "installed shell signal input differs")
+    lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
+    account_pattern = _fixed_account_pattern(account)
+    return {
+        "marker": _fixed_shell_marker_match(text) is not None,
+        "account-pattern": re.search(
+            r"(?<![A-Za-z0-9])" + account_pattern + r"(?![A-Za-z0-9])", text) is not None,
+        "suffix": any(line.endswith(tuple(suffixes)) for line in lines),
+        "exact": _fixed_fish_prompt_present(text, account, suffixes),
+    }
 
 
 def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> str:
@@ -390,6 +412,9 @@ class InstalledStartupDiagnostic:
         self.samples = 0
         self.last = "capture-error"
         self.first = {item: None for item in INSTALLED_SHELL_SURFACES}
+        self.signal_samples = []
+        self.signal_seen = {item: False for item in INSTALLED_SHELL_SIGNALS}
+        self.signal_final = {item: False for item in INSTALLED_SHELL_SIGNALS}
         self.interrupt_status = "not-run"
 
     @staticmethod
@@ -418,13 +443,22 @@ class InstalledStartupDiagnostic:
         self.gate_status = "waiting"
         self.gate_started = time.monotonic()
 
-    def observe(self, surface):
+    def observe(self, surface, signals):
         c.require(surface in INSTALLED_SHELL_SURFACES,
                   "installed startup surface differs")
-        self.samples = min(46, self.samples + 1)
+        c.require(type(signals) is dict and tuple(signals) == INSTALLED_SHELL_SIGNALS
+                  and all(type(value) is bool for value in signals.values())
+                  and len(self.signal_samples) < 46,
+                  "installed startup signals differ")
+        self.samples += 1
         self.last = surface
         if self.first[surface] is None:
             self.first[surface] = self._seconds(self.gate_started, 90)
+        sample = dict(signals)
+        self.signal_samples.append(sample)
+        self.signal_final = sample
+        for name, present in sample.items():
+            self.signal_seen[name] = self.signal_seen[name] or present
 
     def gate_end(self, status):
         c.require(status in ("passed", "timed-out"),
@@ -453,6 +487,9 @@ class InstalledStartupDiagnostic:
                 "status": self.gate_status, "elapsed_seconds": self.gate_seconds,
                 "samples": self.samples, "last_observation": self.last,
                 "first_observation_seconds": dict(self.first),
+                "signal_samples": [dict(sample) for sample in self.signal_samples],
+                "signal_seen": dict(self.signal_seen),
+                "signal_final": dict(self.signal_final),
             },
             "post_failure_interrupt": self.interrupt_status,
         }
@@ -637,8 +674,10 @@ class Controller:
                     self.live_startup.observe(_live_surface_class(image, text))
                 if installed_gate:
                     account, suffixes = prompt_contract
+                    signals = _installed_shell_signals(text, account, suffixes)
                     self.installed_startup.observe(
-                        _installed_shell_surface_class(image, text, account, suffixes))
+                        _installed_shell_surface_class(image, text, account, suffixes),
+                        signals)
                 prompt_ok = (prompt_contract is None
                              or _fixed_fish_prompt_present(text, *prompt_contract))
                 phrase_ok = (not phrases or _phrases_present(
@@ -672,7 +711,9 @@ class Controller:
                 if startup_gate:
                     self.live_startup.observe("capture-error")
                 if installed_gate:
-                    self.installed_startup.observe("capture-error")
+                    self.installed_startup.observe(
+                        "capture-error",
+                        {item: False for item in INSTALLED_SHELL_SIGNALS})
             finally:
                 if path is not None and path.exists():
                     path.unlink(missing_ok=True)

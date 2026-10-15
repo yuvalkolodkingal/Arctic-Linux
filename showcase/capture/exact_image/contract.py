@@ -705,7 +705,8 @@ def installed_startup_diagnostic(value) -> None:
     gate = value["shell_ready_gate"]
     require(type(gate) is dict and set(gate) == {
         "expectation", "timeout_seconds", "status", "elapsed_seconds", "samples",
-        "last_observation", "first_observation_seconds"
+        "last_observation", "first_observation_seconds", "signal_samples",
+        "signal_seen", "signal_final"
     } and gate["expectation"] == "installed-shell-ready"
         and gate["timeout_seconds"] == 90
         and gate["status"] in ("not-started", "waiting", "passed", "timed-out")
@@ -733,8 +734,31 @@ def installed_startup_diagnostic(value) -> None:
     if gate["samples"]:
         require(gate["first_observation_seconds"][gate["last_observation"]] is not None,
                 "installed shell last observation was not observed")
+    signal_names = {"marker", "account-pattern", "suffix", "exact"}
+    samples = gate["signal_samples"]
+    require(type(samples) is list and len(samples) == gate["samples"]
+            and type(gate["signal_seen"]) is dict
+            and set(gate["signal_seen"]) == signal_names
+            and type(gate["signal_final"]) is dict
+            and set(gate["signal_final"]) == signal_names,
+            "installed shell signal projection differs")
+    seen = {name: False for name in signal_names}
+    for sample in samples:
+        require(type(sample) is dict and set(sample) == signal_names
+                and all(type(item) is bool for item in sample.values())
+                and (not sample["exact"]
+                     or (sample["account-pattern"] and sample["suffix"])),
+                "installed shell signal sample differs")
+        for name in signal_names:
+            seen[name] = seen[name] or sample[name]
+    final = samples[-1] if samples else {name: False for name in signal_names}
+    require(gate["signal_seen"] == seen and gate["signal_final"] == final
+            and all(type(item) is bool for item in gate["signal_seen"].values())
+            and all(type(item) is bool for item in gate["signal_final"].values()),
+            "installed shell signal aggregate differs")
     if gate["status"] == "passed":
-        require(gate["last_observation"] == "prompt-exact",
+        require(gate["last_observation"] == "prompt-exact"
+                and all(gate["signal_final"].values()),
                 "installed shell gate passed without exact prompt")
     interrupt = value["post_failure_interrupt"]
     require(interrupt in ("not-run", "sent-no-prompt", "recovered-prompt",

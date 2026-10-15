@@ -497,6 +497,42 @@ class UnattendedController(unittest.TestCase):
             Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
             "geometry-mismatch")
 
+    def test_installed_shell_signals_are_independent_fixed_booleans(self):
+        account = "arcticshowcase@arctic-showcase"
+        suffixes = ("~>", "~ >")
+        marker = "ARCTIC - SHOWCASE - SHELL - READY"
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\nunreadable ~>", account, suffixes), {
+                "marker": True, "account-pattern": False,
+                "suffix": True, "exact": False,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            account + " ~>", account, suffixes), {
+                "marker": False, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\n" + account + " ~>", account, suffixes), {
+                "marker": True, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\narcticshowcase @ arctic - showcase\n~ >",
+            account, suffixes), {
+                "marker": True, "account-pattern": True,
+                "suffix": True, "exact": False,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            "arcticshowcase @ arctic - showcase ~ >", account, suffixes), {
+                "marker": False, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            "arcticsh0wcase @ arctic - showcase ~ >", account, suffixes), {
+                "marker": False, "account-pattern": False,
+                "suffix": True, "exact": False,
+            })
+
     def test_installed_startup_diagnostic_is_bounded_and_rejects_private_content(self):
         diagnostic = automation.InstalledStartupDiagnostic()
         diagnostic.start()
@@ -505,14 +541,31 @@ class UnattendedController(unittest.TestCase):
         diagnostic.fetch_observed()
         diagnostic.dismissal_sent()
         diagnostic.gate_start()
-        diagnostic.observe("fetch-greeting")
-        diagnostic.observe("account-only")
+        diagnostic.observe("fetch-greeting", {
+            "marker": False, "account-pattern": False,
+            "suffix": False, "exact": False,
+        })
+        diagnostic.observe("account-only", {
+            "marker": True, "account-pattern": True,
+            "suffix": False, "exact": False,
+        })
         diagnostic.gate_end("timed-out")
         diagnostic.interrupt("sent-no-prompt")
         value = diagnostic.projection()
         c.installed_startup_diagnostic(value)
         self.assertEqual(value["shell_ready_gate"]["timeout_seconds"], 90)
         self.assertLessEqual(value["shell_ready_gate"]["samples"], 46)
+        self.assertEqual(value["shell_ready_gate"]["signal_samples"], [
+            {"marker": False, "account-pattern": False,
+             "suffix": False, "exact": False},
+            {"marker": True, "account-pattern": True,
+             "suffix": False, "exact": False},
+        ])
+        self.assertEqual(value["shell_ready_gate"]["signal_seen"],
+                         {"marker": True, "account-pattern": True,
+                          "suffix": False, "exact": False})
+        self.assertEqual(value["shell_ready_gate"]["signal_final"],
+                         value["shell_ready_gate"]["signal_samples"][-1])
         forged = copy.deepcopy(value)
         forged["shell_ready_gate"]["private_ocr"] = "do not export"
         with self.assertRaises(c.Invalid):
@@ -521,6 +574,34 @@ class UnattendedController(unittest.TestCase):
         forged["post_failure_interrupt"] = "guest-selected"
         with self.assertRaises(c.Invalid):
             c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["signal_samples"][0]["raw_ocr"] = "private"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["signal_seen"]["suffix"] = True
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+
+    def test_installed_signal_samples_are_bounded_and_fit_failure_projection(self):
+        diagnostic = automation.InstalledStartupDiagnostic()
+        diagnostic.start()
+        diagnostic.login_observed()
+        diagnostic.authentication_sent()
+        diagnostic.fetch_observed()
+        diagnostic.dismissal_sent()
+        diagnostic.gate_start()
+        empty = {"marker": False, "account-pattern": False,
+                 "suffix": False, "exact": False}
+        for _ in range(46):
+            diagnostic.observe("ocr-empty", empty)
+        with self.assertRaisesRegex(c.Invalid, "installed startup signals differ"):
+            diagnostic.observe("ocr-empty", empty)
+        diagnostic.gate_end("timed-out")
+        diagnostic.interrupt("sent-no-prompt")
+        value = diagnostic.projection()
+        c.installed_startup_diagnostic(value)
+        self.assertLess(len(json.dumps(value).encode()), 32_768)
 
     def test_installed_proof_timeout_interrupts_only_after_failure_and_never_types_secret(self):
         operations = []
