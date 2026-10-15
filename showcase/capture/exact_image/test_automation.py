@@ -564,9 +564,15 @@ class UnattendedController(unittest.TestCase):
 
     def test_shell_proof_typed_bytes_do_not_contain_the_required_ocr_marker(self):
         self.assertNotIn("ARCTIC-SHOWCASE-SHELL-READY", automation.Controller.SHELL_PROOF)
-        self.assertEqual(len(automation.Controller.SHELL_PROOF), 146)
+        prefix, rendered_command = automation.Controller.SHELL_PROOF.split("printf ", 1)
+        self.assertEqual(prefix, (
+            "set -g fish_color_user brwhite; set -g fish_color_host brwhite; "
+            "set -g fish_color_cwd brwhite; set -g fish_color_cwd_root brwhite; "
+        ))
+        self.assertNotIn("set -U", prefix)
+        self.assertNotIn(">", prefix)
         rendered = subprocess.run(
-            ["/bin/sh", "-c", automation.Controller.SHELL_PROOF],
+            ["/bin/sh", "-c", "printf " + rendered_command],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=5, check=True,
         )

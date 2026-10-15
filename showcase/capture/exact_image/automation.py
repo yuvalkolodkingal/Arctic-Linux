@@ -485,8 +485,12 @@ class Controller:
     )
     PASSWORD = "ArcticShowcase-Disposable-2026-Only!!!"
     # The typed command deliberately does not contain the OCR marker; only an
-    # initialized shell executing printf can assemble the visible proof.
-    SHELL_PROOF = ("printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
+    # initialized shell executing printf can assemble the visible proof. Keep
+    # the real Fish prompt OCR-visible for this disposable session only; the
+    # shell itself still renders the authoritative prompt after the command.
+    SHELL_PROOF = ("set -g fish_color_user brwhite; set -g fish_color_host brwhite; "
+                   "set -g fish_color_cwd brwhite; set -g fish_color_cwd_root brwhite; "
+                   "printf '\\033[2J\\033[H\\033[1m\\101\\122\\103\\124\\111\\103\\055\\123\\110\\117\\127"
                    "\\103\\101\\123\\105\\055\\123\\110\\105\\114\\114\\055\\122"
                    "\\105\\101\\104\\131\\033[0m\\n'")
     LIVE_STARTUP_PROBE = (
@@ -892,10 +896,12 @@ class Controller:
         # Three seconds is sixty times the renderer's 50 ms polling period and
         # gives Fish time to complete the empty command after the renderer has
         # exited.  The proof contains no secret and cannot mimic its fixed
-        # response.  The proof itself clears and homes the VT before drawing a
-        # bold marker, matching the successful installed-image identity
-        # challenge.  This removes the retained rich greeting from the OCR
-        # surface without relying on a separate Fish Ctrl-L redraw.  Sudo
+        # response. The proof first sets only this Fish session's prompt fields
+        # to bright white, then clears and homes the VT before drawing a bold
+        # marker, matching the successful installed-image identity challenge.
+        # Fish itself draws the real prompt after the command returns. This
+        # removes the retained rich greeting from the OCR surface without
+        # relying on a separate Fish Ctrl-L redraw. Sudo
         # remains forbidden until the fresh response and the exact final
         # prompt are visible together.
         shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
