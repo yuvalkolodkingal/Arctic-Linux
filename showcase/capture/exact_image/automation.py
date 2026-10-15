@@ -141,16 +141,36 @@ def _fixed_shell_marker_match(text: str):
         r"[ \t]*-[ \t]*READY[ \t]*$", text)
 
 
-def _fixed_shell_transport_visual_present(text: str, suffixes) -> bool:
-    """Require the fixed marker followed only by the final Fish suffix row."""
-    if type(text) is not str or type(suffixes) not in (tuple, list) or not suffixes:
+def _fixed_shell_transport_visual_present(text: str, image) -> bool:
+    """Require the exact marker and measured suffix-only VT occupancy."""
+    if _fixed_shell_marker_match(text) is None:
         return False
-    marker = _fixed_shell_marker_match(text)
-    if marker is None:
+    if image.mode != "RGB" or image.size != (1280, 800):
         return False
-    lines = [line.strip().rstrip("_| ")
-             for line in text[marker.end():].splitlines() if line.strip()]
-    return len(lines) == 1 and lines[0] in suffixes
+    return _shell_nonbackground_occupancy(image) in SHELL_TRANSPORT_OCCUPANCY
+
+
+SHELL_OCCUPANCY_WIDTH = 640
+SHELL_OCCUPANCY_BAND_HEIGHT = 8
+SHELL_OCCUPANCY_BANDS = 16
+SHELL_TRANSPORT_OCCUPANCY = (
+    (542, 364, 20, 8) + (0,) * 12,
+    (542, 364, 20, 24) + (0,) * 12,
+)
+
+
+def _shell_nonbackground_occupancy(image):
+    """Count nonblack pixels in fixed private bands without retaining pixels."""
+    c.require(image.mode == "RGB" and image.size == (1280, 800),
+              "controller shell occupancy source geometry differs")
+    pixels = image.load()
+    return tuple(
+        sum(pixels[x, y] != (0, 0, 0)
+            for y in range(band * SHELL_OCCUPANCY_BAND_HEIGHT,
+                           (band + 1) * SHELL_OCCUPANCY_BAND_HEIGHT)
+            for x in range(SHELL_OCCUPANCY_WIDTH))
+        for band in range(SHELL_OCCUPANCY_BANDS)
+    )
 
 
 LIVE_SURFACES = (
@@ -286,14 +306,14 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     """Reduce a private installed-console frame to one reviewed public enum."""
     if image.size != (1280, 800):
         return "geometry-mismatch"
+    if _fixed_shell_transport_visual_present(text, image):
+        return "proof-marker"
     colors = image.resize((32, 20)).getcolors(maxcolors=640)
     if colors is None or len(colors) < 16:
         return "blank-output"
     folded = text.casefold().strip()
     if not folded:
         return "ocr-empty"
-    if _fixed_shell_transport_visual_present(text, suffixes):
-        return "proof-marker"
     if _fixed_fish_prompt_present(text, account, suffixes):
         return "prompt-exact"
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
@@ -567,7 +587,7 @@ class Controller:
                         _installed_shell_surface_class(image, text, account, suffixes))
                 prompt_ok = (prompt_contract is None
                              or (_fixed_shell_transport_visual_present(
-                                    text, prompt_contract[1])
+                                    text, image)
                                  if transport_prompt else
                                  _fixed_fish_prompt_present(text, *prompt_contract)))
                 phrase_ok = (not phrases or _phrases_present(
@@ -575,7 +595,7 @@ class Controller:
                 if (expectation in {"installed-shell-ready", "installed-shell"}
                         and prompt_contract is not None and transport_prompt):
                     phrase_ok = _fixed_shell_transport_visual_present(
-                        text, prompt_contract[1])
+                        text, image)
                 if (phrase_ok
                         and prompt_ok
                         and (not exact_output or image.size == (1280, 800))

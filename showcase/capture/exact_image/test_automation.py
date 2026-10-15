@@ -261,7 +261,6 @@ class UnattendedController(unittest.TestCase):
         account = "arcticshowcase@arctic-showcase"
         suffixes = ("~>", "~ >")
         cases = {
-            "ARCTIC-SHOWCASE-SHELL-READY\n~>": "proof-marker",
             account + " ~>": "prompt-exact",
             account + " ~>\ntrailing fetch row": "prompt-not-final",
             "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
@@ -460,23 +459,34 @@ uptime   2 mins
 
     def test_transport_visual_proof_keeps_exact_marker_order_and_suffix(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
-        suffixes = ("~>", "~ >")
-        for valid in (marker + "\n~>",
-                      "ARCTIC - SHOWCASE - SHELL - READY\n~ > _|"):
+        def frame(counts):
+            image = Image.new("RGB", (1280, 800), "black")
+            for band, count in enumerate(counts):
+                for offset in range(count):
+                    image.putpixel((offset % 640, band * 8 + offset // 640),
+                                   (255, 255, 255))
+            return image
+
+        without_cursor, with_cursor = automation.SHELL_TRANSPORT_OCCUPANCY
+        for counts in (without_cursor, with_cursor):
             self.assertTrue(automation._fixed_shell_transport_visual_present(
-                valid, suffixes))
-        for forged in (
-            "~>\n" + marker,
-            marker,
-            marker + "\n$>",
-            marker + "\n~>\ntrailing",
-            "ARCTIC-SHOWCASE-SHELL-WRONG\n~>",
-            marker + "\naccount\n~>",
-            marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>",
-        ):
-            with self.subTest(forged=forged):
+                marker, frame(counts)))
+            self.assertEqual(automation._installed_shell_surface_class(
+                frame(counts), marker, "arcticshowcase@arctic-showcase",
+                ("~>", "~ >")), "proof-marker")
+        rejected = (
+            ("ARCTIC-SHOWCASE-SHELL-WRONG", without_cursor),
+            (marker, (542, 364, 19, 8) + (0,) * 12),
+            (marker, (542, 364, 20, 9) + (0,) * 12),
+            (marker, (542, 364, 20, 8, 1) + (0,) * 11),
+            (marker, (542, 364, 663, 444) + (0,) * 12),
+        )
+        for text, counts in rejected:
+            with self.subTest(text=text, counts=counts):
                 self.assertFalse(automation._fixed_shell_transport_visual_present(
-                    forged, suffixes))
+                    text, frame(counts)))
+        self.assertFalse(automation._fixed_shell_transport_visual_present(
+            marker, Image.new("RGB", (1024, 768), "black")))
 
     def test_installed_session_proof_is_exact_nonce_bound_identity(self):
         response = (c.SHELL_SESSION_PREFIX + SHELL_NONCE

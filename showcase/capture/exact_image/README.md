@@ -100,10 +100,13 @@ those facts to the nonce. The reviewed tooling archive is withheld until this
 exchange passes, so a guest helper cannot answer it. The same guarded branch
 defines only a bright `~>` prompt for the disposable session, clears and homes
 the VT, and prints `ARCTIC-SHOWCASE-SHELL-READY`. Two independent exact frames
-must contain that marker followed only by the suffix. The nonce response proves
-identity without relying on OCR for the account token. A missing marker,
-alternate suffix, reversed order, extra line, wrong nonce or different session
-identity fails closed before the sudo launcher.
+must contain that marker in OCR and one of the two measured suffix-only pixel
+signatures across sixteen fixed 640×8 bands: `(542, 364, 20, 8)` or the cursor
+state `(542, 364, 20, 24)`, followed by twelve zero bands. The counts are used
+only inside the decision and no pixels, OCR text or band values enter the
+receipt. The nonce response proves identity without relying on OCR for the
+account token. A missing marker, different occupancy, wrong nonce or different
+session identity fails closed before the sudo launcher.
 
 The installed session and visual prompt remain authoritative bounded gates.
 The channel response has a 30-second limit and the visual gate has a 90-second
@@ -112,7 +115,8 @@ projection reduces private frames to closed enums for fetch still visible,
 the fixed proof marker, exact prompt on a nonfinal row, account-only or
 suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty, and
 other text, plus bounded integer timings. Only the challenge SHA-256 and a fixed
-identity enum enter the trace. Only after a timeout, the controller sends one interrupt and records
+identity enum enter the trace. Only after a timeout, the controller sends one
+interrupt and records
 whether the exact prompt becomes visible within 30 seconds. That post-failure
 probe cannot promote the attempt or authorize the proof or sudo commands. Its
 screens and OCR strings stay private and are deleted with the runtime.
