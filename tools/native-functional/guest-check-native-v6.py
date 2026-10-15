@@ -1223,6 +1223,57 @@ class Smoke:
             write_renderer_receipt(self.root,self.uid,value)
         except (OSError,ValueError,RuntimeError): pass
 
+    # BEGIN INSTALLED_RENDERER_MATRIX_METHOD
+    def installed_renderer_matrix(self,fixture,expected,source_sha,primary):
+        """Failure-only installed renderer comparison; acceptance stays failed."""
+        modes=('gl','ngl','cairo','vulkan')
+        rows=[dict(intervention=mode,status='unrun',release_acceptance=False) for mode in modes]
+        value=dict(schema='arctic-native-installed-renderer-matrix-v1',stage=self.stage,
+            primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',primary_failure_preserved=True,
+            same_fixture_sha256=primary['fixture_sha256'],same_expected_rgb_sha256=primary['expected_rgb_sha256'],
+            trials=rows,release_acceptance=False,rendering_cause_proven=False,
+            controls=dict(order=list(modes),fresh_owned_app_each=True,settle_seconds=.5,
+                capture_attempts_per_mode=1,primary_gate_and_oracle_thresholds_unchanged=True,
+                same_static_oracle=True,shared_isolated_config_and_cache=True,
+                preceding_product_launches_and_ordered_warm_cache_confound=True,
+                gsk_debug_renderer_all=True,wayland_debug_client_all=True,
+                raw_stderr_exported=False,GPU_acceleration_or_software_rendering_proven=False))
+        try:
+            require(self.stage=='installed','renderer matrix is installed-session only')
+            require(primary['oracle']['status']=='unmatched','renderer matrix requires the failed primary oracle')
+            require(digest(fixture)==primary['fixture_sha256'] and digest(expected)==primary['expected_rgb_sha256'],
+                    'renderer matrix fixture identity changed')
+            self.finish_native_protocol()
+            # The fixed route suite owns exactly six Celluloid processes before
+            # the matrix. Retire only those proved identities; never search/kill.
+            players=[p for p in self.owned if p.get('executable')=='/usr/bin/celluloid']
+            require(len(players)==6,'renderer matrix primary player inventory differs')
+            for player in players: retire_renderer_player(player,self.uid)
+            for index,mode in enumerate(modes):
+                trial=None
+                try:
+                    trial=InstalledRendererTrialSmoke(self,mode)
+                    rows[index]=trial.observe(fixture,expected,source_sha)
+                except Exception as error:
+                    rows[index].update(status='unknown',error=renderer_trial_error(error))
+                finally:
+                    if trial is not None:
+                        self.owned.extend(trial.owned);self.launches.extend(trial.launches)
+                        trial.finish_native_protocol()
+                        cleanup=True
+                        for player in trial.owned:
+                            try: retire_renderer_player(player,self.uid)
+                            except Exception: cleanup=False
+                        rows[index]['owned_trial_cleanup_completed']=cleanup
+        except Exception as error:
+            value['preparation_error']=renderer_trial_error(error)
+        # Optional diagnostics cannot replace the primary failure or acceptance.
+        try:
+            write_renderer_receipt(self.root,self.uid,value)
+        except (OSError,ValueError,RuntimeError): pass
+    # END INSTALLED_RENDERER_MATRIX_METHOD
+
     # BEGIN CONTROLLED_CONTROLS_INVOCATION
     def controlled_controls_trials(self,fixture,expected,source_sha,primary):
         """Two failure-only default players; the original primary remains failed."""
@@ -2077,6 +2128,9 @@ class Smoke:
         if getattr(self,'gui_v6',False):
             self.native_protocol_diagnostic(player,state,screenshot,client)
             self.player_fullscreen(player,False)
+        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None)=='installed'
+                and info['oracle']['status']=='unmatched'):
+            self.installed_renderer_matrix(fixture,expected,source_sha,info)
         require(info['oracle']['status']=='matched',
                 'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
@@ -2379,6 +2433,53 @@ class RendererTrialSmoke(Smoke):
                 except OSError: value['private_rgb_cleanup_completed']=False
         return value
 # END CONTROLLED_RENDERER_TRIALS
+
+
+# BEGIN INSTALLED_RENDERER_MATRIX_CLASS
+class InstalledRendererTrialSmoke(RendererTrialSmoke):
+    """One fresh explicit GTK renderer trial with the legacy strict oracle."""
+    def __init__(self,parent,mode):
+        require(mode in ('gl','ngl','cairo','vulkan'),'unsupported installed renderer intervention')
+        self.mode=mode;self.user=parent.user;self.uid=parent.uid;self.stage=parent.stage
+        self.root=parent.root/('renderer-trial-'+mode)
+        self.root.mkdir(mode=0o700);os.chown(self.root,self.uid,self.user.pw_gid)
+        self.prefix=list(parent.prefix);self.original_prefix=list(parent.original_prefix)
+        self.owned=[];self.launches=[];self.gui_v6=True
+        self.deadline=time.monotonic()+60
+
+    def launch_renderer(self,argv):
+        require(argv[0]=='/usr/bin/celluloid','installed renderer executable differs')
+        drain=NativeProtocolDrain(renderer=True);reader=None;writer=None
+        self.native_protocol_drain=drain
+        try:
+            read,writer=os.pipe()
+            try:reader=os.fdopen(read,'rb',buffering=0)
+            except BaseException:
+                os.close(read);raise
+            drain.start(reader)
+            options=['env','-u','GSK_RENDERER','GSK_DEBUG=renderer','WAYLAND_DEBUG=client',
+                     'GSK_RENDERER='+self.mode]
+            child=subprocess.Popen(self.prefix+options+argv,stdout=subprocess.DEVNULL,stderr=writer)
+            self.launches.append(child)
+        except BaseException:
+            drain.finish();raise
+        finally:
+            if writer is not None:os.close(writer)
+
+    def observe(self,fixture,expected,source_sha):
+        value=super().observe(fixture,expected,source_sha)
+        expected_realized={'gl':'gl','ngl':'gl','cairo':'cairo','vulkan':'vulkan'}[self.mode]
+        realized=value.get('realized_renderer',{})
+        matched=(realized.get('status')=='reported-realized'
+                 and realized.get('renderer')==expected_realized)
+        value.update(requested_gsk_renderer=self.mode,expected_realized_renderer=expected_realized,
+                     requested_renderer_matched=matched,
+                     support_status='supported-and-realized' if matched else 'not-proven-supported',
+                     capture_attempt_limit=1,diagnostic_time_bound_seconds=60,
+                     release_acceptance=False,rendering_cause_proven=False)
+        value['status']='observed' if matched and 'oracle' in value else 'unknown'
+        return value
+# END INSTALLED_RENDERER_MATRIX_CLASS
 
 
 # BEGIN CONTROLLED_CONTROLS_STUDY
@@ -2719,6 +2820,11 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
     'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
+    # BEGIN INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE
+    '0-controlled-renderer-trials.json',
+    'renderer-trial-gl/reference.png', 'renderer-trial-ngl/reference.png',
+    'renderer-trial-cairo/reference.png', 'renderer-trial-vulkan/reference.png',
+    # END INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE
     'files with spaces/editor fixture.txt',
 )) | frozenset(
     directory + '/' + filename
@@ -2761,7 +2867,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'e943557259ef12d8d463ad49523bc756d2d1102ffb7344ce6cdea144e7f3e151'
+    native_source_sha = '6d5d0c88a78ea742311940f92f154ff32c7f0a161e8400ee097ce175b8a17d16'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

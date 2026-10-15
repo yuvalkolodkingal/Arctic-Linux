@@ -33,8 +33,30 @@ TWO_PLAYER_CURRENT_SHA = '84dd4f74826dc3372f11c96d6399bc763c4eb2ebeb300dbbdbedd6
 PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916cec681b68'
 
 
+def restore_installed_renderer_matrix(source):
+    """Remove only the failure-only installed renderer matrix diagnostic."""
+    invocation="        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None)=='installed'\n                and info['oracle']['status']=='unmatched'):\n            self.installed_renderer_matrix(fixture,expected,source_sha,info)\n"
+    if source.count(invocation)!=1:raise AssertionError('Installed renderer matrix invocation inverse differs')
+    source=source.replace(invocation,'',1)
+    for begin,end in (('    # BEGIN INSTALLED_RENDERER_MATRIX_METHOD\n','    # END INSTALLED_RENDERER_MATRIX_METHOD\n\n'),
+                      ('# BEGIN INSTALLED_RENDERER_MATRIX_CLASS\n','# END INSTALLED_RENDERER_MATRIX_CLASS\n\n\n')):
+        if source.count(begin)!=1 or source.count(end)!=1:
+            raise AssertionError('Installed renderer matrix block inverse differs')
+        first=source.index(begin);last=source.index(end,first)+len(end)
+        source=source[:first]+source[last:]
+    begin='    # BEGIN INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE\n'
+    end='    # END INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE\n'
+    if source.count(begin)!=source.count(end) or source.count(begin)>1:
+        raise AssertionError('Installed renderer matrix public inventory inverse differs')
+    if begin in source:
+        first=source.index(begin);last=source.index(end,first)+len(end)
+        source=source[:first]+source[last:]
+    return source
+
+
 def restore_paused_visual_capture(source):
     """Reverse only the one-player paused-frame capture stabilization."""
+    source=restore_installed_renderer_matrix(source)
     helper_start='def mpv_pause_reference(path, expected_pid, expected_uid):\n'
     helper_end='def mpv_property(path, key, expected_pid, expected_uid):\n'
     if source.count(helper_start)!=1 or source.count(helper_end)!=1:
@@ -599,6 +621,12 @@ def restore_controls_guest(source):
     for index,(new,old) in enumerate(substitutions):
         if source.count(new)!=1:raise AssertionError(f'Controls guest inverse occurrence differs at {index}')
         source=source.replace(new,old)
+    begin='    # BEGIN INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE\n'
+    end='    # END INSTALLED_RENDERER_MATRIX_PUBLIC_EVIDENCE\n'
+    if source.count(begin)!=1 or source.count(end)!=1:
+        raise AssertionError('Controls guest renderer inventory inverse differs')
+    first=source.index(begin);last=source.index(end,first)+len(end)
+    source=source[:first]+source[last:]
     if hashlib.sha256(source.encode()).hexdigest()!=BASE_GUEST_SHA:raise AssertionError('Original whole guest differs')
     return source
 
@@ -952,8 +980,10 @@ class ControlsStateTrials(unittest.TestCase):
         new=guest.NATIVE_PUBLIC_EVIDENCE_FILES
         old=restore_controls_guest((HERE/'guest-check-native-v6.py').read_text())
         env={};exec(compile(old,'strict-rolled-back-source','exec'),env)
-        removed={'0-controlled-renderer-trials.json','renderer-trial-default/reference.png','renderer-trial-gl/reference.png'}
-        added={'0-controls-state-trials.json','controls-trial-transition/reference.png','controls-trial-hidden/reference.png'}
+        removed={'renderer-trial-default/reference.png'}
+        added={'0-controls-state-trials.json','controls-trial-transition/reference.png',
+               'controls-trial-hidden/reference.png','renderer-trial-ngl/reference.png',
+               'renderer-trial-cairo/reference.png','renderer-trial-vulkan/reference.png'}
         current_labels={'failure-fresh-defaults-and-isolation','failure-archive-content-roundtrips',
             'failure-actual-role-file-manager-terminal-editor','failure-open-codec-content-and-player-state',
             'failure-portal-and-accessibility-reachability','failure-owned-process-cleanup-config-preservation',
