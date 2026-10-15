@@ -536,6 +536,7 @@ class Checker:
         self.user_bindings = Path(self.account.pw_dir) / '.config/mango/arctic/binds.conf'
         self.phrases, self.snapshots = [], []
         self.selected_language = None
+        self.selected_backend = None
         self.loop = self.window = self.player = None
         self.old_source = self.source = None
         self.initial_processes = {path.name for path in Path('/proc').glob('[0-9]*')}
@@ -919,10 +920,15 @@ class Checker:
         changed = False
         if backend is not None:
             require(backend in ('cpu', 'vulkan'), 'unknown-backend-selection')
+            if backend == getattr(self, 'selected_backend', None):
+                require((SYSTEM / 'backend').read_text().strip() == backend,
+                        'selected-backend-state-changed')
+        if backend is not None and backend != getattr(self, 'selected_backend', None):
             # Setup may regenerate the canonical multilingual config before a
             # later restart or readiness check fails. Invalidate first so a
             # following selection cannot trust a stale single-language cache.
             self.selected_language = None
+            self.selected_backend = None
             run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
                  str(SETUP), '--backend', backend], 750)
             self.cmd(['systemctl', '--user', 'restart', 'voxtype.service'])
@@ -937,6 +943,8 @@ class Checker:
             changed = True
         if changed:
             self.daemon_ready('daemon-restart', 30)
+            if backend is not None:
+                self.selected_backend = backend
             if selected is not None:
                 self.selected_language = selected
 
@@ -993,6 +1001,14 @@ class Checker:
         self.transcription_stage(
             'recording-state', lambda: self.observe(
                 'recording-state', lambda: self.state() == 'recording', 10))
+        self.transcription_stage(
+            'capture-link', lambda: self.observe('capture-link', self.capture_link, 10))
+        # The native state file can report recording before PipeWire has
+        # published the restarted daemon's authenticated capture graph.  Use
+        # that already-bounded observation as the synchronization boundary,
+        # then pin the exact official process and binary.  A persistent
+        # missing, duplicate, changed or unlinked daemon still fails the
+        # capture-link stage; a wrong binary still fails engine-profile.
         def engine_profile():
             _pid, _ticks, binary = self.engine()
             cpu_key = 'avx2' if self.profile_id == 'turbo-q5-v3' else 'cpu'
@@ -1001,8 +1017,6 @@ class Checker:
                     'cpu-upstream-daemon-profile-pin')
             return cpu_key
         cpu_key = self.transcription_stage('engine-profile', engine_profile)
-        self.transcription_stage(
-            'capture-link', lambda: self.observe('capture-link', self.capture_link, 10))
         self.transcription_stage('fixture-play-start', lambda: self.play(sample))
         self.transcription_stage('fixture-playback', lambda: require(
             self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
@@ -1269,6 +1283,10 @@ class Checker:
         # preflight on the VM's available Vulkan implementation.
         run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
              str(SETUP), '--backend', 'vulkan'], 750)
+        # This path deliberately exercises setup without restarting the user
+        # service.  It still changed the authoritative backend, so invalidate
+        # the qualification cache before selecting CPU for the failure test.
+        self.selected_backend = None
         vulkan = PAYLOAD / ASSETS['vulkan']['name']
         owned_file(vulkan, ASSETS['vulkan']['bytes'])
         require(sha(vulkan) == ASSETS['vulkan']['sha256'],

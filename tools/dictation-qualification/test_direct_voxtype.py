@@ -368,6 +368,7 @@ on_transcription = false
 
     def test_backend_setup_invalidates_cached_language_before_explicit_selection(self):
         checker = self.checker()
+        checker.selected_backend = None
         checker.selected_language = 'he'
         checker.adapter = Mock()
         checker.cmd = Mock()
@@ -378,9 +379,40 @@ on_transcription = false
         checker.adapter.assert_called_once_with('set-language', 'he')
         checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
         self.assertEqual(checker.selected_language, 'he')
+        self.assertEqual(checker.selected_backend, 'cpu')
+
+    def test_same_backend_selection_does_not_repeat_privileged_setup_or_restart(self):
+        checker = self.checker()
+        checker.selected_backend = 'cpu'
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock()
+        checker.daemon_ready = Mock()
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(guest, 'SYSTEM', Path(temp)), \
+                patch.object(guest, 'run') as host_run:
+            (Path(temp) / 'backend').write_text('cpu\n')
+            checker.select(backend='cpu')
+        host_run.assert_not_called()
+        checker.cmd.assert_not_called()
+        checker.daemon_ready.assert_not_called()
+        self.assertEqual(checker.selected_backend, 'cpu')
+        self.assertEqual(checker.selected_language, 'he')
+
+    def test_same_backend_cache_cannot_hide_authoritative_state_change(self):
+        checker = self.checker()
+        checker.selected_backend = 'cpu'
+        checker.selected_language = 'en'
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+                guest, 'SYSTEM', Path(temp)):
+            (Path(temp) / 'backend').write_text('vulkan\n')
+            with self.assertRaisesRegex(guest.Invalid,
+                                        '^selected-backend-state-changed$'):
+                checker.select(backend='cpu')
 
     def test_failed_backend_restart_cannot_leave_a_stale_language_cache(self):
         checker = self.checker()
+        checker.selected_backend = 'vulkan'
         checker.selected_language = 'he'
         checker.adapter = Mock()
         checker.cmd = Mock(side_effect=guest.Invalid('private-restart-failure'))
@@ -390,6 +422,7 @@ on_transcription = false
                 self.assertRaisesRegex(guest.Invalid, '^private-restart-failure$'):
             checker.select(backend='cpu')
         self.assertIsNone(checker.selected_language)
+        self.assertIsNone(checker.selected_backend)
 
         checker.cmd = Mock()
         checker.select(language='he')
@@ -422,6 +455,42 @@ on_transcription = false
                  and node.args and isinstance(node.args[0], ast.Constant)]
         self.assertEqual({call.args[0].value for call in calls},
                          set(guest.TRANSCRIPTION_FAILURE_STAGES))
+
+    def test_transcription_authenticates_capture_before_pinning_engine_profile(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'transcribe')
+        stages = [node.args[0].value for node in method.body
+                  if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                  for node in (node.value,)
+                  if isinstance(node.func, ast.Attribute)
+                  and node.func.attr == 'transcription_stage'
+                  and node.args and isinstance(node.args[0], ast.Constant)]
+        assignments = [node for node in method.body if isinstance(node, ast.Assign)
+                       and isinstance(node.value, ast.Call)
+                       and isinstance(node.value.func, ast.Attribute)
+                       and node.value.func.attr == 'transcription_stage'
+                       and node.value.args and isinstance(node.value.args[0], ast.Constant)]
+        assigned_stages = {node.value.args[0].value: method.body.index(node)
+                           for node in assignments}
+        capture_index = next(index for index, node in enumerate(method.body)
+                             if isinstance(node, ast.Expr)
+                             and isinstance(node.value, ast.Call)
+                             and isinstance(node.value.func, ast.Attribute)
+                             and node.value.func.attr == 'transcription_stage'
+                             and node.value.args
+                             and isinstance(node.value.args[0], ast.Constant)
+                             and node.value.args[0].value == 'capture-link')
+        self.assertIn('capture-link', stages)
+        self.assertGreater(assigned_stages['engine-profile'], capture_index)
+        profile = next(node for node in method.body
+                       if isinstance(node, ast.FunctionDef) and node.name == 'engine_profile')
+        profile_source = ast.get_source_segment(source, profile)
+        self.assertIn('self.engine()', profile_source)
+        self.assertIn("sha(binary) == self.assets[cpu_key]['sha256']", profile_source)
 
     def test_every_microphone_failure_stage_is_used_by_the_checked_path(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
@@ -506,6 +575,7 @@ on_transcription = false
         self.assertIn("(SYSTEM / 'backend').read_text().strip() == 'cpu'", source)
         self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
         self.assertIn("status.get('backend') == 'cpu'", source)
+        self.assertIn('self.selected_backend = None', source)
         self.assertLess(source.index("gpu-failure-actionable-error"),
                         source.rindex("self.select(backend='cpu')"))
 
