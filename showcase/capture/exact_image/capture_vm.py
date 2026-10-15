@@ -258,7 +258,10 @@ class QMP:
         self.command("screendump", {"filename": str(path), "format": "png"})
 
     def eject_iso(self):
-        self.command("eject", {"device": "arcticcd", "force": True})
+        # ``arcticcd`` is the fixed guest-device/QOM ID.  QMP's deprecated
+        # ``device`` member names a block backend instead, so passing the
+        # frontend ID there deterministically returns DeviceNotFound.
+        self.command("eject", {"id": "arcticcd", "force": True})
 
     def quit(self):
         try:
