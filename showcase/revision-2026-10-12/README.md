@@ -49,15 +49,17 @@ published.
   exact segment boundary lies inside 0.431905 seconds below -60 dBFS, and its sample step is
   0.000238 of the largest adjacent step in the surrounding 500 ms. These numeric checks do not
   replace listening.
-- **Publication:** false. Human listening, final-image captures, strict HyperFrames validation,
+- **Publication:** false. The exact master is preserved in a verified private draft release. Human
+  listening, final-image captures, strict HyperFrames validation,
   full render/decode, subtitle mux, representative-frame review, release binding and public
   download verification remain pending.
 
-`resolve-voice.py --purpose private-render` gates an unpublished candidate without treating a
-publisher license confirmation as render evidence. It binds to the repository's real
+`resolve-voice.py --purpose private-render` gates an unpublished candidate without treating human
+listening or a publisher license confirmation as render evidence. The private MP4 is the object for
+complete listening and frame review. The resolver binds it to the repository's real
 `tools/qualified-release/manifest.json`, including the update lane, active-installer lane and all
-media reviews. `--purpose publish-video` separately requires release publication approval, a
-confirmed public-video scope, and a reviewed final-render receipt binding the source commit, render
+media reviews. `--purpose publish-video` separately requires approved human listening, release
+publication approval, a confirmed public-video scope, and a reviewed final-render receipt binding the source commit, render
 run and artifact, exact MP4, full decode/subtitle checks and eight human-reviewed representative
 frames. Only `--purpose publish-video-with-source-audio` permits the source MP3 to be redistributed,
 after the broader `public_video_and_source_audio_redistribution` scope is explicitly confirmed.

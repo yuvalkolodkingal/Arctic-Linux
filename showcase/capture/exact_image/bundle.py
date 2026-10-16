@@ -147,6 +147,7 @@ def approved_ocr_identity():
         measured["traineddata"][language] = {"path": str(path), "bytes": language_info.st_size,
                                                 "sha256": c.sha256(path)}
     measured["invocation"] = list(c.OCR_IDENTITY["invocation"])
+    measured["shell_focus_invocation"] = list(c.OCR_IDENTITY["shell_focus_invocation"])
     measured["controller_invocation"] = list(c.OCR_IDENTITY["controller_invocation"])
     c.ocr_identity(measured)
     return measured
@@ -167,6 +168,25 @@ def tesseract_ocr(path: Path, timeout: int) -> str:
         return result.stdout.decode("utf-8", "strict")
     except UnicodeError as error:
         raise c.Invalid("capture OCR output invalid") from error
+
+
+def tesseract_shell_focus_ocr(path: Path, timeout: int) -> str:
+    """Read one private normalized shell row with its pinned single-line PSM."""
+    approved_ocr_identity()
+    executable = Path(c.OCR_IDENTITY["path"])
+    try:
+        result = subprocess.run(
+            [str(executable), str(path), *c.OCR_IDENTITY["shell_focus_invocation"]],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+            timeout=timeout, check=False, env={"PATH": "/usr/bin:/bin", "LC_ALL": "C"})
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise c.Invalid("capture shell focus OCR failed") from error
+    c.require(result.returncode == 0 and len(result.stdout) <= 256_000,
+              "capture shell focus OCR failed")
+    try:
+        return result.stdout.decode("utf-8", "strict")
+    except UnicodeError as error:
+        raise c.Invalid("capture shell focus OCR output invalid") from error
 
 
 def _inventory(root: Path):

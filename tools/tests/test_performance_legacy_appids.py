@@ -34,6 +34,27 @@ PARENT_GUEST_SHA = '5f3228d6f09a97e7640f522663bbfa32632f63387a3b59235caa3caab64b
 def before_epiphany_product_launcher(data):
     """Invert the reviewed product-launch integration for the exact parent control."""
     text = data.decode()
+    current = """        # The CLI and direct socket are sequential views of a live compositor.
+        # Require an exact stable triplet; retry only a bounded map/unmap race.
+        for attempt in range(20):
+            before = set(clients(prefix))
+            native_before = observer.query()
+            after = set(clients(prefix))
+            if before == set(native_before) == after:
+                break
+            if attempt == 19:
+                raise RuntimeError('Mango CLI/native observer initial client identities differ')
+            time.sleep(.05)
+"""
+    previous = """        # Check the production CLI and native query agree before launching. No
+        # altered compositor, application preference or service is involved.
+        before = set(clients(prefix))
+        native_before = observer.query()
+        if before != set(native_before):
+            raise RuntimeError('Mango CLI/native observer initial client identities differ')
+"""
+    assert text.count(current) == 1
+    text = text.replace(current, previous)
     current = """    'gnome-web': dict(role='browser', configured=('gtk-launch org.gnome.Epiphany',),
                      program='epiphany', rpm='epiphany-runtime', desktop_rpm='epiphany',
                      desktop='org.gnome.Epiphany.desktop',

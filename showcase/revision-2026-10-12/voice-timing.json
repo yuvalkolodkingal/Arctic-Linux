@@ -1,6 +1,6 @@
 {
   "status": "direct_voxtype_1_1_1_master_aligned_capture_listening_pending",
-  "source_commit": null,
+  "source_commit": "c9ac983c8d54aec109f0ebbbf3633d26b7cf8b9d",
   "source_branch": "codex/showcase-river-production",
   "voice": {
     "provider": "ElevenLabs",
@@ -135,18 +135,18 @@
     "preserved_in_draft_release": false
   },
   "source_archive": {
-    "status": "pending",
-    "release_id": null,
-    "draft": null,
-    "public": null,
-    "target_commit": null,
+    "status": "verified_private_draft",
+    "release_id": 413658818,
+    "draft": true,
+    "public": false,
+    "target_commit": "c9ac983c8d54aec109f0ebbbf3633d26b7cf8b9d",
     "tag": "showcase-river-source-2026-10-15",
-    "asset_id": null,
+    "asset_id": 643686786,
     "asset": "narration-river-arctic-1.2.1-voxtype-1.1.1-2026-10-15.mp3",
     "bytes": 13978270,
-    "rest_digest": null,
-    "download_sha256": null,
-    "full_decode_errors": null
+    "rest_digest": "sha256:f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+    "download_sha256": "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+    "full_decode_errors": 0
   },
   "validation": {
     "local_speech_to_text_alignment": "passed_faster_whisper_1.2.1_base_en_word_alignment",
@@ -309,7 +309,7 @@
     },
     "alignment": "verified_faster_whisper_1_2_1_base_en_word_alignment",
     "capture_evidence": "pending_qualified_direct_voxtype_iso",
-    "note": "The corrected 1.1.1 master is aligned to all 130 approved cues. Rendering remains blocked pending human listening, qualified captures, private source-archive verification and release binding.",
+    "note": "The corrected 1.1.1 master is aligned to all 130 approved cues and preserved in the verified private draft archive. Private rendering remains blocked pending qualified captures and release binding; human listening is required before publication.",
     "failed_full_narration_attempt": {
       "flow_id": "Cy4mMtnohtJes0X2nAN9",
       "node_id": "89XLWvL8r6Kw473qr1C0",

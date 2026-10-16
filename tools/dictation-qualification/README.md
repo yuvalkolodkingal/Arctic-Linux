@@ -100,13 +100,16 @@ The complete installed session requires:
   journal interval, notification history, setup status or state surfaces.
 - Offline transcription after outside HTTP reachability has been disproved.
 
-The modern lane injects a private Vulkan ICD that names an absent library. The
-failed attempt must insert no text. The checker then **explicitly** selects CPU,
-restarts the upstream user service and completes new English and Hebrew
+The modern lane uses the frozen GitHub-hosted VM's real unsupported Vulkan
+environment: its QEMU display is 2D virtio without virgl, GPU passthrough or
+another accelerated Vulkan device. The signed upstream Vulkan payload must be
+present, the guarded selection must fail, preserve CPU and insert no text, and
+Settings must show the actionable error. The checker then **explicitly** selects
+CPU, restarts the upstream user service and completes new English and Hebrew
 recordings. A GPU error never counts as automatic CPU fallback. This VM fixture
 does not certify physical GPU acceleration or a physical driver failure. The
-legacy lane separately proves that Vulkan selection is rejected and that an
-explicit CPU selection succeeds.
+legacy lane separately proves that Vulkan selection is rejected when the
+profile has no Vulkan payload and that an explicit CPU selection succeeds.
 
 The official Vulkan build may fall back at model start when no GPU is available;
 VoxType 1.1.1 has no configuration switch that requires GPU execution. That
@@ -121,9 +124,36 @@ language samples, reused boots/disks and a single hardware profile all fail the
 contract.
 
 Only validated transcript-free JSON, fixture provenance, execution identities
-and the two empty-receiver indicator PNGs per hardware lane may be uploaded.
-Raw serial logs, journals, audio, references, GTK receiver files and hypotheses
-remain private.
+and two empty-receiver indicator PNGs per hardware lane may be uploaded. The
+modern lane additionally uploads four transcript-free Arctic Settings PNGs:
+the actionable Vulkan error and explicit CPU-ready state from both installed
+sessions. Every image is bound to the exact ISO, installation, boot and checked
+gate, and publication requires a separate visual review. Raw serial logs,
+journals, audio, references, GTK receiver files and hypotheses remain private.
+
+A failed CPU transcription gate includes one source-owned numeric
+`failure_stage` so a retained report can locate the failed operation without
+retaining exception text, command output or transcript data. The fixed mapping
+is: 1 fixture selection, 2 receiver clear, 3 pre-recording focus, 4 language
+selection, 5 record start, 6 recording state, 7 engine profile, 8 capture link,
+9 playback start, 10 playback completion, 11 record stop, 12 transcribing state,
+13 terminal idle state, 14 text delivery, 15 text shape, 16 post-insertion focus,
+17 language script, 18 accuracy metrics and 19 sample record. The same field is
+allowed on GPU gates only when their CPU retry transcription fails. Every audio
+sample is still attempted once: the checker does not retry a recording or
+transcription. Consecutive samples in one language reuse the already verified
+language selection instead of restarting the official daemon between samples;
+backend setup invalidates that cache because it regenerates the config.
+
+The microphone-disconnect gate uses the same bounded mechanism with IDs
+101–123 for, in order: receiver clear, CPU selection, initial status, source
+selection, pinned restart/readiness, record start/state/link, route removal,
+source isolation, interrupted cancel, disconnected restart/readiness, failed
+record start, actionable error, idle state, receiver check, cleanup cancel,
+route restoration, default-source restoration, language restoration and error
+clearance. Its cleanup attempts every restoration step and then reports the
+first fixed cleanup stage if any failed, so one failed cleanup operation cannot
+silently skip the remaining restoration work or publish private failure text.
 
 Run source controls with:
 

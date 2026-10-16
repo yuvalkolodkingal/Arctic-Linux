@@ -1,0 +1,93 @@
+name: Export pinned qualification media to a private draft
+
+on:
+  push:
+    branches: [codex/private-media-review-exporter-20261016]
+    paths: [.github/private-media-review-export-20261016.activate]
+
+concurrency:
+  group: private-media-review-export-20261016
+  cancel-in-progress: false
+
+jobs:
+  screen:
+    if: >-
+      github.repository == 'yuvalkolodkingal/Arctic-Linux' &&
+      github.event_name == 'push' && github.run_attempt == 1
+    permissions:
+      actions: read
+      contents: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      bundle_sha256: ${{ steps.bundle.outputs.bundle_sha256 }}
+      bundle_bytes: ${{ steps.bundle.outputs.bundle_bytes }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Install bounded image and OCR decoders
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil tesseract-ocr-eng tesseract-ocr-heb
+      - name: Verify pins, screen and export the declared private review set
+        timeout-minutes: 12
+        run: >-
+          python3 -B tools/private-media-review/export.py export
+          --manifest tools/private-media-review/manifest.json
+          --out "$RUNNER_TEMP/arctic-private-media-review"
+      - name: Create the hash-bound screened handoff
+        id: bundle
+        run: >-
+          python3 -B tools/private-media-review/export.py bundle
+          --input "$RUNNER_TEMP/arctic-private-media-review"
+          --out "$RUNNER_TEMP/arctic-private-media-review.zip"
+          --github-output "$GITHUB_OUTPUT"
+      - name: Transfer only the screened hash-bound bundle
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: private-screened-media-review-20261016
+          path: ${{ runner.temp }}/arctic-private-media-review.zip
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+      - name: Bind the Actions handoff digest
+        env:
+          ACTUAL: ${{ steps.upload.outputs.artifact-digest }}
+        run: |
+          test "$ACTUAL" != ''
+          test '${{ steps.bundle.outputs.bundle_sha256 }}' != ''
+
+  publish:
+    needs: screen
+    if: >-
+      github.repository == 'yuvalkolodkingal/Arctic-Linux' &&
+      github.event_name == 'push' && github.run_attempt == 1
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Download only the screened handoff
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: private-screened-media-review-20261016
+          path: ${{ runner.temp }}/private-screened-handoff
+      - name: Create and verify the collaborator-only draft release
+        run: >-
+          python3 -B tools/private-media-review/publish.py
+          --manifest tools/private-media-review/manifest.json
+          --bundle "$RUNNER_TEMP/private-screened-handoff/arctic-private-media-review.zip"
+          --bundle-sha256 '${{ needs.screen.outputs.bundle_sha256 }}'

@@ -26,26 +26,35 @@ def dictation(facts):
             "recording", "transcribing", "receiver_empty", "transcript_files"}
     c.require(type(facts) is dict and set(facts) == keys, "dictation fact fields differ")
     status = facts["status"]
-    c.require(type(status) is dict, "dictation status missing")
-    profile = status.get("profile")
+    c.require(type(status) is dict and set(status) == c.DICTATION_STATUS_FIELDS,
+              "dictation status schema differs")
+    profile = status["profile"]
     descriptor = c.DICTATION_PROFILES.get(profile)
-    c.require(facts["phase"] == "online-installed" and status.get("ok") is True
-              and status.get("ready") is True and status.get("state") == "ready"
-              and status.get("version") == "1.1.1" and descriptor is not None
-              and {key: status.get(key) for key in descriptor} == descriptor
-              and all(type(status.get(key)) is type(expected) for key, expected in descriptor.items())
-              and status.get("compatibility_required") is False
+    c.require(facts["phase"] == "online-installed"
+              and type(status["ready"]) is bool and status["ready"] is True
+              and status["state"] == "ready" and status["error"] == ""
+              and status["version"] == "1.1.1"
+              and type(status["upgrade_pending"]) is bool
+              and status["upgrade_pending"] is False
+              and status["language"] in ("auto", "he", "en")
+              and status["backend"] == "cpu" and descriptor is not None
+              and {key: status[key] for key in descriptor} == descriptor
+              and all(type(status[key]) is type(expected)
+                      for key, expected in descriptor.items())
+              and type(status["vulkan_download_bytes"]) is int
+              and status["vulkan_download_bytes"] == 66_575_872
               and facts["settings_ready"] is True and facts["settings_page"] == "dictation"
               and type(facts["settings_clients"]) is int and facts["settings_clients"] == 1
               and facts["recording"] is False
               and facts["transcribing"] is False and facts["receiver_empty"] is True
               and type(facts["transcript_files"]) is int and facts["transcript_files"] == 0,
               "dictation diagnostic check failed")
-    return {"phase": facts["phase"], "status_ok": True, "ready": True, "state": "ready",
-            "version": "1.1.1", "profile": profile,
-            "model": descriptor["model"], "cpu_variant": descriptor["cpu_variant"],
+    return {"phase": facts["phase"], "ready": True, "state": "ready", "error": "",
+            "version": "1.1.1", "upgrade_pending": False, "language": status["language"],
+            "backend": "cpu", "profile": profile, "model": descriptor["model"],
             "model_download_bytes": descriptor["model_download_bytes"],
-            "download_bytes": descriptor["download_bytes"], "compatibility_required": False,
+            "download_bytes": descriptor["download_bytes"],
+            "vulkan_download_bytes": 66_575_872,
             "settings_ready": True, "settings_page": "dictation",
             "settings_clients": 1, "recording": False, "transcribing": False,
             "receiver_empty": True, "transcript_files": 0}

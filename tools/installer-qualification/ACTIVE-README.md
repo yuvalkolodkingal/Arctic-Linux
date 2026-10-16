@@ -64,18 +64,22 @@ the final crop stops before the following prompt. The original 1280×720 capture
 stay unchanged. Whole-frame OCR can interpret identical small glyphs differently,
 so it is used for readiness and the private-input guard, rather than response
 recognition. The three physical regions must each contain exactly one 20-digit
-record with its expected marker in that position. The parser must observe exactly three records with
-distinct expected row markers on the physical 1280×720 console within the original
-45-second bound. Normally at least two rows must agree on every one of the 19
-response digits, and the complete consensus must equal the expected 60-bit
-response. If OCR damages the same glyph in multiple rows, authorization instead
-requires the three original-scale response-cell pixel regions to be byte-identical
-and at least one complete row OCR to equal its expected marker and full 60-bit
-response. Pixels alone and near-match text never authorize. Two exact rows without
-the third marker cannot pass. Disjoint OCR errors can be corrected; duplicate or
-swapped markers, changed response pixels, zero exact rows, split votes, stale
-responses and wrong identities fail closed. Sudo input remains forbidden
-until that response is observed. Getty and sudo password OCR remain unchanged.
+record with its expected marker in that position. The parser must observe exactly
+three records with distinct expected row markers on the physical 1280×720 console
+within the original 45-second bound. Normally at least two rows must agree on every
+one of the 19 response digits, and the complete consensus must equal the expected
+60-bit response. The command also renders one fixed ordered `0123456789` legend in
+the same bold console font. The observer compares every unchanged 8×16 response
+cell with the ten unique legend cells and accepts a correlated OCR error only when
+all three physical rows decode to the complete expected response. The earlier
+one-exact-row fallback remains bound to three byte-identical response regions.
+OCR must still read the three distinct positional markers and exactly three
+fixed-width rows. Pixels alone and near-match text never authorize. Two exact rows
+without the third marker cannot pass. Duplicate or swapped markers, a duplicate or
+blank legend glyph, an unknown response glyph, changed response pixels, split
+votes, stale responses and wrong identities fail closed. Sudo input remains
+forbidden until that response is observed. Getty and sudo password OCR remain
+unchanged.
 
 The four live guest captures, actual VT-away host capture and two pre-input console
 prompt captures form a mandatory seven-image manual review inventory. The OCR

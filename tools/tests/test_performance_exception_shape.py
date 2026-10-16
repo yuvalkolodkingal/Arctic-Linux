@@ -41,16 +41,36 @@ class ExceptionShapeTest(unittest.TestCase):
         historical = historical.replace(b'pinned 110-site inventory', b'pinned 104-site inventory')
         historical = historical.replace(b'Complete 110-site inventory bound to the frozen observer.',
                                         b'Complete 104-site inventory bound to the original frozen observer.')
+        historical = historical.replace(b"len(inventory) != 110 or digest != '8c931e11ec264d92c4f789e9d3b6a3bfea603cbf43c6821b5156c865dd60cab9'",
+                                        b"len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51'")
         historical = historical.replace(b"len(inventory) != 110 or digest != '0036a44d0991027dabbdfd3a0e52dd42faaacbb3b1ce77f5dae096737c507b51'",
                                         b"len(inventory) != 104 or digest != '2d94f03b8519b3a3e4d95f24a2834dec5171997a84e6deba1f02e20fd936701b'")
+        self.assertEqual(historical.count(b'not 947 <= frames[1][0] <= 1013'), 1)
+        historical = historical.replace(b'not 947 <= frames[1][0] <= 1013',
+                                        b'not 942 <= frames[1][0] <= 1008')
         self.assertEqual(historical.count(b'not 942 <= frames[1][0] <= 1008'), 1)
         historical = historical.replace(b'not 942 <= frames[1][0] <= 1008',
                                         b'not 871 <= frames[1][0] <= 942')
         for current, previous in (
-                (b'ae57b29c0d36b833ec571b2d8886e3468459db40551e2a127b906602e7401818', b'c6532d1b6dde6101c7f8856072498985b3be5aeb7d91d873ac428610e1dc7ae6'),
-                (b'd751e1f6f52f574a3d247dfa09aa984ad791d2c3873d8193fa4eb9c6e8c2d02e', b'5a1bce24d3097cbeeb936701de0cf87b4bc8bf7f8aa121dc0f7a498b9a821b1e'),
-                (b'1de5938ab1c96951dffcc84980d59f373124a26955a6ef292216973917d3aafd', b'dce568410fb95f027c1ab4b44148b8af93ea16f32e0b64dcff79bcb707b77940'),
-                (b'96ccc1e7a992a092e79aa00661f0098acaeba8e3f3ef76ff856716b720ac3158', b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562'),
+                (b'c9f9e28142788da739fcb8c0ebfddf39823fd88b9b62d108582d9dfcef42a408', b'dc3e24713f2241fe2f794795de5cd75091af5ebbdc3cccc7efe3616ee738b6b1'),
+                (b'5aeca09dfde70e7ec4e69ff29c5d102f30dea23df427d08823f5e3221c73a1e7', b'31ca4168768680f3a267016bf3dd3e1c0ba6a449f40b0d50038d7c1b8f4d62e5'),
+                (b'3a1a7549cce04665e2f2300a684aa842f2b00fcd7208acaf556e5cca0c078f47', b'726b4f3788cfd4f1357a7fd26147d2f91b9c31c87bbc0c01d8803a89f50af82b'),
+                (b'f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208', b'df9f89b5dd5b6323df67d46f40ed8f8d7f8f68c602b9520224e4c283384266a1'),
+                (b'dc3e24713f2241fe2f794795de5cd75091af5ebbdc3cccc7efe3616ee738b6b1', b'06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5'),
+                (b'31ca4168768680f3a267016bf3dd3e1c0ba6a449f40b0d50038d7c1b8f4d62e5', b'd576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf'),
+                (b'726b4f3788cfd4f1357a7fd26147d2f91b9c31c87bbc0c01d8803a89f50af82b', b'7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e'),
+                (b'df9f89b5dd5b6323df67d46f40ed8f8d7f8f68c602b9520224e4c283384266a1', b'ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85'),
+                (b'd576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf', b'fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf'),
+                (b'7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e', b'4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256'),
+                (b'ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85', b'c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc'),
+                (b'06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5', b'8ddb36c2c84a3e103e8e34e0c39a2a9d61ddc992ed5ddd1e2396ad06be30e680'),
+                (b'fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf', b'6a2bde52bc55e3f2fb2545370b6ed16287fa4979e0a64c55eaff134ea6db091c'),
+                (b'4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256', b'03fd8f81c2bd744c5cfdc13fc6694d5aa0ef0ad19a78276763046512aaf5c40d'),
+                (b'62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415', b'69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73'),
+                (b'6a2bde52bc55e3f2fb2545370b6ed16287fa4979e0a64c55eaff134ea6db091c', b'c6532d1b6dde6101c7f8856072498985b3be5aeb7d91d873ac428610e1dc7ae6'),
+                (b'03fd8f81c2bd744c5cfdc13fc6694d5aa0ef0ad19a78276763046512aaf5c40d', b'5a1bce24d3097cbeeb936701de0cf87b4bc8bf7f8aa121dc0f7a498b9a821b1e'),
+                (b'c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc', b'dce568410fb95f027c1ab4b44148b8af93ea16f32e0b64dcff79bcb707b77940'),
+                (b'8ddb36c2c84a3e103e8e34e0c39a2a9d61ddc992ed5ddd1e2396ad06be30e680', b'bdd1dbcc5f45af671063b58779306f8add7ccfd656549495937e91996ccbf562'),
                 (b'c6532d1b6dde6101c7f8856072498985b3be5aeb7d91d873ac428610e1dc7ae6', b'7f0eb763b0b649a7b60153e3c11518029f71b44e08d6714f013db51409c6a2ed'),
                 (b'5a1bce24d3097cbeeb936701de0cf87b4bc8bf7f8aa121dc0f7a498b9a821b1e', b'733870e07dfed54229b9b8bf21000573545fe2479c2fd9c35454be301c8683e7'),
                 (b'69ab0810e5e4e521f238a2a4ad2bf262b50791c288fdf2d071b3ee72ebcd6e73', b'088eaa168c30e0ab4faae90e50045f6615f29594dc06a7361ee8ea398951636d'),

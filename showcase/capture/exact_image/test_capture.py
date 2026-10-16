@@ -18,7 +18,6 @@ import guest
 import host
 
 
-
 def installed_proof():
     marker = {"schema": "arctic-installed-image-provenance-v1", "image": copy.deepcopy(c.IMAGE),
               "disk_serial": c.VM_DISK_SERIAL, "installation_id": "1" * 32,
@@ -75,10 +74,11 @@ def session(scene, facts, random=lambda size: b"\x55" * size):
 
 def dictation_facts():
     return {"phase": "online-installed",
-            "status": {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
+            "status": {"state": "ready", "ready": True, "error": "", "version": "1.1.1",
+                       "upgrade_pending": False, "language": "auto", "backend": "cpu",
                        "profile": "turbo-q5-v3", "model": "large-v3-turbo-q5_0",
-                       "cpu_variant": "avx2", "model_download_bytes": 574041195,
-                       "download_bytes": 593457131, "compatibility_required": False},
+                       "model_download_bytes": 574041195, "download_bytes": 593457131,
+                       "vulkan_download_bytes": 66575872},
             "settings_ready": True, "settings_page": "dictation", "settings_clients": 1,
             "recording": False, "transcribing": False, "receiver_empty": True, "transcript_files": 0}
 
@@ -142,12 +142,18 @@ def vm_provenance():
 
 
 def controller_trace():
-    screen = lambda expectation: {"bytes": 1234, "sha256": "a" * 64,
-                                  "ocr_sha256": "b" * 64, "expectation": expectation,
-                                  "width": 1280, "height": 800}
+    def screen(expectation):
+        width, height = ((1920, 1080) if expectation == "install-boot-menu-selected"
+                         else (1280, 800))
+        return {"bytes": 1234, "sha256": "a" * 64,
+                "ocr_sha256": "b" * 64, "expectation": expectation,
+                "width": width, "height": height}
     rows = [
+        ("live-boot", "keys", {"names": ["home"]}),
         ("live-boot", "screen", screen("install-boot-menu")),
-        ("live-boot", "keys", {"names": ["home", "down", "ret"]}),
+        ("live-boot", "keys", {"names": ["down"]}),
+        ("live-boot", "screen", screen("install-boot-menu-selected")),
+        ("live-boot", "keys", {"names": ["ret"]}),
         ("live-boot", "screen", screen("live-installer-visible")),
         ("live-console", "keys", {"names": ["ctrl-alt-f6"]}),
         ("live-console", "screen", screen("live-console-login")),
@@ -162,6 +168,8 @@ def controller_trace():
         ("install-complete", "screen", screen("installer-done")),
         ("installed-transition", "qmp", {"operation": "eject-exact-iso"}),
         ("installed-transition", "qmp", {"operation": "system-reset"}),
+        ("installed-boot", "screen", screen("first-login-welcome")),
+        ("installed-boot", "keys", {"names": ["esc"]}),
         ("installed-console", "keys", {"names": ["ctrl-alt-f6"]}),
         ("installed-boot", "screen", screen("installed-login-ready")),
         ("installed-console", "text", {"command": "installed-username", "characters": 14,
@@ -171,20 +179,24 @@ def controller_trace():
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
-        ("installed-console", "text", {"command": "installed-shell-proof", "characters": 119,
-                                         "sha256": "d4e0d2a1ef814035fdc94ff2ff81ebddd74658f5ea8389a4784c75a2bca36466"}),
+        ("installed-console", "screen", screen("installed-fetch-greeting")),
         ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "text", {"command": "installed-shell-proof", "characters": 996,
+                                         "sha256": "ff17d3cc4effe8d74d6f059d5d017ae9443b0310763d3c329785d395f80e273c"}),
+        ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "session", {
+            "transport": "owned-root-virtio-serial", "challenge_sha256": "c" * 64,
+            "identity": "uid-1000-arcticshowcase-at-arctic-showcase-fish"}),
+        ("installed-console", "screen", screen("installed-shell-ready")),
         ("installed-console", "screen", screen("installed-shell")),
-        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 417,
-                                        "sha256": "fdc5975a8303234e9099a11187a3616a6ea59d3b7e8cd83e080b0793efc6b735"}),
+        ("installed-scenes", "text", {"command": "installed-scenes", "characters": 548,
+                                        "sha256": "f1418f9787b417445c2792a686e024986367ec186f1ff5d798a463fa938d4d06"}),
         ("installed-scenes", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-sudo-password")),
         ("installed-console", "secret", {"source": "reviewed-disposable-controller-constant",
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-scenes", "command", {"id": "installed-scenes"}),
-        ("installed-boot", "screen", screen("first-login-welcome")),
-        ("installed-boot", "keys", {"names": ["esc"]}),
         ("installed-boot", "screen", screen("first-login-dismissed")),
         ("dictation-readiness", "command", {"id": "dictation-readiness"}),
         ("dictationsetup", "command", {"id": "dictationsetup"}),
@@ -221,11 +233,13 @@ class DiagnosticChecks(unittest.TestCase):
         self.assertTrue(guest.wallpaper(wallpaper_facts())["returned_after_restore"])
         self.assertFalse(guest.updates(updates_facts())["automatic_trigger_proved"])
 
-    def test_dictation_rejects_recording_and_small_download(self):
+    def test_dictation_rejects_recording_changed_values_types_and_invented_fields(self):
         for mutate in (lambda value: value.update(recording=True),
                        lambda value: value["status"].update(download_bytes=9),
                        lambda value: value["status"].update(download_bytes=593457131.0),
-                       lambda value: value["status"].update(model_download_bytes=574041195.0)):
+                       lambda value: value["status"].update(model_download_bytes=574041195.0),
+                       lambda value: value["status"].update(ok=True),
+                       lambda value: value["status"].pop("error")):
             value = dictation_facts(); mutate(value)
             with self.assertRaises(c.Invalid): guest.dictation(value)
 
@@ -306,6 +320,31 @@ class Protocol(unittest.TestCase):
                        artifact_digest="sha256:" + "b" * 64)
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
+
+    def test_nonsecret_proof_precedes_the_prompt_gate(self):
+        value = controller_trace()
+        proof = next(event for event in value["events"]
+                     if event["kind"] == "text"
+                     and event["detail"].get("command") == "installed-shell-proof")
+        proof["detail"]["command"] = "installed-scenes"
+        with self.assertRaisesRegex(c.Invalid, "text record|fetch redraw|key inventory"):
+            c.controller_trace(value)
+
+    def test_second_exact_prompt_frame_precedes_sudo_launcher(self):
+        value = controller_trace()
+        events = value["events"]
+        shell = next(index for index, event in enumerate(events)
+                     if event["kind"] == "screen"
+                     and event["detail"].get("expectation") == "installed-shell")
+        launcher = next(index for index, event in enumerate(events)
+                        if event["kind"] == "text"
+                        and event["detail"].get("command") == "installed-scenes")
+        moved = events.pop(launcher)
+        events.insert(shell, moved)
+        for index, event in enumerate(events):
+            event["index"] = index
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw sequence"):
+            c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):
         value = installed_snapshot()

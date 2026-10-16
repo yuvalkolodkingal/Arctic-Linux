@@ -19,10 +19,10 @@ PARENT = 'a25d6c0e9e457a783e2de8f223028eaf945eee84'
 
 
 def restore_collector_host_relay(text):
-    """Remove exactly this relay layer and recover its reviewed parent bytes."""
+    """Remove exactly this relay layer while retaining surrounding layers."""
     constants = 'COLLECTOR_SETUP_STAGES = ('
-    helper = 'def relay_collector_diagnostic(vm, phase):'
-    call = '                relay_collector_diagnostic(vm, phase)\n'
+    helper = 'def relay_collector_diagnostic(vm, phase, stage):'
+    call = '                relay_collector_diagnostic(vm, phase, stage)\n'
     present = (constants in text, helper in text, call in text)
     if not any(present):
         return text
@@ -38,6 +38,21 @@ def restore_collector_host_relay(text):
 
 
 class CollectorHostRelayControls(unittest.TestCase):
+    def test_runner_defines_and_calls_one_stage_aware_relay(self):
+        tree = ast.parse(Path(runner.__file__).read_text())
+        helpers = [node for node in tree.body
+                   if isinstance(node, ast.FunctionDef)
+                   and node.name == 'relay_collector_diagnostic']
+        self.assertEqual(len(helpers), 1)
+        self.assertEqual([item.arg for item in helpers[0].args.args],
+                         ['vm', 'phase', 'stage'])
+        calls = [node for node in ast.walk(tree)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
+                 and node.func.id == 'relay_collector_diagnostic']
+        self.assertEqual(len(calls), 1)
+        self.assertEqual([item.id if isinstance(item, ast.Name) else None
+                          for item in calls[0].args], ['vm', 'phase', 'stage'])
+
     def test_fixed_inventory_matches_guest_source(self):
         tree = ast.parse(Path(__file__).with_name('guest_check.py').read_text())
         assignments = {
@@ -58,14 +73,53 @@ class CollectorHostRelayControls(unittest.TestCase):
                 'collector-' + stage + '-' + label
                 for stage in stages for label in labels}))
 
-    def relay(self, serial, phase='recovered-offline'):
+    def relay(self, serial, phase='recovered-offline', stage='boot', name='serial-boot.log'):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / 'serial-boot.log').write_bytes(serial)
+            (root / name).write_bytes(serial)
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                runner.relay_collector_diagnostic(root, phase)
+                runner.relay_collector_diagnostic(root, phase, stage)
             return output.getvalue()
+
+    def test_install_stage_collector_code_relays_from_install_serial(self):
+        record = (b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                  b'{"code":"collector-integration-invalid",'
+                  b'"release_acceptance":false}\n')
+        self.assertEqual(
+            self.relay(record, phase='online-installed', stage='all',
+                       name='serial-install.log'),
+            'ARCTIC-DICTATION-HOST-FAILURE online-installed collector '
+            'collector-integration-invalid\n')
+
+    def test_installed_tty_crlf_collector_code_relays_without_payload(self):
+        record = (b'private transcript before\r\n'
+                  b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                  b'{"code":"collector-execution-os-error",'
+                  b'"release_acceptance":false}\r\n'
+                  b'private transcript after\r\n')
+        output = self.relay(record, phase='online-installed', stage='all')
+        self.assertEqual(
+            output,
+            'ARCTIC-DICTATION-HOST-FAILURE online-installed collector '
+            'collector-execution-os-error\n')
+        self.assertNotIn('private', output)
+
+    def test_all_stage_rejects_duplicate_collector_records_across_install_and_boot(self):
+        record = (b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                  b'{"code":"collector-integration-invalid",'
+                  b'"release_acceptance":false}\n')
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / 'serial-install.log').write_bytes(record)
+            (root / 'serial-boot.log').write_bytes(record)
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                runner.relay_collector_diagnostic(root, 'online-installed', 'all')
+            self.assertEqual(
+                output.getvalue(),
+                'ARCTIC-DICTATION-HOST-FAILURE online-installed collector '
+                'collector-invalid-record\n')
 
     def test_every_finite_guest_code_relays_without_payload(self):
         for code in sorted(runner.COLLECTOR_DIAGNOSTIC_CODES):
@@ -96,6 +150,7 @@ class CollectorHostRelayControls(unittest.TestCase):
             b'{"code":"collector-integration-invalid","release_acceptance":false}\n'
             b'ARCTIC-DICTATION-COLLECTOR-ERROR '
             b'{"code":"collector-integration-invalid","release_acceptance":false}\n',
+            b'ARCTIC-DICTATION-COLLECTOR-ERROR ' + b' ' * 512 + b'\r\n',
         )
         for serial in records:
             with self.subTest(serial=serial):
@@ -113,6 +168,15 @@ class CollectorHostRelayControls(unittest.TestCase):
                 b'{"code":"collector-integration-invalid",'
                 b'"code":"private","release_acceptance":false}\n',
                 b'ARCTIC-DICTATION-COLLECTOR-ERROR {}',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",'
+                b'"release_acceptance":false}\r',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",\r'
+                b'"release_acceptance":false}\n',
+                b'ARCTIC-DICTATION-COLLECTOR-ERROR '
+                b'{"code":"collector-integration-invalid",'
+                b'"release_acceptance":false}\r\r\n',
                 b'private transcript only\n'):
             with self.subTest(serial=serial):
                 output = self.relay(serial)
@@ -124,7 +188,7 @@ class CollectorHostRelayControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                runner.relay_collector_diagnostic(Path(tmp), 'recovered-offline')
+                runner.relay_collector_diagnostic(Path(tmp), 'recovered-offline', 'boot')
             self.assertEqual(output.getvalue(), '')
 
     def test_non_phase_context_cannot_relay(self):

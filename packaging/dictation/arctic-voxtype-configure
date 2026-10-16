@@ -101,7 +101,7 @@ mode = "local"
 model = "$model"
 language = ["he", "en"]
 translate = false
-on_demand_loading = true
+on_demand_loading = false
 
 [text]
 filter_filler_words = false

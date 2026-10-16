@@ -22,6 +22,7 @@ jobs:
           persist-credentials: false
 
       - name: Verify reviewed single-file activation and execution manifest
+        id: reviewed
         working-directory: execution
         run: |
           python3 -B - <<'PY'
@@ -38,17 +39,20 @@ jobs:
           assert manifest['ready'] is True and manifest['release_acceptance'] is False
           sys.path.insert(0,'showcase/capture/exact_image')
           import contract
+          contract.require_active()
           assert manifest['image']==contract.IMAGE
           assert manifest['controller']==contract.CONTROLLER
           assert manifest['branch']=='codex/showcase-exact-capture-20261014'
           expected={
               '.github/workflows/showcase-exact-capture-20261014.yml',
               'tools/native-functional/fetch-image.py',
+              'tools/dictation-qualification/contract.py',
               'showcase/capture/exact_image/automation.py',
               'showcase/capture/exact_image/bundle.py',
               'showcase/capture/exact_image/capture_probe.py',
               'showcase/capture/exact_image/capture_vm.py',
               'showcase/capture/exact_image/contract.py',
+              'showcase/capture/exact_image/dictation_bundle.py',
               'showcase/capture/exact_image/guest.py',
               'showcase/capture/exact_image/host.py',
               'showcase/capture/exact_image/unattended.py',
@@ -59,6 +63,18 @@ jobs:
               path=Path(name)
               assert path.is_file() and not path.is_symlink()
               assert hashlib.sha256(path.read_bytes()).hexdigest()==expected
+          import dictation_bundle
+          evidence=dictation_bundle.evidence_pin(manifest['dictation_evidence'])
+          image=manifest['image']
+          assert evidence['image']==image
+          candidate_name=image['name']
+          assert type(image['run_id']) is int and image['run_id'] > 0
+          assert candidate_name==f"Arctic-Linux-1.2-candidate-{image['run_id']}-1-x86_64.iso"
+          assert Path(candidate_name).name==candidate_name
+          with open(os.environ['GITHUB_OUTPUT'],'a',encoding='utf-8') as output:
+              output.write('candidate_name='+candidate_name+'\n')
+              output.write('dictation_run_id='+str(evidence['run_id'])+'\n')
+              output.write('dictation_artifact_id='+str(evidence['artifact_id'])+'\n')
           PY
 
       - name: Install fixed host dependencies
@@ -86,18 +102,51 @@ jobs:
             --manifest execution/showcase/capture/exact_image/execution-manifest.json \
             --out "$RUNNER_TEMP/arctic-showcase/inputs"
 
+      - name: Fetch and verify the exact-image VoxType capture evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DICTATION_RUN_ID: ${{ steps.reviewed.outputs.dictation_run_id }}
+          DICTATION_ARTIFACT_ID: ${{ steps.reviewed.outputs.dictation_artifact_id }}
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/arctic-showcase/dictation-evidence"
+          install -d -m 0700 "$evidence"
+          umask 077
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DICTATION_RUN_ID" > "$evidence/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$DICTATION_ARTIFACT_ID" > "$evidence/artifact.json"
+          /usr/bin/python3 -B execution/showcase/capture/exact_image/dictation_bundle.py verify-metadata \
+            --manifest execution/showcase/capture/exact_image/execution-manifest.json \
+            --run-json "$evidence/run.json" --artifact-json "$evidence/artifact.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$DICTATION_ARTIFACT_ID/zip" \
+            > "$evidence/archive.zip"
+          /usr/bin/python3 -B execution/showcase/capture/exact_image/dictation_bundle.py extract \
+            --manifest execution/showcase/capture/exact_image/execution-manifest.json \
+            --archive "$evidence/archive.zip" --output "$evidence/extracted"
+
       - name: Install once and capture three host-screened exact-image scenes
         id: capture
         timeout-minutes: 170
         run: |
-          iso="$RUNNER_TEMP/arctic-showcase/inputs/iso/Arctic-Linux-1.2-candidate-38536710765-1-x86_64.iso"
-          test -f "$iso"
+          iso="$RUNNER_TEMP/arctic-showcase/inputs/iso/${{ steps.reviewed.outputs.candidate_name }}"
+          test -f "$iso" && test ! -L "$iso"
           /usr/bin/python3 -B execution/showcase/capture/exact_image/capture_vm.py host \
             --candidate-iso "$iso" \
             --output "$RUNNER_TEMP/arctic-showcase/exact-captures" \
             --failure-report "$RUNNER_TEMP/arctic-showcase/failure-projection.json" \
             --display none --accel kvm --unattended --timeout 7200 --ocr-timeout 60 \
             > "$RUNNER_TEMP/arctic-showcase/result.json"
+
+      - name: Admit the two checked VoxType scenes for human review
+        timeout-minutes: 5
+        run: |
+          root="$RUNNER_TEMP/arctic-showcase"
+          /usr/bin/python3 -B execution/showcase/capture/exact_image/dictation_bundle.py export \
+            --manifest execution/showcase/capture/exact_image/execution-manifest.json \
+            --evidence "$root/dictation-evidence/extracted" --repository execution \
+            --output "$root/exact-dictation-captures" \
+            --archive "$root/exact-dictation-captures.tar" \
+            --digest "$root/exact-dictation-captures.digest.json" --ocr-timeout 60
 
       - name: Validate bounded privacy-safe failure projection
         id: failure_projection
@@ -141,6 +190,11 @@ jobs:
             "$RUNNER_TEMP/arctic-showcase/exact-captures.digest.json" \
             "$RUNNER_TEMP/arctic-showcase/exact-captures.tar" \
             --expected-contract-sha256 "$contract_sha256"
+          /usr/bin/python3 -B execution/showcase/capture/exact_image/dictation_bundle.py validate \
+            --bundle "$RUNNER_TEMP/arctic-showcase/exact-dictation-captures" \
+            --archive "$RUNNER_TEMP/arctic-showcase/exact-dictation-captures.tar" \
+            --digest "$RUNNER_TEMP/arctic-showcase/exact-dictation-captures.digest.json" \
+            --ocr-timeout 60
           python3 -B - <<'PY'
           import json,os
           from pathlib import Path
@@ -151,6 +205,13 @@ jobs:
           manifest=json.loads((root/'exact-captures/bundle.json').read_text())
           assert manifest['release_acceptance'] is False
           assert manifest['privacy']=={'automated':'passed_and_rechecked_after_export','human':'pending'}
+          dictation=json.loads((root/'exact-dictation-captures/bundle.json').read_text())
+          assert dictation['release_acceptance'] is False
+          assert dictation['human_review']=='pending'
+          assert dictation['privacy']=={'automated':'passed_and_rechecked_after_export','human':'pending'}
+          assert manifest['image']==dictation['image']
+          assert set(manifest['scenes']) | set(dictation['scenes']) == {
+              'dictationsetup','dictationrecord','dictationrecovery','winter','updates'}
           PY
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -160,6 +221,9 @@ jobs:
             ${{ runner.temp }}/arctic-showcase/exact-captures/
             ${{ runner.temp }}/arctic-showcase/exact-captures.tar
             ${{ runner.temp }}/arctic-showcase/exact-captures.digest.json
+            ${{ runner.temp }}/arctic-showcase/exact-dictation-captures/
+            ${{ runner.temp }}/arctic-showcase/exact-dictation-captures.tar
+            ${{ runner.temp }}/arctic-showcase/exact-dictation-captures.digest.json
             ${{ runner.temp }}/arctic-showcase/result.json
           if-no-files-found: error
           retention-days: 14

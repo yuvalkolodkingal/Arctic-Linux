@@ -401,17 +401,21 @@ def ocr_provenance():
 
 
 IDENTITY_MARKERS = ('2', '4', '6')
+IDENTITY_LEGEND = '0123456789'
 IDENTITY_TOKEN_DIGITS = 19
 IDENTITY_RECORDS = 3
 IDENTITY_CHALLENGE_IMAGES = tuple('installed-identity-challenge-' + str(index) + '.png'
                                   for index in range(IDENTITY_RECORDS))
 IDENTITY_CHALLENGE_METADATA = 'installed-identity-challenges.json'
-# The unchanged challenge positions rows at ANSI lines 8, 10 and 12. The exact
+# The unchanged challenge positions rows at ANSI lines 8, 10 and 12. A fixed
+# ordered digit legend is at ANSI line 6. The exact
 # 1280x720 installed console uses 8x16-pixel cells. Keep the 20-character rows
 # separate with eight horizontal and four vertical padding pixels. The final
 # crop stops before the following prompt's console cell; black canvas padding
 # keeps its OCR input height equal. No response pixels are changed or scaled.
 IDENTITY_RECORD_BOXES = ((64, 108, 240, 132), (64, 140, 240, 164), (64, 172, 240, 192))
+IDENTITY_LEGEND_BOX = (72, 80, 152, 96)
+IDENTITY_RESPONSE_CELL_ORIGINS = ((80, 112), (80, 144), (80, 176))
 
 
 def installed_user_token(nonce, user='arcticqual', uid=1000, id_un='arcticqual'):
@@ -446,7 +450,8 @@ def installed_user_command(nonce):
     return ("sh -c 'u=$(id -u)||exit;n=$(id -un)||exit;"
             "h=$(printf \"%s\\0%s\\0%s\\0%s\\0\" \"$1\" \"$USER\" \"$u\" \"$n\"|sha256sum|cut -c1-15);"
             "d=$(printf %019u 0x$h)||exit;"
-            "printf \"\\033[2J\\033[8;10H\\033[1m\\062%s\\n\\n"
+            "printf \"\\033[2J\\033[6;10H\\033[1m\\060\\061\\062\\063\\064\\065\\066\\067\\070\\071\\n\\n"
+            "         \\062%s\\n\\n"
             "         \\064%s\\n\\n"
             "         \\066%s\\033[0m\\n\" \"$d\" \"$d\" \"$d\"' sh " + nonce)
 
@@ -463,10 +468,15 @@ def _identity_count(value):
     return ('zero', 'one', 'two', 'three')[value] if value < 4 else 'four-or-more'
 
 
-def _identity_ocr_observation(stdout, expected, sent, physical_rows_proven=False):
+def _identity_ocr_observation(stdout, expected, sent, physical_rows_proven=False,
+                              physical_response=None):
     """Parse only fixed-width decimal records and return counts, never OCR text."""
     require(type(stdout) is bytes and len(stdout) <= 65536, 'prompt OCR exceeds bound')
     require(type(physical_rows_proven) is bool,
+            'installed user identity physical proof differs')
+    require(physical_response is None or
+            (type(physical_response) is str and
+             re.fullmatch('[0-9]{' + str(IDENTITY_TOKEN_DIGITS) + '}', physical_response)),
             'installed user identity physical proof differs')
     require(type(expected) is tuple and len(expected) == IDENTITY_RECORDS and
             len(set(expected)) == IDENTITY_RECORDS,
@@ -503,15 +513,16 @@ def _identity_ocr_observation(stdout, expected, sent, physical_rows_proven=False
             tuple(record[0] for record in expected) == IDENTITY_MARKERS,
             'installed user identity records differ')
     # A whole response may also be established by unchanged physical pixels:
-    # the three fixed row crops must have byte-identical response cells, every
-    # crop must OCR its own distinct marker, and at least one complete OCR row
-    # must equal its expected marker plus the full 60-bit response. This
-    # tolerates correlated OCR damage to an identical glyph in the other rows
-    # without accepting a near match, synthesizing text, or trusting pixels
-    # alone. The caller derives physical_rows_proven from the original frame's
-    # per-position marker reads and response pixels; it is never derived from a
-    # text-only consensus.
-    pixel_bound_exact = physical_rows_proven and len(exact) >= 1
+    # the three fixed row crops must have byte-identical response cells and
+    # every crop must OCR its own distinct marker. Either one complete OCR row
+    # is exact, or every original 8x16 response cell must decode against the
+    # ten unique ordered legend cells to the full expected 60-bit response.
+    # This tolerates correlated OCR damage without accepting a near match,
+    # synthesizing text, or trusting pixels alone. The caller derives
+    # physical_rows_proven from per-position marker reads and response pixels;
+    # it is never derived from a text-only consensus.
+    pixel_bound_exact = physical_rows_proven and (len(exact) >= 1 or
+                                                  physical_response == expected_response)
     accepted = sent and len(numeric) == len(marked) == IDENTITY_RECORDS and \
         {line[0] for line in marked} == set(IDENTITY_MARKERS) and \
         (consensus == expected_response or pixel_bound_exact)
@@ -635,14 +646,19 @@ def discard_identity_challenges(out, captures):
 
 
 def installed_identity_ocr(path, deadline):
-    """Read three distinct physical rows; preserve every original response bit."""
+    """Read three distinct physical rows and decode their exact console cells."""
     raw, generation = identity_diagnostic_read(path, 8 * 1024 * 1024)
     from PIL import Image
-    outputs, regions_valid, response_regions = [], True, []
+    outputs, regions_valid, response_regions, decoded_rows = [], True, [], []
     with Image.open(io.BytesIO(raw)) as image:
         require(image.format == 'PNG' and image.mode == 'RGB' and image.size == (1280, 720),
                 'installed prompt physical dimensions differ')
         image.load()
+        legend = [image.crop((IDENTITY_LEGEND_BOX[0] + index * 8, IDENTITY_LEGEND_BOX[1],
+                              IDENTITY_LEGEND_BOX[0] + (index + 1) * 8, IDENTITY_LEGEND_BOX[3])).tobytes()
+                  for index in range(len(IDENTITY_LEGEND))]
+        legend_valid = len(legend) == len(IDENTITY_LEGEND) and len(set(legend)) == len(legend) and \
+            all(len(set(cell)) > 1 for cell in legend)
         for marker, box in zip(IDENTITY_MARKERS, IDENTITY_RECORD_BOXES):
             remaining = deadline - time.monotonic()
             require(remaining > 0, 'installed user identity deadline exceeded')
@@ -655,6 +671,18 @@ def installed_identity_ocr(path, deadline):
             # including their padding, after translating each crop to the same
             # fixed canvas. No pixels are resized, normalized, or exported.
             response_regions.append(row.crop((16, 0, 176, 24)).tobytes())
+            origin = IDENTITY_RESPONSE_CELL_ORIGINS[len(decoded_rows)]
+            cells = [image.crop((origin[0] + index * 8, origin[1],
+                                 origin[0] + (index + 1) * 8, origin[1] + 16)).tobytes()
+                     for index in range(IDENTITY_TOKEN_DIGITS)]
+            decoded = []
+            for cell in cells:
+                matches = [digit for digit, known in zip(IDENTITY_LEGEND, legend) if cell == known]
+                if len(matches) != 1:
+                    decoded = []
+                    break
+                decoded.append(matches[0])
+            decoded_rows.append(''.join(decoded) if len(decoded) == IDENTITY_TOKEN_DIGITS else None)
             row.save(buffer, format='PNG')
             result = subprocess.run(['tesseract', 'stdin', 'stdout', '-l', 'eng', '--psm', '7',
                 '-c', 'tessedit_char_whitelist=0123456789'], input=buffer.getvalue(),
@@ -672,7 +700,9 @@ def installed_identity_ocr(path, deadline):
             'installed user identity deadline exceeded')
     responses_identical = len(response_regions) == IDENTITY_RECORDS and \
         len(set(response_regions)) == 1
-    return combined, regions_valid, responses_identical
+    physical_response = decoded_rows[0] if legend_valid and len(decoded_rows) == IDENTITY_RECORDS and \
+        decoded_rows[0] is not None and len(set(decoded_rows)) == 1 else None
+    return combined, regions_valid, responses_identical, physical_response
 
 
 def wait_installed_graphical_login(vm, vmtest):
@@ -716,14 +746,14 @@ def console_user_identity(vm, startup, out, nonce, private_password):
         path = vm.shot('installed-login-shell-probe')
         require(path and startup.console_screen(path), 'actual password console disappeared')
         if sent:
-            stdout, regions_valid, responses_identical = installed_identity_ocr(path, deadline)
+            stdout, regions_valid, responses_identical, physical_response = installed_identity_ocr(path, deadline)
         else:
             result = subprocess.run(['tesseract', str(path), 'stdout', '-l', 'eng', '--psm', '6'],
                                     capture_output=True, timeout=10, check=True)
-            stdout, regions_valid, responses_identical = result.stdout, True, False
+            stdout, regions_valid, responses_identical, physical_response = result.stdout, True, False, None
         require(len(stdout) <= 65536, 'prompt OCR exceeds bound')
         accepted, observation = _identity_ocr_observation(
-            stdout, expected, sent, regions_valid and responses_identical)
+            stdout, expected, sent, regions_valid and responses_identical, physical_response)
         accepted = accepted and regions_valid
         if observation[:3] != ('zero', 'zero', 'zero'):
             if not sent:

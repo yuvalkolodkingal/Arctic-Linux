@@ -766,12 +766,17 @@ def startup(prefix, command, pattern, timeout=300, hold_seconds=5, observations=
             poll_seconds=MAPPING_POLL_SECONDS, label=None):
     label = label or (pattern if isinstance(pattern, str) else pattern[0])
     with NativeClientQuery(prefix, raw_clock=CAUSAL_TRACER is not None) as observer, open('/tmp/arctic-performance-apps.log', 'a') as output:
-        # Check the production CLI and native query agree before launching. No
-        # altered compositor, application preference or service is involved.
-        before = set(clients(prefix))
-        native_before = observer.query()
-        if before != set(native_before):
-            raise RuntimeError('Mango CLI/native observer initial client identities differ')
+        # The CLI and direct socket are sequential views of a live compositor.
+        # Require an exact stable triplet; retry only a bounded map/unmap race.
+        for attempt in range(20):
+            before = set(clients(prefix))
+            native_before = observer.query()
+            after = set(clients(prefix))
+            if before == set(native_before) == after:
+                break
+            if attempt == 19:
+                raise RuntimeError('Mango CLI/native observer initial client identities differ')
+            time.sleep(.05)
         started_ns = observer.now_ns()
         deadline = time.monotonic() + timeout
         # Arm before the original parent-side Popen. Both processes use the

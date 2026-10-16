@@ -1,0 +1,135 @@
+name: Publish reviewed River showcase
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: showcase-river-publication
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          persist-credentials: false
+
+      - name: Require the reviewed main revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$(git rev-parse HEAD)"
+          python -m py_compile showcase/publish_video.py showcase/voice_receipt.py \
+            showcase/revision-2026-10-12/resolve-voice.py
+          python -m unittest showcase/test_publish_video.py showcase/test_voice_receipt.py \
+            showcase/test_supply_chain.py -v
+
+      - name: Admit public video and download the exact reviewed candidate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python showcase/revision-2026-10-12/resolve-voice.py \
+            --receipt showcase/revision-2026-10-12/voice-timing.json \
+            --purpose publish-video
+          python - <<'PY' > "$RUNNER_TEMP/reviewed-render.env"
+          import json
+          from pathlib import Path
+          receipt = json.loads(Path("showcase/revision-2026-10-12/voice-timing.json").read_text())
+          render = receipt["validation"]["final_render_review"]["render"]
+          print(f"ARTIFACT_ID={render['artifact_id']}")
+          print(f"RUN_ID={render['workflow_run'].rsplit('/', 1)[1]}")
+          PY
+          source "$RUNNER_TEMP/reviewed-render.env"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" \
+            > "$RUNNER_TEMP/artifact.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" \
+            > "$RUNNER_TEMP/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID/zip" \
+            > "$RUNNER_TEMP/candidate.zip"
+          python showcase/publish_video.py stage \
+            --receipt showcase/revision-2026-10-12/voice-timing.json \
+            --artifact "$RUNNER_TEMP/candidate.zip" \
+            --artifact-metadata "$RUNNER_TEMP/artifact.json" \
+            --run-metadata "$RUNNER_TEMP/run.json" \
+            --target-commit "$GITHUB_SHA" \
+            --output "$RUNNER_TEMP/publication"
+
+      - name: Publish atomically and verify every public download
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: showcase-2026-10-16
+        shell: bash
+        run: |
+          set -euo pipefail
+          python showcase/publish_video.py require-absent \
+            --endpoint "repos/$GITHUB_REPOSITORY/releases/tags/$TAG"
+          python showcase/publish_video.py require-absent \
+            --endpoint "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG"
+
+          creation_attempted=false
+          cleanup_failed_publication() {
+            status=$?
+            trap - EXIT
+            if [[ "$status" -ne 0 && "$creation_attempted" = true ]]; then
+              if ! python showcase/publish_video.py cleanup-release --tag "$TAG"; then
+                echo "failed to prove incomplete release and tag cleanup" >&2
+                exit 1
+              fi
+            fi
+            exit "$status"
+          }
+          trap cleanup_failed_publication EXIT
+
+          creation_attempted=true
+          gh release create "$TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "Arctic Linux 1.2.1 showcase" \
+            --notes-file showcase/release-notes-2026-10-16.md \
+            --draft
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" \
+            "$RUNNER_TEMP/publication/Arctic-Linux-Showcase-River-1080p.mp4" \
+            "$RUNNER_TEMP/publication/Arctic-Linux-Showcase-Poster.png" \
+            "$RUNNER_TEMP/publication/captions.srt" \
+            "$RUNNER_TEMP/publication/captions.vtt" \
+            "$RUNNER_TEMP/publication/chapters.txt"
+
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft,isPrerelease,targetCommitish,url,assets \
+            > "$RUNNER_TEMP/draft-release.json"
+          mkdir "$RUNNER_TEMP/draft-download"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/draft-download"
+          python showcase/publish_video.py verify-files \
+            --manifest "$RUNNER_TEMP/publication/publication-manifest.json" \
+            --downloaded "$RUNNER_TEMP/draft-download"
+
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json tagName,isDraft,isPrerelease,targetCommitish,url,assets \
+            > "$RUNNER_TEMP/release.json"
+          mkdir "$RUNNER_TEMP/release-download"
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --dir "$RUNNER_TEMP/release-download"
+          python showcase/publish_video.py verify-release \
+            --release "$RUNNER_TEMP/release.json" \
+            --manifest "$RUNNER_TEMP/publication/publication-manifest.json" \
+            --downloaded "$RUNNER_TEMP/release-download"
+          python showcase/publish_video.py fetch-urls \
+            --release "$RUNNER_TEMP/release.json" \
+            --manifest "$RUNNER_TEMP/publication/publication-manifest.json" \
+            --output "$RUNNER_TEMP/url-download"
+          python showcase/publish_video.py verify-release \
+            --release "$RUNNER_TEMP/release.json" \
+            --manifest "$RUNNER_TEMP/publication/publication-manifest.json" \
+            --downloaded "$RUNNER_TEMP/url-download"
+          trap - EXIT

@@ -1,6 +1,7 @@
 """Source controls for the direct official VoxType qualification client."""
 import ast
 import grp
+import hashlib
 import importlib.util
 import json
 import os
@@ -34,6 +35,220 @@ class DirectVoxtypeControls(unittest.TestCase):
             checker.cmd.assert_called_with(['/usr/bin/voxtype', 'record', action], check=True)
         with self.assertRaisesRegex(guest.Invalid, '^unknown-upstream-record-command$'):
             checker.record('status')
+
+    def test_connected_vulkan_preparation_isolates_before_any_session(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        checker.engines = Mock(return_value=[])
+        checker.record = Mock()
+        checker.prefetch_vulkan_cache = Mock()
+        checker.checked_vulkan_payload = Mock(return_value=True)
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            system = root / 'state'; system.mkdir()
+            state_path = root / 'runtime-state'
+            checker.state_path = state_path
+            def command(argv, timeout=20, check=True, **_kwargs):
+                calls.append(tuple(argv))
+                if argv[:3] == ['/usr/bin/env', 'PKEXEC_UID=' + str(os.getuid()),
+                                str(guest.SETUP)]:
+                    backend = argv[-1]
+                    (system / 'backend').write_text('cpu\n')
+                    if backend == 'vulkan':
+                        (system / 'setup.error').write_text('backend-vulkan\n')
+                        return SimpleNamespace(stdout=b'', stderr=b'', returncode=1)
+                    (system / 'setup.error').unlink()
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv == ['/usr/bin/nmcli', 'networking', 'off']:
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[:2] == ['curl', '--noproxy']:
+                    return SimpleNamespace(stdout=b'000', stderr=b'', returncode=7)
+                raise AssertionError(argv)
+            with patch.object(guest, 'SYSTEM', system), patch.object(guest, 'run', side_effect=command):
+                result = checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(result, {
+            'gpu_supported': False, 'explicit_cpu_selected': True,
+            'bytes': guest.ASSETS['vulkan']['bytes'],
+            'sha256': guest.ASSETS['vulkan']['sha256'], 'returncode': 7})
+        network = calls.index(('/usr/bin/nmcli', 'networking', 'off'))
+        probe = next(index for index, argv in enumerate(calls) if argv[:2] == ('curl', '--noproxy'))
+        vulkan = next(index for index, argv in enumerate(calls)
+                       if argv[-2:] == ('--backend', 'vulkan'))
+        cpu = next(index for index, argv in enumerate(calls)
+                    if argv[-2:] == ('--backend', 'cpu'))
+        self.assertLess(network, probe)
+        self.assertLess(probe, vulkan)
+        self.assertLess(vulkan, cpu)
+        checker.record.assert_not_called()
+        checker.prefetch_vulkan_cache.assert_called_once_with()
+        checker.checked_vulkan_payload.assert_called_once_with()
+
+    def test_failed_connected_preparation_still_disables_network(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'recovery'}
+        checker.state_path = Path('/does-not-exist')
+        checker.engines = Mock(return_value=[])
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        calls = []
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=(b'000' if argv[:1] == ['curl'] else b''),
+                                   stderr=b'',
+                                   returncode=(7 if argv[:1] == ['curl'] else 0))
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^bad-prefetch$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertIn(('/usr/bin/nmcli', 'networking', 'off'), calls)
+        self.assertTrue(any(argv[:2] == ('curl', '--noproxy') for argv in calls))
+        self.assertFalse(any(argv[-2:] in (('--backend', 'vulkan'), ('--backend', 'cpu'))
+                             for argv in calls))
+
+    def test_failed_prefetch_prioritizes_failed_network_disable_without_setup(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=b'', stderr=b'', returncode=4)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^vulkan-boundary-network-disable$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(calls, [('/usr/bin/nmcli', 'networking', 'off')])
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_failed_prefetch_prioritizes_reachable_network_without_setup(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'recovery'}
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            if argv == ['/usr/bin/nmcli', 'networking', 'off']:
+                return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+            if argv[:2] == ['curl', '--noproxy']:
+                return SimpleNamespace(stdout=b'200', stderr=b'', returncode=0)
+            raise AssertionError(argv)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^outside-network-response$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(calls[0], ('/usr/bin/nmcli', 'networking', 'off'))
+        self.assertEqual(calls[1][:2], ('curl', '--noproxy'))
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_unexpected_prefetch_interrupt_is_preserved_after_isolation_attempt(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        interrupt = KeyboardInterrupt()
+        checker.prefetch_vulkan_cache = Mock(side_effect=interrupt)
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=b'', stderr=b'', returncode=5)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaises(KeyboardInterrupt) as caught:
+            checker.prepare_vulkan_offline_boundary()
+        self.assertIs(caught.exception, interrupt)
+        self.assertEqual(calls, [('/usr/bin/nmcli', 'networking', 'off')])
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_connected_prefetch_authenticates_cache_without_executing_setup(self):
+        checker = self.checker()
+        data, signature = b'signed-vulkan-fixture', b'vulkan-signature'
+        sums_signature = b'sums-signature'
+        digest = hashlib.sha256(data).hexdigest()
+        sums = (digest + '  ' + guest.VULKAN_RELEASE_NAME + '\n').encode()
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            cache = root / 'cache'; cache.mkdir()
+            key = root / 'key.asc'; key.write_bytes(b'fixture-key')
+            provenance = root / 'SHA256SUMS.txt'; provenance.write_bytes(sums)
+            provenance_sig = root / 'SHA256SUMS.txt.asc'; provenance_sig.write_bytes(sums_signature)
+            vulkan = cache / guest.VULKAN_RELEASE_NAME
+            vulkan_sig = cache / (guest.VULKAN_RELEASE_NAME + '.asc')
+            sums_cache = cache / 'SHA256SUMS.txt'
+            sums_cache_sig = cache / 'SHA256SUMS.txt.asc'
+            def command(argv, timeout=20, check=True, **_kwargs):
+                calls.append(tuple(argv))
+                if argv[:4] == ['gpg', '--batch', '--show-keys', '--with-colons']:
+                    fields = ['fpr'] + [''] * 8 + [guest.RELEASE_FINGERPRINT, '']
+                    return SimpleNamespace(stdout=(':'.join(fields) + '\n').encode(),
+                                           stderr=b'', returncode=0)
+                if argv[:4] == ['gpg', '--batch', '--yes', '--dearmor']:
+                    Path(argv[argv.index('--output') + 1]).write_bytes(b'keyring')
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[0] == 'curl':
+                    target = Path(argv[argv.index('--output') + 1])
+                    target.write_bytes(signature if argv[-1].endswith('.asc') else data)
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[0] == 'gpgv':
+                    return SimpleNamespace(
+                        stdout=('[GNUPG:] VALIDSIG ' + guest.RELEASE_FINGERPRINT +
+                                ' 0 0 0 0 0 0 0 0 0\n').encode(),
+                        stderr=b'', returncode=0)
+                raise AssertionError(argv)
+            original_lstat = Path.lstat
+            def root_owned(path):
+                info = original_lstat(path)
+                return SimpleNamespace(st_mode=info.st_mode, st_uid=0,
+                                       st_size=info.st_size)
+            with patch.object(guest, 'KEY', key), \
+                    patch.object(guest, 'PROVENANCE_SUMS', provenance), \
+                    patch.object(guest, 'PROVENANCE_SUMS_SIG', provenance_sig), \
+                    patch.object(guest, 'VULKAN_CACHE', vulkan), \
+                    patch.object(guest, 'VULKAN_CACHE_SIG', vulkan_sig), \
+                    patch.object(guest, 'SUMS_CACHE', sums_cache), \
+                    patch.object(guest, 'SUMS_CACHE_SIG', sums_cache_sig), \
+                    patch.object(guest, 'VULKAN_SIG_BYTES', len(signature)), \
+                    patch.object(guest, 'VULKAN_SIG_SHA256', hashlib.sha256(signature).hexdigest()), \
+                    patch.object(guest, 'SUMS_BYTES', len(sums)), \
+                    patch.object(guest, 'SUMS_SHA256', hashlib.sha256(sums).hexdigest()), \
+                    patch.object(guest, 'SUMS_SIG_BYTES', len(sums_signature)), \
+                    patch.object(guest, 'SUMS_SIG_SHA256', hashlib.sha256(sums_signature).hexdigest()), \
+                    patch.dict(guest.ASSETS, {'vulkan': {'name': 'voxtype-vulkan',
+                               'bytes': len(data), 'sha256': digest}}), \
+                    patch.object(Path, 'lstat', root_owned), \
+                    patch.object(guest, 'run', side_effect=command):
+                checker.prefetch_vulkan_cache()
+            self.assertEqual(vulkan.read_bytes(), data)
+            self.assertEqual(vulkan_sig.read_bytes(), signature)
+            self.assertEqual(sums_cache.read_bytes(), sums)
+            self.assertEqual(sums_cache_sig.read_bytes(), sums_signature)
+        self.assertEqual(sum(argv[0] == 'curl' for argv in calls), 2)
+        self.assertEqual(sum(argv[0] == 'gpgv' for argv in calls), 2)
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_execute_places_isolation_before_ready_and_session(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'execute')
+        body = ast.get_source_segment(source, method)
+        boundary = body.index('self.prepare_vulkan_offline_boundary')
+        readiness = body.index('self.ready')
+        session = body.index('self.session')
+        self.assertLess(boundary, readiness)
+        self.assertLess(readiness, session)
+
+        prefetch = next(node for node in checker.body
+                        if isinstance(node, ast.FunctionDef)
+                        and node.name == 'prefetch_vulkan_cache')
+        prefetch_body = ast.get_source_segment(source, prefetch)
+        for forbidden in ('SETUP', 'VOXTYPE', 'record', 'transcribe'):
+            self.assertNotIn(forbidden, prefetch_body)
 
     def test_adapter_is_never_used_for_recording_in_session_methods(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
@@ -79,6 +294,7 @@ enabled = false
 mode = "local"
 model = "/opt/arctic/voxtype/models/ggml-small.bin"
 language = ["he", "en"]
+on_demand_loading = false
 [output]
 mode = "type"
 driver_order = ["wtype"]
@@ -89,6 +305,7 @@ on_transcription = false
             checker.config_path.chmod(0o600)
             self.assertEqual(checker.config_contract(), {'language_count': 2})
             for needle in ('mode = "remote"', 'enabled = true',
+                           'on_demand_loading = true',
                            'language = ["he", "fr"]', 'on_transcription = true'):
                 body = checker.config_path.read_text()
                 if needle.startswith('mode = "remote"'):
@@ -97,6 +314,8 @@ on_transcription = false
                     body = body.replace('enabled = false', needle)
                 elif needle.startswith('language'):
                     body = body.replace('language = ["he", "en"]', needle)
+                elif needle.startswith('on_demand_loading'):
+                    body = body.replace('on_demand_loading = false', needle)
                 else:
                     body = body.replace('on_transcription = false', needle)
                 checker.config_path.write_text(body)
@@ -111,6 +330,7 @@ enabled = false
 mode = "local"
 model = "/opt/arctic/voxtype/models/ggml-small.bin"
 language = ["he", "en"]
+on_demand_loading = false
 [output]
 mode = "type"
 driver_order = ["wtype"]
@@ -129,59 +349,193 @@ on_transcription = false
             with self.assertRaisesRegex(guest.Invalid, '^desktop-user-has-input-group$'):
                 checker.no_input()
 
-    def test_microphone_disconnect_restores_route_and_restarts_clean_daemon(self):
+    def test_microphone_disconnect_waits_for_projection_and_restores_clean_daemon(self):
         checker = self.checker()
+        checker.empty = Mock()
         checker.select = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
-        checker.observe = Mock(side_effect=lambda _target, fn, _seconds=20: fn())
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
         checker.route = Mock()
-        checker.state = Mock(return_value='idle')
+        checker.loop = None
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
+        checker.state = Mock(side_effect=['idle', 'recording', 'idle'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
-        checker.adapter = Mock(return_value={
-            'state': 'error', 'error': 'VoxType could not open the microphone.'})
+        checker.adapter = Mock(side_effect=[
+            {'state': 'ready', 'ready': True, 'error': '', 'language': 'en'},
+            {'state': 'error', 'error': 'VoxType could not open the microphone.'},
+        ])
+        observed = []
+        def observe(target, fn, _seconds=20):
+            observed.append(target)
+            value = fn()
+            if not value:
+                value = fn()
+            if not value:
+                raise guest.Invalid('observation-timeout')
+            return value
+        checker.observe = Mock(side_effect=observe)
         with tempfile.TemporaryDirectory() as temp:
             checker.root = Path(temp)
+            checker.runtime = checker.root
             (checker.root / 'received.private').write_bytes(b'')
+            error_path = checker.runtime / 'arctic-dictation/voxtype-error'
+            error_path.parent.mkdir()
+            error_path.write_text('microphone\n')
+            def selection(**choice):
+                if choice == {'language': 'en'}:
+                    error_path.unlink()
+            checker.select.side_effect = selection
             def command(argv, check=True):
                 if argv == ['/usr/bin/pw-dump']:
-                    return SimpleNamespace(stdout=b'[]', stderr=b'', returncode=0)
-                if argv == ['systemctl', '--user', 'is-active', 'voxtype.service']:
-                    return SimpleNamespace(stdout=b'active\n', stderr=b'', returncode=0)
-                return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                    output = b'[]'
+                elif argv == ['systemctl', '--user', 'is-active', 'voxtype.service']:
+                    output = b'active\n'
+                else:
+                    output = b''
+                return SimpleNamespace(stdout=output, stderr=b'', returncode=0)
             checker.cmd = Mock(side_effect=command)
             self.assertEqual(checker.microphone(),
                              {'count': 0, 'drained': True, 'restored': True})
+        self.assertIn('microphone-actionable-error', observed)
+        self.assertEqual([call.args[0] for call in checker.daemon_ready.call_args_list],
+                         ['microphone-pinned-daemon', 'microphone-disconnected-daemon'])
+        self.assertEqual([call.kwargs for call in checker.select.call_args_list],
+                         [{'backend': 'cpu'}, {'language': 'en'}])
+        self.assertEqual(checker.adapter.call_count, 2)
+        self.assertEqual([call.args[0] for call in checker.record.call_args_list],
+                         ['start', 'cancel', 'start', 'cancel'])
         checker.destroy_route.assert_called_once_with(restore=False)
         checker.route.assert_called_once_with()
+        configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
+        self.assertTrue(any(call.args == (configure + ['default'],)
+                            for call in checker.cmd.call_args_list))
+        missing = [call.args[0][-1] for call in checker.cmd.call_args_list
+                   if call.args and call.args[0][:4] == configure
+                   and call.args[0][-1] != 'default']
+        self.assertEqual(len(missing), 1)
+        self.assertRegex(missing[0], r'^ArcticQualificationMissingInput-[0-9a-f]{32}$')
+        self.assertFalse(any(call.args == (configure + [checker.source_name],)
+                             for call in checker.cmd.call_args_list))
+        self.assertTrue(any(call.args == (configure + ['default'],)
+                            and call.kwargs == {}
+                            for call in checker.cmd.call_args_list))
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
 
     def test_microphone_failed_assertion_still_restores_independent_gate_state(self):
         checker = self.checker()
+        checker.empty = Mock()
         checker.select = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
         checker.record = Mock(return_value=SimpleNamespace(returncode=0))
-        checker.observe = Mock(side_effect=lambda _target, fn, _seconds=20: fn())
         checker.capture_link = Mock(return_value=True)
         checker.destroy_route = Mock()
         checker.route = Mock()
-        checker.state = Mock(return_value='idle')
+        checker.loop = None
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
+        checker.state = Mock(side_effect=['recording'])
         checker.engines = Mock(return_value=[(123, 456, Path('/usr/bin/voxtype'))])
-        checker.adapter = Mock(return_value={'state': 'ready', 'error': ''})
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'en'})
+        def observe(target, fn, _seconds=20):
+            value = fn()
+            if target == 'microphone-actionable-error':
+                raise guest.Invalid('observation-timeout')
+            if not value:
+                raise guest.Invalid('observation-timeout')
+            return value
+        checker.observe = Mock(side_effect=observe)
         with tempfile.TemporaryDirectory() as temp:
             checker.root = Path(temp)
+            checker.runtime = checker.root
             (checker.root / 'received.private').write_bytes(b'')
             checker.cmd = Mock(side_effect=lambda argv, check=True: SimpleNamespace(
                 stdout=(b'[]' if argv == ['/usr/bin/pw-dump'] else
                         b'active\n' if argv == ['systemctl', '--user', 'is-active',
                                                 'voxtype.service'] else b''),
                 stderr=b'', returncode=0))
-            with self.assertRaisesRegex(guest.Invalid, '^microphone-failure-not-actionable$'):
+            with self.assertRaises(guest.MicrophoneStageFailure) as failure:
                 checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['actionable-error'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
         checker.route.assert_called_once_with()
         restart = ['systemctl', '--user', 'restart', 'voxtype.service']
         self.assertTrue(any(call.args == (restart,) for call in checker.cmd.call_args_list))
+        checker.select.assert_called_with(language='en')
+        self.assertIsNone(checker.selected_language)
+
+    def test_microphone_pre_disconnect_failure_restores_config_without_duplicate_route(self):
+        checker = self.checker()
+        checker.empty = Mock()
+        checker.select = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.capture_link = Mock(return_value=False)
+        checker.destroy_route = Mock()
+        checker.route = Mock()
+        checker.loop = object()
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'he'
+        checker.state = Mock(return_value='recording')
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'he'})
+        checker.observe = Mock(side_effect=lambda target, fn, _seconds=20: (
+            (_ for _ in ()).throw(guest.Invalid('observation-timeout'))
+            if target == 'capture-link' else fn()))
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        with self.assertRaises(guest.MicrophoneStageFailure) as failure:
+            checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['capture-link'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
+        checker.destroy_route.assert_not_called()
+        checker.route.assert_not_called()
+        configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device']
+        self.assertTrue(any(call.args == (configure + ['default'],)
+                            and call.kwargs == {}
+                            for call in checker.cmd.call_args_list))
+        self.assertEqual([call.args[0] for call in checker.record.call_args_list],
+                         ['start', 'cancel'])
+        checker.select.assert_called_with(language='he')
+
+    def test_microphone_cleanup_attempts_later_restoration_after_route_failure(self):
+        checker = self.checker()
+        checker.empty = Mock()
+        checker.select = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.capture_link = Mock(return_value=False)
+        checker.destroy_route = Mock()
+        checker.route = Mock(side_effect=guest.Invalid('private-route-failure'))
+        checker.loop = None
+        checker.source_name = 'ArcticVoxtypeFixtureSource-test'
+        checker.selected_language = 'en'
+        checker.state = Mock(return_value='recording')
+        checker.adapter = Mock(return_value={
+            'state': 'ready', 'ready': True, 'error': '', 'language': 'en'})
+        checker.observe = Mock(side_effect=lambda target, fn, _seconds=20: (
+            (_ for _ in ()).throw(guest.Invalid('private-capture-failure'))
+            if target == 'capture-link' else fn()))
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        with tempfile.TemporaryDirectory() as temp:
+            checker.root = Path(temp)
+            checker.runtime = checker.root
+            (checker.root / 'received.private').write_bytes(b'')
+            with self.assertRaises(guest.MicrophoneStageFailure) as failure:
+                checker.microphone()
+        self.assertEqual(failure.exception.failure_stage,
+                         guest.MICROPHONE_FAILURE_STAGES['route-restore'])
+        self.assertEqual(failure.exception.error_label, 'invalid')
+        checker.select.assert_called_with(language='en')
+        configure = [str(guest.VOXTYPE), 'config', 'set', 'audio.device', 'default']
+        self.assertTrue(any(call.args == (configure,) for call in checker.cmd.call_args_list))
 
     def test_failed_lock_assertion_unlocks_and_restores_service_for_later_gates(self):
         checker = self.checker()
@@ -191,12 +545,13 @@ on_transcription = false
         checker.capture_link = Mock(return_value=True)
         checker.play = Mock()
         checker.kill = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
         checker.player = None
         checker.fixtures = [{}]
-        checker.state = Mock(side_effect=['recording', 'stopped', 'idle'])
-        checker.engines = Mock(side_effect=[[], [(123, 456, Path('/usr/bin/voxtype'))]])
+        checker.state = Mock(side_effect=['recording', 'stopped'])
+        checker.engines = Mock(return_value=[])
         lock_states = iter((b'true\n', b'false\n'))
-        service_states = iter((b'inactive\n', b'active\n'))
+        service_states = iter((b'inactive\n',))
         def command(argv, check=True):
             if argv == ['/usr/bin/arctic-shell-ipc', 'lock', 'isLocked']:
                 output = next(lock_states)
@@ -221,8 +576,339 @@ on_transcription = false
         start = ['systemctl', '--user', 'start', 'voxtype.service']
         self.assertTrue(any(call.args == (start,) and call.kwargs == {'check': False}
                             for call in checker.cmd.call_args_list))
-        self.assertEqual(checker.state.call_count, 3)
-        self.assertEqual(checker.engines.call_count, 2)
+        self.assertEqual(checker.state.call_count, 2)
+        self.assertEqual(checker.engines.call_count, 1)
+        checker.daemon_ready.assert_called_once_with('unlock-cleanup-daemon', 30)
+
+    def test_selection_waits_for_stable_official_daemon_after_language_restart(self):
+        checker = self.checker()
+        checker.adapter = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        checker.select(language='en')
+        checker.adapter.assert_called_once_with('set-language', 'en')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        checker.select(language='en')
+        checker.adapter.assert_called_once_with('set-language', 'en')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        checker.select(language='he')
+        self.assertEqual(checker.adapter.call_args_list,
+                         [unittest.mock.call('set-language', 'en'),
+                          unittest.mock.call('set-language', 'he')])
+        self.assertEqual(checker.daemon_ready.call_count, 2)
+        self.assertEqual(checker.selected_language, 'he')
+
+    def test_backend_setup_invalidates_cached_language_before_explicit_selection(self):
+        checker = self.checker()
+        checker.selected_backend = None
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock()
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        with patch.object(guest, 'run', return_value=SimpleNamespace(
+                stdout=b'', stderr=b'', returncode=0)):
+            checker.select(language='he', backend='cpu')
+        checker.adapter.assert_called_once_with('set-language', 'he')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+        self.assertEqual(checker.selected_language, 'he')
+        self.assertEqual(checker.selected_backend, 'cpu')
+
+    def test_same_backend_selection_does_not_repeat_privileged_setup_or_restart(self):
+        checker = self.checker()
+        checker.selected_backend = 'cpu'
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock()
+        checker.daemon_ready = Mock()
+        with tempfile.TemporaryDirectory() as temp, \
+                patch.object(guest, 'SYSTEM', Path(temp)), \
+                patch.object(guest, 'run') as host_run:
+            (Path(temp) / 'backend').write_text('cpu\n')
+            checker.select(backend='cpu')
+        host_run.assert_not_called()
+        checker.cmd.assert_not_called()
+        checker.daemon_ready.assert_not_called()
+        self.assertEqual(checker.selected_backend, 'cpu')
+        self.assertEqual(checker.selected_language, 'he')
+
+    def test_same_backend_cache_cannot_hide_authoritative_state_change(self):
+        checker = self.checker()
+        checker.selected_backend = 'cpu'
+        checker.selected_language = 'en'
+        with tempfile.TemporaryDirectory() as temp, patch.object(
+                guest, 'SYSTEM', Path(temp)):
+            (Path(temp) / 'backend').write_text('vulkan\n')
+            with self.assertRaisesRegex(guest.Invalid,
+                                        '^selected-backend-state-changed$'):
+                checker.select(backend='cpu')
+
+    def test_failed_backend_restart_cannot_leave_a_stale_language_cache(self):
+        checker = self.checker()
+        checker.selected_backend = 'vulkan'
+        checker.selected_language = 'he'
+        checker.adapter = Mock()
+        checker.cmd = Mock(side_effect=guest.Invalid('private-restart-failure'))
+        checker.daemon_ready = Mock(return_value=(123, 456, Path('/usr/bin/voxtype')))
+        with patch.object(guest, 'run', return_value=SimpleNamespace(
+                stdout=b'', stderr=b'', returncode=0)), \
+                self.assertRaisesRegex(guest.Invalid, '^private-restart-failure$'):
+            checker.select(backend='cpu')
+        self.assertIsNone(checker.selected_language)
+        self.assertIsNone(checker.selected_backend)
+
+        checker.cmd = Mock()
+        checker.select(language='he')
+        checker.adapter.assert_called_once_with('set-language', 'he')
+        checker.daemon_ready.assert_called_once_with('daemon-restart', 30)
+
+    def test_failed_language_readiness_cannot_leave_a_stale_language_cache(self):
+        checker = self.checker()
+        checker.selected_language = 'en'
+        checker.adapter = Mock()
+        checker.daemon_ready = Mock(side_effect=[
+            guest.Invalid('private-readiness-failure'),
+            (123, 456, Path('/usr/bin/voxtype')),
+        ])
+        with self.assertRaisesRegex(guest.Invalid, '^private-readiness-failure$'):
+            checker.select(language='he')
+        self.assertIsNone(checker.selected_language)
+
+        checker.select(language='en')
+        self.assertEqual(checker.adapter.call_args_list,
+                         [unittest.mock.call('set-language', 'he'),
+                          unittest.mock.call('set-language', 'en')])
+        self.assertEqual(checker.selected_language, 'en')
+
+    def test_every_transcription_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'transcription_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.TRANSCRIPTION_FAILURE_STAGES))
+
+    def test_every_readiness_failure_substage_is_used_by_ready(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'ready')
+        calls = [node for node in ast.walk(method)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'readiness_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.READINESS_FAILURE_SUBSTAGES))
+
+    def test_readiness_failure_projection_is_closed_and_drops_error_material(self):
+        checker = self.checker()
+        checker.gates = {'recovered-ready'}
+        checker.report = {'gates': []}
+
+        def fails():
+            raise guest.Invalid('private readiness details')
+
+        passed = checker.gate(
+            'recovered-ready',
+            lambda: checker.readiness_stage('recording-observed', fails))
+        self.assertFalse(passed)
+        self.assertEqual(checker.report['gates'], [{
+            'id': 'recovered-ready', 'status': 'failed',
+            'evidence_kind': guest.EXPECTED_KINDS['recovered-ready'],
+            'code': 'gate-recovered-ready-invalid',
+            'observations': {
+                'failure_stage': guest.READINESS_FAILURE_STAGE,
+                'failure_substage':
+                    guest.READINESS_FAILURE_SUBSTAGES['recording-observed'],
+            },
+        }])
+
+    def test_transcription_authenticates_capture_before_pinning_engine_profile(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'transcribe')
+        stages = [node.args[0].value for node in method.body
+                  if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call)
+                  for node in (node.value,)
+                  if isinstance(node.func, ast.Attribute)
+                  and node.func.attr == 'transcription_stage'
+                  and node.args and isinstance(node.args[0], ast.Constant)]
+        assignments = [node for node in method.body if isinstance(node, ast.Assign)
+                       and isinstance(node.value, ast.Call)
+                       and isinstance(node.value.func, ast.Attribute)
+                       and node.value.func.attr == 'transcription_stage'
+                       and node.value.args and isinstance(node.value.args[0], ast.Constant)]
+        assigned_stages = {node.value.args[0].value: method.body.index(node)
+                           for node in assignments}
+        capture_index = next(index for index, node in enumerate(method.body)
+                             if isinstance(node, ast.Expr)
+                             and isinstance(node.value, ast.Call)
+                             and isinstance(node.value.func, ast.Attribute)
+                             and node.value.func.attr == 'transcription_stage'
+                             and node.value.args
+                             and isinstance(node.value.args[0], ast.Constant)
+                             and node.value.args[0].value == 'capture-link')
+        self.assertIn('capture-link', stages)
+        self.assertGreater(assigned_stages['engine-profile'], capture_index)
+        profile = next(node for node in checker.body
+                       if isinstance(node, ast.FunctionDef)
+                       and node.name == 'checked_engine_profile')
+        profile_source = ast.get_source_segment(source, profile)
+        self.assertIn("getattr(self, '_capture_engine', None)", profile_source)
+        self.assertIn("sha(binary) != self.assets[cpu_key]['sha256']", profile_source)
+        self.assertNotIn('self.engine()', profile_source)
+
+    def test_every_microphone_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        calls = [node for node in ast.walk(tree) if isinstance(node, ast.Call)
+                 and ((isinstance(node.func, ast.Attribute)
+                       and node.func.attr == 'microphone_stage')
+                      or (isinstance(node.func, ast.Name)
+                          and node.func.id == 'cleanup'))
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.MICROPHONE_FAILURE_STAGES))
+
+    def test_every_gpu_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'gpu_failure')
+        calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'gpu_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.GPU_FAILURE_STAGES))
+
+    def test_daemon_readiness_rejects_stale_and_changing_process_identity(self):
+        checker = self.checker()
+        old = (101, 1, Path('/usr/bin/voxtype'))
+        new = (202, 2, Path('/usr/bin/voxtype'))
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'active\n', stderr=b'', returncode=0))
+        checker.state = Mock(return_value='idle')
+        checker.engines = Mock(side_effect=[[old], [new], [new], [new], [new]])
+        observed = []
+        def observe(target, fn, seconds):
+            observed.extend((target, seconds))
+            for _ in range(5):
+                value = fn()
+                if value:
+                    return value
+            raise guest.Invalid('observation-timeout')
+        checker.observe = Mock(side_effect=observe)
+        self.assertEqual(checker.daemon_ready('fixture-ready', 17), new)
+        self.assertEqual(observed, ['fixture-ready', 17])
+        self.assertEqual(checker.engines.call_count, 5)
+
+    def test_terminal_idle_waits_for_same_quiescent_official_process(self):
+        checker = self.checker()
+        engine = (202, 22, Path('/usr/bin/voxtype'))
+        checker.engines = Mock(return_value=[engine])
+        checker.state = Mock(return_value='idle')
+        # fields[11:13] are utime/stime and fields[19] is starttime after the
+        # executable name and closing parenthesis have been removed.
+        ticks = iter((10, 11, 11, 11, 11))
+        def stat_text():
+            fields = ['S'] + ['0'] * 19
+            tick = next(ticks)
+            fields[11], fields[12], fields[19] = str(tick), '0', '22'
+            return '202 (voxtype) ' + ' '.join(fields)
+        observed = []
+        def observe(target, fn, seconds):
+            observed.extend((target, seconds))
+            for _ in range(5):
+                value = fn()
+                if value:
+                    return value
+            raise guest.Invalid('observation-timeout')
+        checker.observe = Mock(side_effect=observe)
+        with patch.object(guest.Path, 'read_text', side_effect=stat_text):
+            self.assertEqual(checker.daemon_idle('terminal-state', 240), engine)
+        self.assertEqual(observed, ['terminal-state', 240])
+        self.assertEqual(checker.engines.call_count, 5)
+
+    def test_terminal_idle_rejects_process_identity_change(self):
+        checker = self.checker()
+        checker.engines = Mock(return_value=[(202, 22, Path('/usr/bin/voxtype'))])
+        checker.state = Mock(return_value='idle')
+        fields = ['S'] + ['0'] * 19
+        fields[11], fields[12], fields[19] = '10', '0', '23'
+        checker.observe = Mock(side_effect=lambda _target, fn, _seconds: fn())
+        with patch.object(guest.Path, 'read_text', return_value=(
+                '202 (voxtype) ' + ' '.join(fields))):
+            with self.assertRaisesRegex(guest.Invalid, '^idle-daemon-identity-changed$'):
+                checker.daemon_idle('terminal-state', 240)
+
+    def test_missing_model_uses_actionable_guard_without_entering_upstream_recording(self):
+        checker = self.checker()
+        checker.names = {'model': 'ggml-small.bin'}
+        checker.assets = {'model': {'sha256': hashlib.sha256(b'model').hexdigest()}}
+        checker.player = None
+        checker.record = Mock(return_value=SimpleNamespace(returncode=0))
+        checker.select = Mock()
+        checker.adapter = Mock(return_value={
+            'state': 'error', 'ready': False,
+            'error': 'The verified local Whisper model is missing. Retry setup to repair it.',
+        })
+        checker.kill = Mock()
+        checker.daemon_ready = Mock()
+        with tempfile.TemporaryDirectory() as temp:
+            checker.root = Path(temp)
+            (checker.root / 'received.private').write_bytes(b'')
+            models = checker.root / 'models'
+            models.mkdir()
+            target = models / 'ggml-small.bin'
+            target.write_bytes(b'model')
+            with patch.object(guest, 'MODELS', models):
+                def command(argv, check=True):
+                    return SimpleNamespace(stdout=b'', stderr=b'',
+                                           returncode=69 if argv == [str(guest.TOGGLE)] else 0)
+                checker.cmd = Mock(side_effect=command)
+                self.assertEqual(checker.missing(), {'ready': False, 'restored': True})
+        checker.record.assert_called_once_with('cancel', check=False)
+        checker.adapter.assert_called_once_with('status')
+        checker.select.assert_called_once_with(backend='cpu')
+        checker.cmd.assert_any_call([str(guest.TOGGLE)], check=False)
+        checker.daemon_ready.assert_called_once_with('model-restored', 30)
+
+    def test_gpu_error_projection_is_bounded_observation_before_cpu_recovery(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'gpu_failure')
+        calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and isinstance(node.func.value, ast.Name)
+                 and node.func.value.id == 'self' and node.func.attr == 'observe']
+        targets = [call.args[0].value for call in calls if call.args
+                   and isinstance(call.args[0], ast.Constant)]
+        self.assertIn('gpu-failure-actionable-error', targets)
+        source = ast.get_source_segment((HERE / 'guest_check.py').read_text(), method)
+        self.assertIn("self.vm_vulkan_failure", source)
+        setup = source.index("self.vm_vulkan_failure")
+        payload = source.index("'vulkan-payload-integrity'")
+        preservation = source.index("'cpu-preservation'")
+        self.assertLess(setup, preservation)
+        self.assertLess(preservation, payload)
+        self.assertNotIn('VK_DRIVER_FILES', source)
+        self.assertIn("(SYSTEM / 'backend').read_text().strip() == 'cpu'", source)
+        self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
+        self.assertIn("status.get('backend') == 'cpu'", source)
+        self.assertIn('self.selected_backend = None', source)
+        projection = source.index("gpu-failure-actionable-error")
+        invalidation = source.rindex('self.selected_backend = None')
+        recovery = source.rindex("self.select(backend='cpu')")
+        self.assertLess(projection, invalidation)
+        self.assertLess(invalidation, recovery)
 
     def test_command_contract_requires_direct_mango_binds_and_rejecting_adapter(self):
         checker = self.checker()
@@ -243,11 +929,13 @@ on_transcription = false
             binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation-toggle\n'
                              'bindr=SUPER+CTRL,BackSpace,spawn,voxtype record cancel\n')
             with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
-                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()):
                 self.assertEqual(checker.command_contract(), {'command_count': 4})
             binds.write_text('bindr=SUPER+CTRL,x,spawn,arctic-dictation toggle\n')
             with patch.object(guest, 'SKEL_BINDINGS', binds), patch.object(guest, 'TOGGLE', guard), \
                     patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
                     self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
                 checker.command_contract()
 
@@ -266,7 +954,8 @@ on_transcription = false
             skel.chmod(0o600); active.chmod(0o600)
             checker.user_bindings = active
             with patch.object(guest, 'SKEL_BINDINGS', skel), patch.object(guest, 'TOGGLE', guard), \
-                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()):
+                    patch.object(guest, 'owned_text', side_effect=lambda path, _uid, _code: Path(path).read_text()), \
+                    patch.object(guest, 'owned_binding_link', side_effect=lambda path, _uid, _code: Path(path).read_text()):
                 self.assertEqual(checker.command_contract(), {'command_count': 4})
                 active.write_text('spawn,arctic-dictation-toggle\n')
                 with self.assertRaisesRegex(guest.Invalid, '^mango-not-bound-directly-to-upstream$'):
@@ -287,6 +976,79 @@ on_transcription = false
             path.chmod(0o600); path.write_bytes(b'\xff')
             with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
                 guest.owned_text(path, os.getuid(), 'unsafe')
+
+    def test_owned_binding_link_accepts_only_exact_absolute_packaged_target(self):
+        uid = os.getuid()
+        valid = 'spawn,arctic-dictation-toggle\nspawn,voxtype record cancel\n'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            parent = root / 'config'
+            parent.mkdir(mode=0o700)
+            target = root / 'packaged-binds.conf'
+            target.write_text(valid)
+            target.chmod(0o600)
+            link = parent / 'binds.conf'
+            link.symlink_to(target)
+            self.assertEqual(
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe'), valid)
+
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid + 1, target, uid, 'unsafe')
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, root / 'other', uid, 'unsafe')
+
+            link.unlink()
+            link.symlink_to('../packaged-binds.conf')
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            link.unlink()
+            link.write_text(valid)
+            link.chmod(0o600)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+    def test_owned_binding_link_pins_root_owned_packaged_path(self):
+        path = Path('/home/arctic/.config/mango/arctic/binds.conf')
+        with patch.object(guest, '_owned_binding_link', return_value='binds') as reader:
+            self.assertEqual(guest.owned_binding_link(path, 1000, 'unsafe'), 'binds')
+        reader.assert_called_once_with(path, 1000, guest.PACKAGED_BINDINGS, 0, 'unsafe')
+
+    def test_owned_binding_link_rejects_chained_writable_missing_and_unsafe_parent(self):
+        uid = os.getuid()
+        valid = 'spawn,arctic-dictation-toggle\nspawn,voxtype record cancel\n'
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            parent = root / 'config'
+            parent.mkdir(mode=0o700)
+            target = root / 'packaged-binds.conf'
+            final = root / 'final-binds.conf'
+            final.write_text(valid)
+            final.chmod(0o600)
+            target.symlink_to(final)
+            link = parent / 'binds.conf'
+            link.symlink_to(target)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.unlink()
+            target.write_text(valid)
+            target.chmod(0o622)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.unlink()
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+
+            target.write_text(valid)
+            target.chmod(0o600)
+            parent.chmod(0o770)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid, 'unsafe')
+            parent.chmod(0o700)
+            with self.assertRaisesRegex(guest.Invalid, '^unsafe$'):
+                guest._owned_binding_link(link, uid, target, uid + 1, 'unsafe')
 
     def test_journal_decoder_retains_full_strings_and_rejects_truncation(self):
         raw = (json.dumps({'MESSAGE': 'English private fixture'}) + '\n'
@@ -316,7 +1078,11 @@ on_transcription = false
                     'packaging/systemd/arctic-dictation-setup.service',
                     'packaging/systemd/arctic-dictation-setup.timer')):
                 path = root / str(index)
-                path.write_text(str(index))
+                if index < 6:
+                    shell = 'bash' if index == 3 else 'sh'
+                    path.write_text('#!/usr/bin/' + shell + '\n' + str(index))
+                else:
+                    path.write_text(str(index))
                 path.chmod(0o600)
                 paths.append(path)
             with patch.object(guest, 'owned_file', side_effect=lambda path, size=None: Path(path).stat()), \
@@ -334,8 +1100,57 @@ on_transcription = false
                     patch.object(guest, 'SETUP_SERVICE', paths[13]), \
                     patch.object(guest, 'SETUP_TIMER', paths[14]):
                 first = guest.installed_integration_sha()
-                paths[1].write_text('changed')
+                paths[1].write_text('#!/usr/bin/sh\nchanged')
                 self.assertNotEqual(first, guest.installed_integration_sha())
+
+    def test_installed_integration_hash_reverses_only_rpm_shebang_mangling(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            paths = []
+            shells = ('sh', 'sh', 'sh', 'bash', 'sh', 'sh')
+            source_hash = hashlib.sha256()
+            for index, (name, shell) in enumerate(zip((
+                    'packaging/dictation/arctic-dictation',
+                    'packaging/dictation/arctic-dictation-toggle',
+                    'packaging/dictation/voxtype',
+                    'packaging/dictation/arctic-voxtype-setup',
+                    'packaging/dictation/arctic-voxtype-host-profile',
+                    'packaging/dictation/arctic-voxtype-configure'), shells)):
+                path = root / str(index)
+                source = ('#!/bin/' + shell + '\npayload-' + str(index) + '\n').encode()
+                installed = source.replace(b'#!/bin/', b'#!/usr/bin/', 1)
+                path.write_bytes(installed); path.chmod(0o600); paths.append(path)
+                encoded = name.encode()
+                source_hash.update(len(encoded).to_bytes(4, 'big'))
+                source_hash.update(encoded); source_hash.update(source)
+            remaining = (
+                'packaging/dictation/voxtype-release-key.asc',
+                'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt',
+                'packaging/dictation/provenance/v1.1.1/SHA256SUMS.txt.asc',
+                'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-baseline.asc',
+                'packaging/dictation/provenance/v1.1.1/voxtype-1.1.1-linux-x86_64-avx2.asc',
+                'packaging/dictation/org.arcticlinux.dictation.policy',
+                'packaging/systemd/voxtype.service',
+                'packaging/systemd/arctic-dictation-setup.service',
+                'packaging/systemd/arctic-dictation-setup.timer')
+            for index, name in enumerate(remaining, start=6):
+                path = root / str(index); content = ('payload-' + str(index)).encode()
+                path.write_bytes(content); path.chmod(0o600); paths.append(path)
+                encoded = name.encode()
+                source_hash.update(len(encoded).to_bytes(4, 'big'))
+                source_hash.update(encoded); source_hash.update(content)
+            patches = dict(ADAPTER=paths[0], TOGGLE=paths[1], VOXTYPE=paths[2],
+                           SETUP=paths[3], HOST_PROFILE=paths[4], CONFIGURE=paths[5],
+                           KEY=paths[6], PROVENANCE_SUMS=paths[7],
+                           PROVENANCE_SUMS_SIG=paths[8], PROVENANCE_BASELINE_SIG=paths[9],
+                           PROVENANCE_AVX2_SIG=paths[10], POLICY=paths[11], UNIT=paths[12],
+                           SETUP_SERVICE=paths[13], SETUP_TIMER=paths[14])
+            with patch.object(guest, 'owned_file', side_effect=lambda path, size=None: Path(path).stat()), \
+                    patch.multiple(guest, **patches):
+                self.assertEqual(guest.installed_integration_sha(), source_hash.hexdigest())
+                paths[0].write_bytes(b'#!/bin/sh\npayload-0\n')
+                with self.assertRaisesRegex(guest.Invalid, 'installed-integration-shebang-mismatch'):
+                    guest.installed_integration_sha()
 
     def test_status_adapter_has_exact_bounded_public_contract(self):
         checker = self.checker()

@@ -2,57 +2,53 @@
 
 ## Arctic Linux 1.2.1 — prepared release
 
-The completed desktop, installer and setup changes described here are on `main`. The v1.2.1
-release notes are prepared, while the replacement ISO and its final measurements still require
-aggregate qualification. Until the public release exists, [v1.2.0](#arctic-linux-120) remains
-the latest downloadable image.
+The v1.2.1 source includes direct official VoxType 1.1.1 integration, the 28-photo wallpaper
+collection, the first-login reliability fix, per-update What's New card, removable packaged
+wallpapers, lightweight default apps, and the taskbar and installer fixes. The replacement ISO is
+still being qualified and has not been published. Until a public v1.2.1 release exists,
+[v1.2.0](#arctic-linux-120) remains the latest downloadable image.
 
-Keep the signed **stable arctic** channel selected. The packages are published there now;
-existing systems can use `arctic-update now`, then `arctic-update apply` (save your work; this
-asks before restarting). **The testing channel is not required.** Existing app and wallpaper
-choices are preserved.
+Keep the signed **stable arctic** channel selected; the testing channel is not required. Existing
+systems preserve their app and wallpaper choices. Final stable v1.2.1 package publication and its
+signed update/reboot test are still pending.
 
-The stable package set includes:
+The current artifact-only candidate was built from
+`4f2595c3ecf11ab3332a615df162518d3f677f59` in
+[run 38866458401](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38866458401).
+`Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso` is **1,936,308,224 bytes** with SHA-256
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`. It is below the strict
+2,000,000,000-byte ceiling but above the preferred 1.6 GB target. Its UEFI Try, BIOS Install and UEFI Safe startup checks
+passed.
 
-- New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
-  Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
-- Twenty-eight photo wallpapers, including the original *Ember Clouds, City Silhouette* master;
-  fresh defaults use *City Afterglow*. Rotation can combine the Arctic collection and a personal
-  folder with **Both**. Per-account hide/restore tombstones keep packaged photos out of the picker
-  and rotation without deleting RPM-owned files; the active wallpaper is protected.
-- A separate **Remove apps** menu, local Nix profile management, optional gaming setup and
-  explicitly selected Tor/Tailscale/VPN support.
-- Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
-  status, the lock-screen clock, and installer restoration after a console/output change.
-- Local VoxType 1.1.1 dictation for Hebrew and English: verified online-install downloads,
-  nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
-  selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
-- A **What's New** card keyed by a unique packaged update ID, shown once per account after every
-  Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
-  reopens the current notes.
+Those are producer results only. The previous ISO was disqualified after a first-login race was
+found, and its exact-image results do not qualify this replacement. Installation and installed
+boot, networking, apps/media, SELinux, Nix, taskbar and installer behavior, the complete VoxType
+matrix, stable update/reboot, paired performance and media review are pending on this exact image.
+A successful source test or artifact build is not aggregate release qualification.
 
-The **replacement ISO remains unqualified and unpublished**. The prepared repository note is
-[`docs/releases/v1.2.1.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
-Its final record intentionally leaves these values pending:
+The prepared package set includes:
 
-| Release field | Status |
-|---|---|
-| ISO byte size and SHA-256 | **Pending final qualified image** |
-| Build and qualification run links | **Pending aggregate qualification** |
-| Startup, installed size, RAM and app-launch measurements | **Pending final measurement** |
-| Torrent checksum and verified release web seed | **Pending publication verification** |
+- Direct signed upstream VoxType 1.1.1. Online installation verifies and prepares the CPU binary
+  and selected multilingual model; offline installation queues a clear retry that never blocks
+  the OS install. Recording, cancellation, transcription and insertion are VoxType commands.
+  Hebrew/English current-image accuracy, GPU failure and CPU recovery, microphone failure and
+  transcript-leakage results remain pending.
+- Twenty-eight photo wallpapers, including the original *Ember Clouds, City Silhouette* master.
+  Fresh accounts use *City Afterglow*. Existing choices are preserved. Packaged photos can be
+  hidden per account and restored, while personal pictures can be deleted normally.
+- A first-login welcome card whose marker survives a shell-startup race and is consumed only
+  after the persistent card opens.
+- A **What's New** card shown once per account for each distinct Arctic package update, with the
+  current notes available again from **Settings → Updates → Release notes**.
+- GNOME Web, Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash as the
+  lightweight intended defaults, plus a separate **Remove apps** menu.
+- Taskbar frame/edge, auto-hide/dodge, exclusive-zone and duplicate-bar fixes; the full-battery
+  icon; lock-screen clock; wallpaper settings; update detection; and single-window installer
+  restoration with page, keyboard and engine state retained.
 
-Source checks or a successful artifact build alone do not establish release readiness.
-
-The current retained diagnostic candidate was built from `fc501fdf90c17c617b15b8b13038d062d519fcc6`.
-It is **1,936,185,344 bytes** with SHA-256
-`92fe2a1bcb9a67b8ed72e7b38d065e7e68ae26a38e930042a752aae7146e8d66`, below the strict
-2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its matching signed stable-update
-lane passed offline apply, reboot, SELinux and Nix-persistence checks. Dictation readiness and the
-remaining native, installer, reliability and performance lanes still have to pass before this can
-become the public v1.2.1 image. See the
-[prepared release record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
-for run links and the remaining evidence boundaries.
+The complete pending matrix and candidate identity are in the
+[prepared v1.2.1 record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
+Torrent and web-seed claims remain pending publication and download verification.
 
 ## Arctic Linux 1.2.0
 

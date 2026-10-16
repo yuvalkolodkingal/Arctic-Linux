@@ -65,6 +65,25 @@ class FirstLoginTests(unittest.TestCase):
         calls = self.run_welcome(env=env)
         self.assertTrue(calls[0].startswith('notify ') and 'Welcome to Arctic Linux' in calls[0])
         self.assertFalse([c for c in calls if c.startswith('ipc ')])
+        self.assertFalse((self.state / 'first-login').exists())
+
+    def test_default_shell_ipc_race_keeps_marker_for_later_card(self):
+        (self.state / 'first-login').write_text('')
+        unavailable = self.home / 'shell-unavailable'
+        unavailable.write_text('')
+        (self.bin / 'arctic-shell-ipc').write_text(
+            '#!/bin/sh\n'
+            f'if [ -e "{unavailable}" ]; then exit 1; fi\n'
+            f'echo "ipc $*" >> "{self.log}"\n')
+        (self.bin / 'arctic-shell-ipc').chmod(0o755)
+
+        calls = self.run_welcome()
+        self.assertTrue(calls[0].startswith('notify ') and 'Welcome to Arctic Linux' in calls[0])
+        self.assertTrue((self.state / 'first-login').exists())
+
+        unavailable.unlink()
+        self.assertEqual(self.run_welcome(), calls + ['ipc welcome firstLogin'])
+        self.assertFalse((self.state / 'first-login').exists())
 
 
 if __name__ == '__main__':

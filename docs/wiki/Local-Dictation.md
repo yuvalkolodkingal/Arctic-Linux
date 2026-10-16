@@ -47,12 +47,13 @@ transaction. An old payload that fails its strict hash check is never launched.
 3. Speak, then press the same keys to stop, transcribe and insert.
 4. Press **`Super + Ctrl + Backspace`** to cancel without inserting.
 
-Mango runs the transcript-free `arctic-dictation-toggle` readiness helper,
-which invokes `voxtype record toggle` only when setup is ready. Cancel invokes
-`voxtype record cancel` directly.
+Mango runs the transcript-free `arctic-dictation-toggle` readiness helper.
+On the first activation in a graphical session it starts VoxType, shows a fixed
+loading state, waits up to 60 seconds for official `idle`, and then invokes
+`voxtype record toggle`. Cancel invokes `voxtype record cancel` directly.
 VoxType inserts through `wtype`; Arctic does not enable VoxType's input-device
 hotkey listener. The recording/transcribing indicator remains visible while the
-taskbar hides. Locking cancels active work and stops the daemon until unlock.
+taskbar hides. Locking cancels active work and stops the daemon. Unlock restarts it only if you had explicitly activated dictation in that graphical session.
 
 The 60-second recording limit stops and transcribes what was captured. There is
 no Arctic 240-second transcription timeout in the direct integration.
@@ -86,10 +87,15 @@ only for the official acceleration outcome and does not save or display it.
 | Microphone cannot open | Select and unmute the input in **Settings → Sound**, then try again. |
 | Vulkan fails | Select **CPU**, then make a new recording. |
 | Text is not inserted | Focus a writable field and retry; the app may reject Wayland virtual-keyboard input. |
-| VoxType service is stopped | Open Dictation settings and repair or restart setup. |
+| First activation cannot start or times out | Open Dictation settings, verify/repair setup, then retry. |
 
-Models load on demand when recording begins and unload after transcription.
-This saves idle RAM and VRAM, with a short delay when a recording starts.
+VoxType is not enabled at login, so the model uses no login RAM or VRAM. The first
+explicit recording activation loads it; upstream then keeps it resident for the
+session to avoid unreliable load/unload cycles between recordings. Stop the
+service to release that memory. Setup, language and backend changes do not start
+an inactive service and apply on its next activation. Exact-image qualification
+checks that no VoxType engine exists before activation and records process RSS
+after loading; Vulkan VRAM is outside that RSS measurement.
 
 ## Privacy
 
@@ -103,9 +109,9 @@ The service can use only local Unix sockets for Wayland and PipeWire. Internet
 sockets remain blocked even if the user configuration or post-processing
 command is changed.
 
-The final release qualification still audits the exact image's journal and
-notifications. A source configuration is not proof that every runtime path is
-free of transcript excerpts.
+The final release qualification still binds the exact image's journal and
+notification audit for both model profiles. A source configuration is not proof
+that every runtime path is free of transcript excerpts.
 
 ## Commands and files
 
@@ -124,10 +130,19 @@ is `$XDG_RUNTIME_DIR/voxtype/state`. Verified binaries and models are under
 `/opt/arctic/voxtype`, with setup state and a public verification receipt under
 `/var/lib/arctic/dictation`.
 
+An update from Arctic's earlier VoxType 1.1.1 config takes effect after the
+next reboot, before login. Arctic changes only the exact config it generated,
+keeps the chosen language and model, and leaves custom configs unchanged. The
+running recorder is never restarted for this migration; an interrupted attempt
+is retried at a later boot from root-owned state in `/var/lib/arctic/dictation`.
+
 See [the pinned files and implementation details](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/DICTATION.md)
 and the [official VoxType documentation](https://voxtype.io/docs/).
 
 ## What has been measured
+
+These are historical direct-VoxType measurements from an earlier image. They inform expected CPU
+behavior, but they do not qualify the current replacement candidate.
 
 [Exact-image run 38699057684](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38699057684)
 tested official VoxType 1.1.1 on both CPU profiles. It used the first five public
@@ -146,21 +161,13 @@ virtual-source public read-speech results from a small fixed sample. They do not
 establish general accuracy, Whisper parity, mixed-language behavior, physical-
 microphone performance, GPU acceleration or speed on your hardware.
 
-The CPU transcription and insertion sublane is complete. The run created both
-target disks but stopped during the online-installed microphone fixture, before
-an offline-installed recovery report was emitted. The broader v1.2.1 dictation
-record still requires online and offline setup recovery, CPU recovery after a
-controlled Vulkan failure, missing models, physical microphone failure,
-cancellation, locking and transcript-leakage checks:
-
-| Exact-image field | Result |
-|---|---|
-| Small v2 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
-| Turbo Q5 v3 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
-| Online setup and offline first-boot recovery | **Pending final qualification** |
-| Controlled Vulkan failure and explicit CPU recovery | **Pending final qualification** |
-| Physical microphone failure and cancellation | **Pending final qualification** |
-| Log, notification and status privacy audit | **Pending final qualification** |
+The current replacement image must repeat the complete matrix. Its online/offline setup,
+English/Hebrew insertion, cancellation, missing-model and microphone errors, unsupported Vulkan
+failure, explicit CPU recovery, locking and transcript-leakage checks are all **pending exact-image
+qualification**. The earlier runs above cannot be rebound to the replacement artifact.
+The QEMU guest has no physical GPU. It proves that an unsupported or fallback Vulkan path is
+rejected rather than reported as accelerated, but it does not test physical GPU acceleration.
+Hardware-specific Vulkan performance and compatibility therefore remain untested for this release.
 
 An older candidate VM run measured online/offline paths through the retired
 Arctic runtime controller. Its service, installer, cancellation, GPU recovery

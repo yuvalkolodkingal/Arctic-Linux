@@ -14,15 +14,15 @@ photo backgrounds, separate Remove apps, official VoxType 1.1.1 local dictation,
 the one-time What's New summary, and per-account hide/restore for packaged wallpapers.
 
 The script has 38 scenes and 130 caption cues. Every time window is aligned to the verified
-582.356463-second direct-VoxType 1.1.1 River master. Rendering remains blocked by human listening,
-qualified final-image captures and release binding.
+582.356463-second direct-VoxType 1.1.1 River master. Rendering remains blocked by qualified
+final-image captures and release binding; human listening remains mandatory before publication.
 
 The prior faster-whisper results are preserved as evidence for the superseded master only. The
 first full-script River request failed because the connector caps one request at 5,000 characters;
 the locked script is 9,093 characters. That attempt has no renderable audio. The exact script is
 now pinned as two minimum-count inputs of 4,451 and 4,642 characters, split between the Get apps
 and Remove apps paragraphs. Both one-take River generations completed. Their verified sample-exact
-assembly is 582.356463 seconds and has SHA-256
+assembly is 13,978,270 bytes and 582.356463 seconds, with SHA-256
 `f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`. The audio is preserved
 outside Git and remains unpublished. Two offline faster-whisper 1.2.1 alignment runs produced
 byte-identical outputs. The measured WER is 4.1412%, exact-token coverage is 97.4202%, and no cue
@@ -30,18 +30,21 @@ falls below half exact-token coverage. Human listening review remains pending.
 
 The new source has **not** been rendered or published. Final-image captures for direct VoxType,
 wallpaper management and What's New remain explicitly pending until the matching Arctic image
-finishes qualification. Full decode, subtitle mux, representative-frame review, human listening,
+finishes qualification. The source composition keeps evidence cards in those five positions and
+will replace them only with contract-validated, manually reviewed exact-image assets bound to the
+same ISO receipt. Full decode, subtitle mux, representative-frame review, human listening,
 release binding and public download verification must then run on the final render. The public
 link above therefore continues to point to the 3 October edition.
 
 ## What the source shows
 
 The app scenes cover GNOME Web, Foot, PCManFM, XArchiver, FeatherPad, Celluloid, Nano and
-Fish/Bash. Arctic downloads signature-checked official VoxType 1.1.1 binaries and uses a small
-setup and status adapter around VoxType's public commands. Online installation automatically
-downloads and verifies the compatible CPU engine and multilingual model. Offline installation
-reports that dictation is not ready and leaves a clear first-boot retry. Mango's readiness helper
-invokes VoxType record toggle, and Arctic's VoxType-backed indicator stays visible. The script
+Fish/Bash. VoxType's official 1.1.1 daemon records, transcribes and inserts text directly. Arctic
+downloads and verifies the signed upstream binary and multilingual model, supplies safe local
+configuration, and presents sanitized readiness and error states. Online installation performs
+that setup automatically. Offline installation reports that dictation is not ready and leaves a
+clear first-boot retry. Mango's readiness helper starts the official service on first use and
+invokes `voxtype record toggle`; Arctic's indicator follows VoxType's runtime state. The script
 reports hosted Westmere CPU measurements of 7.77% English WER and 42.0%
 Hebrew WER; processing took 15.79 and 11.63 times the respective audio durations. Evidence cards
 remain until those paths are captured from the qualified ISO.
@@ -80,7 +83,7 @@ npm run check -- --samples 38 --strict
 `package-lock.json` pins every HyperFrames dependency and registry integrity digest; the npm scripts
 invoke that installed CLI rather than resolving a package with `npx`. Asset preparation accepts the
 committed GSAP 3.14.2 file only at 72,777 bytes and SHA-256
-`19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee`. The two showcase workflows
+`19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee`. The showcase workflows
 also pin each official GitHub Action to a reviewed full commit SHA.
 
 The superseded custom-controller River master remains recorded with its exact SHA-256, duration and generation receipts
@@ -98,15 +101,47 @@ the complete output, and review representative frames. The final MP4 size, SHA-2
 and matching ISO fields remain pending qualification.
 
 The resolver does not trust `ready_for_render` by itself. `--purpose private-render` admits only an
-unpublished candidate after verifying the private draft asset, human listening receipt, the actual
+unpublished candidate after verifying the private draft asset, the actual
 `tools/qualified-release/manifest.json` schema (including update, active-installer and every media
 review), all five reviewed capture contracts, one matching ISO identity and identical render-ready
-timing. `--purpose publish-video` additionally requires the release publication flag, the
+timing. The private candidate is the review object for complete human listening and frame review.
+`--purpose publish-video` additionally requires the approved human-listening receipt, the release publication flag, the
 publisher's public-video confirmation, and a reviewed final-render receipt. That receipt binds the
 exact source commit, render run and artifact, MP4 bytes, duration and SHA-256, full decode and
 subtitle checks, and human review of the eight representative frames. `--purpose
 publish-video-with-source-audio` is the only mode that accepts redistribution of the source MP3,
 and it requires the broader explicit `public_video_and_source_audio_redistribution` scope.
+
+## Public video publication
+
+[`showcase-river-publish.yml`](../.github/workflows/showcase-river-publish.yml) is a manual,
+input-free publisher for the reviewed River edition. It is inert until a maintainer dispatches it
+from `main`. The checked-out commit must equal the qualified-release manifest's `main_sha`; the
+voice resolver must independently admit `--purpose publish-video`; and the live render run and
+artifact metadata, archive byte count and SHA-256 must reproduce the approved final-render receipt.
+
+The candidate ZIP has a closed member inventory and bounded expanded size. Before staging, the
+publisher verifies its MP4 bytes and SHA-256, all eight human-reviewed frame hashes, render and
+caption validation records, 130 matching SRT/WebVTT/muxed caption cues, the exact committed poster,
+captions, chapters, timing and provenance, and the archived private-render receipt. That archived
+receipt may differ from the final receipt only in post-render listening, frame, final-render and
+publisher-plan approvals. Unexpected members, including any MP3, stop publication. The workflow
+publishes only:
+
+- `Arctic-Linux-Showcase-River-1080p.mp4`
+- `Arctic-Linux-Showcase-Poster.png`
+- `captions.srt`
+- `captions.vtt`
+- `chapters.txt`
+
+The tag and release must not already exist. The workflow first creates a draft, uploads all five
+assets, downloads them through the authenticated GitHub release client, and verifies their byte
+counts and SHA-256 values. It then makes the release public, downloads each public asset URL
+independently, and verifies the public metadata and both copies. If any creation or verification
+step fails, the workflow removes the incomplete release and tag. Source-audio publication is
+outside this workflow; the resolver
+permits it only through the separate `publish-video-with-source-audio` purpose and the broader
+`public_video_and_source_audio_redistribution` confirmation.
 
 ## Source and verification records
 

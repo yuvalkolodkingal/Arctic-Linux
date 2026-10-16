@@ -12,19 +12,29 @@ Turbo Q5 v3 at 6.80% and 21.0%, respectively. Both are small virtual-source publ
 fixtures; neither claims general parity, physical-microphone coverage or real-time CPU performance.
 
 The old custom-controller screenshots and their River audio are superseded. Five explicit
-capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
-packaged-wallpaper hide and restore, and one for the per-update What's New summary. A new River
+capture contracts require evidence from the exact qualified ISO: three for direct VoxType, one for
+packaged-wallpaper hide and restore, and one for the per-update What's New summary. The new
+artifact-only candidate from [run 38866458401](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38866458401)
+is 1,936,308,224 bytes with SHA-256
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`. Its producer startup checks
+passed, while exact-image capture
+and qualification remain pending; no pixels from the disqualified predecessor are admitted.
+A new River
 master has deterministic local alignment and still needs human listening. The locked narration is 9,093 characters, above
 the connected generator's 5,000-character request limit. The failed full-script attempt has no
 renderable audio. Two exact source segments of 4,451 and 4,642 characters are pinned at a paragraph
 boundary. Both one-take River generations completed and their receipts were verified. The
-sample-exact assembled master is 582.356463 seconds with SHA-256
+sample-exact assembled master uses River voice ID `SAz9YHcvj6GT2YYXdXww` with
+`eleven_multilingual_v2`. It is 13,978,270 bytes and 582.356463 seconds, with SHA-256
 `f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b`; it remains unpublished.
 Two offline faster-whisper 1.2.1 runs produced byte-identical timing for all 130 cues, with 4.1412%
-WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; the
-segment boundary lies inside 0.431905 seconds below -60 dBFS. These automated results do not replace
-listening. Rendering is blocked pending human listening, qualified captures, private source-archive
-verification and release binding, so no replacement video link is published yet.
+WER and 97.4202% exact-token coverage. A full decode found no errors or hard-clipped samples; its
+measured loudness is -24.6 LUFS with a -2.2 dBTP true peak, and the segment boundary lies inside
+0.431905 seconds below -60 dBFS. These automated results do not replace
+listening. The exact master is preserved in a verified private draft release. A private render is
+blocked pending qualified captures and release binding; publication additionally requires complete
+human listening, final video and frame review, confirmation that the connected ElevenLabs plan
+permits the public video, and verified public downloads. No replacement video link is published yet.
 
 [![Watch the Arctic Linux showcase](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-Poster.png)](https://github.com/yuvalkolodkingal/Arctic-Linux/releases/download/showcase-2026-10-03/Arctic-Linux-Showcase-1080p.mp4)
 

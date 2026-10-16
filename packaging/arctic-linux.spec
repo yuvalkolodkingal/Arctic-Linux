@@ -893,6 +893,7 @@ install -Dpm 0755 packaging/dictation/voxtype %{buildroot}%{_bindir}/voxtype
 install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-setup
 install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
 install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
+install -Dpm 0755 packaging/dictation/arctic-voxtype-migrate-config %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-migrate-config
 install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
 install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.1
 install -pm 0644 packaging/dictation/provenance/v1.1.1/* \
@@ -900,6 +901,12 @@ install -pm 0644 packaging/dictation/provenance/v1.1.1/* \
 install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
 install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
+install -Dpm 0644 packaging/systemd/arctic-voxtype-config-migration.service %{buildroot}%{_unitdir}/arctic-voxtype-config-migration.service
+# Keep this migration ordered before logins on upgraded systems too. RPM's
+# first-install-only preset path does not enable a newly added unit on upgrade.
+install -d %{buildroot}%{_unitdir}/multi-user.target.wants
+ln -s ../arctic-voxtype-config-migration.service \
+  %{buildroot}%{_unitdir}/multi-user.target.wants/arctic-voxtype-config-migration.service
 install -Dpm 0644 packaging/systemd/voxtype.service %{buildroot}%{_userunitdir}/voxtype.service
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
@@ -1366,16 +1373,28 @@ systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 %systemd_post arctic-login-wallpaper.service
 %systemd_post arctic-firstboot.timer arctic-update-stage.timer
 %systemd_post arctic-dictation-setup.timer
+%systemd_post arctic-voxtype-config-migration.service
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-login-wallpaper.service
 %systemd_preun arctic-firstboot.service arctic-firstboot.timer arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
 %systemd_preun arctic-dictation-setup.service arctic-dictation-setup.timer
+%systemd_preun arctic-voxtype-config-migration.service
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
+# VoxType now loads only after explicit recording activation. Remove the old
+# global wants link without stopping a possibly active recording in this
+# transaction. The unit's per-session condition makes any leftover per-user
+# wants link inert at the next login without erasing an administrator's intent.
+if [ ! -e %{_sharedstatedir}/arctic/dictation/lazy-session-start-v1 ]; then
+  if systemctl --global --no-reload disable voxtype.service >/dev/null 2>&1; then
+    install -d -m 0755 %{_sharedstatedir}/arctic/dictation
+    install -m 0644 /dev/null %{_sharedstatedir}/arctic/dictation/lazy-session-start-v1 || :
+  fi
+fi
 # Direct-upstream dictation replaced the old Arctic runtime controller. A new
 # pinned upstream release also enters this queue: the model and user choice are
 # reused, while the new signed executable is fetched in the background. The
@@ -1416,6 +1435,10 @@ if [ "$dictation_current" != true ]; then
     fi
   fi
 fi
+# Existing 1.1.1 systems generated on-demand configs. Queue their narrow,
+# receipt-bound migration for the next boot; fresh setups already carry the
+# resident-model generation marker. Custom config bytes are preserved.
+%{_libexecdir}/arctic/arctic-voxtype-setup --queue-config-resident-v1 >/dev/null 2>&1 || :
 # Migrate old boot-wanted download services to post-boot retries once. Do not stop a
 # currently running setup, and do not override later administrator timer choices.
 if [ ! -e %{_sharedstatedir}/arctic/.postboot-setup-timers ]; then
@@ -1640,10 +1663,13 @@ fi
 %{_libexecdir}/arctic/arctic-voxtype-setup
 %{_libexecdir}/arctic/arctic-voxtype-host-profile
 %{_libexecdir}/arctic/arctic-voxtype-configure
+%{_libexecdir}/arctic/arctic-voxtype-migrate-config
 %{_datadir}/arctic/dictation/
 %{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
 %{_unitdir}/arctic-dictation-setup.service
 %{_unitdir}/arctic-dictation-setup.timer
+%{_unitdir}/arctic-voxtype-config-migration.service
+%{_unitdir}/multi-user.target.wants/arctic-voxtype-config-migration.service
 %{_userunitdir}/voxtype.service
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service

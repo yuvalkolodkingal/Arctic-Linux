@@ -59,12 +59,17 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
         report['payload'] = c.pinned(profile)
     for name in sorted(c.gates(phase, profile)):
         observed = dict(c.REQUIRED_OBSERVATIONS.get(name, {}))
+        if name in ('online-installer-ready', 'recovered-ready'):
+            observed['resident_rss_bytes'] = 600_000_000
         if name == 'installed-payload-integrity':
             observed['file_count'] = len(c.PROFILE_ASSETS[profile])
-        if name == 'local-offline-transcription':
+        if name in ('local-offline-transcription', c.VULKAN_ISOLATION_GATE):
             observed['returncode'] = 7
         if name == 'recording-status-published':
             observed.update(snapshot_sha256='d' * 64, sha256='e' * 64)
+        if name == c.MODERN_GPU_GATE:
+            observed.update(gpu_failure_capture_ack_sha256='1' * 64,
+                            cpu_ready_capture_ack_sha256='2' * 64)
         if name == 'transcript-log-notification-leak-scan':
             observed['count'] = 12
         if name == 'no-new-avcs':
@@ -91,6 +96,14 @@ class ContractControls(unittest.TestCase):
         result = c.validate_report(report, report['context'], FIXTURES)
         self.assertTrue(result['contract_valid'])
         self.assertFalse(result['release_acceptance'])
+
+    def test_lazy_readiness_requires_zero_login_engine_and_measured_resident_rss(self):
+        for key, code in (("pre_activation_engine_count", "gate-contradictory-or-missing-observations"),
+                          ("resident_rss_bytes", "gate-resident-rss-missing")):
+            report = synthetic("online-installed")
+            gate = next(row for row in report["gates"] if row["id"] == "online-installer-ready")
+            gate["observations"].pop(key)
+            self.rejects(report, code)
 
     def test_upstream_version_commit_and_signing_fingerprint_are_fixed(self):
         for key, value in (('version', '1.0.0'), ('source_commit', '0' * 40),
@@ -120,11 +133,53 @@ class ContractControls(unittest.TestCase):
         gate['observations']['failed_attempt_inserted'] = True
         self.rejects(report, 'gate-contradictory-or-missing-observations')
 
+    def test_frozen_vm_gate_records_unsupported_gpu_without_claiming_acceleration(self):
+        self.assertEqual(c.EXPECTED_KINDS[c.MODERN_GPU_GATE], 'actual-session')
+        self.assertIs(c.REQUIRED_OBSERVATIONS[c.MODERN_GPU_GATE]['gpu_supported'], False)
+        report = synthetic('online-installed')
+        gate = next(row for row in report['gates'] if row['id'] == c.MODERN_GPU_GATE)
+        gate['observations']['gpu_supported'] = True
+        self.rejects(report, 'gate-contradictory-or-missing-observations')
+
+    def test_turbo_connected_preparation_has_an_explicit_offline_boundary(self):
+        for phase in ('online-installed', 'recovery'):
+            report = synthetic(phase)
+            gate = next(row for row in report['gates']
+                        if row['id'] == c.VULKAN_ISOLATION_GATE)
+            self.assertEqual(gate['evidence_kind'], 'actual-boot')
+            self.assertGreater(gate['observations']['returncode'], 0)
+            gate['observations']['returncode'] = 0
+            self.rejects(report, 'vulkan-boundary-network-check-successful-response')
+        for phase in ('live', 'offline-installed', 'recovered-offline'):
+            self.assertNotIn(c.VULKAN_ISOLATION_GATE,
+                             c.gates(phase, 'turbo-q5-v3'))
+        for phase in c.PHASES:
+            self.assertNotIn(c.VULKAN_ISOLATION_GATE,
+                             c.gates(phase, 'small-v2'))
+
+    def test_modern_gpu_gate_requires_both_recovery_screen_acknowledgements(self):
+        for key in ('gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256'):
+            report = synthetic('online-installed')
+            gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+            del gate['observations'][key]
+            self.rejects(report, 'recovery-screen-evidence-missing')
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+        gate['observations']['cpu_ready_capture_ack_sha256'] = 'not-a-digest'
+        self.rejects(report, 'gate-observation-hash')
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+        gate['observations']['cpu_ready_capture_ack_sha256'] = gate['observations']['gpu_failure_capture_ack_sha256']
+        self.rejects(report, 'recovery-screen-evidence-missing')
+
     def test_legacy_lane_cannot_claim_vulkan(self):
         report = synthetic('online-installed', profile='small-v2')
         ids = {gate['id'] for gate in report['gates']}
         self.assertIn(c.LEGACY_GPU_GATE, ids)
         self.assertNotIn(c.MODERN_GPU_GATE, ids)
+        legacy = next(gate for gate in report['gates'] if gate['id'] == c.LEGACY_GPU_GATE)
+        self.assertNotIn('gpu_failure_capture_ack_sha256', legacy['observations'])
+        self.assertNotIn('cpu_ready_capture_ack_sha256', legacy['observations'])
 
     def test_transcript_fields_and_arbitrary_codes_are_rejected(self):
         report = synthetic(); report['transcript'] = 'private sentence'
@@ -144,6 +199,194 @@ class ContractControls(unittest.TestCase):
         self.assertEqual(c.validate(report, report['context'])['status'], 'failed')
         gate.update(status='unrun', code='gate-' + gate['id'] + '-invalid')
         self.rejects(report, 'gate-code-status')
+
+    def test_failed_cpu_transcription_requires_bounded_numeric_stage(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates']
+                    if gate['id'] == 'cpu-hebrew-transcription-insertion')
+        gate.update(status='failed', code='gate-' + gate['id'] + '-timeout',
+                    observations={'failure_stage':
+                                  c.TRANSCRIPTION_FAILURE_STAGES['terminal-state']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        missing = copy.deepcopy(report)
+        next(g for g in missing['gates'] if g['id'] == gate['id'])['observations'] = {}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
+            c.validate(missing, missing['context'], fixture_manifest=FIXTURES)
+
+        for value in (True, 0, max(c.TRANSCRIPTION_FAILURE_STAGES.values()) + 1):
+            changed = copy.deepcopy(report)
+            next(g for g in changed['gates'] if g['id'] == gate['id'])[
+                'observations']['failure_stage'] = value
+            with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+                c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
+
+    def test_failure_stage_is_rejected_outside_failed_transcription_gate(self):
+        report = synthetic('online-installed')
+        cpu = next(gate for gate in report['gates']
+                   if gate['id'] == 'cpu-english-transcription-insertion')
+        cpu['observations']['failure_stage'] = 1
+        self.rejects(report, 'gate-failure-stage-scope')
+
+        report = synthetic('online-installed')
+        unrelated = next(gate for gate in report['gates']
+                         if gate['id'] == 'cancel-discards')
+        unrelated.update(status='failed', code='gate-cancel-discards-invalid',
+                         observations={'failure_stage': 1})
+        report['status'] = 'failed'
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-scope$'):
+            c.validate(report, report['context'], fixture_manifest=FIXTURES)
+
+    def test_gpu_gate_allows_only_transcription_or_fixed_recovery_stage(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+        gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                    observations={'failure_stage':
+                                  c.TRANSCRIPTION_FAILURE_STAGES['text-delivery']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        gate['observations'] = {
+            'failure_stage': c.GPU_FAILURE_STAGES['gpu-failure-screen']}
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        gate['observations'] = {'failure_stage': 999}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+            c.validate(report, report['context'], fixture_manifest=FIXTURES)
+        gate['observations'] = {}
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+    def test_failure_substages_are_closed_and_scoped_to_engine_identity(self):
+        report = synthetic('online-installed')
+        gate = next(row for row in report['gates']
+                    if row['id'] == 'cpu-english-transcription-insertion')
+        gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                    observations={
+                        'failure_stage': c.TRANSCRIPTION_FAILURE_STAGES['engine-profile'],
+                        'failure_substage': 704})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'], fixture_manifest=FIXTURES)['status'], 'failed')
+        for key, value, code in (
+                ('failure_substage', 9999, 'gate-failure-substage-value'),
+                ('failure_returncode', 1, 'gate-observation-fields')):
+            changed = copy.deepcopy(report)
+            changed_gate = next(row for row in changed['gates'] if row['id'] == gate['id'])
+            changed_gate['observations'][key] = value
+            self.rejects(changed, code)
+
+        cpu = synthetic('online-installed')
+        cpu_gate = next(row for row in cpu['gates']
+                        if row['id'] == 'cpu-hebrew-transcription-insertion')
+        cpu['status'] = 'failed'
+        for stage, substage in (
+                ('language-selection', 412), ('recording-state', 608),
+                ('engine-profile', 704), ('transcribing-state', 1210)):
+            with self.subTest(stage=stage):
+                changed = copy.deepcopy(cpu)
+                changed_gate = next(row for row in changed['gates']
+                                    if row['id'] == cpu_gate['id'])
+                changed_gate.update(
+                    status='failed', code='gate-' + changed_gate['id'] + '-invalid',
+                    observations={
+                        'failure_stage': c.TRANSCRIPTION_FAILURE_STAGES[stage],
+                        'failure_substage': substage})
+                self.assertEqual(c.validate(
+                    changed, changed['context'],
+                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+    def test_failed_microphone_gate_requires_its_own_bounded_stage(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates']
+                    if gate['id'] == 'microphone-disconnect-error')
+        gate.update(status='failed', code='gate-' + gate['id'] + '-timeout',
+                    observations={'failure_stage':
+                                  c.MICROPHONE_FAILURE_STAGES['actionable-error']})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+        missing = copy.deepcopy(report)
+        next(g for g in missing['gates'] if g['id'] == gate['id'])['observations'] = {}
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
+            c.validate(missing, missing['context'], fixture_manifest=FIXTURES)
+
+        wrong_inventory = copy.deepcopy(report)
+        next(g for g in wrong_inventory['gates'] if g['id'] == gate['id'])[
+            'observations']['failure_stage'] = c.TRANSCRIPTION_FAILURE_STAGES['record-start']
+        with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
+            c.validate(wrong_inventory, wrong_inventory['context'], fixture_manifest=FIXTURES)
+
+    def test_failed_readiness_gate_requires_closed_stage_and_substage(self):
+        for phase, gate_id in (('online-installed', 'online-installer-ready'),
+                               ('recovered-offline', 'recovered-ready')):
+            with self.subTest(phase=phase):
+                report = synthetic(phase)
+                gate = next(row for row in report['gates'] if row['id'] == gate_id)
+                gate.update(
+                    status='failed', code='gate-' + gate_id + '-invalid',
+                    observations={
+                        'failure_stage': c.READINESS_FAILURE_STAGE,
+                        'failure_substage':
+                            c.READINESS_FAILURE_SUBSTAGES['recording-observed'],
+                    })
+                report['status'] = 'failed'
+                self.assertEqual(c.validate(
+                    report, report['context'], fixture_manifest=FIXTURES)['status'],
+                    'failed')
+
+                missing = copy.deepcopy(report)
+                next(row for row in missing['gates'] if row['id'] == gate_id)[
+                    'observations'] = {}
+                self.rejects(missing, 'gate-failure-stage-missing')
+
+                missing_substage = copy.deepcopy(report)
+                next(row for row in missing_substage['gates'] if row['id'] == gate_id)[
+                    'observations'] = {
+                        'failure_stage': c.READINESS_FAILURE_STAGE,
+                    }
+                self.rejects(missing_substage, 'gate-failure-substage-missing')
+
+                unknown = copy.deepcopy(report)
+                next(row for row in unknown['gates'] if row['id'] == gate_id)[
+                    'observations']['failure_substage'] = 3999
+                self.rejects(unknown, 'gate-failure-substage-value')
+
+    def test_dependent_unrun_gates_require_a_concrete_source_owned_failure(self):
+        report = synthetic('online-installed')
+        failed, dependent = report['gates'][:2]
+        failed.update(status='failed', code='gate-' + failed['id'] + '-invalid', observations={})
+        dependent.update(status='unrun', code='prerequisite-or-collector-failed', observations={})
+        report['status'] = 'failed'
+        result = c.validate(report, report['context'], fixture_manifest=FIXTURES)
+        self.assertEqual(result['status'], 'failed')
+        self.assertFalse(result['release_acceptance'])
+        with self.assertRaisesRegex(c.Invalid, '^image-dictation-gates-incomplete$'):
+            c.validate_report(report, report['context'], FIXTURES)
+
+        no_failure = synthetic('online-installed')
+        no_failure['gates'][0].update(
+            status='unrun', code='prerequisite-or-collector-failed', observations={})
+        no_failure['status'] = 'failed'
+        self.rejects(no_failure, 'gate-code-status')
+
+    def test_dependent_unrun_cannot_mask_hostile_or_accepting_reports(self):
+        for mutation, code in (
+                (lambda report: report.update(status='passed'), 'gate-code-status'),
+                (lambda report: report.update(release_acceptance=True), 'report-schema-scope'),
+                (lambda report: report['gates'][1].update(code='private-transcript'),
+                 'gate-code-status'),
+                (lambda report: report['gates'][0].update(code='attackercontrolledtoken'),
+                 'gate-code-status')):
+            report = synthetic('online-installed')
+            report['gates'][0].update(
+                status='failed', code='gate-' + report['gates'][0]['id'] + '-invalid', observations={})
+            report['gates'][1].update(
+                status='unrun', code='prerequisite-or-collector-failed', observations={})
+            report['status'] = 'failed'
+            mutation(report)
+            self.rejects(report, code)
 
     def test_exact_binary_model_and_fixture_pins_are_required(self):
         report = synthetic('online-installed')

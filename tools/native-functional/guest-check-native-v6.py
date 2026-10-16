@@ -459,6 +459,27 @@ def visual_reference_frame():
                  for channel in palette[(y//30)*4+x//40])
 
 
+def visual_reference_stream():
+    """Twenty bounded palette frames that keep the actual GL surface damaged.
+
+    A stream of byte-identical frames can advance the libmpv clock without
+    causing GTK's GL surface to repaint after a compositor fullscreen resize.
+    Alternating every RGB channel by four keeps both deterministic phases well
+    inside the unchanged oracle tolerances while requiring real frame damage.
+    """
+    base=visual_reference_frame()
+    pulse=bytes(channel+4 for channel in base)
+    require(len(base)==len(pulse)==160*120*3 and all(b-a==4 for a,b in zip(base,pulse)),
+            'visual reference pulse differs')
+    return b''.join(base if index%2==0 else pulse for index in range(20))
+
+
+def visual_reference_cadence():
+    return dict(schema='arctic-native-visual-cadence-v1',frames=20,frames_per_second=10,
+                alternating_rgb_delta=4,changes_every_frame=True,
+                oracle_thresholds_unchanged=True,release_acceptance=False)
+
+
 def visual_capture_geometry(client, monitors):
     """Validate an observed focused client and scale1 SDR monitor before cropping."""
     require(isinstance(client,dict) and client.get('is_focused') is True
@@ -1153,6 +1174,100 @@ class Smoke:
             try: drain.finish()
             except Exception: pass
 
+    # BEGIN HOST_FRAME_DIAGNOSTIC
+    def host_frame_diagnostic(self,player,expected,primary):
+        """Request one QMP frame while the failed primary player stays frozen."""
+        value=dict(schema='arctic-native-host-frame-request-v1',stage=self.stage,
+            status='unknown',primary_screenshot_sha256=primary['screenshot']['sha256'],
+            primary_oracle_status='unmatched',release_acceptance=False,
+            rendering_cause_proven=False)
+        try:
+            require(self.stage in ('live','installed'),'host frame request requires a native stage')
+            require(primary['oracle']['status']=='unmatched','host frame request requires the failed primary oracle')
+            require(primary['playback_clock']['capture_paused'] is True
+                    and abs(primary['playback_clock']['settled_seconds']-
+                            primary['playback_clock']['paused_seconds'])<=.05,
+                    'host frame request requires the settled paused primary')
+            client=self.alive(player)
+            require(all(client.get(key)==primary['client_after'].get(key)
+                        for key in ('id','pid','monitor','is_visible','is_focused','is_fullscreen','x','y','width','height')),
+                    'host frame request player identity or geometry changed')
+            require(client['is_visible'] is True and client['is_focused'] is True
+                    and client['is_fullscreen'] is True,'host frame request player is not focused fullscreen')
+            monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+            monitor,geometry,crop=visual_capture_geometry(client,monitors)
+            require(geometry=={key:primary['client_after'][key] for key in ('x','y','width','height')}
+                    and crop==primary['client_pixel_crop'],
+                    'host frame request capture geometry changed')
+            environ=Path('/proc')/str(player['pid'])/'environ'
+            require(environ.stat().st_uid==self.uid,'host frame settings process owner differs')
+            with environ.open('rb') as stream: raw=stream.read(65537)
+            require(len(raw)<=65536,'host frame settings environment exceeded bound')
+            variables=raw.split(b'\0')
+            config_values=[item.split(b'=',1)[1] for item in variables if item.startswith(b'XDG_CONFIG_HOME=')]
+            require([item for item in variables if item.startswith(b'GSETTINGS_BACKEND=')]==
+                    [b'GSETTINGS_BACKEND=keyfile'] and len(config_values)==1,
+                    'host frame settings backend/config is not process bound')
+            config=Path(os.fsdecode(config_values[0]));expected_config=self.reference_settings_config()
+            require(config==expected_config and config.resolve()==config,
+                    'host frame process settings config differs')
+            query=['/usr/bin/env','GSETTINGS_BACKEND=keyfile','XDG_CONFIG_HOME='+str(config),
+                   '/usr/bin/gsettings','get','io.github.celluloid-player.Celluloid','graphics-offload-enable']
+            result=self.cmd(query,timeout=5,original=True)
+            require(result[0]==0 and result[1] in ('true','false'),
+                    'graphics offload process-bound readback is not boolean')
+            reference=expected.read_bytes()
+            require(len(reference)==160*120*3,'host frame expected RGB format differs')
+            palette=[list(reference[((row*30+15)*160+column*40+20)*3:
+                                    ((row*30+15)*160+column*40+20)*3+3])
+                     for row in range(4) for column in range(4)]
+            request=dict(schema='arctic-native-host-frame-request-v1',stage=self.stage,
+                nonce=os.urandom(16).hex(),boot_id=Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                player={key:player[key] for key in ('client_id','pid','start_ticks','executable','executable_sha256','is_xwayland')},
+                monitor={key:monitor[key] for key in ('name','x','y','width','height','scale','is_hdr')},
+                client_geometry=geometry,client_pixel_crop=crop,expected_palette=palette,
+                expected_rgb_sha256=primary['expected_rgb_sha256'],
+                primary_screenshot_sha256=primary['screenshot']['sha256'],
+                primary_oracle_status='unmatched',playback_paused=True,
+                playback_time_seconds=primary['playback_clock']['settled_seconds'],
+                graphics_offload=dict(schema='io.github.celluloid-player.Celluloid',
+                    key='graphics-offload-enable',effective_value=result[1]=='true',
+                    settings_backend='keyfile',private_config_process_bound=True),
+                hold_seconds=20,release_acceptance=False)
+            print('ARCTIC-NATIVE-HOST-FRAME-REQUEST '+json.dumps(request,sort_keys=True),flush=True)
+            # No guest input or product state changes occur during this bounded
+            # window. The host polls the original UART and captures this exact
+            # QEMU head with an explicit device/head selector.
+            time.sleep(request['hold_seconds'])
+            after=self.alive(player)
+            paused=mpv_property(self.root/'visual-reference-ipc.sock','pause',player['pid'],self.uid)
+            observed=mpv_property(self.root/'visual-reference-ipc.sock','time-pos',player['pid'],self.uid)
+            require(paused is True and type(observed) in (int,float) and not isinstance(observed,bool)
+                    and math.isfinite(observed) and abs(observed-request['playback_time_seconds'])<=.05
+                    and all(after.get(key)==client.get(key) for key in
+                            ('id','pid','monitor','is_visible','is_focused','is_fullscreen','x','y','width','height')),
+                    'host frame hold did not preserve the paused player')
+            value.update(status='request-held',request=request,hold_completed=True,
+                         player_identity_geometry_unchanged=True,
+                         playback_clock_drift_seconds=abs(observed-request['playback_time_seconds']))
+        except Exception as error:
+            value['error']=renderer_trial_error(error)
+        try:
+            raw=(json.dumps(value,sort_keys=True)+'\n').encode()
+            require(len(raw)<=64*1024,'host frame request receipt exceeded bound')
+            directory=os.open(self.root,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+            try:
+                require(os.fstat(directory).st_uid==self.uid,'host frame receipt directory owner differs')
+                fd=os.open('0-host-frame-request.json',os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,
+                           0o600,dir_fd=directory)
+                with os.fdopen(fd,'wb') as stream:
+                    os.fchown(stream.fileno(),self.uid,-1);stream.write(raw)
+            finally: os.close(directory)
+        except (OSError,ValueError,RuntimeError):
+            pass
+
+    # END HOST_FRAME_DIAGNOSTIC
+
     def controlled_renderer_trials(self,fixture,expected,source_sha,primary):
         """Failure-only diagnostics. Primary oracle/error and overall FAIL stand."""
         rows=[dict(intervention=mode,status='unrun',release_acceptance=False)
@@ -1473,7 +1588,7 @@ class Smoke:
         self.trace('editor-physical-request',request=request)
         print('ARCTIC-NATIVE-EDITOR-PHYSICAL '+json.dumps(request,sort_keys=True),flush=True)
 
-    def player_fullscreen(self, proof, enabled):
+    def player_fullscreen(self, proof, enabled, ipc):
         require(type(enabled) is bool and proof['executable']=='/usr/bin/celluloid'
                 and proof['is_xwayland'] is False,'owned native player fullscreen only')
         before=self.alive(proof)
@@ -1481,9 +1596,7 @@ class Smoke:
         visual_capture_geometry(before,monitors_before)
         require(before.get('is_fullscreen') is (not enabled),'fullscreen must change exactly once')
         origin=time.monotonic_ns()
-        argv=['mmsg','dispatch','togglefullscreen','client,'+proof['client_id']]
-        response=self.cmd(argv)
-        require(response[0]==0 and json.loads(response[1])=={'success':True},'owned fullscreen action failed')
+        action=mpv_celluloid_fullscreen(ipc,proof['pid'],self.uid,enabled)
         self.wait(lambda:self.alive(proof).get('is_fullscreen') is enabled,10,'owned player fullscreen state')
         after=self.alive(proof)
         monitors_after=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
@@ -1494,8 +1607,7 @@ class Smoke:
             require(crop==dict(x=0,y=0,width=monitor['width'],height=monitor['height']),
                     'fullscreen did not provide the complete observed monitor viewport')
         receipt=dict(player=dict(proof,uid=self.uid),enabled=enabled,before=before,after=after,
-            monitors_before=monitors_before,monitors_after=monitors_after,
-            action=dict(argv=argv,returncode=response[0],stdout=response[1],stderr=response[2]),
+            monitors_before=monitors_before,monitors_after=monitors_after,action=action,
             monotonic_ns=origin,completed_monotonic_ns=time.monotonic_ns(),release_acceptance=False)
         self.trace('owned-player-fullscreen',receipt=receipt)
         self.fullscreen_receipts=getattr(self,'fullscreen_receipts',[])+[receipt]
@@ -1753,8 +1865,9 @@ class Smoke:
             release_acceptance=True)
         retire_renderer_player(enqueue_target,self.uid)
         ipc = self.root/'celluloid-ipc.sock'
-        player = self.fresh_window(lambda:self.launch_protocol_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
-            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)]),
+        player = self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
+            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
+            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
             'celluloid',r'celluloid')
         renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None
         self.wait(lambda:ipc.is_socket())
@@ -1768,38 +1881,42 @@ class Smoke:
                 raise
         self.wait(ready)
         samples = []
-        for _ in range(8):
+        for sample_index in range(8):
             sample = {key:mpv_property(ipc,key,player['pid'],self.uid)
                       for key in ('path','time-pos','pause','video-params','audio-params','audio-out-params','current-vo','current-ao')}
             samples.append(sample)
             self.alive(player)
-            time.sleep(.35)
+            # Preserve all seven sample-to-sample intervals.  The eighth sleep
+            # never contributed another sample, so retain that exact bounded
+            # settle below after the final fullscreen geometry is established.
+            if sample_index < 7: time.sleep(.35)
         validate_player_samples(samples,str(fixture))
         maps = Path('/proc')/str(player['pid'])/'maps'
         require('libmpv.so' in maps.read_text(), 'Celluloid PID has no mapped libmpv')
         if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,True)
+            self.player_fullscreen(player,True,ipc)
             moving_before=self.alive(player)
+        time.sleep(.35)
         moving_shot=self.screenshot('celluloid-playing')
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,moving_before,self.alive(player),moving_shot)
         moving_proof=dict(decoder=decoder,player=player,player_samples=samples,screenshot=moving_shot,
                           product_renderer=renderer,
-                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; proved player is retired before the separate static oracle player')
-        moving_proof['retirement_before_static_oracle']=None
+                          client=self.alive(player),scope='original moving testsrc2 decode/advancing AV state retained; this frame still requires visual review; the same visibly proved renderer is reused for the sequential static oracle')
+        reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=player,
+                   ipc=str(ipc),moving_fixture=str(fixture),moving_screenshot_sha256=moving_shot['sha256'],
+                   product_renderer=renderer,
+                   same_process_renderer_required=True,release_acceptance=False)
+        moving_proof['static_oracle_reuse']=reuse
         (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
-        if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,False)
-            self.finish_native_protocol()
-            moving_proof['retirement_before_static_oracle']=self.retire_moving_player(player,ipc)
-            (self.root/'moving-player-proof.json').write_text(json.dumps(moving_proof,indent=2))
-        visual=self.visual_media()
+        if getattr(self,'gui_v6',False): self.player_fullscreen(player,False,ipc)
+        visual=self.visual_media(reuse if getattr(self,'gui_v6',False) else None)
         return dict(moving_proof, visual_reference=visual,desktop_action_launches=action_routes,
                     enqueue_semantics=enqueue_semantics,
-                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; original moving fixture lossless decode/advancing AV state and sequential separate static rendered-content oracle; motion/perceived audio/hardware remain unqualified')
+                    scope='product file-manager/MIME and Gio desktop actions plus enqueue semantics; one owned product player proves the original moving fixture and then an authenticated exact-file transition to the strict static oracle; motion/perceived audio/hardware remain unqualified')
 
     def visual_fixture(self):
-        source=self.write('visual-reference-input.raw',visual_reference_frame()*20)
+        source=self.write('visual-reference-input.raw',visual_reference_stream())
         fixture=self.root/'visual-reference.mkv'
         expected=self.root/'visual-reference-frame.rgb'
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
@@ -1878,23 +1995,47 @@ class Smoke:
         self.trace('reference-controls-hidden',receipt=value)
         return value
 
-    def visual_media(self):
+    def visual_media(self,reuse=None):
         fixture,expected,source_sha=self.visual_fixture()
-        # This release gate admits exactly one fresh product-wrapper player.
-        # A failed or unmatched capture cannot create another acceptance path.
+        # The GUI release gate admits only the already proved product-wrapper
+        # player. A failed or unmatched capture cannot create another path.
         player_attempt=1
         player_attempt_limit=1
         common=['ffmpeg','-nostdin','-hide_banner','-loglevel','error','-y']
         ipc=self.root/'visual-reference-ipc.sock'
-        player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
-            '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],
-            self.launch_protocol_player if getattr(self,'gui_v6',False) else self.launch),
-            'celluloid',r'celluloid')
-        renderer=self.product_renderer_contract(player) if getattr(self,'gui_v6',False) else None
-        self.wait(lambda:ipc.is_socket())
+        transition=None
+        if getattr(self,'gui_v6',False):
+            require(type(reuse) is dict and set(reuse)=={'schema','player','ipc','moving_fixture',
+                    'moving_screenshot_sha256','product_renderer','same_process_renderer_required','release_acceptance'}
+                    and reuse['schema']=='arctic-native-player-fixture-continuity-v1'
+                    and type(reuse['product_renderer']) is dict
+                    and reuse['same_process_renderer_required'] is True and reuse['release_acceptance'] is False,
+                    'visual oracle requires exact moving-player continuity')
+            player=reuse['player'];renderer=reuse['product_renderer']
+            old_ipc=Path(reuse['ipc'])
+            require(old_ipc==self.root/'celluloid-ipc.sock' and old_ipc.is_socket()
+                    and reuse['moving_fixture']==str(self.root/'open-codec-fixture.mkv')
+                    and re.fullmatch(r'[0-9a-f]{64}',reuse['moving_screenshot_sha256']) is not None,
+                    'moving-player continuity paths/evidence differ')
+            ipc=old_ipc
+            before=self.alive(player)
+            require(before.get('is_fullscreen') is False and before.get('is_focused') is True,
+                    'moving player was not restored before static fixture transition')
+            source_path=mpv_property(ipc,'path',player['pid'],self.uid)
+            require(source_path==reuse['moving_fixture'],'moving player source changed before static transition')
+            transition=celluloid_replace_fixture(self.prefix,ipc,player['pid'],self.uid,
+                                                  Path(source_path),fixture)
+        else:
+            require(reuse is None,'non-GUI visual fixture cannot reuse a GUI player')
+            player=self.fresh_window(lambda:self.launch_reference_player(['/usr/libexec/arctic/arctic-celluloid','--no-existing-session',
+                '--new-window','--mpv-input-ipc-server='+str(ipc),'--mpv-loop-file=inf',str(fixture)],self.launch),
+                'celluloid',r'celluloid')
+            renderer=None
+            self.wait(lambda:ipc.is_socket())
         def ready_reference():
             try:
-                return mpv_property(ipc,'video-params',player['pid'],self.uid)
+                return (mpv_property(ipc,'path',player['pid'],self.uid)==str(fixture)
+                        and mpv_property(ipc,'video-params',player['pid'],self.uid))
             except RuntimeError as exc:
                 if str(exc).startswith('mpv property unavailable:'): return None
                 raise
@@ -1909,12 +2050,22 @@ class Smoke:
         require(json.loads(response).get('success') is True,'visual player focus failed')
         self.wait(lambda:self.alive(player).get('is_focused') is True,10)
         if getattr(self,'gui_v6',False):
-            self.player_fullscreen(player,True)
+            self.player_fullscreen(player,True,ipc)
             controls=self.hide_reference_controls(player,ipc)
-        initial_time=state['time-pos']
+        pre_geometry_time=state['time-pos']
+        require(type(pre_geometry_time) in (int,float) and not isinstance(pre_geometry_time,bool)
+                and math.isfinite(pre_geometry_time) and 0<=pre_geometry_time<=2,
+                'pre-geometry visual playback clock is invalid')
+        # Anchor readiness after the fullscreen and controls transitions.  A
+        # clock sampled before those transitions can satisfy the old delta as
+        # soon as the window enters fullscreen, while its GL content is still
+        # unpainted.  The exact same owned player must advance for a bounded
+        # interval in its final capture geometry before the bounded capture.
+        initial_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
         require(type(initial_time) in (int,float) and not isinstance(initial_time,bool)
                 and math.isfinite(initial_time) and 0<=initial_time<=2,
-                'initial visual playback clock is invalid')
+                'post-geometry visual playback clock is invalid')
+        minimum_post_geometry_advance=.5
         def playback_advanced():
             observed=mpv_property(ipc,'time-pos',player['pid'],self.uid)
             require(type(observed) in (int,float) and not isinstance(observed,bool)
@@ -1922,9 +2073,29 @@ class Smoke:
                     'visual playback clock is invalid')
             delta=observed-initial_time
             if delta<0: delta+=2
-            return observed if delta>=.05 else None
+            return observed if delta>=minimum_post_geometry_advance else None
         advanced_time=self.wait(playback_advanced,5,'owned visual playback clock advancement')
+        # The pulsed fixture above proves post-fullscreen presentation work, but
+        # capturing while the software GL path is replacing that texture can
+        # expose a transient tiled buffer rather than one complete frame. Pause
+        # this same proved player, require the clock to settle, and keep the
+        # strict screenshot/oracle and every acceptance threshold unchanged.
+        mpv_pause_reference(ipc,player['pid'],self.uid)
+        def paused_reference():
+            value=mpv_property(ipc,'pause',player['pid'],self.uid)
+            require(type(value) is bool, 'visual pause state is not Boolean')
+            return value
+        self.wait(paused_reference,3,'owned visual playback pause')
+        paused_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(paused_time) in (int,float) and not isinstance(paused_time,bool)
+                and math.isfinite(paused_time) and 0<=paused_time<=2,
+                'paused visual playback clock is invalid')
         time.sleep(.5)
+        settled_time=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+        require(type(settled_time) in (int,float) and not isinstance(settled_time,bool)
+                and math.isfinite(settled_time) and 0<=settled_time<=2
+                and abs(settled_time-paused_time)<=.05,
+                'paused visual playback clock did not settle')
         client=self.alive(player)
         monitors=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
         self.trace('visual-capture-before',player=player,client=client,monitors=monitors)
@@ -1934,11 +2105,15 @@ class Smoke:
         x,y,w,h=[crop[key] for key in ('x','y','width','height')]
         image=self.root/'celluloid-reference.png'
         rgb=self.root/'visual-owned-window.rgb'
-        attempt_limit=1
+        # A screencopy can race the first repaint after the supported OpenUri
+        # transition even after mpv's path, video state and paused clock have
+        # settled.  Permit one bounded recapture of this same proved player,
+        # with its identity, focus, geometry and monitor revalidated.  Keep the
+        # original 9.5 second total deadline and exact pixel oracle unchanged.
+        attempt_limit=2
         capture_command_timeout_seconds=3
         retry_settle_seconds=.5
-        capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds
-                                  + (attempt_limit-1) * retry_settle_seconds + 3.5)
+        capture_deadline_seconds=9.5
         capture_deadline=time.monotonic()+capture_deadline_seconds
         attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
         oracle=dict(status='unmatched',reason='No capture attempted')
@@ -1994,25 +2169,32 @@ class Smoke:
                 capture_attempts=attempts,capture_attempt_limit=attempt_limit,
                 capture_deadline_seconds=capture_deadline_seconds),indent=2)+'\n')
             if oracle.get('status')=='matched': break
+            if oracle.get('status')!='unmatched': break
         if getattr(self,'gui_v6',False):
             self.fullscreen_capture_pair(player,client,after,screenshot)
         info=dict(player=player,player_state=state,client_before=client,client_after=after,monitors=monitors,monitors_after=monitors_after,screenshot=screenshot,
                   fixture_sha256=digest(fixture),input_rgb_sha256=source_sha,expected_rgb_sha256=digest(expected),actual_rgb_sha256=digest(rgb),
                   expected_rgb_path=str(expected),actual_rgb_path=str(rgb),capture_pixels=size,
                   client_pixel_crop=dict(x=x,y=y,width=w,height=h),default_render_options=True,
-                  playback_clock=dict(initial_seconds=initial_time,advanced_seconds=advanced_time,minimum_advance_seconds=.05),
+                  playback_clock=dict(pre_geometry_seconds=pre_geometry_time,initial_seconds=initial_time,
+                                      advanced_seconds=advanced_time,paused_seconds=paused_time,
+                                      settled_seconds=settled_time,capture_paused=True,
+                                      presentation_refresh='frame-step',
+                                      maximum_settled_drift_seconds=.05,
+                                      minimum_advance_seconds=minimum_post_geometry_advance,
+                                      anchor='after fullscreen and controls transitions'),
                   capture_attempts=attempts,capture_attempt_limit=attempt_limit,capture_deadline_seconds=capture_deadline_seconds,
                   accepted_capture_attempt=len(attempts) if oracle.get('status')=='matched' else None,
                   player_attempt=player_attempt,player_attempt_limit=player_attempt_limit,
-                  product_renderer=renderer,
+                  product_renderer=renderer,fixture_transition=transition,fixture_cadence=visual_reference_cadence(),
                   command_options=['--no-existing-session','--new-window','--mpv-input-ipc-server=<owned socket>','--mpv-loop-file=inf'],
-                  scope='separate static16-color FFV1 visual fixture; does not prove moving frames, audio or hardware')
+                  scope='separate pulsed 16-color FFV1 visual fixture; strict captured-frame content only, not perceived motion, audio or hardware')
         if getattr(self,'gui_v6',False):
             info['capture_precondition']=controls
         info['oracle']=oracle
         player_receipt={key:info[key] for key in ('player_attempt','player','player_state','fixture_sha256','input_rgb_sha256',
             'expected_rgb_sha256','actual_rgb_sha256','playback_clock','capture_attempts','capture_attempt_limit',
-            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer')}
+            'capture_deadline_seconds','accepted_capture_attempt','oracle','screenshot','product_renderer','fixture_transition')}
         player_receipt.update(owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
         info['player_attempts']=[player_receipt]
         info['accepted_player_attempt']=1 if oracle.get('status')=='matched' else None
@@ -2020,7 +2202,12 @@ class Smoke:
         self.trace('visual-oracle',proof=info)
         if getattr(self,'gui_v6',False):
             self.native_protocol_diagnostic(player,state,screenshot,client)
-            self.player_fullscreen(player,False)
+        if (getattr(self,'gui_v6',False) and getattr(self,'stage',None) in ('live','installed')
+                and info['oracle']['status']=='unmatched'):
+            self.host_frame_diagnostic(player,expected,info)
+        if getattr(self,'gui_v6',False):
+            self.player_fullscreen(player,False,ipc)
+            self.finish_native_protocol()
         require(info['oracle']['status']=='matched',
                 'actual static visual fixture content unmatched; rendered-content gate remains open')
         return info
@@ -2397,6 +2584,117 @@ class ControlsTrialSmoke(RendererTrialSmoke):
 # END CONTROLLED_CONTROLS_STUDY
 
 
+CELLULOID_MPRIS_OPEN_URI_CODE=r'''from gi.repository import Gio,GLib
+import json,re,sys
+pid=int(sys.argv[1]);uri=sys.argv[2]
+bus=Gio.bus_get_sync(Gio.BusType.SESSION,None)
+def call(name,path,interface,method,parameters,reply_type):
+    return bus.call_sync(name,path,interface,method,parameters,GLib.VariantType.new(reply_type),
+                         Gio.DBusCallFlags.NONE,3000,None)
+names=call('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus',
+           'ListNames',None,'(as)').unpack()[0]
+pattern=re.compile(r'org\.mpris\.MediaPlayer2\.io\.github\.celluloid_player\.Celluloid\.instance-[1-9][0-9]*')
+owned=[]
+for name in names:
+    if pattern.fullmatch(name):
+        owner=call('org.freedesktop.DBus','/org/freedesktop/DBus','org.freedesktop.DBus',
+                   'GetConnectionUnixProcessID',GLib.Variant('(s)',(name,)),'(u)').unpack()[0]
+        if owner==pid: owned.append(name)
+if len(owned)!=1: raise RuntimeError('exact owned Celluloid MPRIS name unavailable')
+reply=call(owned[0],'/org/mpris/MediaPlayer2','org.mpris.MediaPlayer2.Player','OpenUri',
+           GLib.Variant('(s)',(uri,)),'()')
+if reply.unpack()!=(): raise RuntimeError('Celluloid MPRIS OpenUri reply differs')
+print(json.dumps({'bus_name':owned[0],'owner_pid':pid,'reply_signature':'()'},sort_keys=True))'''
+
+
+def celluloid_replace_fixture(prefix, path, expected_pid, expected_uid, source, target):
+    """Replace a fixture through the exact owned Celluloid window's supported API."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0
+            and type(prefix) is list and prefix[:2]==['runuser','-u'] and prefix[3:5]==['--','env']
+            and isinstance(source,Path) and isinstance(target,Path)
+            and source.is_absolute() and target.is_absolute() and source.parent==target.parent
+            and source.name=='open-codec-fixture.mkv' and target.name=='visual-reference.mkv',
+            'Celluloid fixture transition identity/path is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'Celluloid fixture transition IPC path owner/type differs')
+    for fixture in (source,target):
+        info=fixture.lstat()
+        require(stat.S_ISREG(info.st_mode) and info.st_uid==expected_uid and not fixture.is_symlink(),
+                'Celluloid fixture transition file owner/type differs')
+    # Bind the existing mpv IPC endpoint to the same process before addressing
+    # Celluloid's public per-window MPRIS service.  Raw mpv loadfile injection
+    # bypasses Celluloid's model and is not a supported application transition.
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2);peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid),'Celluloid fixture transition IPC peer differs')
+    uri=target.as_uri()
+    _,output,_=execute(prefix+['/usr/bin/python3','-c',CELLULOID_MPRIS_OPEN_URI_CODE,
+                               str(expected_pid),uri],timeout=8)
+    def pairs(items):
+        value={}
+        for key,item in items:
+            require(key not in value,'Celluloid fixture transition D-Bus duplicate field')
+            value[key]=item
+        return value
+    receipt=json.loads(output,object_pairs_hook=pairs)
+    bus_prefix='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-'
+    require(type(receipt) is dict and set(receipt)=={'bus_name','owner_pid','reply_signature'}
+            and type(receipt['bus_name']) is str and receipt['bus_name'].startswith(bus_prefix)
+            and receipt['bus_name'][len(bus_prefix):].isdigit()
+            and receipt['owner_pid']==expected_pid and receipt['reply_signature']=='()',
+            'Celluloid fixture transition D-Bus acknowledgement differs')
+    return dict(schema='arctic-native-fixture-transition-v2',
+                transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
+                source=str(source),target=str(target),target_uri=uri,
+                bus_name=receipt['bus_name'],owner_pid=receipt['owner_pid'],
+                ipc_peer_pid=pid,ipc_peer_uid=uid,object_path='/org/mpris/MediaPlayer2',
+                interface='org.mpris.MediaPlayer2.Player',method='OpenUri',
+                reply_signature=receipt['reply_signature'],same_process_renderer_required=True,
+                release_acceptance=False)
+
+
+def mpv_celluloid_fullscreen(path, expected_pid, expected_uid, enabled):
+    """Use Celluloid's supported per-window fullscreen action on its owned IPC."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0
+            and type(enabled) is bool, 'Celluloid fullscreen IPC identity/state is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'Celluloid fullscreen IPC path owner/type differs')
+    request_id=46 if enabled else 47
+    action='win.enter-fullscreen' if enabled else 'win.leave-fullscreen'
+    command=['script-message','celluloid-action',action]
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'Celluloid fullscreen IPC peer differs')
+        peer.sendall(json.dumps(dict(command=command,request_id=request_id),separators=(',',':')).encode()+b'\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'Celluloid fullscreen IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'Celluloid fullscreen IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'Celluloid fullscreen IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'Celluloid fullscreen IPC reply is not an object')
+                if message.get('request_id')==request_id:
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'Celluloid fullscreen IPC command failed')
+                    return dict(transport='owned mpv IPC SO_PEERCRED',command=command,
+                                request_id=request_id,acknowledgement=message)
+        raise RuntimeError('Celluloid fullscreen IPC acknowledgement timed out')
+
+
 def mpv_hide_reference_controls(path, expected_pid, expected_uid):
     """The sole supported fixed per-window UI command; never an arbitrary action."""
     require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
@@ -2431,6 +2729,50 @@ def mpv_hide_reference_controls(path, expected_pid, expected_uid):
                             and message.get('data') is None, 'reference controls IPC command failed')
                     return
         raise RuntimeError('reference controls IPC acknowledgement timed out')
+
+
+def mpv_pause_reference(path, expected_pid, expected_uid):
+    """Pause and present one complete frame through the proved player's IPC."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
+            'reference pause IPC identity is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'reference pause IPC path owner/type differs')
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'reference pause IPC peer differs')
+        # Process both controls on the same authenticated, ordered connection.
+        # frame-step keeps mpv paused but forces the GL video surface to present
+        # a complete post-fullscreen frame instead of retaining a blank buffer.
+        peer.sendall(b'{"command":["set_property","pause",true],"request_id":44}\n'
+                     b'{"command":["frame-step"],"request_id":45}\n')
+        data=b''; deadline=time.monotonic()+3
+        acknowledged=set()
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'reference pause IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'reference pause IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'reference pause IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'reference pause IPC reply is not an object')
+                if message.get('request_id') in (44,45):
+                    require(type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'reference pause IPC command failed')
+                    require(message['request_id'] not in acknowledged,
+                            'reference pause IPC duplicate acknowledgement')
+                    acknowledged.add(message['request_id'])
+                    if acknowledged=={44,45}: return
+        raise RuntimeError('reference pause IPC acknowledgement timed out')
 
 
 def mpv_property(path, key, expected_pid, expected_uid):
@@ -2624,6 +2966,7 @@ NATIVE_PUBLIC_EVIDENCE_FILES = frozenset((
     'fullscreen-player-receipts.json', 'fullscreen-player-captures.json',
     'terminal-role.json', 'file-manager-terminal.json',
     '0-native-protocol-viewport.json', '0-controls-state-trials.json',
+    '0-host-frame-request.json',
     'editor-saved.png', 'files-opened-zip.png', 'celluloid-playing.png',
     'celluloid-reference.png', 'visual-reference-frame.rgb', 'visual-owned-window.rgb',
     'controls-trial-transition/reference.png', 'controls-trial-hidden/reference.png',
@@ -2669,7 +3012,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = '9d3cbfffd3b0d3469ad2aff42563975e656a5c570a85650b88cd9714a8684203'
+    native_source_sha = 'e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

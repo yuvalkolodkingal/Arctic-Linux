@@ -162,7 +162,21 @@ def main() -> None:
         "confirmed_at": None,
         "scope": None,
     }
-    assert voice["source_archive"]["status"] == "pending"
+    assert voice["source_commit"] == "c9ac983c8d54aec109f0ebbbf3633d26b7cf8b9d"
+    assert voice["source_archive"] == {
+        "status": "verified_private_draft",
+        "release_id": 413658818,
+        "draft": True,
+        "public": False,
+        "target_commit": voice["source_commit"],
+        "tag": "showcase-river-source-2026-10-15",
+        "asset_id": 643686786,
+        "asset": "narration-river-arctic-1.2.1-voxtype-1.1.1-2026-10-15.mp3",
+        "bytes": 13_978_270,
+        "rest_digest": "sha256:f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+        "download_sha256": "f6852132fed3f97e3b6a6b69fe4543e6af1a26c8495c9243e2cccfbde7c7081b",
+        "full_decode_errors": 0,
+    }
     assert voice["release_binding"] == {
         "status": "pending",
         "qualified_iso": None,
@@ -314,7 +328,8 @@ def main() -> None:
     assert supply["package_lock"]["registry_packages_require_sha512_integrity"] is True
     assert supply["gsap"]["sha256"] == digest(SHOWCASE / "assets/gsap.min.js")
     assert validation["validation_tests"]["supply_chain_unit_tests"] == 8
-    assert validation["validation_tests"]["total_unit_tests"] == 35
+    assert validation["validation_tests"]["capture_and_voice_contract_unit_tests"] == 29
+    assert validation["validation_tests"]["total_unit_tests"] == 37
     assert validation["local_whisper_alignment"]["ephemeral_outputs_not_uploaded"] == [
         "whisper-transcript.txt", "whisper-words.json"
     ]

@@ -228,10 +228,11 @@ class Controls(unittest.TestCase):
                     with self.subTest(path=path, key=key), self.assertRaisesRegex(RuntimeError, 'private fields'):
                         self.replay(folder, members, state, manifest)
 
-    def test_publication_manifest_keeps_both_installer_lanes_disabled_and_mandatory(self):
+    def test_publication_manifest_leaves_both_installer_lanes_pending_for_new_image(self):
         manifest = json.loads((ROOT / 'tools/qualified-release/manifest.json').read_text())
         self.assertFalse(manifest['ready'])
-        for key in ('installer', 'installer_media_review', 'installer_active', 'installer_active_media_review'):
+        for key in ('installer', 'installer_active',
+                    'installer_media_review', 'installer_active_media_review'):
             self.assertIsNone(manifest[key])
 
     def test_active_lane_rejects_failed_or_retried_actions_before_artifact_lookup(self):

@@ -245,6 +245,12 @@ class AppTests(unittest.TestCase):
             client['is_xwayland']=False;(proc/'environ').write_bytes(b'x'*65537)
             with self.assertRaisesRegex(RuntimeError,'exceeded bound'):
                 guest.celluloid_identity(client,set(),os.getuid(),root)
+            for environment in (b'', b'GSK_RENDERER=ngl\0',
+                                b'GSK_RENDERER=gl\0GSK_RENDERER=gl\0'):
+                with self.subTest(environment=environment):
+                    (proc/'environ').write_bytes(environment)
+                    with self.assertRaisesRegex(RuntimeError,'renderer request differs'):
+                        guest.celluloid_identity(client,set(),os.getuid(),root)
             (proc/'environ').write_bytes(b'GSK_RENDERER=gl\0')
             (proc/'stat').write_text('123 (Celluloid media) '+' '.join(['Z']+['0']*18+['77']))
             with self.assertRaisesRegex(RuntimeError,'not live'):
@@ -258,6 +264,10 @@ class AppTests(unittest.TestCase):
                                 guest.expected_apps('lightweight', 'installed')[role])
         with self.assertRaises(ValueError):
             guest.expected_apps('unknown', 'live')
+        command, pattern = guest.expected_apps('lightweight', 'installed')['media']
+        self.assertEqual(command, ['/usr/libexec/arctic/arctic-celluloid',
+                                   '--no-existing-session', '--new-window'])
+        self.assertEqual(pattern, r'io\.github\.celluloid_player\.Celluloid')
 
 
 class SessionTests(unittest.TestCase):

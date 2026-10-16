@@ -11,6 +11,73 @@ D = ROOT / "packaging/dictation"
 
 
 class DirectUpstreamIntegration(unittest.TestCase):
+    def test_config_restart_recovers_failed_started_service_without_eager_start(self):
+        adapter = (D / "arctic-dictation").read_text()
+        start = adapter.index("restart_started_service() {")
+        end = adapter.index("\n}\n", start) + 3
+        helper = adapter[start:end]
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            runtime = root / "runtime"
+            runtime.mkdir(mode=0o700)
+            marker = runtime / "voxtype-session-started-v1"
+            marker.mkdir(mode=0o700)
+            calls = root / "calls"
+            reset = root / "reset"
+            active = root / "active"
+            systemctl = root / "systemctl"
+            systemctl.write_text(r'''#!/bin/sh
+printf '%s\n' "$*" >>"$CALLS"
+case "$*" in
+  '--user is-failed --quiet voxtype.service') [ "$SERVICE_STATE" = failed ] ;;
+  '--user reset-failed voxtype.service') : >"$RESET" ;;
+  '--user restart voxtype.service') [ -f "$RESET" ] || exit 1; : >"$ACTIVE" ;;
+  '--user try-restart voxtype.service') ;;
+  *) exit 2 ;;
+esac
+''')
+            systemctl.chmod(0o700)
+            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin",
+                       CALLS=str(calls), RESET=str(reset), ACTIVE=str(active),
+                       RUNTIME=str(runtime), SERVICE_STATE="failed")
+            command = helper + '\nprivate_runtime() { printf "%s\\n" "$RUNTIME"; }\nrestart_started_service\n'
+
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user is-failed --quiet voxtype.service",
+                "--user reset-failed voxtype.service",
+                "--user restart voxtype.service",
+            ])
+            self.assertTrue(active.is_file())
+
+            calls.write_text("")
+            reset.unlink()
+            active.unlink()
+            env["SERVICE_STATE"] = "inactive"
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user is-failed --quiet voxtype.service",
+                "--user try-restart voxtype.service",
+            ])
+            self.assertFalse(reset.exists())
+            self.assertFalse(active.exists())
+
+            marker.rmdir()
+            calls.write_text("")
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user try-restart voxtype.service",
+            ])
+            self.assertFalse(active.exists())
+
+            marker.symlink_to(root, target_is_directory=True)
+            calls.write_text("")
+            rejected = subprocess.run(["sh", "-c", command], env=env)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertEqual(calls.read_text(), "")
+
+        self.assertEqual(adapter.count("restart_started_service || :"), 3)
+
     def test_status_projects_official_upstream_microphone_disconnect_errors(self):
         adapter = (D / "arctic-dictation").read_text()
         self.assertIn("*'Audio stream error, capture is now dead:'*", adapter)
@@ -18,11 +85,59 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertLess(adapter.index("*'Audio stream error, capture is now dead:'*"),
                         adapter.index("*'Transcription failed:'*"))
 
+    def test_status_journal_cursor_uses_supported_mutually_exclusive_bounds(self):
+        adapter = (D / "arctic-dictation").read_text()
+        start = adapter.index("journal_events() {")
+        end = adapter.index("\n}\nstatus() {", start) + 3
+        helper = adapter[start:end]
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            runtime = root / "runtime"
+            runtime.mkdir(mode=0o700)
+            calls = root / "calls"
+            journalctl = root / "journalctl"
+            journalctl.write_text("""#!/bin/sh
+printf '%s\\n' "$*" >>"$CALLS"
+case " $* " in
+  *' --show-cursor '*) printf '%s\\n' '-- cursor: s=abc;i=1;b=2;m=3;t=4;x=5' ;;
+  *' --since '*) printf '%s\\n' 'Failed to start audio: fixture' ;;
+  *' --cursor-file='*) printf '%s\\n' 'Audio stream error, capture is now dead: fixture' ;;
+esac
+""")
+            journalctl.chmod(0o700)
+            env = dict(os.environ, PATH=str(root) + os.pathsep + os.environ["PATH"],
+                       CALLS=str(calls))
+            command = helper + '\njournal_events "$1"\n'
+
+            first = subprocess.run(["sh", "-c", command, "sh", str(runtime)],
+                                   env=env, text=True, capture_output=True, check=True)
+            self.assertEqual(first.stdout, "Failed to start audio: fixture\n")
+            first_calls = calls.read_text().splitlines()
+            self.assertEqual(len(first_calls), 2)
+            self.assertTrue(any("--show-cursor" in row for row in first_calls))
+            self.assertTrue(any("--since -30 seconds" in row for row in first_calls))
+            self.assertFalse(any("--since" in row and "--cursor-file" in row
+                                 for row in first_calls))
+            cursor = runtime / "voxtype-journal.cursor"
+            self.assertEqual(cursor.read_text(), "s=abc;i=1;b=2;m=3;t=4;x=5\n")
+
+            calls.write_text("")
+            second = subprocess.run(["sh", "-c", command, "sh", str(runtime)],
+                                    env=env, text=True, capture_output=True, check=True)
+            self.assertEqual(second.stdout,
+                             "Audio stream error, capture is now dead: fixture\n")
+            second_calls = calls.read_text().splitlines()
+            self.assertEqual(len(second_calls), 1)
+            self.assertIn("--cursor-file=" + str(cursor), second_calls[0])
+            self.assertNotIn("--since", second_calls[0])
+
     def test_shells_parse_and_old_runtime_is_gone(self):
         for name, shell in (("voxtype", "sh"), ("arctic-dictation", "sh"), ("arctic-dictation-toggle", "sh"), ("arctic-voxtype-setup", "bash"),
                             ("arctic-voxtype-configure", "sh"),
                             ("arctic-voxtype-host-profile", "sh")):
             subprocess.run([shell, "-n", str(D / name)], check=True)
+        subprocess.run(["python3", "-m", "py_compile",
+                        str(D / "arctic-voxtype-migrate-config")], check=True)
         for name in ("dictation.py", "child_exec.py", "arctic-dictation-install", "arctic-dictation-setup"):
             self.assertFalse((D / name).exists(), name)
 
@@ -35,7 +150,8 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertIn("voxtype record cancel", binds)
         self.assertIn("voxtype record toggle", (D / "arctic-dictation-toggle").read_text())
         shell = (ROOT / "shell/DictationService.qml").read_text()
-        self.assertIn("['voxtype', 'record', 'toggle']", shell)
+        self.assertIn("['arctic-dictation-toggle']", shell)
+        self.assertIn("['voxtype', 'record', 'cancel']", shell)
         self.assertIn("Session.runtimeDir + '/voxtype/state'", shell)
         settings = (ROOT / "settings/pages/DictationPage.qml").read_text()
         self.assertEqual(settings.count("enabled: page.status.ready && page.canConfigure"), 2)
@@ -52,7 +168,7 @@ class DirectUpstreamIntegration(unittest.TestCase):
         ):
             self.assertIn(value, setup)
         for value in ('language = ["he", "en"]', 'driver_order = ["wtype"]',
-                      "fallback_to_clipboard = false", "on_demand_loading = true",
+                      "fallback_to_clipboard = false", "on_demand_loading = false",
                       "filter_filler_words = false"):
             self.assertIn(value, config)
         unit = (ROOT / "packaging/systemd/voxtype.service").read_text()
@@ -90,6 +206,23 @@ class DirectUpstreamIntegration(unittest.TestCase):
         service = (ROOT / "packaging/systemd/voxtype.service").read_text()
         self.assertIn("ConditionPathExists=/var/lib/arctic/dictation/upstream-direct-v1", service)
         self.assertIn("ConditionPathExists=%h/.config/voxtype/config.toml", service)
+
+    def test_resident_config_migration_is_deferred_and_generation_tracked(self):
+        setup = (D / "arctic-voxtype-setup").read_text()
+        spec = (ROOT / "packaging/arctic-linux.spec").read_text()
+        unit = (ROOT / "packaging/systemd/arctic-voxtype-config-migration.service").read_text()
+        for value in ("config-resident-v1.pending", "config-generation-resident-v1.json",
+                      "arctic-voxtype-config-generation-v1", "resident-model-v1",
+                      "custom-preserved", "--migrate-config-resident-v1"):
+            self.assertIn(value, setup)
+        self.assertIn("arctic-voxtype-migrate-config", spec)
+        self.assertIn("multi-user.target.wants/arctic-voxtype-config-migration.service", spec)
+        self.assertIn("--queue-config-resident-v1", spec)
+        self.assertIn("Before=systemd-user-sessions.service user@.service", unit)
+        lowered = unit.lower()
+        for dependency in ("after=network", "wants=network", "requires=network"):
+            self.assertNotIn(dependency, lowered)
+        self.assertIn("PrivateNetwork=yes", unit)
 
     def test_status_protocol_has_no_transcript_field(self):
         adapter = (D / "arctic-dictation").read_text()
@@ -228,7 +361,9 @@ class DirectUpstreamIntegration(unittest.TestCase):
         self.assertLess(setup.index('\n    cleanup_legacy_payload'),
                         setup.index('durable_remove "$STATE/pending"'))
         self.assertIn('systemctl --user daemon-reload >/dev/null 2>&1 || :', setup_user)
-        self.assertIn('systemctl --user enable --now voxtype.service >/dev/null 2>&1 || :', setup_user)
+        self.assertIn('systemctl --user try-restart voxtype.service', setup_user)
+        self.assertNotIn('systemctl --user disable voxtype.service', setup_user)
+        self.assertNotIn('enable --now voxtype.service', setup_user)
 
         # Vulkan is published only after the official post-init marker is
         # observed; intent, exit zero, and device enumeration are insufficient.
@@ -243,17 +378,21 @@ class DirectUpstreamIntegration(unittest.TestCase):
 
     def test_runtime_error_cache_is_per_uid_and_no_follow(self):
         adapter = (D / "arctic-dictation").read_text()
+        toggle = (D / "arctic-dictation-toggle").read_text()
         self.assertIn('base=${XDG_RUNTIME_DIR:-/run/user/$uid}', adapter)
-        self.assertIn('runtime=/tmp/arctic-$uid', adapter)
+        self.assertIn('runtime=/tmp/arctic-dictation-$uid', adapter)
+        self.assertIn('runtime=$base/arctic-dictation', adapter)
         self.assertIn('[ ! -L "$runtime" ]', adapter)
         self.assertIn('stat -c %u:%a "$runtime"', adapter)
+        self.assertIn('[ ! -L "$runtime" ]', toggle)
+        self.assertIn('stat -c %u:%a "$runtime"', toggle)
         self.assertNotIn('${XDG_RUNTIME_DIR:-/tmp}/arctic', adapter)
 
     def test_bad_complete_partial_is_restarted_and_unready_pill_opens_settings(self):
         setup = (D / "arctic-voxtype-setup").read_text()
         self.assertRegex(setup, r'\[ -f "\$part" \].*stat -c %s.*-ge "\$bytes".*rm -f')
         indicator = (ROOT / "shell/ModeIndicators.qml").read_text()
-        self.assertIn("['unavailable', 'queued', 'downloading', 'ready', 'error'].includes", indicator)
+        self.assertIn("['unavailable', 'queued', 'downloading', 'starting', 'ready', 'error'].includes", indicator)
         self.assertIn("if (!DictationService.status.ready", indicator)
 
     def test_haswell_profile_requires_every_flag_on_every_logical_cpu(self):
@@ -304,38 +443,164 @@ class DirectUpstreamIntegration(unittest.TestCase):
         for root_operation in ("install ", "chown", "mktemp", "mv "):
             self.assertNotIn(root_operation, configure)
 
-    def test_activation_guard_calls_only_upstream_and_never_exposes_command_error(self):
+    def test_activation_guard_lazy_start_failures_success_reuse_and_privacy(self):
         helper = D / "arctic-dictation-toggle"
         with tempfile.TemporaryDirectory() as folder:
-            root = pathlib.Path(folder); log = root / "calls"
+            root = pathlib.Path(folder)
+            runtime = root / "runtime"; runtime.mkdir(mode=0o700)
+            calls = root / "calls"; calls.write_text("")
+            active = root / "active"
+            count = root / "status-count"
             def stub(name, body):
                 path = root / name
                 path.write_text("#!/bin/sh\n" + body + "\n"); path.chmod(0o755)
-            stub("arctic-dictation", 'printf \'%s\\n\' "$STATUS"')
-            stub("voxtype", 'printf \'voxtype %s\\n\' "$*" >>"$CALLS"; printf \'private transcript\\n\' >&2; exit "${VOXTYPE_RC:-0}"')
-            stub("notify-send", 'printf \'notify %s\\n\' "$*" >>"$CALLS"')
-            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin", CALLS=str(log))
-            env["STATUS"] = '{"state":"unavailable","ready":false}'
-            unavailable = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
-            self.assertEqual(unavailable.returncode, 69)
-            self.assertNotIn("private", unavailable.stdout + unavailable.stderr)
-            self.assertNotIn("voxtype", log.read_text())
-            log.write_text("")
-            env["STATUS"] = '{"state":"ready","ready":true}'
-            ready = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
-            self.assertEqual(ready.returncode, 0)
-            self.assertEqual(log.read_text().strip(), "voxtype record toggle")
-            log.write_text(""); env["VOXTYPE_RC"] = "1"
-            failed = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            stub("arctic-dictation", "printf '%s\\n' '${STATUS:-{\"state\":\"ready\",\"ready\":true}}'")
+            stub("systemctl", r'''printf 'systemctl %s\n' "$*" >>"$CALLS"
+case "$*" in
+  '--user is-active --quiet voxtype.service') [ -f "$ACTIVE" ] ;;
+  '--user start voxtype.service') [ "${START_RC:-0}" = 0 ] || exit "$START_RC"; : >"$ACTIVE" ;;
+  '--user stop voxtype.service') rm -f "$ACTIVE" ;;
+  *) exit 0 ;;
+esac''')
+            stub("voxtype", r'''printf 'voxtype %s\n' "$*" >>"$CALLS"
+printf 'private transcript\n' >&2
+case "$*" in
+  status)
+    n=0; [ ! -r "$COUNT" ] || n=$(cat "$COUNT"); n=$((n + 1)); printf '%s\n' "$n" >"$COUNT"
+    [ "$n" -ge "${IDLE_AFTER:-1}" ] && printf 'idle\n' || printf 'loading\n'
+    ;;
+  'record toggle') exit "${VOXTYPE_RC:-0}" ;;
+esac''')
+            stub("notify-send", "printf 'notify %s\\n' \"$*\" >>\"$CALLS\"")
+            stub("sleep", '[ -z "${HOLD_SLEEP:-}" ] || while [ ! -e "$RELEASE" ]; do /bin/sleep 0.02; done')
+            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin", CALLS=str(calls),
+                       ACTIVE=str(active), COUNT=str(count), XDG_RUNTIME_DIR=str(runtime),
+                       RELEASE=str(root / "release"))
+
+            # A dedicated path with an unsafe type is rejected without following it.
+            private = runtime / "arctic-dictation"
+            symlink_target = root / "symlink-target"; symlink_target.mkdir(mode=0o700)
+            private.symlink_to(symlink_target, target_is_directory=True)
+            linked = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(linked.returncode, 69)
+            self.assertEqual(list(symlink_target.iterdir()), [])
+            private.unlink()
+            private.write_text("not a directory")
+            nondirectory = subprocess.run([str(helper)], env=env, text=True, capture_output=True)
+            self.assertEqual(nondirectory.returncode, 69)
+            self.assertEqual(private.read_text(), "not a directory")
+            private.unlink()
+
+            # A shared Arctic runtime created with the normal umask may coexist;
+            # dictation creates a separate private namespace and cleans old state.
+            legacy = runtime / "arctic"; legacy.mkdir(mode=0o755); legacy.chmod(0o755)
+            (legacy / "voxtype-starting").mkdir(mode=0o700)
+            (legacy / "voxtype-error").write_text("service-start\n")
+            (legacy / "voxtype-journal.cursor").write_text("opaque cursor\n")
+
+            # A failed first start leaves neither loading nor session-resume markers.
+            failed = subprocess.run([str(helper)], env=dict(env, START_RC="1"),
+                                    text=True, capture_output=True)
             self.assertEqual(failed.returncode, 69)
             self.assertNotIn("private", failed.stdout + failed.stderr)
-            self.assertIn("Dictation is not ready", log.read_text())
+            self.assertEqual(private.stat().st_mode & 0o777, 0o700)
+            self.assertEqual(legacy.stat().st_mode & 0o777, 0o755)
+            self.assertFalse((legacy / "voxtype-starting").exists())
+            self.assertFalse((legacy / "voxtype-error").exists())
+            self.assertFalse((legacy / "voxtype-journal.cursor").exists())
+            self.assertFalse((private / "voxtype-starting").exists())
+            self.assertFalse((private / "voxtype-session-started-v1").exists())
+            self.assertEqual((private / "voxtype-error").read_text(), "service-start\n")
+            self.assertIn("Dictation could not start", calls.read_text())
+
+            # A daemon that never reaches official idle is stopped at the fixed bound.
+            calls.write_text(""); count.unlink(missing_ok=True)
+            timed_out = subprocess.run([str(helper)], env=dict(env, IDLE_AFTER="999"),
+                                       text=True, capture_output=True)
+            self.assertEqual(timed_out.returncode, 69)
+            self.assertFalse(active.exists())
+            self.assertFalse((private / "voxtype-starting").exists())
+            self.assertFalse((private / "voxtype-session-started-v1").exists())
+            self.assertEqual((private / "voxtype-error").read_text(), "service-timeout\n")
+            self.assertEqual(calls.read_text().count("voxtype record toggle"), 0)
+            self.assertIn("Dictation took too long to load", calls.read_text())
+
+            # First activation waits for idle, toggles once, and keeps the daemon resident.
+            calls.write_text(""); count.unlink(missing_ok=True)
+            success_env = dict(env, IDLE_AFTER="3")
+            ready = subprocess.run([str(helper)], env=success_env, text=True, capture_output=True)
+            self.assertEqual(ready.returncode, 0)
+            self.assertTrue(active.exists())
+            self.assertTrue((private / "voxtype-session-started-v1").is_dir())
+            self.assertFalse((private / "voxtype-starting").exists())
+            self.assertEqual(calls.read_text().count("systemctl --user start voxtype.service"), 1)
+            self.assertEqual(calls.read_text().count("voxtype record toggle"), 1)
+            self.assertNotIn("private", ready.stdout + ready.stderr)
+
+            # A later activation reuses the resident service and calls upstream directly.
+            again = subprocess.run([str(helper)], env=success_env, text=True, capture_output=True)
+            self.assertEqual(again.returncode, 0)
+            self.assertEqual(calls.read_text().count("systemctl --user start voxtype.service"), 1)
+            self.assertEqual(calls.read_text().count("voxtype record toggle"), 2)
+
+            # While the first caller is loading, a concurrent activation is coalesced.
+            active.unlink(); count.unlink(missing_ok=True); calls.write_text("")
+            (root / "release").unlink(missing_ok=True)
+            concurrent_env = dict(env, IDLE_AFTER="2", HOLD_SLEEP="1")
+            first = subprocess.Popen([str(helper)], env=concurrent_env,
+                                     stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            for _ in range(100):
+                if (private / "voxtype-starting").is_dir():
+                    break
+                subprocess.run(["/bin/sleep", "0.01"], check=True)
+            self.assertTrue((private / "voxtype-starting").is_dir())
+            second = subprocess.run([str(helper)], env=concurrent_env, text=True, capture_output=True)
+            self.assertEqual(second.returncode, 0)
+            (root / "release").touch()
+            stdout, stderr = first.communicate(timeout=5)
+            self.assertEqual(first.returncode, 0)
+            self.assertNotIn("private", stdout + stderr + second.stdout + second.stderr)
+            self.assertEqual(calls.read_text().count("voxtype record toggle"), 1)
+            self.assertIn("already in progress", calls.read_text())
+
+            # A safe legacy session marker is migrated so lock/unlock resume survives.
+            (private / "voxtype-session-started-v1").rmdir()
+            old_session = legacy / "voxtype-session-started-v1"
+            old_session.mkdir(mode=0o700)
+            migrated = subprocess.run([str(helper)], env=success_env, text=True, capture_output=True)
+            self.assertEqual(migrated.returncode, 0)
+            self.assertFalse(old_session.exists())
+            self.assertTrue((private / "voxtype-session-started-v1").is_dir())
+
+    def test_lazy_memory_and_configuration_semantics_are_structural(self):
+        helper = (D / "arctic-dictation-toggle").read_text()
+        adapter = (D / "arctic-dictation").read_text()
+        setup = (D / "arctic-voxtype-setup").read_text()
+        spec = (ROOT / "packaging/arctic-linux.spec").read_text()
+        unit = (ROOT / "packaging/systemd/voxtype.service").read_text()
+        lock = (ROOT / "shell/LockScreen.qml").read_text()
+        self.assertIn("ConditionPathExists=%t/arctic-dictation/voxtype-session-started-v1", unit)
+        self.assertIn("on_demand_loading = false", (D / "arctic-voxtype-configure").read_text())
+        self.assertIn("systemctl --user start voxtype.service", helper)
+        self.assertIn("voxtype status", helper)
+        self.assertIn('attempts" -ge 60', helper)
+        self.assertIn("flock --exclusive --nonblock", helper)
+        self.assertNotIn("systemctl --user disable voxtype.service", helper)
+        self.assertNotIn("voxtype-autostart-migrated", helper)
+        self.assertIn("state=starting", adapter)
+        self.assertNotIn("systemctl --global enable voxtype.service", setup)
+        self.assertNotIn("enable --now voxtype.service", setup)
+        self.assertIn("systemctl --user try-restart voxtype.service", setup)
+        self.assertIn("systemctl --global --no-reload disable voxtype.service", spec)
+        self.assertIn("lazy-session-start-v1", spec)
+        self.assertIn("voxtype-session-started-v1", lock)
+        self.assertIn("arctic-dictation-toggle", (ROOT / "shell/DictationService.qml").read_text())
 
     def test_active_state_clears_stale_sanitized_error(self):
         adapter = (D / "arctic-dictation").read_text()
         active = adapter.index('if [ "$state" = recording ]')
         clear = adapter.index('rm -f "$runtime/voxtype-error"', active)
-        scan = adapter.index("journalctl --user", clear)
+        scan = adapter.index('recent=$(journal_events "$runtime")', clear)
         self.assertLess(active, clear)
         self.assertLess(clear, scan)
         self.assertNotIn("*'Vulkan'*", adapter)

@@ -1,0 +1,18 @@
+[Unit]
+Description=Migrate Arctic's managed VoxType config safely
+Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Local-Dictation
+ConditionPathExists=/var/lib/arctic/dictation/config-resident-v1.pending
+After=local-fs.target
+Before=systemd-user-sessions.service user@.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/arctic/arctic-voxtype-setup --migrate-config-resident-v1
+UMask=0077
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

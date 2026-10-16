@@ -1,8 +1,8 @@
 {
+  "app_profile": "lightweight",
+  "execution_files": {},
+  "image": null,
   "ready": false,
   "release_acceptance": false,
-  "version": "1.2",
-  "app_profile": "lightweight",
-  "image": null,
-  "execution_files": {}
+  "version": "1.2"
 }

@@ -5,6 +5,7 @@ PartOf=graphical-session.target
 After=graphical-session.target pipewire.service pipewire-pulse.service
 ConditionPathExists=/var/lib/arctic/dictation/upstream-direct-v1
 ConditionPathExists=%h/.config/voxtype/config.toml
+ConditionPathExists=%t/arctic-dictation/voxtype-session-started-v1
 
 [Service]
 Type=simple

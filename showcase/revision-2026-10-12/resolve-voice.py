@@ -12,6 +12,7 @@ from voice_receipt import (  # noqa: E402,F401
     resolve,
     resolve_publication,
     validate_assembled_master,
+    validate_source_archive,
     validate_segment_plan,
 )
 

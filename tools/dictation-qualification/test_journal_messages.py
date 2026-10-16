@@ -43,13 +43,16 @@ class JournalMessageSemantics(unittest.TestCase):
         gate=checker.report['gates'][0]
         self.assertEqual(gate['status'],'failed');self.assertEqual(gate['code'],'gate-transcript-log-notification-leak-scan-invalid');self.assertEqual(gate['observations'],{})
         self.assertNotIn('transcript-canary',json.dumps(gate));self.assertNotIn('PRIVATE',json.dumps(gate))
-    def test_command_bound_remains_strict_at_sixteen_MiB_including_stderr(self):
-        limit=16*1024*1024
+    def test_interval_bound_is_finite_and_separate_from_ordinary_commands(self):
+        limit=32*1024*1024
         for out,err,passed in ((b' '*(limit-1),b'',True),(b' '*limit,b'',False),(b' '*(limit-1),b'e',False)):
             with mock.patch.object(guest.subprocess,'run',return_value=subprocess.CompletedProcess([],0,stdout=out,stderr=err)):
                 if passed:self.assertEqual(len(guest.run(['private'],60,output_role='interval-journal').stdout),limit-1)
                 else:
                     with self.assertRaisesRegex(guest.Invalid,r'^command-output-bound-journal-o[0-9]+-e[0-9]+$'):guest.run(['private'],60,output_role='interval-journal')
+        ordinary=16*1024*1024
+        with mock.patch.object(guest.subprocess,'run',return_value=subprocess.CompletedProcess([],0,stdout=b' '*ordinary,stderr=b'')):
+            with self.assertRaisesRegex(guest.Invalid,'^command-output-bound$'):guest.run(['private'],60)
     def test_real_journalctl_supports_projection_flags_without_journal_write(self):
         import shutil,tempfile
         if not shutil.which('journalctl'):self.skipTest('journalctl unavailable')

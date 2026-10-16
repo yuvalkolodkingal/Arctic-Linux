@@ -34,35 +34,48 @@ def product_renderer(player):
    owner=dict(pid=player['pid'],start_ticks=player['start_ticks'],executable_sha256=player['executable_sha256']),
    realized_renderer=dict(status='reported-realized',renderer='gl',owned_stderr_binding_verified=True,
     environment_request_is_not_attestation=True,release_acceptance=False)))
-def moving_retirement():
- return dict(process_identity_retired=True,owned_ipc_absent=True,
-  compositor_client_absent=True,release_acceptance=False)
+def fixture_transition(root,pid=70,uid=1000):
+ target=root+'/visual-reference.mkv'
+ return dict(schema='arctic-native-fixture-transition-v2',
+  transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',
+  source=root+'/open-codec-fixture.mkv',target=target,target_uri=Path(target).as_uri(),
+  bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7',owner_pid=pid,
+  ipc_peer_pid=pid,ipc_peer_uid=uid,object_path='/org/mpris/MediaPlayer2',
+  interface='org.mpris.MediaPlayer2.Player',method='OpenUri',reply_signature='()',
+  same_process_renderer_required=True,release_acceptance=False)
+def moving_reuse(root,player,shot):
+ return dict(schema='arctic-native-player-fixture-continuity-v1',player=player,ipc=root+'/celluloid-ipc.sock',
+  moving_fixture=root+'/open-codec-fixture.mkv',moving_screenshot_sha256=shot['sha256'],
+  product_renderer=product_renderer(player),
+  same_process_renderer_required=True,release_acceptance=False)
 def fullscreen_fixture(value,visual,moving_shot):
  """Data-only synthetic positive proof; never claims real GUI or activation."""
- turns=[];caps=[];owned=[];root=value['evidence_root'];monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
- for i in range(2):
-  p=dict(client_id=str(7+i),pid=70+i,start_ticks=700+i,executable='/usr/bin/celluloid',executable_sha256='1'*64,is_xwayland=False)
-  owned.append(p);full=dict(id=7+i,pid=70+i,appid='celluloid',foreign_toplevel_id='owned-'+str(i),monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=True,x=0,y=0,width=160,height=120)
-  tiled=dict(full,is_fullscreen=False,x=0,y=0,width=160,height=120)
+ turns=[];caps=[];root=value['evidence_root'];monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
+ p=dict(client_id='7',pid=70,start_ticks=700,executable='/usr/bin/celluloid',executable_sha256='1'*64,is_xwayland=False)
+ full=dict(id=7,pid=70,appid='celluloid',foreign_toplevel_id='owned-0',monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=True,x=0,y=0,width=160,height=120)
+ tiled=dict(full,is_fullscreen=False,x=0,y=0,width=160,height=120)
+ for cycle,shot in enumerate((moving_shot,visual['screenshot'])):
   for j,enabled in enumerate((True,False)):
-   turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(argv=['mmsg','dispatch','togglefullscreen','client,'+p['client_id']],returncode=0,stdout='{"success":true}',stderr=''),monotonic_ns=100+i*100+j*20,completed_monotonic_ns=110+i*100+j*20,release_acceptance=False))
-  shot=moving_shot if i==0 else visual['screenshot'];caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
- visual.update(player=owned[1],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
-  capture_deadline_seconds=42,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
+   turns.append(dict(player=dict(p,uid=1000),enabled=enabled,before=copy.deepcopy(tiled if enabled else full),after=copy.deepcopy(full if enabled else tiled),monitors_before=dict(monitors=[monitor]),monitors_after=dict(monitors=[monitor]),action=dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=46 if enabled else 47,acknowledgement={'data':None,'error':'success','request_id':46 if enabled else 47}),monotonic_ns=100+cycle*100+j*20,completed_monotonic_ns=110+cycle*100+j*20,release_acceptance=False))
+  caps.append(dict(player=dict(p,uid=1000),before=copy.deepcopy(full),after=copy.deepcopy(full),screenshot=shot,release_acceptance=False))
+ visual.update(player=p,player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=2,
+  capture_deadline_seconds=9.5,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
  matched=dict(status='matched');capture=dict(attempt=1,screenshot_sha256=visual['screenshot']['sha256'],
   actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
- accepted=dict(player_attempt=1,player=owned[1],player_state={},fixture_sha256=visual['fixture_sha256'],
+ transition=fixture_transition(root)
+ accepted=dict(player_attempt=1,player=p,player_state={},fixture_sha256=visual['fixture_sha256'],
   input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
-  playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=42,
-  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],product_renderer=product_renderer(owned[1]),owned_player_cleanup_completed=False,
-  restart_eligible=False,release_acceptance=False)
+  playback_clock={},capture_attempts=[capture],capture_attempt_limit=2,capture_deadline_seconds=9.5,
+  accepted_capture_attempt=1,oracle=matched,screenshot=visual['screenshot'],product_renderer=product_renderer(p),
+  fixture_transition=transition,owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
  visual['player_attempts']=[accepted]
  visual.update({key:accepted[key] for key in ('player','player_state','actual_rgb_sha256','playback_clock','capture_attempts',
-  'accepted_capture_attempt','oracle','screenshot','product_renderer')})
- value['proven_new_processes']=owned
+  'accepted_capture_attempt','oracle','screenshot','product_renderer','fixture_transition')})
+ value['proven_new_processes']=[p]
  value['diagnostic_controls']=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False)
  trace=[dict(event='owned-player-fullscreen',receipt=x) for x in turns]+[dict(event='owned-fullscreen-capture',receipt=x) for x in caps]
- return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(dict(player=owned[0],screenshot=moving_shot,product_renderer=product_renderer(owned[0]),retirement_before_static_oracle=moving_retirement())).encode()}
+ moving=dict(player=p,screenshot=moving_shot,product_renderer=product_renderer(p),static_oracle_reuse=moving_reuse(root,p,moving_shot))
+ return {'fullscreen-player-receipts.json':json.dumps(turns).encode(),'fullscreen-player-captures.json':json.dumps(caps).encode(),'gui-trace.log':''.join(json.dumps(x)+'\n' for x in trace).encode(),'gui-trace-summary.json':b'{"omitted_records":0}','moving-player-proof.json':json.dumps(moving).encode()}
 class EditorControls(unittest.TestCase):
  def fixture(self,d):
   clock=Clock();vm=VM(Path(d));c=C.EditorSaveController(vm,d,'live','2'*64,clock=clock,sleep=clock.sleep);return c,vm,clock
@@ -151,25 +164,34 @@ class FullscreenControls(unittest.TestCase):
    s.alive=lambda _:copy.deepcopy(current);s.wait=lambda fn,*a:fn()
    def cmd(argv):
     calls.append(argv)
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[monitor])),''
-    self.assertEqual(argv,['mmsg','dispatch','togglefullscreen','client,7']);current['is_fullscreen']=not current['is_fullscreen'];current.update(width=640 if current['is_fullscreen'] else 160,height=480 if current['is_fullscreen'] else 120);return 0,'{"success":true}',''
-   s.cmd=cmd;s.player_fullscreen(p,True);self.assertTrue(current['is_fullscreen']);s.player_fullscreen(p,False);self.assertFalse(current['is_fullscreen'])
-   self.assertFalse(any('focusid' in x for x in calls))
+    self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[monitor])),''
+   actions=[]
+   def fullscreen(path,pid,uid,enabled):
+    self.assertEqual((path,pid,uid),('/tmp/owned.sock',70,1000));actions.append(enabled)
+    current['is_fullscreen']=enabled;current.update(width=640 if enabled else 160,height=480 if enabled else 120)
+    request_id=46 if enabled else 47
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=request_id,acknowledgement={'data':None,'error':'success','request_id':request_id})
+   s.cmd=cmd
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    s.player_fullscreen(p,True,'/tmp/owned.sock');self.assertTrue(current['is_fullscreen']);s.player_fullscreen(p,False,'/tmp/owned.sock');self.assertFalse(current['is_fullscreen'])
+   self.assertEqual(actions,[True,False]);self.assertFalse(any('focusid' in x for x in calls))
  def test_fullscreen_unfocused_or_incomplete_viewport_rejects(self):
   with tempfile.TemporaryDirectory() as d:
    s=S.Smoke.__new__(S.Smoke);s.root=Path(d);s.uid=1000;s.trace=lambda *a,**k:None
    p=dict(executable='/usr/bin/celluloid',is_xwayland=False,client_id='7',pid=70,start_ticks=700)
    c=dict(id=7,pid=70,appid='celluloid',foreign_toplevel_id='own',monitor='M',is_focused=False,is_visible=True,is_fullscreen=False,x=0,y=0,width=160,height=120)
    m=dict(name='M',x=0,y=0,width=640,height=480,scale=1,is_hdr=False);calls=[];s.alive=lambda _:c;s.cmd=lambda a:(calls.append(a) or (0,json.dumps(dict(monitors=[m])),''))
-   with self.assertRaises(RuntimeError):s.player_fullscreen(p,True)
+   with self.assertRaises(RuntimeError):s.player_fullscreen(p,True,'/tmp/owned.sock')
    self.assertFalse(any('dispatch' in a for a in calls))
    c['is_focused']=True
    def dispatch(argv):
-    calls.append(argv)
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[m])),''
-    c['is_fullscreen']=True;return 0,'{"success":true}',''
+    calls.append(argv);self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[m])),''
    s.cmd=dispatch;s.wait=lambda fn,*a:fn()
-   with self.assertRaisesRegex(RuntimeError,'complete'):s.player_fullscreen(p,True)
+   def fullscreen(*args):
+    c['is_fullscreen']=True
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen'],request_id=46,acknowledgement={'data':None,'error':'success','request_id':46})
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    with self.assertRaisesRegex(RuntimeError,'complete'):s.player_fullscreen(p,True,'/tmp/owned.sock')
 
  def test_capture_pair_rejects_focus_identity_geometry_and_failed_restore(self):
   with tempfile.TemporaryDirectory() as d:
@@ -184,7 +206,8 @@ class FullscreenControls(unittest.TestCase):
    self.assertEqual(len(s.fullscreen_captures),1)
    monitor=dict(name='M',x=0,y=0,width=640,height=480,scale=1,is_hdr=False);s.alive=lambda _:c
    s.cmd=lambda argv:(0,json.dumps(dict(monitors=[monitor])),'') if argv==['mmsg','get','all-monitors'] else (1,'{"success":false}','explicit synthetic failure')
-   with self.assertRaises(RuntimeError):s.player_fullscreen(p,False)
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=RuntimeError('explicit synthetic failure')):
+    with self.assertRaises(RuntimeError):s.player_fullscreen(p,False,'/tmp/owned.sock')
 
  def test_actual_host_fullscreen_raw_pairing_and_adverses(self):
   N=load('desktop_host_fullscreen','evidence.py')
@@ -200,7 +223,7 @@ class FullscreenControls(unittest.TestCase):
     trace=[dict(event='owned-player-fullscreen',receipt=x) for x in ts]+[dict(event='owned-fullscreen-capture',receipt=x) for x in cs]
     (d/'fullscreen-player-receipts.json').write_text(json.dumps(ts));(d/'fullscreen-player-captures.json').write_text(json.dumps(cs));(d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace))
     with self.assertRaises((RuntimeError,KeyError)):N.check_fullscreen(d,v,1000)
-   for mutate in [lambda v,t,c:t[0]['action'].update(argv=['mmsg','dispatch','focusid','client,7']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action'].update(returncode=1)]:rerun(mutate)
+   for mutate in [lambda v,t,c:t[0]['action'].update(command=['script-message','celluloid-action','win.toggle-fullscreen']),lambda v,t,c:t[0]['after'].update(width=159),lambda v,t,c:t[3].update(enabled=True),lambda v,t,c:c[0]['before'].update(is_focused=False),lambda v,t,c:t[0]['player'].update(start_ticks=True),lambda v,t,c:t[0]['player'].update(uid=1001),lambda v,t,c:t[0].update(monotonic_ns=False),lambda v,t,c:v.update(proven_new_processes=[]),lambda v,t,c:c[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[0]['after'].update(foreign_toplevel_id='changed'),lambda v,t,c:t[1]['action']['acknowledgement'].update(error='failure')]:rerun(mutate)
 
  def test_actual_fullscreen_validator_requires_one_fresh_first_launch(self):
   N=load('desktop_host_fullscreen_single','evidence.py')
@@ -209,43 +232,50 @@ class FullscreenControls(unittest.TestCase):
    smoke=S.Smoke.__new__(S.Smoke);smoke.root=d;smoke.uid=1000
    smoke.trace=lambda event,**value:trace.append(dict(event=event,**value))
    monitor=dict(name='FIXTURE',x=0,y=0,width=160,height=120,scale=1,is_hdr=False)
-   players=[dict(client_id=str(7+i),pid=70+i,start_ticks=700+i,executable='/usr/bin/celluloid',
-                 executable_sha256=str(i+1)*64,is_xwayland=False) for i in range(2)]
+   players=[dict(client_id='7',pid=70,start_ticks=700,executable='/usr/bin/celluloid',
+                 executable_sha256='1'*64,is_xwayland=False)]
    states={p['pid']:dict(id=int(p['client_id']),pid=p['pid'],appid='celluloid',foreign_toplevel_id='owned-'+str(i),
           monitor='FIXTURE',is_xwayland=False,is_focused=True,is_visible=True,is_fullscreen=False,
           x=0,y=0,width=160,height=120) for i,p in enumerate(players)}
    smoke.alive=lambda proof:copy.deepcopy(states[proof['pid']]);smoke.wait=lambda fn,*a:fn()
    def command(argv):
-    if argv==['mmsg','get','all-monitors']:return 0,json.dumps(dict(monitors=[monitor])),''
-    client=int(argv[-1].split(',')[-1]);state=next(x for x in states.values() if x['id']==client)
-    state['is_fullscreen']=not state['is_fullscreen'];return 0,'{"success":true}',''
+    self.assertEqual(argv,['mmsg','get','all-monitors']);return 0,json.dumps(dict(monitors=[monitor])),''
    smoke.cmd=command
+   def fullscreen(path,pid,uid,enabled):
+    self.assertEqual((path,uid),('/tmp/owned.sock',1000));state=states[pid];state['is_fullscreen']=enabled
+    request_id=46 if enabled else 47
+    return dict(transport='owned mpv IPC SO_PEERCRED',command=['script-message','celluloid-action','win.enter-fullscreen' if enabled else 'win.leave-fullscreen'],request_id=request_id,acknowledgement={'data':None,'error':'success','request_id':request_id})
    names=('moving.png','celluloid-reference.png');shots=[]
    for index,name in enumerate(names):
     png=b'\x89PNG\r\n\x1a\nsingle-player-validator-'+bytes([index]);(d/name).write_bytes(png)
     shots.append(dict(path=root+'/'+name,sha256=hashlib.sha256(png).hexdigest()))
-   for player,shot in zip(players,shots):
-    smoke.player_fullscreen(player,True);full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False)
+   with patch.object(S,'mpv_celluloid_fullscreen',side_effect=fullscreen):
+    for shot in shots:
+     player=players[0];smoke.player_fullscreen(player,True,'/tmp/owned.sock');full=smoke.alive(player);smoke.fullscreen_capture_pair(player,full,full,shot);smoke.player_fullscreen(player,False,'/tmp/owned.sock')
    matched=dict(status='matched',mismatched_pixels=0)
    hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
-   capture=dict(attempt=1,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
+   first_capture=dict(attempt=1,screenshot_sha256='7'*64,actual_rgb_sha256='9'*64,
+      oracle=dict(status='unmatched',reason='fixture repaint pending'),playback_time_seconds=.5,
+      owned_identity_geometry_unchanged=True)
+   capture=dict(attempt=2,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
       oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
-   accepted=dict(player_attempt=1,player=players[1],player_state={},**hashes,actual_rgb_sha256='8'*64,
-      playback_clock={},capture_attempts=[capture],capture_attempt_limit=1,capture_deadline_seconds=9.5,
-      accepted_capture_attempt=1,oracle=matched,screenshot=shots[1],product_renderer=product_renderer(players[1]),
+   transition=fixture_transition(root)
+   accepted=dict(player_attempt=1,player=players[0],player_state={},**hashes,actual_rgb_sha256='8'*64,
+      playback_clock={},capture_attempts=[first_capture,capture],capture_attempt_limit=2,capture_deadline_seconds=9.5,
+      accepted_capture_attempt=2,oracle=matched,screenshot=shots[1],product_renderer=product_renderer(players[0]),fixture_transition=transition,
       owned_player_cleanup_completed=False,restart_eligible=False,release_acceptance=False)
-   visual=dict(player=players[1],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=1,
+   visual=dict(player=players[0],player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=2,
       capture_deadline_seconds=9.5,screenshot=shots[1],player_state=accepted['player_state'],actual_rgb_sha256=accepted['actual_rgb_sha256'],
-      playback_clock=accepted['playback_clock'],capture_attempts=[capture],accepted_capture_attempt=1,
-      oracle=matched,product_renderer=accepted['product_renderer'],player_attempts=[accepted],**hashes)
+      playback_clock=accepted['playback_clock'],capture_attempts=[first_capture,capture],accepted_capture_attempt=2,
+      oracle=matched,product_renderer=accepted['product_renderer'],fixture_transition=transition,player_attempts=[accepted],**hashes)
    report=dict(evidence_root=root,proven_new_processes=players,
       diagnostic_controls=dict(gui_v6=True,editor_physical_save=True,owned_player_fullscreen=True,accessibility_proof=False))
    moving=dict(player=players[0],screenshot=shots[0],product_renderer=product_renderer(players[0]),
-      retirement_before_static_oracle=moving_retirement())
+      static_oracle_reuse=moving_reuse(root,players[0],shots[0]))
    (d/'moving-player-proof.json').write_text(json.dumps(moving));(d/'visual-oracle.json').write_text(json.dumps(visual))
    (d/'gui-trace.log').write_text(''.join(json.dumps(x)+'\n' for x in trace));(d/'gui-trace-summary.json').write_text('{"omitted_records":0}')
    result=N.check_fullscreen(d,report,1000)
-   self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(2,4,2,1))
+   self.assertEqual((result['owned_players'],result['fullscreen_actions'],result['captures'],result['accepted_visual_player_attempt']),(1,4,2,1))
    original_visual=(d/'visual-oracle.json').read_text();original_captures=(d/'fullscreen-player-captures.json').read_text()
    def rejected(mutate):
     value=json.loads(original_visual);mutate(value);(d/'visual-oracle.json').write_text(json.dumps(value))
@@ -254,14 +284,15 @@ class FullscreenControls(unittest.TestCase):
    rejected(lambda v:v.update(player_attempt_limit=2))
    rejected(lambda v:v.update(accepted_player_attempt=2))
    rejected(lambda v:v['player_attempts'].append(copy.deepcopy(v['player_attempts'][0])))
-   rejected(lambda v:v['player_attempts'][0].update(capture_attempt_limit=6))
+   rejected(lambda v:v['player_attempts'][0].update(capture_attempt_limit=1))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0]['oracle'].update(status='matched'))
    rejected(lambda v:v['player_attempts'][0].update(restart_eligible=True))
    rejected(lambda v:v['player_attempts'][0]['oracle'].update(status='unmatched'))
    rejected(lambda v:v['player_attempts'][0].update(actual_rgb_sha256='9'*64))
    rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0].update(private_value='forbidden'))
    rejected(lambda v:v['product_renderer'].update(realized_renderer='vulkan'))
    moving_path=d/'moving-player-proof.json';original_moving=moving_path.read_text()
-   changed=json.loads(original_moving);changed['retirement_before_static_oracle']['owned_ipc_absent']=False
+   changed=json.loads(original_moving);changed['static_oracle_reuse']['player']['pid']=71
    moving_path.write_text(json.dumps(changed))
    with self.assertRaises(RuntimeError):N.check_fullscreen(d,report,1000)
    moving_path.write_text(original_moving)
@@ -294,7 +325,9 @@ class HarnessControls(unittest.TestCase):
   self.assertFalse(any(k.arg=='gui_v6' for k in call.keywords))
   fn=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='run_checks')
   self.assertIs(fn.args.kw_defaults[-1].value,False)
-  self.assertEqual(hashlib.sha256((HERE/'native-physical-controller.py').read_text().split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
+  from test_native_host_frame import restore_host_frame_controller
+  physical=restore_host_frame_controller((HERE/'native-physical-controller.py').read_text())
+  self.assertEqual(hashlib.sha256(physical.split("EDITOR_PREFIX=",1)[0].rstrip().encode()).hexdigest(),'6d56cc48b5e0a58b4abb5c7542bc91f180ff94e905446488e1a670c0f6fe2307')
  def test_actual_generated_poll_default_off_and_selected_editor_path(self):
   import os
   F=load('desktop_poll_fixture','test_native_physical_v6.py')

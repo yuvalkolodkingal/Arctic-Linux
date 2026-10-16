@@ -45,7 +45,7 @@
     "info_findings": 30,
     "info_note": "All 30 informational findings occur during intentional scene crossfade overlap; strict validation passed with no errors or warnings.",
     "audio_attached": false,
-    "audio_note": "Source composition omits audio while render_ready is false pending human listening, qualified captures and release binding.",
+    "audio_note": "Source composition omits audio while render_ready is false pending qualified captures and release binding; human listening is required before publication.",
     "preparation": "python3 showcase/prepare-assets.py regenerated local derivatives before the strict check; generated derivatives were not added to this source-only commit.",
     "dependency_install": "npm ci --ignore-scripts --no-audit --no-fund",
     "package_lock": {
@@ -71,7 +71,7 @@
   },
   "exact_capture_execution_manifest": {
     "path": "showcase/capture/exact_image/execution-manifest.json",
-    "sha256": "486b60e30e1b10755c2c3b166bce2be6d901abf57a147eeff469f353919f6043",
+    "sha256": "47359f1d7bace3b3263608375612767960ee4ee59a779dd01a712c05a46b9ee6",
     "execution_files": 0,
     "all_hashes_recomputed": true
   },
@@ -199,7 +199,7 @@
     }
   },
   "voice_master_contract": {
-    "status": "verified assembled master and deterministic alignment pinned; private rendering remains blocked pending human listening, qualified captures and the actual qualified-release manifest; public publication has a separate approval gate",
+    "status": "verified assembled master, deterministic alignment and private draft archive pinned; private rendering remains blocked pending qualified captures and the actual qualified-release manifest; public publication separately requires human listening and publisher approval",
     "connector_limit_characters": 5000,
     "locked_narration_characters": 9093,
     "minimum_generation_calls": 2,
@@ -280,8 +280,8 @@
       "interpretation": "Numeric checks found no decode errors or hard-clipped samples; the exact join lies inside a below-minus-60-dBFS interval. Human listening remains pending."
     },
     "admission_contract": {
-      "private_render": "requires the verified private draft source, exact-master human listening, actual qualified-release manifest, reviewed captures and aligned render-ready timing; does not grant publication",
-      "public_video": "additionally requires qualified-release publication approval, confirmed public_video scope, and an approved exact final-render review",
+      "private_render": "requires the verified private draft source, actual qualified-release manifest, reviewed captures and aligned render-ready timing; produces an unpublished candidate for human listening and frame review",
+      "public_video": "additionally requires approved exact-master human listening, qualified-release publication approval, confirmed public_video scope, and an approved exact final-render review",
       "source_mp3_redistribution": "additionally requires public_video_and_source_audio_redistribution scope",
       "qualification_manifest_path": "tools/qualified-release/manifest.json",
       "qualification_required_lanes": [
@@ -323,10 +323,10 @@
     }
   },
   "validation_tests": {
-    "capture_and_voice_contract_unit_tests": 27,
+    "capture_and_voice_contract_unit_tests": 29,
     "status": "passed",
     "supply_chain_unit_tests": 8,
-    "total_unit_tests": 35
+    "total_unit_tests": 37
   },
   "narration_characters": 9093,
   "river_segment_characters": [

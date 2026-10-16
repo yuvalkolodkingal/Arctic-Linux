@@ -13,9 +13,12 @@ INITIAL = set('online-network-preflight desktop-before-install search desktop-pr
               'profile-export-identity desktop-hot-install-rescan desktop-after-install desktop-entry-launch '
               'hello desktop-file icons graphical-foot session-paths two-user-isolation update-personal '
               'offline-foot-profile-exports desktop-after-offline-rollback remove rollback rollback-hello '
-              'trust-config signed-offline-update-stage signed-offline-update-ready engine-version-change'.split())
+              'trust-config voxtype-legacy-migration-seeded signed-offline-update-stage '
+              'signed-offline-update-ready engine-version-change'.split())
 FINAL = set('new-boot profile-persistence hello-after-reboot nix-engine-after-update graphical-after-reboot '
-            'signed-offline-update-completed signed-offline-update-history'.split())
+            'signed-offline-update-completed signed-offline-update-history '
+            'voxtype-resident-config-migrated voxtype-migration-prelogin-private '
+            'whats-new-voxtype-card'.split())
 
 
 def verify(text, phase):

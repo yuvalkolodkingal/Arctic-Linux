@@ -26,6 +26,15 @@ EXECUTION_FILES = frozenset((WORKFLOW, 'tools/performance/qualification.py',
     'tools/native-functional/fetch-image.py', 'tools/native-functional/screen-evidence.py'))
 ORDER = (('baseline', 1), ('candidate', 1), ('candidate', 2),
          ('baseline', 2), ('baseline', 3), ('candidate', 3))
+INSTALL_SERIAL_PROJECTION = b'ARCTIC-INSTALL-SERIAL-PROJECTION=arctic-performance-install-v1'
+INSTALL_SERIAL_OMITTED = re.compile(br'ARCTIC-INSTALL-SERIAL-OMITTED=[1-9][0-9]{0,7}')
+BOOT_SERIAL_PROJECTION = b'ARCTIC-BOOT-SERIAL-PROJECTION=arctic-performance-boot-v1'
+BOOT_SERIAL_OMITTED = re.compile(br'ARCTIC-BOOT-SERIAL-OMITTED=[1-9][0-9]{0,8}')
+BOOT_CONSOLE_RESTORED = b'ARCTIC-PERFORMANCE-CONSOLE-RESTORED'
+BOOT_COLLECT_BEGIN = b'ARCTIC-COLLECT-BEGIN'
+BOOT_COLLECT_END = b'ARCTIC-COLLECT-END'
+BOOT_SMOKE_EXIT = b'ARCTIC-INSTALLED-SMOKE-EXIT=0'
+PERFORMANCE_RECORD = b'ARCTIC-PERFORMANCE '
 
 
 def require(ok, reason):
@@ -111,6 +120,71 @@ def parse_json(content):
     return json.loads(content, object_pairs_hook=pairs, parse_constant=invalid)
 
 
+def validate_install_serial_projection(content):
+    """Independently validate the closed, public offline-install UART."""
+    require(type(content) is bytes and 0 < len(content) <= 4096,
+            'Install serial projection byte bound differs')
+    lines = content.splitlines()
+    require(content.endswith(b'\n') and lines and lines[0] == INSTALL_SERIAL_PROJECTION,
+            'Install serial projection schema differs')
+    exits = 0
+    previous_omission = False
+    for line in lines[1:]:
+        omission = INSTALL_SERIAL_OMITTED.fullmatch(line) is not None
+        require(line == b'ARCTIC-INSTALL-EXIT=0' or omission,
+                'Install serial projection record differs')
+        require(not (omission and previous_omission),
+                'Adjacent install serial omission records differ')
+        exits += line == b'ARCTIC-INSTALL-EXIT=0'
+        previous_omission = omission
+    require(exits == 1, 'Missing/duplicate successful offline installation exit')
+
+
+def validate_boot_serial_projection(content):
+    """Independently validate a complete public performance replay protocol."""
+    require(type(content) is bytes and 0 < len(content) <= 128 * 1024 * 1024,
+            'Boot serial projection byte bound differs')
+    lines = content.splitlines()
+    require(content.endswith(b'\n') and lines and lines[0] == BOOT_SERIAL_PROJECTION,
+            'Boot serial projection schema differs')
+    counts = dict(restored=0, begin=0, end=0, exit=0, performance=0)
+    order = []
+    previous_omission = False
+    for line in lines[1:]:
+        omission = BOOT_SERIAL_OMITTED.fullmatch(line) is not None
+        require(not (omission and previous_omission),
+                'Adjacent boot serial omission records differ')
+        previous_omission = omission
+        if omission:
+            continue
+        if line == BOOT_CONSOLE_RESTORED:
+            key = 'restored'
+        elif line == BOOT_COLLECT_BEGIN:
+            key = 'begin'
+        elif line == BOOT_COLLECT_END:
+            key = 'end'
+        elif line == BOOT_SMOKE_EXIT:
+            key = 'exit'
+        elif line.startswith(PERFORMANCE_RECORD):
+            require(counts['begin'] == 1 and counts['exit'] == counts['end'] == 0,
+                    'Boot serial observer record order differs')
+            require(len(line) <= 4 * 1024 * 1024, 'Boot serial observer record is oversized')
+            record = parse_json(line[len(PERFORMANCE_RECORD):])
+            require(type(record) is dict and set(record) == {'stage', 'check', 'value'}
+                    and record['stage'] == 'installed' and type(record['check']) is str
+                    and re.fullmatch(r'[a-z0-9_.]{1,128}', record['check']) is not None,
+                    'Boot serial observer record differs')
+            key = 'performance'
+        else:
+            require(False, 'Boot serial projection record differs')
+        counts[key] += 1
+        if key != 'performance':
+            order.append(key)
+    require(all(counts[key] == 1 for key in ('restored', 'begin', 'end', 'exit'))
+            and counts['performance'] > 0 and order == ['restored', 'begin', 'exit', 'end'],
+            'Boot serial projection protocol markers differ')
+
+
 def required_files():
     result = {'status.json', 'comparison.json', 'producer-receipt.json', 'observer-source.txt',
               'vm-base-image-id.txt', 'vm-prepared-image-id.txt'}
@@ -124,7 +198,7 @@ def required_files():
 
 def validate_evidence(archive, *, plan, plan_sha256, image, execution_source_sha,
                       reviewed_parent_sha, execution_run_id, comparator, producer_receipt):
-    """Verify full original inputs and independently recompute all six boots."""
+    """Verify public install projections and independently replay all six boots."""
     validate_plan(plan, candidate_source_files=plan['candidate_source_files'],
         execution_files=plan['execution_files'], observer=plan['observer'])
     require(plan['ready'] is True and same(plan['image'], image), 'Unready/mismatched execution plan')
@@ -193,9 +267,7 @@ def validate_evidence(archive, *, plan, plan_sha256, image, execution_source_sha
         require(state.get('profiles', {}).get(name, {}).get('sha256') == profile, 'Measured install profile differs')
         require(raw(name + '-install-harness.log').count(b'ARCTIC-PRISTINE-INSTALL-POWEROFF=clean') == 1,
             'Missing/duplicate clean offline installation')
-        exits = [line.split(b'ARCTIC-INSTALL-EXIT=', 1)[1].strip()
-            for line in raw(name + '/serial-install.log').splitlines() if b'ARCTIC-INSTALL-EXIT=' in line]
-        require(exits == [b'0'], 'Missing/duplicate successful offline installation exit')
+        validate_install_serial_projection(raw(name + '/serial-install.log'))
         pristine = state.get('pristine_installed_sources', {}).get(name, {})
         require(set(pristine) == {'target.qcow2', 'OVMF_VARS.fd'}
             and all(re.fullmatch('[0-9a-f]{64}', val) for val in pristine.values()), 'Missing pristine source identities')
@@ -227,7 +299,9 @@ def validate_evidence(archive, *, plan, plan_sha256, image, execution_source_sha
                 and context.get('install_profile_sha256') == state['profiles'][name]['sha256'], 'Boot source context differs')
             require(digest(raw(prefix + 'vm-toolchain.txt')) == state['vm_toolchain_sha256'], 'Boot toolchain differs')
             log = Path(temp) / (name + '-' + str(boot) + '.log')
-            log.write_bytes(raw(prefix + 'serial-boot.log'))
+            serial = raw(prefix + 'serial-boot.log')
+            validate_boot_serial_projection(serial)
+            log.write_bytes(serial)
             run = comparator.read_run(log, strict=True)
             require(run.get('observer_source_sha256') == plan['observer']['source_sha256']
                 and same(run.get('external_execution'), dict(context=context,

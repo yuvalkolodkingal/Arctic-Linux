@@ -262,7 +262,9 @@ class CaptureControls(unittest.TestCase):
             self.assertEqual(method.count('self.hide_reference_controls(player,ipc)'),1)
             self.assertIn('evaluate_reference_rgb(',method)
             if klass=='Smoke':
-                self.assertIn('capture_deadline_seconds=(attempt_limit * 2 * capture_command_timeout_seconds',method)
+                self.assertIn('attempt_limit=2',method)
+                self.assertIn('capture_deadline_seconds=9.5',method)
+                self.assertIn("if oracle.get('status')!='unmatched': break",method)
                 self.assertIn("schema='arctic-native-visual-attempts-v1'",method)
                 self.assertLess(method.index('attempts.append('),
                                 method.index("(self.root/'visual-oracle.json').write_text"))

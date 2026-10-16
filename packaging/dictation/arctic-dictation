@@ -6,17 +6,106 @@ private_runtime() {
     uid=$(id -u)
     base=${XDG_RUNTIME_DIR:-/run/user/$uid}
     if [ -z "$base" ] || [ ! -d "$base" ] || [ -L "$base" ] || [ "$(stat -c %u:%a "$base" 2>/dev/null || true)" != "$uid:700" ]; then
-        runtime=/tmp/arctic-$uid
+        runtime=/tmp/arctic-dictation-$uid
+        legacy=/tmp/arctic-$uid
     else
-        runtime=$base/arctic
+        runtime=$base/arctic-dictation
+        legacy=$base/arctic
     fi
     if [ ! -e "$runtime" ] && [ ! -L "$runtime" ]; then mkdir -m 0700 "$runtime" 2>/dev/null || return 1; fi
-    [ ! -L "$runtime" ] && [ -d "$runtime" ] && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    [ ! -L "$runtime" ] && [ -d "$runtime" ] \
+        && [ "$(stat -c %u:%a "$runtime" 2>/dev/null || true)" = "$uid:700" ] || return 1
+    # Preserve the lazy-start marker across an update from the former shared
+    # Arctic directory. Remove only known, type-checked transient state; the
+    # per-login runtime base clears any remaining legacy lock automatically.
+    if [ ! -L "$legacy" ] && [ -d "$legacy" ] \
+            && [ "$(stat -c %u "$legacy" 2>/dev/null || true)" = "$uid" ]; then
+        old_session=$legacy/voxtype-session-started-v1
+        new_session=$runtime/voxtype-session-started-v1
+        if [ ! -L "$old_session" ] && [ -d "$old_session" ] \
+                && [ "$(stat -c %u:%a "$old_session" 2>/dev/null || true)" = "$uid:700" ]; then
+            if [ ! -e "$new_session" ] && [ ! -L "$new_session" ]; then
+                mkdir -m 0700 "$new_session" 2>/dev/null || return 1
+            fi
+            [ ! -L "$new_session" ] && [ -d "$new_session" ] \
+                && [ "$(stat -c %u:%a "$new_session" 2>/dev/null || true)" = "$uid:700" ] || return 1
+            rmdir "$old_session" 2>/dev/null || :
+        fi
+        old_starting=$legacy/voxtype-starting
+        if [ ! -L "$old_starting" ] && [ -d "$old_starting" ] \
+                && [ "$(stat -c %u:%a "$old_starting" 2>/dev/null || true)" = "$uid:700" ]; then
+            rmdir "$old_starting" 2>/dev/null || :
+        fi
+        for old_file in "$legacy/voxtype-error" "$legacy/voxtype-journal.cursor"; do
+            if [ ! -L "$old_file" ] && [ -f "$old_file" ] \
+                    && [ "$(stat -c %u "$old_file" 2>/dev/null || true)" = "$uid" ]; then
+                rm -f "$old_file" || :
+            fi
+        done
+    fi
     printf '%s\n' "$runtime"
+}
+restart_started_service() {
+    runtime=$(private_runtime 2>/dev/null) || return 1
+    session_marker=$runtime/voxtype-session-started-v1
+    if [ -e "$session_marker" ] || [ -L "$session_marker" ]; then
+        [ ! -L "$session_marker" ] && [ -d "$session_marker" ] \
+            && [ "$(stat -c %u:%a "$session_marker" 2>/dev/null || true)" = "$(id -u):700" ] \
+            || return 1
+        # try-restart deliberately preserves lazy startup and a manual stop,
+        # but it is a no-op after an audio-device failure has left the official
+        # daemon failed. Recover only that explicit failed state; the valid
+        # per-login activation marker prevents a stale unit failure from
+        # turning a settings change into the first activation of the session.
+        if systemctl --user is-failed --quiet voxtype.service; then
+            systemctl --user reset-failed voxtype.service || :
+            systemctl --user restart voxtype.service
+        else
+            systemctl --user try-restart voxtype.service
+        fi
+    else
+        systemctl --user try-restart voxtype.service
+    fi
 }
 clear_runtime_error() {
     runtime=$(private_runtime 2>/dev/null) || return 0
     rm -f "$runtime/voxtype-error"
+}
+journal_events() {
+    runtime=$1
+    cursor_file=$runtime/voxtype-journal.cursor
+    if [ -e "$cursor_file" ] || [ -L "$cursor_file" ]; then
+        [ ! -L "$cursor_file" ] && [ -f "$cursor_file" ] \
+            && [ "$(stat -c %u "$cursor_file" 2>/dev/null || true)" = "$(id -u)" ] \
+            || return 0
+        journalctl --user -u voxtype.service -n 40 --no-pager -o cat \
+            --cursor-file="$cursor_file" 2>/dev/null || true
+        return 0
+    fi
+
+    # journalctl rejects --since together with --cursor-file. Seed the cursor
+    # first, then use a bounded initial look-back so an error emitted just
+    # before the first status poll is still projected. Later polls read only
+    # entries after that private cursor.
+    seed=$(journalctl --user -u voxtype.service -n 0 --no-pager -o cat \
+        --show-cursor 2>/dev/null || true)
+    case "$seed" in
+        '-- cursor: '*) cursor=${seed#-- cursor: } ;;
+        *) cursor= ;;
+    esac
+    case "$cursor" in
+        ''|*[!A-Za-z0-9_:.';'=-]*) ;;
+        *)
+            temporary=$(mktemp "$runtime/.voxtype-journal.cursor.XXXXXX") || return 0
+            if ! printf '%s\n' "$cursor" >"$temporary" || ! chmod 0600 "$temporary" \
+                    || ! mv -f -- "$temporary" "$cursor_file"; then
+                rm -f -- "$temporary"
+                return 0
+            fi
+            ;;
+    esac
+    journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
+        2>/dev/null || true
 }
 status() {
     state=unavailable error= language=auto backend= backend_state_valid=false integrity_ready=false
@@ -124,12 +213,6 @@ status() {
             fi
         fi
         if [ "$integrity_ready" = true ]; then
-            upstream=$(voxtype status 2>/dev/null || true)
-            case "$upstream" in
-                idle) state=ready ;;
-                recording|transcribing) state=$upstream ;;
-                *) state=error; error='VoxType is installed but its user service is stopped. Start it in Dictation settings.' ;;
-            esac
             configured=$(voxtype config get whisper.language 2>/dev/null || true)
             case "$configured" in
                 he,en|en,he) language=auto ;;
@@ -139,11 +222,30 @@ status() {
             if ! runtime=$(private_runtime); then
                 state=error
                 error='The private dictation runtime directory is unsafe. Sign out and back in before trying again.'
-            elif [ "$state" = recording ] || [ "$state" = transcribing ]; then
-                rm -f "$runtime/voxtype-error"
             else
-                recent=$(journalctl --user -u voxtype.service --since '-30 seconds' -n 40 --no-pager -o cat \
-                    --cursor-file="$runtime/voxtype-journal.cursor" 2>/dev/null || true)
+                upstream=$(voxtype status 2>/dev/null || true)
+                case "$upstream" in
+                    idle) state=ready ;;
+                    recording|transcribing) state=$upstream ;;
+                    *)
+                        if [ -d "$runtime/voxtype-starting" ] \
+                                && [ ! -L "$runtime/voxtype-starting" ]; then
+                            state=starting
+                        elif systemctl --user is-active --quiet voxtype.service; then
+                            state=error
+                            error='VoxType started but did not publish a usable state. Stop it and retry setup.'
+                        else
+                            # Installed and ready for an explicit first activation.
+                            # The resident model consumes no login memory yet.
+                            state=ready
+                        fi
+                        ;;
+                esac
+            fi
+            if [ "$state" = recording ] || [ "$state" = transcribing ]; then
+                rm -f "$runtime/voxtype-error"
+            elif [ "$state" != starting ] && [ -n "${runtime:-}" ]; then
+                recent=$(journal_events "$runtime")
                 case "$recent" in
                     *'Failed to start audio:'*|*'Failed to create audio capture:'*|*'Audio stream error, capture is now dead:'*|*'failed during this recording; the transcript will be short or empty.'*) printf '%s\n' microphone >"$runtime/voxtype-error" ;;
                     *'Transcription failed: Model not found:'*|*'Transcription failed: Failed to load model:'*) printf '%s\n' model >"$runtime/voxtype-error" ;;
@@ -159,6 +261,8 @@ status() {
                     transcription:vulkan) state=error; error='Vulkan transcription failed. Select CPU acceleration in Dictation settings, then try again.' ;;
                     transcription:*) state=error; error='Local transcription failed. Try a shorter recording; if it repeats, retry setup.' ;;
                     output:*) state=error; error='VoxType could not insert text. Focus a writable text field; the app may reject Wayland text insertion.' ;;
+                    service-start:*) state=error; error='VoxType could not start. Verify or repair the signed app and model in Dictation settings, then retry.' ;;
+                    service-timeout:*) state=error; error='VoxType took too long to load the local model. Verify or repair setup, then retry.' ;;
                 esac
             fi
         fi
@@ -188,7 +292,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --retry; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user enable --now voxtype.service || :
+            restart_started_service || :
         fi
         status
         ;;
@@ -203,7 +307,7 @@ case ${1:-} in
             chmod 0600 "$temporary"; mv -f "$temporary" "$config"
             voxtype --config "$config" config get whisper.language --json >/dev/null
         fi
-        systemctl --user restart voxtype.service || :
+        restart_started_service || :
         clear_runtime_error
         status
         ;;
@@ -213,8 +317,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --backend "$2"; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user enable voxtype.service || :
-            systemctl --user restart voxtype.service || :
+            restart_started_service || :
         fi
         status
         ;;

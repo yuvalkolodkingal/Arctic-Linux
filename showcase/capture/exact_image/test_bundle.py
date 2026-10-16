@@ -153,6 +153,59 @@ class ExportedBundle(unittest.TestCase):
 
 
 class WrapperProtocol(unittest.TestCase):
+    def test_shell_focus_ocr_uses_only_pinned_single_line_invocation(self):
+        result = types.SimpleNamespace(returncode=0, stdout=b"marker\n")
+        with mock.patch.object(bundle, "approved_ocr_identity",
+                               return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                mock.patch.object(bundle.subprocess, "run", return_value=result) as run:
+            text = bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+
+        self.assertEqual(text, "marker\n")
+        self.assertEqual(run.call_args.args[0], [
+            c.OCR_IDENTITY["path"], "/private/focus.png",
+            *c.OCR_IDENTITY["shell_focus_invocation"],
+        ])
+        self.assertIn("7", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertNotIn("6", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertNotIn("11", c.OCR_IDENTITY["shell_focus_invocation"])
+        self.assertEqual(run.call_args.kwargs, {
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.DEVNULL,
+            "timeout": 17,
+            "check": False,
+            "env": {"PATH": "/usr/bin:/bin", "LC_ALL": "C"},
+        })
+
+    def test_shell_focus_ocr_fails_closed_on_process_size_and_encoding(self):
+        failures = (
+            (types.SimpleNamespace(returncode=1, stdout=b""),
+             "capture shell focus OCR failed"),
+            (types.SimpleNamespace(returncode=0, stdout=b"x" * 256_001),
+             "capture shell focus OCR failed"),
+            (types.SimpleNamespace(returncode=0, stdout=b"\xff"),
+             "capture shell focus OCR output invalid"),
+        )
+        for result, message in failures:
+            with self.subTest(message=message, bytes=len(result.stdout)), \
+                    mock.patch.object(bundle, "approved_ocr_identity",
+                                      return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                    mock.patch.object(bundle.subprocess, "run", return_value=result), \
+                    self.assertRaisesRegex(c.Invalid, message):
+                bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+        with mock.patch.object(bundle, "approved_ocr_identity",
+                               return_value=copy.deepcopy(c.OCR_IDENTITY)), \
+                mock.patch.object(bundle.subprocess, "run",
+                                  side_effect=subprocess.TimeoutExpired("tesseract", 17)), \
+                self.assertRaisesRegex(c.Invalid, "capture shell focus OCR failed"):
+            bundle.tesseract_shell_focus_ocr(Path("/private/focus.png"), 17)
+
+    def test_shell_focus_invocation_is_part_of_exact_ocr_identity(self):
+        changed = copy.deepcopy(c.OCR_IDENTITY)
+        changed["shell_focus_invocation"][changed["shell_focus_invocation"].index("7")] = "11"
+        with self.assertRaisesRegex(c.Invalid, "OCR identity differs"):
+            c.ocr_identity(changed)
+
     def test_uaccess_rule_precedes_seat_late_and_nonroot_opens_device_path(self):
         self.assertLess(Path(c.CHANNEL_RULE_PATH).name, "73-seat-late.rules")
         self.assertIn(b'TAG+="uaccess"', c.CHANNEL_RULE)
@@ -225,6 +278,31 @@ class WrapperProtocol(unittest.TestCase):
             first.close()
             second.close()
 
+    def test_installed_shell_exchange_is_fresh_bounded_and_exact(self):
+        calls = []
+
+        class Channel:
+            def write(self, line):
+                calls.append(("write", line))
+
+            def read(self, timeout=None):
+                calls.append(("read", timeout))
+                return (c.SHELL_SESSION_PREFIX + "ab" * 16
+                        + " 1000 arcticshowcase arctic-showcase fish")
+
+        nonce, response = capture_vm._installed_shell_exchange(
+            Channel(), random=lambda size: b"\xab" * size)
+        self.assertEqual(nonce, "ab" * 16)
+        self.assertEqual(calls, [
+            ("write", c.SHELL_CHALLENGE_PREFIX + nonce), ("read", 30),
+        ])
+        c.installed_shell_session_proof(nonce, response)
+        calls.clear()
+        with self.assertRaisesRegex(c.Invalid, "shell challenge differs"):
+            capture_vm._installed_shell_exchange(
+                Channel(), random=lambda _size: b"too-short")
+        self.assertEqual(calls, [])
+
     def test_fixed_vm_rejects_wrong_disk_and_fake_channel_or_server(self):
         qmp, channel = Path("/run/qmp"), Path("/run/channel")
         command = capture_vm._qemu_command(qmp, channel, 7, 8, "none", "tcg")
@@ -271,6 +349,13 @@ class WrapperProtocol(unittest.TestCase):
                 thread.join()
                 client.close()
                 listener.close()
+
+    def test_iso_eject_targets_the_fixed_frontend_id(self):
+        qmp = capture_vm.QMP.__new__(capture_vm.QMP)
+        qmp.command = mock.Mock(return_value={})
+        qmp.eject_iso()
+        qmp.command.assert_called_once_with(
+            "eject", {"id": "arcticcd", "force": True})
 
     def test_process_group_shutdown_reaps_descendant(self):
         with tempfile.TemporaryDirectory() as temp:

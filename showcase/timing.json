@@ -1412,5 +1412,5 @@
   ],
   "timing_status": "verified_direct_voxtype_river_alignment",
   "render_ready": false,
-  "timing_basis": "All scene and caption windows are aligned to the verified assembled direct-VoxType River master. Rendering remains blocked by human listening, qualified final-image captures and release binding."
+  "timing_basis": "All scene and caption windows are aligned to the verified assembled direct-VoxType River master. Private rendering remains blocked by qualified final-image captures and release binding; human listening is required before publication."
 }

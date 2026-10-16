@@ -44,7 +44,7 @@ Scope {
     }
     Process {
         id: dictationGuard
-        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 3s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; fi']
+        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 3s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; runtime=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/arctic-dictation; rmdir \"$runtime/voxtype-starting\" >/dev/null 2>&1 || :; fi']
         // Optional dictation must never prevent the screen from locking.
         onExited: root.acquireLock()
     }
@@ -190,7 +190,7 @@ Scope {
             NotificationService.locked = false;
             root.password = '';
             root.state = 'idle';
-            Quickshell.execDetached(['systemctl', '--user', 'start', 'voxtype.service']);
+            Quickshell.execDetached(['sh', '-c', 'runtime=${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/arctic-dictation; if [ -d \"$runtime/voxtype-session-started-v1\" ] && [ ! -L \"$runtime/voxtype-session-started-v1\" ]; then systemctl --user start voxtype.service >/dev/null 2>&1 || :; fi']);
             Quickshell.execDetached(['arctic-hook', 'unlock']);
         }
     }

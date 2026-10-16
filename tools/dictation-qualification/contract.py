@@ -57,6 +57,7 @@ SESSION = {
 }
 MODERN_GPU_GATE = 'gpu-failure-explicit-cpu-fallback'
 LEGACY_GPU_GATE = 'legacy-no-vulkan-explicit-cpu'
+VULKAN_ISOLATION_GATE = 'vulkan-download-offline-boundary'
 GATES = {
     'live': COMMON | {'live-payload-model-absent', 'live-voxtype-unavailable'},
     'online-installed': COMMON | SESSION | {'encrypted-installed-boot', 'online-installer-ready'},
@@ -69,6 +70,8 @@ GATES = {
 
 def gates(phase, profile):
     expected = set(GATES[phase])
+    if profile == 'turbo-q5-v3' and phase in ('online-installed', 'recovery'):
+        expected.add(VULKAN_ISOLATION_GATE)
     if phase in ('online-installed', 'recovered-offline'):
         expected.add(MODERN_GPU_GATE if profile == 'turbo-q5-v3' else LEGACY_GPU_GATE)
     return expected
@@ -82,7 +85,7 @@ def pinned(profile):
 LIMITATIONS = [
     'measured-public-read-speech-only', 'no-whisper-parity-claim',
     'virtual-source-not-physical-microphone',
-    'bad-icd-loader-fixture-not-physical-driver-failure',
+    'non-gpu-vm-rejection-not-physical-driver-failure',
     'legacy-profile-does-not-certify-vulkan',
     'hardware-acceleration-not-certified-by-this-vm',
     'visible-indicator-needs-screenshot-review',
@@ -95,14 +98,136 @@ OBSERVATIONS = {
     'sha256', 'snapshot_sha256', 'file_count', 'drained', 'restored',
     'automatic_ready', 'gpu_supported', 'explicit_cpu_selected',
     'failed_attempt_inserted', 'audit_lost', 'audit_enabled',
+    'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
+    'failure_stage', 'failure_substage',
+    'pre_activation_engine_count', 'resident_rss_bytes',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
+TRANSCRIPTION_FAILURE_STAGES = {
+    'fixture-selection': 1,
+    'receiver-clear': 2,
+    'focus-before': 3,
+    'language-selection': 4,
+    'record-start': 5,
+    'recording-state': 6,
+    'engine-profile': 7,
+    'capture-link': 8,
+    'fixture-play-start': 9,
+    'fixture-playback': 10,
+    'record-stop': 11,
+    'transcribing-state': 12,
+    'terminal-state': 13,
+    'text-delivery': 14,
+    'text-shape': 15,
+    'focus-after': 16,
+    'language-script': 17,
+    'accuracy-metrics': 18,
+    'sample-record': 19,
+}
+MICROPHONE_FAILURE_STAGES = {
+    'receiver-clear': 101,
+    'cpu-backend': 102,
+    'initial-status': 103,
+    'source-selection': 104,
+    'pinned-daemon-restart': 105,
+    'pinned-daemon-ready': 106,
+    'record-start': 107,
+    'recording-state': 108,
+    'capture-link': 109,
+    'route-destroy': 110,
+    'source-isolation': 111,
+    'interrupted-cancel': 112,
+    'disconnected-daemon-restart': 113,
+    'disconnected-daemon-ready': 114,
+    'failed-record-start': 115,
+    'actionable-error': 116,
+    'idle-state': 117,
+    'receiver-empty': 118,
+    'cleanup-cancel': 119,
+    'route-restore': 120,
+    'default-source-restore': 121,
+    'language-restore': 122,
+    'error-clear': 123,
+}
+GPU_FAILURE_STAGES = {
+    'receiver-clear': 201,
+    'vulkan-payload-integrity': 203,
+    'cpu-backend-selection': 204,
+    'language-selection': 205,
+    'failed-vulkan-setup': 207,
+    'cpu-preservation': 208,
+    'receiver-empty': 209,
+    'actionable-error': 210,
+    'gpu-failure-screen': 211,
+    'cpu-recovery-selection': 212,
+    'cpu-ready-status': 213,
+    'cpu-ready-screen': 214,
+}
+READINESS_FAILURE_STAGE = 301
+READINESS_FAILURE_SUBSTAGES = {
+    'status-ready': 3011,
+    'status-state': 3012,
+    'status-profile': 3013,
+    'status-backend': 3014,
+    'pending-absent': 3015,
+    'marker-ownership': 3016,
+    'marker-content': 3017,
+    'service-inactive': 3018,
+    'state-absent': 3019,
+    'engine-absent': 3020,
+    'session-marker-absent': 3021,
+    'route': 3022,
+    'activation-returncode': 3023,
+    'activation-stdout-bound': 3024,
+    'activation-stderr-bound': 3025,
+    'recording-observed': 3026,
+    'session-marker-directory': 3027,
+    'session-marker-symlink': 3028,
+    'cancel': 3029,
+    'daemon-ready': 3030,
+    'engine-unique': 3031,
+    'resident-rss': 3032,
+}
+FAILURE_SUBSTAGES = {
+    TRANSCRIPTION_FAILURE_STAGES['language-selection']: frozenset(
+        {401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414}),
+    TRANSCRIPTION_FAILURE_STAGES['recording-state']: frozenset(
+        {601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612}),
+    TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
+    TRANSCRIPTION_FAILURE_STAGES['transcribing-state']: frozenset(
+        {1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212}),
+    GPU_FAILURE_STAGES['vulkan-payload-integrity']: frozenset(
+        {2031, 2032, 2033, 2034, 2035, 2036, 2037}),
+    READINESS_FAILURE_STAGE: frozenset(READINESS_FAILURE_SUBSTAGES.values()),
+}
+TRANSCRIPTION_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+    MODERN_GPU_GATE,
+    LEGACY_GPU_GATE,
+}
+FAILURE_STAGE_GATES = {
+    **{gate: frozenset(TRANSCRIPTION_FAILURE_STAGES.values())
+       for gate in TRANSCRIPTION_GATES},
+    'microphone-disconnect-error': frozenset(MICROPHONE_FAILURE_STAGES.values()),
+}
+FAILURE_STAGE_GATES[MODERN_GPU_GATE] = frozenset(
+    set(TRANSCRIPTION_FAILURE_STAGES.values()) | set(GPU_FAILURE_STAGES.values()))
+FAILURE_STAGE_GATES[VULKAN_ISOLATION_GATE] = frozenset(
+    {GPU_FAILURE_STAGES['vulkan-payload-integrity']})
+for readiness_gate in ('online-installer-ready', 'recovered-ready'):
+    FAILURE_STAGE_GATES[readiness_gate] = frozenset({READINESS_FAILURE_STAGE})
+TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
+    'cpu-english-transcription-insertion',
+    'cpu-hebrew-transcription-insertion',
+}
+READINESS_FAILURE_GATES = {'online-installer-ready', 'recovered-ready'}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
-    'local-offline-transcription')})
+    'local-offline-transcription', VULKAN_ISOLATION_GATE)})
 EXPECTED_KINDS.update({name: 'actual-installed-files' for name in (
     'live-payload-model-absent', 'installed-payload-integrity')})
 EXPECTED_KINDS.update({name: 'config-inspection' for name in (
@@ -111,7 +236,7 @@ EXPECTED_KINDS.update({name: 'config-inspection' for name in (
 EXPECTED_KINDS.update({
     'missing-model-error': 'file-removal-fixture',
     'microphone-disconnect-error': 'device-disconnect-fixture',
-    MODERN_GPU_GATE: 'loader-configuration-fixture',
+    MODERN_GPU_GATE: 'actual-session',
     'transcript-log-notification-leak-scan': 'interval-log-scan',
     'no-new-avcs': 'interval-log-scan',
 })
@@ -119,8 +244,10 @@ EXPECTED_KINDS[LEGACY_GPU_GATE] = 'actual-session'
 REQUIRED_OBSERVATIONS = {
     'selinux-enforcing': {'ready': True}, 'encrypted-installed-boot': {'ready': True},
     'live-payload-model-absent': {'file_count': 0}, 'live-voxtype-unavailable': {'ready': False},
-    'online-installer-ready': {'ready': True, 'pending': False},
-    'recovered-ready': {'ready': True, 'pending': False},
+    'online-installer-ready': {'ready': True, 'pending': False,
+                               'pre_activation_engine_count': 0},
+    'recovered-ready': {'ready': True, 'pending': False,
+                        'pre_activation_engine_count': 0},
     'explicit-service-recovery-ready': {'ready': True, 'pending': False},
     'offline-setup-pending': {'ready': False, 'pending': True},
     'offline-os-healthy': {'ready': True},
@@ -135,7 +262,7 @@ REQUIRED_OBSERVATIONS = {
     'missing-model-error': {'ready': False, 'restored': True},
     'microphone-disconnect-error': {'count': 0, 'drained': True, 'restored': True},
     'lock-discards': {'locked': True, 'count': 0, 'drained': True},
-    MODERN_GPU_GATE: {'gpu_supported': True, 'explicit_cpu_selected': True,
+    MODERN_GPU_GATE: {'gpu_supported': False, 'explicit_cpu_selected': True,
                       'failed_attempt_inserted': False, 'count': 2,
                       'bytes': ASSETS['vulkan']['bytes'],
                       'sha256': ASSETS['vulkan']['sha256']},
@@ -143,6 +270,9 @@ REQUIRED_OBSERVATIONS = {
     'transcript-private-cleanup': {'file_count': 0, 'drained': True},
     'transcript-log-notification-leak-scan': {'matched': 0},
     'no-new-avcs': {'avcs': 0},
+    VULKAN_ISOLATION_GATE: {'gpu_supported': False, 'explicit_cpu_selected': True,
+                            'bytes': ASSETS['vulkan']['bytes'],
+                            'sha256': ASSETS['vulkan']['sha256']},
 }
 
 
@@ -232,6 +362,12 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
     require(len(ids) == len(report['gates']) == len(set(ids))
             and set(ids) == gates(expected['phase'], profile),
             'report-missing-duplicate-extra-gates')
+    # The guest collector completes the fixed gate inventory after a checked
+    # gate aborts a dependent sequence.  These placeholders are useful only
+    # when a source-owned, concrete failed gate already explains the failure;
+    # an all-placeholder report remains a collector failure and is rejected.
+    concrete_failure = any(isinstance(gate, dict) and gate.get('status') == 'failed'
+                           for gate in report['gates'])
     for gate in report['gates']:
         require(set(gate) == {'id', 'status', 'evidence_kind', 'code', 'observations'},
                 'gate-fields')
@@ -246,8 +382,14 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                 'gate-' + gate['id'] + '-' + label for label in ERROR_LABELS},
                 'gate-code-status')
         else:
-            require(gate['id'] == 'microphone-disconnect-error'
-                    and gate['code'] == 'gate-microphone-disconnect-error-isolation-unavailable',
+            isolated_microphone = (gate['id'] == 'microphone-disconnect-error'
+                                   and gate['code'] ==
+                                   'gate-microphone-disconnect-error-isolation-unavailable')
+            dependent_unrun = (gate['code'] == 'prerequisite-or-collector-failed'
+                               and report['status'] == 'failed'
+                               and report['release_acceptance'] is False
+                               and concrete_failure)
+            require(isolated_microphone or dependent_unrun,
                     'gate-code-status')
         observed = gate['observations']
         require(isinstance(observed, dict) and set(observed) <= OBSERVATIONS,
@@ -258,11 +400,37 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             else:
                 require(type(value) in (int, bool) and (type(value) is bool or value >= 0),
                         'gate-observation-scalar')
+        if 'failure_stage' in observed:
+            require(gate['status'] == 'failed' and gate['id'] in FAILURE_STAGE_GATES,
+                    'gate-failure-stage-scope')
+            require(type(observed['failure_stage']) is int
+                    and observed['failure_stage'] in FAILURE_STAGE_GATES.get(gate['id'], ()),
+                    'gate-failure-stage-value')
+        elif (gate['status'] == 'failed'
+              and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
+                                 | READINESS_FAILURE_GATES
+                                 | {'microphone-disconnect-error'})):
+            require(False, 'gate-failure-stage-missing')
+        substage = observed.get('failure_substage')
+        if gate['status'] == 'failed' and gate['id'] in READINESS_FAILURE_GATES:
+            require(observed.get('failure_stage') == READINESS_FAILURE_STAGE,
+                    'gate-failure-stage-value')
+            require(substage is not None,
+                    'gate-failure-substage-missing')
+        if substage is not None:
+            require(type(substage) is int
+                    and observed.get('failure_stage') in FAILURE_SUBSTAGES
+                    and substage in FAILURE_SUBSTAGES[observed['failure_stage']],
+                    'gate-failure-substage-value')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value
                         for key, value in required.items()),
                     'gate-contradictory-or-missing-observations')
+            if gate['id'] in ('online-installer-ready', 'recovered-ready'):
+                require(type(observed.get('resident_rss_bytes')) is int
+                        and observed['resident_rss_bytes'] > 0,
+                        'gate-resident-rss-missing')
             if gate['id'] == 'installed-payload-integrity':
                 require(observed.get('file_count') == len(PROFILE_ASSETS[profile])
                         and type(observed.get('file_count')) is int
@@ -271,12 +439,21 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             if gate['id'] == 'recording-status-published':
                 require(digest(observed.get('snapshot_sha256')) and digest(observed.get('sha256')),
                         'recording-indicator-evidence-missing')
+            if gate['id'] == MODERN_GPU_GATE:
+                require(digest(observed.get('gpu_failure_capture_ack_sha256'))
+                        and digest(observed.get('cpu_ready_capture_ack_sha256'))
+                        and observed['gpu_failure_capture_ack_sha256'] !=
+                            observed['cpu_ready_capture_ack_sha256'],
+                        'recovery-screen-evidence-missing')
             if gate['id'] == 'transcript-log-notification-leak-scan':
                 require(type(observed.get('count')) is int and observed['count'] >= 12,
                         'leak-scan-coverage')
             if gate['id'] == 'local-offline-transcription':
                 require(type(observed.get('returncode')) is int and observed['returncode'] > 0,
                         'offline-network-check-successful-response')
+            if gate['id'] == VULKAN_ISOLATION_GATE:
+                require(type(observed.get('returncode')) is int and observed['returncode'] > 0,
+                        'vulkan-boundary-network-check-successful-response')
             if gate['id'] == 'no-new-avcs':
                 require(observed.get('audit_enabled') in (1, 2)
                         and observed.get('audit_enabled_before') == observed.get('audit_enabled')

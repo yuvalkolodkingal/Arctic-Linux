@@ -56,6 +56,8 @@ class CaptureClientBindingControls(unittest.TestCase):
         checker = self.checker()
         self.assertIs(checker.capture_link(), True)
         self.assertEqual(checker._wait_last_graph, (True, True, True, True, True))
+        self.assertEqual(checker._capture_engine,
+                         (41, 123, Path('/synthetic-owned-engine')))
         self.assertEqual(checker.engines.call_count, 2)
         checker.cmd.assert_called_once_with(['/usr/bin/pw-dump'])
 
@@ -151,13 +153,65 @@ class CaptureClientBindingControls(unittest.TestCase):
                       [(42, 123, Path('/synthetic-owned-engine'))],
                       [(41, 123, Path('/different-engine'))], before * 2):
             checker = self.checker(); checker.engines.side_effect = [before, after]
-            with self.assertRaisesRegex(c.Invalid, '^recording-engine-changed$'):
-                checker.capture_link()
+            self.assertIs(checker.capture_link(), False)
+            self.assertEqual(checker._wait_last_graph[0], False)
+            self.assertIsNone(checker._capture_engine)
         for value in ([], before * 2):
             checker = self.checker(); checker.engines.return_value = value
-            with self.assertRaisesRegex(c.Invalid, '^recording-engine-not-unique$'):
-                checker.capture_link()
+            self.assertIs(checker.capture_link(), False)
+            self.assertEqual(checker._wait_last_graph,
+                             (False, False, False, False, False))
+            self.assertIsNone(checker._capture_engine)
             checker.cmd.assert_not_called()
+
+    def test_observation_retries_transient_engine_snapshot_within_existing_boundary(self):
+        before = [(41, 123, Path('/synthetic-owned-engine'))]
+        changed = [(41, 124, Path('/synthetic-owned-engine'))]
+        checker = self.checker()
+        checker.engines.side_effect = [before, changed, before, before]
+
+        def bounded(fn, seconds):
+            self.assertEqual(seconds, 10)
+            self.assertIs(fn(), False)
+            return fn()
+
+        with mock.patch.object(guest, 'wait', side_effect=bounded):
+            self.assertIs(checker.observe('capture-link', checker.capture_link, 10), True)
+        self.assertEqual(checker.engines.call_count, 4)
+
+    def test_engine_profile_pins_captured_process_without_third_proc_scan(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.names = {'avx2': 'synthetic-owned-engine'}
+        checker.assets = {'avx2': {'sha256': 'a' * 64}}
+        self.assertIs(checker.capture_link(), True)
+        with mock.patch.object(guest, 'PAYLOAD', Path('/')), \
+                mock.patch.object(guest, 'sha', return_value='a' * 64):
+            self.assertEqual(checker.checked_engine_profile(), 'avx2')
+        self.assertEqual(checker.engines.call_count, 2)
+
+    def test_engine_profile_substages_distinguish_profile_count_path_and_sha(self):
+        checker = self.checker()
+        checker.profile_id = 'private-profile'
+        checker.names = {}; checker.assets = {}
+        cases = []
+        try:
+            checker.checked_engine_profile()
+        except guest.TranscriptionStageFailure as error:
+            cases.append(error.failure_substage)
+        checker.profile_id = 'turbo-q5-v3'
+        checker.names = {'avx2': 'voxtype-avx2'}
+        checker.assets = {'avx2': {'sha256': 'a' * 64}}
+        for engine, digest in ((None, 'a' * 64),
+                               ((41, 123, Path('/wrong')), 'a' * 64),
+                               ((41, 123, guest.PAYLOAD / 'voxtype-avx2'), 'b' * 64)):
+            checker._capture_engine = engine
+            try:
+                with mock.patch.object(guest, 'sha', return_value=digest):
+                    checker.checked_engine_profile()
+            except guest.TranscriptionStageFailure as error:
+                cases.append(error.failure_substage)
+        self.assertEqual(cases, [701, 702, 703, 704])
 
 if __name__ == '__main__':
     unittest.main()

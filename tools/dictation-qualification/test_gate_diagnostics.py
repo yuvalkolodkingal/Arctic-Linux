@@ -121,12 +121,103 @@ class GateDiagnosticControls(unittest.TestCase):
         self.assertEqual(checker.report['gates'][0]['code'],
                          'gate-microphone-disconnect-error-invalid')
 
+    def test_transcription_failures_project_only_fixed_stage_number_and_family(self):
+        families = (
+            (PrivateInvalid('sensitive-canary transcript'), 'invalid'),
+            (OSError('sensitive-canary path'), 'os-error'),
+            (ValueError('sensitive-canary value'), 'value-error'),
+            (subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                       output=b'sensitive-canary'), 'timeout'),
+            (KeyError('sensitive-canary key'), 'key-error'),
+            (TypeError('sensitive-canary type'), 'type-error'),
+        )
+        gate = 'cpu-hebrew-transcription-insertion'
+        for stage, number in guest.TRANSCRIPTION_FAILURE_STAGES.items():
+            for error, label in families:
+                with self.subTest(stage=stage, label=label):
+                    checker = self.checker(gate)
+                    action = lambda: checker.transcription_stage(
+                        stage, self.raising(error))
+                    self.assertFalse(checker.gate(gate, action))
+                    result = checker.report['gates'][0]
+                    self.assertEqual(result['code'], 'gate-' + gate + '-' + label)
+                    self.assertEqual(result['observations'], {'failure_stage': number})
+                    self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_transcription_stage_inventory_is_closed(self):
+        checker = self.checker('cpu-english-transcription-insertion')
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-transcription-failure-stage$'):
+            checker.transcription_stage('private-stage', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-transcription-failure-family$'):
+            guest.TranscriptionStageFailure('terminal-state', 'private-family')
+
+    def test_microphone_failures_project_only_fixed_stage_number_and_family(self):
+        gate = 'microphone-disconnect-error'
+        checker = self.checker(gate)
+        error = subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                          output=b'sensitive-canary')
+        action = lambda: checker.microphone_stage(
+            'actionable-error', self.raising(error))
+        self.assertFalse(checker.gate(gate, action))
+        result = checker.report['gates'][0]
+        self.assertEqual(result['code'], 'gate-' + gate + '-timeout')
+        self.assertEqual(result['observations'], {
+            'failure_stage': guest.MICROPHONE_FAILURE_STAGES['actionable-error']})
+        self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_microphone_stage_inventory_is_closed(self):
+        checker = self.checker('microphone-disconnect-error')
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-microphone-failure-stage$'):
+            checker.microphone_stage('private-stage', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-microphone-failure-family$'):
+            guest.MicrophoneStageFailure('actionable-error', 'private-family')
+
+    def test_gpu_failures_project_only_fixed_stage_number_and_family(self):
+        gate = guest.MODERN_GPU_GATE
+        checker = self.checker(gate)
+        error = subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                          output=b'sensitive-canary')
+        action = lambda: checker.gpu_stage(
+            'gpu-failure-screen', self.raising(error))
+        self.assertFalse(checker.gate(gate, action))
+        result = checker.report['gates'][0]
+        self.assertEqual(result['code'], 'gate-' + gate + '-timeout')
+        self.assertEqual(result['observations'], {
+            'failure_stage': guest.GPU_FAILURE_STAGES['gpu-failure-screen']})
+        self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_gpu_stage_inventory_is_closed(self):
+        checker = self.checker(guest.MODERN_GPU_GATE)
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-stage$'):
+            checker.gpu_stage('private-stage', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-family$'):
+            guest.GpuStageFailure('gpu-failure-screen', 'private-family')
+
+    def test_closed_engine_substage_projects_without_command_output(self):
+        cpu_gate = 'cpu-hebrew-transcription-insertion'
+        checker = self.checker(cpu_gate)
+        failure = guest.TranscriptionStageFailure('engine-profile', 'invalid', 704)
+        self.assertFalse(checker.gate(cpu_gate, self.raising(failure)))
+        self.assertEqual(checker.report['gates'][0]['observations'], {
+            'failure_stage': guest.TRANSCRIPTION_FAILURE_STAGES['engine-profile'],
+            'failure_substage': 704})
+
+    def test_gpu_wrapper_preserves_nested_transcription_stage(self):
+        checker = self.checker(guest.MODERN_GPU_GATE)
+        nested = guest.TranscriptionStageFailure('text-delivery', 'invalid')
+        with self.assertRaises(guest.TranscriptionStageFailure) as raised:
+            checker.gpu_stage('cpu-ready-screen', self.raising(nested))
+        self.assertIs(raised.exception, nested)
+
     def test_state_contract_reports_allowed_cardinality_not_observed_count(self):
         checker = guest.Checker.__new__(guest.Checker)
         checker.state = lambda: 'idle'
         with tempfile.TemporaryDirectory() as temp:
             unit = Path(temp) / 'voxtype.service'
             unit.write_text('ConditionPathExists=%h/.config/voxtype/config.toml\n'
+                            'ConditionPathExists=%t/arctic-dictation/voxtype-session-started-v1\n'
                             'UMask=0077\nRestrictAddressFamilies=AF_UNIX\n'
                             'UnsetEnvironment=' + ' '.join(sorted(guest.SERVICE_UNSET_ENV)) + '\n'
                             'ExecStart=/usr/bin/voxtype --config %h/.config/voxtype/config.toml -q daemon\n')
