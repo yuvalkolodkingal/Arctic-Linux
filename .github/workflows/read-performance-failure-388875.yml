@@ -1,0 +1,220 @@
+name: Read bounded performance failure for run 38887538012
+
+on:
+  push:
+    branches: [codex/read-performance-failure-388875-20261016]
+    paths: [.github/performance-failure-reader-388875.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-summary:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-performance-failure-388875-20261016' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify marker-only activation
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          event=json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          marker=Path('.github/performance-failure-reader-388875.activate')
+          reviewed=marker.read_text().strip()
+          assert re.fullmatch('[0-9a-f]{40}', reviewed)
+          def valid_parents(values):
+              assert values == [head,reviewed]
+          valid_parents([head,reviewed])
+          try:
+              valid_parents([head,reviewed,'f'*40])
+          except AssertionError:
+              pass
+          else:
+              raise AssertionError('merge-parent bypass accepted')
+          assert subprocess.check_output(['git','rev-list','--parents','-n','1',head],text=True).split() == [head,reviewed]
+          assert reviewed == event['before'] and head == event['after']
+          assert not subprocess.check_output(['git','status','--porcelain'],text=True)
+          assert subprocess.check_output(['git','diff','--name-only',reviewed,head],text=True).splitlines() == [str(marker)]
+          PY
+      - name: Read only the closed unqualified failure summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+
+          artifact_id=12043356013
+          expected_bytes=1259
+          digest='20397d6adea6d92e827d008e2c1c122fae8687c7204f3941c723040f0ee86f37'
+          endpoint=f'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/{artifact_id}'
+          live=json.loads(subprocess.check_output(['gh','api',
+              'repos/yuvalkolodkingal/Arctic-Linux/actions/runs/38887538012'],timeout=60))
+          assert live['id'] == 38887538012 and live['run_attempt'] == 1
+          assert live['workflow_id'] == 380402148
+          assert live['name'] == 'Frozen exact-image paired performance qualification'
+          assert live['path'] == '.github/workflows/paired-candidate-20261009.yml'
+          assert live['event'] == 'push' and live['status'] == 'completed' and live['conclusion'] == 'failure'
+          assert live['head_branch'] == 'codex/qualification-dispatch-20261010'
+          assert live['head_sha'] == 'b993d91f692d0824013ee752d0b9bee77ae98022'
+          assert live['repository']['id'] == live['head_repository']['id'] == 1390608717
+          workflow=json.loads(subprocess.check_output(['gh','api',
+              'repos/yuvalkolodkingal/Arctic-Linux/actions/workflows/380402148'],timeout=60))
+          assert workflow['id'] == 380402148
+          assert workflow['name'] == live['name'] and workflow['path'] == live['path']
+          metadata=json.loads(subprocess.check_output(['gh','api',endpoint],timeout=60))
+          assert metadata['id'] == artifact_id and metadata['name'] == 'external-paired-performance'
+          assert metadata['expired'] is False and metadata['size_in_bytes'] == expected_bytes
+          assert metadata['digest'] == 'sha256:' + digest
+          run=metadata['workflow_run']
+          assert run == {'id':38887538012,'repository_id':1390608717,'head_repository_id':1390608717,
+              'head_branch':'codex/qualification-dispatch-20261010',
+              'head_sha':'b993d91f692d0824013ee752d0b9bee77ae98022'}
+
+          def pairs(items):
+              out={}
+              for key, value in items:
+                  assert key not in out
+                  out[key]=value
+              return out
+
+          expected_names={'unqualified-failure-phase.json','upload-screening.json'}
+          def validate_inventory(items):
+              assert len(items) == 2 and {item.filename for item in items} == expected_names
+              assert len({item.filename for item in items}) == len(items)
+              for item in items:
+                  assert not (item.flag_bits & 1)
+                  assert stat.S_IFMT(item.external_attr >> 16) in (0,stat.S_IFREG)
+                  assert item.compress_type in (zipfile.ZIP_STORED,zipfile.ZIP_DEFLATED)
+                  assert 0 < item.compress_size <= expected_bytes
+                  assert 1 <= item.file_size <= 4096
+
+          # Guard regressions without touching the retained artifact.
+          with tempfile.TemporaryDirectory(prefix='arctic-performance-reader-tests-') as test_folder:
+              test_zip=Path(test_folder)/'two.zip'
+              with zipfile.ZipFile(test_zip,'w',zipfile.ZIP_DEFLATED) as test:
+                  for name in expected_names:
+                      test.writestr(name,b'{}\n')
+              with zipfile.ZipFile(test_zip) as test:
+                  validate_inventory(test.infolist())
+                  one=test.infolist()[:1]
+                  three=test.infolist()+[test.infolist()[0]]
+              for rejected in (one,three):
+                  try:
+                      validate_inventory(rejected)
+                  except AssertionError:
+                      pass
+                  else:
+                      raise AssertionError('non-exact ZIP inventory accepted')
+
+          with tempfile.TemporaryDirectory(prefix='arctic-performance-failure-reader-') as folder:
+              archive_path=Path(folder)/'retained.zip'
+              with archive_path.open('xb') as output:
+                  subprocess.run(['gh','api',endpoint+'/zip'],stdout=output,check=True,timeout=120)
+              assert archive_path.stat().st_size == expected_bytes
+              assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == digest
+              with zipfile.ZipFile(archive_path) as archive:
+                  items=archive.infolist()
+                  validate_inventory(items)
+                  raw=archive.read('unqualified-failure-phase.json')
+                  receipt_raw=archive.read('upload-screening.json')
+                  assert len(raw) == archive.getinfo('unqualified-failure-phase.json').file_size and raw.endswith(b'\n')
+                  assert len(receipt_raw) == archive.getinfo('upload-screening.json').file_size and receipt_raw.endswith(b'\n')
+          receipt=json.loads(receipt_raw.decode('utf-8','strict'),object_pairs_hook=pairs,
+              parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+          assert type(receipt) is dict and set(receipt) == {'scope','files'}
+          assert receipt['scope'] == 'Owned synthetic QEMU VM only; no host desktop, VM disks or credentials'
+          assert type(receipt['files']) is dict and set(receipt['files']) == {'unqualified-failure-phase.json'}
+          record=receipt['files']['unqualified-failure-phase.json']
+          assert type(record) is dict and set(record) == {'original_sha256','uploaded_sha256','bytes','redactions'}
+          raw_digest=hashlib.sha256(raw).hexdigest()
+          assert record == {'original_sha256':raw_digest,'uploaded_sha256':raw_digest,
+              'bytes':len(raw),'redactions':0}
+          summary=json.loads(raw.decode('utf-8','strict'),object_pairs_hook=pairs,
+              parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)))
+
+          top={'schema','status','release_acceptance','performance_acceptance','original_evidence_uploaded',
+              'screening_failure','private_owner_verified','observed_context','runner_phase','read_status',
+              'markers','smoke_exit','console_restore_error','guest_failure','guest_envelope'}
+          assert type(summary) is dict and set(summary) == top
+          assert summary['schema'] == 'arctic-paired-failure-phase-v1'
+          assert summary['status'] == 'unqualified_fixed_observations_only'
+          assert summary['release_acceptance'] is summary['performance_acceptance'] is False
+          assert summary['original_evidence_uploaded'] is False
+          assert summary['screening_failure'] in {'sensitive_text','terminal_escape','member_count',
+              'member_type','member_size','ownership','deadline','unclassified','not_observed'}
+          assert type(summary['private_owner_verified']) is bool
+          assert summary['observed_context'] in {'none',*[f'{image}_{boot}' for image in ('baseline','candidate') for boot in range(1,4)]}
+          assert summary['runner_phase'] in {'unavailable','prepare_immutable_vm_tools','offline_install_baseline',
+              'offline_install_candidate','blocked','command_interrupted','command_timeout','prepared_image_cleanup_failed'}
+          read_keys={'status','owner','baseline_install','candidate_install','context','harness','serial'}
+          assert type(summary['read_status']) is dict and set(summary['read_status']) == read_keys
+          assert all(value in {'unavailable','absent','readable','unsafe_or_oversized'} for value in summary['read_status'].values())
+          marker_keys={'baseline_clean_poweroff','candidate_clean_poweroff','qemu_start','qemu_exit_before_qmp',
+              'qmp_not_connected','default_entry','passphrase_prompt','missing_passphrase_prompt',
+              'graphical_login','missing_graphical_login','reported_collection','reported_incomplete_collection',
+              'console_restored','collector_begin','collector_end'}
+          assert type(summary['markers']) is dict and set(summary['markers']) == marker_keys
+          assert all(type(value) is bool for value in summary['markers'].values())
+          assert summary['smoke_exit'] in {'unavailable','absent','ambiguous','zero','nonzero'}
+          assert summary['console_restore_error'] in {'unavailable','none','no_unique_desktop_session',
+              'invalid_desktop_vt','inactive_desktop_vt','multiple'}
+
+          phases={'unavailable','measurement_conditions','rpm_inventory','external_execution','app_roles',
+              'measured_payload','pristine_idle_measurement_scope','pristine_idle_samples','role_workload',
+              'role_measurement_order','keep_awake_restored','done'}
+          failure=summary['guest_failure']
+          assert type(failure) is dict and set(failure) == {'status','code','exception_class','last_observer_phase'}
+          assert failure['status'] in {'unavailable','unknown','ambiguous','source_mismatch','invalid_uart','source_known_shape'}
+          assert failure['code'] == 'none' or re.fullmatch(r'(?:guest|causal)_[1-9][0-9]{0,3}',failure['code'])
+          assert failure['exception_class'] in {'none','RuntimeError','ValueError','InterruptedError'}
+          assert failure['last_observer_phase'] in phases
+
+          envelope=summary['guest_envelope']
+          assert type(envelope) is dict and set(envelope) == {'reason','counts','collector_order','frame_status',
+              'control_status','last_observer_phase','exception_shape','colored_traceback'}
+          reasons={'not_observed','observer_context_mismatch','frozen_observer_mismatch','source_root_unavailable',
+              'source_directory_owner','source_blob_mismatch','source_parse_failure','source_inventory_mismatch',
+              'observer_source_mismatch','uart_utf8','uart_termination','observer_record_oversized',
+              'observer_record_invalid','marker_multiplicity','traceback_multiplicity','observer_phase_duplicate',
+              'smoke_not_nonzero','marker_order','smoke_exit_range','traceback_missing','traceback_order',
+              'frame_unrecognized','frame_chain_invalid','observer_record_count','source_candidate_count','source_known_shape'}
+          assert envelope['reason'] in reasons
+          count_keys={'collector_begin','collector_end','smoke_exit','tracebacks','supported_exceptions',
+              'unsupported_exception_like_lines','admitted_observer_records','frames','source_candidates'}
+          assert type(envelope['counts']) is dict and set(envelope['counts']) == count_keys
+          assert all(value in {'unavailable','zero','one','multiple'} for value in envelope['counts'].values())
+          assert envelope['collector_order'] in {'unavailable','ordered','invalid'}
+          assert envelope['frame_status'] in {'unavailable','recognized','unrecognized','control','invalid_chain'}
+          assert envelope['control_status'] in {'unavailable','none','present'}
+          assert envelope['last_observer_phase'] in phases
+          shape=envelope['exception_shape']
+          assert type(shape) is dict and set(shape) == {'reason','count','exception_class','format'}
+          assert shape['reason'] in {'not_observed','traceback_not_unique','observer_not_unique','exception_control',
+              'exception_missing','exception_multiplicity','unsupported_class','class_token_observed'}
+          assert shape['count'] in {'unavailable','zero','one','multiple'}
+          assert shape['exception_class'] in {'none','RuntimeError','ValueError','InterruptedError','TypeError',
+              'NameError','UnboundLocalError','AttributeError','KeyError','IndexError','OSError','FileNotFoundError',
+              'PermissionError','ProcessLookupError','TimeoutError','ConnectionError','BrokenPipeError','ImportError',
+              'ModuleNotFoundError','AssertionError','MemoryError','OverflowError','ZeroDivisionError','StopIteration',
+              'KeyboardInterrupt','SystemExit'}
+          assert shape['format'] in {'none','plain','python314_default'}
+          colored=envelope['colored_traceback']
+          assert type(colored) is dict and set(colored) == {'reason','code','exception_class','frames','candidates','format'}
+          assert colored['reason'] in {'not_observed','traceback_not_unique','observer_not_unique',
+              'exception_not_supported','frame_source_unknown','frame_unrecognized','frame_context_unknown',
+              'frame_chain_invalid','source_candidate_count','source_projection'}
+          assert colored['code'] == 'none' or re.fullmatch(r'(?:guest|causal)_[1-9][0-9]{0,3}',colored['code'])
+          assert colored['exception_class'] in {'none','RuntimeError','ValueError','InterruptedError'}
+          assert colored['frames'] in {'unavailable','zero','one','multiple'}
+          assert colored['candidates'] in {'unavailable','zero','one','multiple'}
+          assert colored['format'] in {'none','python314_default'}
+          print('ARCTIC-PAIRED-SAFE-DIAGNOSTIC='+json.dumps(summary,sort_keys=True,separators=(',',':')))
+          PY
