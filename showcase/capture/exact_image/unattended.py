@@ -684,6 +684,14 @@ def _scene_failure(channel, stage: str):
             pass
 
 
+def _first_login(account, environment, channel):
+    """Retry the normal one-shot welcome, then wait for host pixel approval."""
+    _as_user(account, environment, ["/usr/bin/arctic-welcome"], timeout=90)
+    channel.write(c.FIRST_LOGIN_READY)
+    c.require(channel.read() == c.FIRST_LOGIN_ACK,
+              "host did not observe fresh-account welcome")
+
+
 def installed_scenes(timeout: int, channel_fd: int):
     c.require(os.geteuid() > 0 and pwd.getpwuid(os.geteuid()).pw_name == USERNAME,
               "installed automation account differs")
@@ -692,6 +700,7 @@ def installed_scenes(timeout: int, channel_fd: int):
     try:
         account, environment = _inherited_graphical_environment(USERNAME)
         stage = "dictationsetup"
+        _first_login(account, environment, channel)
         channel.write(c.SCENE_STAGE_PREFIX + stage)
         _wait(lambda: _dictation_ready(environment), min(timeout, 1800),
               "online dictation did not become ready")

@@ -379,6 +379,7 @@ class UnattendedController(unittest.TestCase):
     def test_first_login_is_host_observed_dismissed_and_rechecked(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
         self.controller.dismiss_first_login()
+        self.controller.verify_first_login_dismissed()
         self.assertEqual(self.controller.wait_screen.call_args_list[0].args[1],
                          "first-login-welcome")
         self.assertEqual(self.controller.events[0], {
@@ -387,6 +388,35 @@ class UnattendedController(unittest.TestCase):
         })
         self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
                          "first-login-dismissed")
+
+    def test_first_login_transport_is_fixed_and_precedes_settings(self):
+        events = []
+
+        class Lines:
+            def read(self, timeout=None):
+                events.append(("read", timeout))
+                return c.FIRST_LOGIN_READY
+
+            def write(self, value):
+                events.append(("write", value))
+
+        controller = types.SimpleNamespace(
+            dismiss_first_login=lambda: events.append(("dismiss", None)))
+        capture_vm._first_login_ready(Lines(), controller)
+        self.assertEqual(events, [
+            ("read", capture_vm.FIRST_LOGIN_SIGNAL_TIMEOUT),
+            ("dismiss", None),
+            ("write", c.FIRST_LOGIN_ACK),
+        ])
+
+        class Changed(Lines):
+            def read(self, timeout=None):
+                return c.FIRST_LOGIN_READY + " private"
+
+        events.clear()
+        with self.assertRaisesRegex(c.Invalid, "welcome readiness differs"):
+            capture_vm._first_login_ready(Changed(), controller)
+        self.assertEqual(events, [])
 
     def test_live_boot_proves_the_real_installer_before_switching_vt(self):
         operations = []
@@ -1671,6 +1701,9 @@ class GuestAutomation(unittest.TestCase):
             def write(self, line):
                 self.rows.append(line)
 
+            def read(self):
+                return c.FIRST_LOGIN_ACK
+
             def close(self):
                 self.closed = True
 
@@ -1688,12 +1721,40 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended, "Channel", return_value=channel), \
              mock.patch.object(unattended, "_inherited_graphical_environment",
                                return_value=(account, {"PATH": "/usr/bin:/bin"})), \
+             mock.patch.object(unattended, "_as_user"), \
              mock.patch.object(unattended, "_wait", side_effect=wait):
             with self.assertRaisesRegex(c.Invalid, "private transcript"):
                 unattended.installed_scenes(3600, 73)
-        self.assertEqual(channel.rows, [c.SCENE_STAGE_PREFIX + "dictationsetup",
+        self.assertEqual(channel.rows, [c.FIRST_LOGIN_READY,
+                                        c.SCENE_STAGE_PREFIX + "dictationsetup",
                                         c.SCENE_FAILURE_PREFIX + "dictationsetup"])
         self.assertTrue(channel.closed)
+
+    def test_guest_retries_normal_welcome_and_waits_for_host_pixels(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name="arcticshowcase")
+        environment = {"PATH": "/usr/bin:/bin"}
+
+        class Channel:
+            def __init__(self, reply):
+                self.reply = reply
+                self.rows = []
+
+            def write(self, line):
+                self.rows.append(line)
+
+            def read(self):
+                return self.reply
+
+        channel = Channel(c.FIRST_LOGIN_ACK)
+        with mock.patch.object(unattended, "_as_user") as invoke:
+            unattended._first_login(account, environment, channel)
+        invoke.assert_called_once_with(
+            account, environment, ["/usr/bin/arctic-welcome"], timeout=90)
+        self.assertEqual(channel.rows, [c.FIRST_LOGIN_READY])
+
+        with mock.patch.object(unattended, "_as_user"), self.assertRaisesRegex(
+                c.Invalid, "did not observe fresh-account welcome"):
+            unattended._first_login(account, environment, Channel("changed"))
 
     def test_inherited_channel_descriptor_must_be_the_exact_protected_device(self):
         protected = types.SimpleNamespace(st_mode=stat.S_IFCHR | 0o660, st_uid=0,

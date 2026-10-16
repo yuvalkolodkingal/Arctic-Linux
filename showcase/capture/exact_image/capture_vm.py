@@ -42,6 +42,7 @@ TOOLING_FILES = ("capture_vm.py", "contract.py", "guest.py", "capture_probe.py",
 # does not extend either readiness gate or any screen/acceptance predicate.
 SCENE_READY_TIMEOUTS = {"dictationsetup": 2_160, "winter": 300, "updates": 180}
 SCENE_REQUEST_TIMEOUT = 300
+FIRST_LOGIN_SIGNAL_TIMEOUT = 120
 
 
 class GuestSceneFailure(c.Invalid):
@@ -258,6 +259,15 @@ def _scene_ready(lines: Lines, expected_scene: str, timeout: int,
         if str(error) == "private capture channel timed out":
             raise GuestSceneFailure(stage) from error
         raise
+
+
+def _first_login_ready(lines: Lines, controller) -> None:
+    """Accept only the fixed pre-Settings signal, then use host pixels/input."""
+    signal = _scene_line(lines, FIRST_LOGIN_SIGNAL_TIMEOUT)
+    c.require(signal == c.FIRST_LOGIN_READY,
+              "fresh-account welcome readiness differs")
+    controller.dismiss_first_login()
+    lines.write(c.FIRST_LOGIN_ACK)
 
 
 class QMP:
@@ -655,12 +665,14 @@ def host_mode(args) -> int:
         capture = host.Capture(runtime / "captures", execution, provenance, ocr_identity,
                                qmp.screendump, ocr, fragments)
         for expected_scene in c.SCENES:
+            if expected_scene == "dictationsetup":
+                _first_login_ready(lines, controller)
             ready = _scene_ready(lines, expected_scene,
                                  SCENE_READY_TIMEOUTS[expected_scene])
             c.require(ready == c.AUTOMATION_READY_PREFIX + expected_scene,
                       "installed unattended scene readiness missing")
             if expected_scene == "dictationsetup":
-                controller.dismiss_first_login()
+                controller.verify_first_login_dismissed()
             controller.authorize_scene(expected_scene)
             lines.write(c.AUTOMATION_GO_PREFIX + expected_scene)
             request = _scene_line(lines, SCENE_REQUEST_TIMEOUT)

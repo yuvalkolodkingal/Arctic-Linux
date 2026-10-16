@@ -204,11 +204,14 @@ These bounds do not replace or relax any readiness, nonce, screen, privacy or
 human-review gate; they only prevent a failed guest helper from inheriting the
 outer 120-minute channel timeout while QEMU keeps the character device open.
 
-The fresh disposable account's top-layer welcome is expected. After the
-Dictation page is open behind it, the host requires `Welcome to Arctic Linux`
-pixels, sends one QMP Escape, and requires both `Dictation is ready` and the
-reviewed Dictation page copy. The same ready screen is checked again after guest
-diagnostics and immediately before capture.
+The fresh disposable account's top-layer welcome is expected. The installed
+helper retries the normal one-shot `arctic-welcome` command without `--again`,
+then emits one fixed readiness token. Before Settings opens, the host requires
+`Welcome to Arctic Linux` pixels, sends one QMP Escape and returns one fixed
+acknowledgement. Only then may the helper open the Dictation page. The host
+requires both `Dictation is ready` and the reviewed Dictation page copy, and
+checks the same ready screen again after guest diagnostics and immediately
+before capture.
 
 The winter pointer target is found by the approved Tesseract binary and fixed TSV
 invocation from the unique visible `Butterfly in Gold` title. A fixed geometric

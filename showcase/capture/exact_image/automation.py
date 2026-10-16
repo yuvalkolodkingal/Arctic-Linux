@@ -1124,10 +1124,13 @@ class Controller:
                              exact_output=True)
 
     def dismiss_first_login(self):
-        """Dismiss the fresh account's top-layer welcome using host pixels/input."""
+        """Observe and dismiss the fresh account welcome before Settings opens."""
         self.wait_screen("installed-boot", "first-login-welcome",
                          ("Welcome", "Arctic Linux"), seconds=300, exact_output=True)
         self.press("installed-boot", "esc")
+
+    def verify_first_login_dismissed(self):
+        """Require the reviewed Dictation surface after the welcome was dismissed."""
         self.wait_screen("installed-boot", "first-login-dismissed",
                          ("Dictation is ready", "Local setup", "Recording", "Audio stays here"),
                          seconds=120, exact_output=True)
