@@ -36,10 +36,10 @@
     "showcase/capture/exact_image/bundle.py": "3ccdcd284aa19aabfb3f6ae02c0e186f6fe30dc826b8ac2b2b51dcb144d9d063",
     "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
     "showcase/capture/exact_image/capture_vm.py": "69dcde3bb6cffed6b93433439840d715ea5d160722e4a79aade954381025f18b",
-    "showcase/capture/exact_image/contract.py": "332bda77c9441d1509b06b22e12acc144b2605fe4a8203b67b40292e13b8f257",
-    "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
+    "showcase/capture/exact_image/contract.py": "1f46446479b52b11c49a9f6254315cb1da40fe4b0365d0952e0e71211394bf7c",
+    "showcase/capture/exact_image/guest.py": "80edf1a7b4a3bdbea84ff6133c834c131bbb7483a2d4f0376f701e05471b95b6",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
-    "showcase/capture/exact_image/unattended.py": "51b207e3c103464e3b5d26415b1782394993deaba62d0e53f13d8f91fee7affb",
+    "showcase/capture/exact_image/unattended.py": "d633ffbdebae4fdab20204c33090c7a486cddddbfd5d4151f042e1f7323b1acb",
     "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
