@@ -31,6 +31,10 @@ MAX_ASSETS = 257
 MAX_ASSET_BYTES = 32_000_000
 MAX_REVIEW_BYTES = 2_000_000
 MAX_API_BYTES = 2_000_000
+DRAFT_BODY = ("Private qualification media for collaborator review only. "
+              "Human review is pending; this draft is not release acceptance and must not be published.")
+SCREENING = ["producer-inventory-exact", "png-metadata-absent",
+             "ocr-sensitive-shapes-absent"]
 
 
 def require(value, reason):
@@ -121,6 +125,33 @@ def artifact_projection(artifact):
     }
 
 
+def declared_exports(manifest):
+    expected = {}
+    for artifact in manifest["artifacts"]:
+        require(type(artifact) is dict and type(artifact.get("exports")) is list,
+                "Committed artifact export declarations are malformed")
+        for item in artifact["exports"]:
+            require(type(item) is dict and set(item) == {
+                "member", "asset_name", "kind", "privacy_class", "max_bytes",
+                "width", "height", "ocr_languages"
+            } and item["kind"] == "png"
+                    and item["privacy_class"] == "screened-synthetic-vm-ui"
+                    and item["ocr_languages"] == "eng+heb"
+                    and SAFE_PNG.fullmatch(item["asset_name"])
+                    and item["asset_name"] not in expected
+                    and type(item["max_bytes"]) is int and 0 < item["max_bytes"] <= MAX_ASSET_BYTES
+                    and type(item["width"]) is int and type(item["height"]) is int,
+                    "Committed PNG export declaration is invalid or duplicated")
+            expected[item["asset_name"]] = {
+                "artifact_id": artifact["artifact_id"], "asset_name": item["asset_name"],
+                "height": item["height"], "kind": item["kind"], "lane": artifact["lane"],
+                "member": item["member"], "privacy_class": item["privacy_class"],
+                "width": item["width"], "screening": SCREENING, "max_bytes": item["max_bytes"],
+            }
+    require(expected, "Committed manifest declares no review PNGs")
+    return expected
+
+
 def unpack_bundle(bundle, expected_sha256, manifest, preparation, activation, destination):
     bundle = Path(bundle)
     require(type(expected_sha256) is str and HEX64.fullmatch(expected_sha256)
@@ -154,23 +185,28 @@ def unpack_bundle(bundle, expected_sha256, manifest, preparation, activation, de
         require(type(review["assets"]) is list and review["asset_count"] == len(review["assets"]) + 1
                 and review["png_count"] == len(review["assets"]),
                 "Screened review manifest counts differ")
+        declarations = declared_exports(manifest)
         expected = {}
         total = 0
         fields = {"artifact_id", "asset_name", "bytes", "height", "kind", "lane", "member",
                   "privacy_class", "sha256", "width", "screening"}
         for item in review["assets"]:
-            require(type(item) is dict and set(item) == fields and item["kind"] == "png"
-                    and item["privacy_class"] == "screened-synthetic-vm-ui"
-                    and item["screening"] == ["producer-inventory-exact", "png-metadata-absent",
-                                               "ocr-sensitive-shapes-absent"]
-                    and SAFE_PNG.fullmatch(item["asset_name"])
-                    and item["asset_name"] not in expected
-                    and type(item["bytes"]) is int and 0 < item["bytes"] <= MAX_ASSET_BYTES
+            require(type(item) is dict and set(item) == fields
+                    and item.get("asset_name") in declarations
+                    and item["asset_name"] not in expected,
+                    "Screened PNG is not a unique committed export")
+            declaration = declarations[item["asset_name"]]
+            require(all(item[key] == declaration[key] for key in (
+                        "artifact_id", "asset_name", "height", "kind", "lane", "member",
+                        "privacy_class", "width", "screening"))
+                    and type(item["bytes"]) is int
+                    and 0 < item["bytes"] <= declaration["max_bytes"]
                     and type(item["sha256"]) is str and HEX64.fullmatch(item["sha256"]),
-                    "Screened PNG record is malformed")
+                    "Screened PNG differs from its committed export declaration")
             expected[item["asset_name"]] = (item["bytes"], item["sha256"])
             total += item["bytes"]
-        require(set(infos) == set(expected) | {"REVIEW-MANIFEST.json"}
+        require(set(expected) == set(declarations)
+                and set(infos) == set(expected) | {"REVIEW-MANIFEST.json"}
                 and review["png_bytes"] == total, "Screened bundle inventory differs")
         destination.mkdir(mode=0o700)
         records = {}
@@ -259,6 +295,26 @@ def resolve_tag(tag, activation):
     raise RuntimeError("Created review tag chain exceeds its bound")
 
 
+def recover_exact_draft(tag, release, activation):
+    """Recover only a lost create response for the exact draft this run requested."""
+    endpoint = f"repos/{REPOSITORY}/releases/tags/{quote(tag, safe='')}"
+    status, raw = api_request("GET", endpoint)
+    if status == 404:
+        return None
+    require(status == 200, f"Private draft recovery returned HTTP {status}")
+    try:
+        value = strict_json(raw.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError) as error:
+        raise RuntimeError("Private draft recovery JSON is invalid") from error
+    require(type(value) is dict and type(value.get("id")) is int
+            and value.get("draft") is True and value.get("prerelease") is False
+            and value.get("tag_name") == tag and value.get("name") == release["name"]
+            and value.get("body") == DRAFT_BODY and value.get("target_commitish") == activation,
+            "Refusing to delete a nonidentical release after a lost create response")
+    resolve_tag(tag, activation)
+    return value["id"]
+
+
 def verify_absent_after_cleanup(release_tag_endpoint, ref_endpoint):
     problems = []
     for endpoint, label in ((release_tag_endpoint, "release"), (ref_endpoint, "tag")):
@@ -324,11 +380,9 @@ def publish(manifest_path, bundle, bundle_sha256):
                     "Created private review tag differs")
             tag_created = True
             resolve_tag(tag, activation)
-            body = ("Private qualification media for collaborator review only. "
-                    "Human review is pending; this draft is not release acceptance and must not be published.")
             created = api_json("POST", f"repos/{REPOSITORY}/releases", 201, payload={
                 "tag_name": tag, "target_commitish": activation, "name": release["name"],
-                "body": body, "draft": True, "prerelease": False, "make_latest": "false",
+                "body": DRAFT_BODY, "draft": True, "prerelease": False, "make_latest": "false",
             })
             release_id = created.get("id")
             require(type(release_id) is int and created.get("draft") is True
@@ -371,6 +425,14 @@ def publish(manifest_path, bundle, bundle_sha256):
             print(json.dumps({"draft_release_id": release_id, "draft": True,
                               "human_review": "pending", "asset_count": len(assets)}, sort_keys=True))
         except BaseException as original:
+            if release_id is None and tag_created:
+                try:
+                    release_id = recover_exact_draft(tag, release, activation)
+                except BaseException:
+                    # Cleanup below removes only the confirmed-new tag, then
+                    # verifies both objects absent. An unknown/nonidentical
+                    # draft remains private and forces an explicit failure.
+                    release_id = None
             try:
                 cleanup_created(release_id, tag, tag_created)
             except BaseException as cleanup:

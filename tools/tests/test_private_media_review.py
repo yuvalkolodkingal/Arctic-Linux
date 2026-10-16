@@ -103,6 +103,22 @@ def screened_bundle(root, value=None):
     return bundle, digest, value
 
 
+def forge_bundle(root, original, change):
+    with zipfile.ZipFile(original) as archive:
+        files = {info.filename: archive.read(info) for info in archive.infolist()}
+    review = json.loads(files["REVIEW-MANIFEST.json"])
+    change(files, review)
+    files["REVIEW-MANIFEST.json"] = (json.dumps(review, indent=2, sort_keys=True) + "\n").encode()
+    forged = root / "forged.zip"
+    with zipfile.ZipFile(forged, "w", compression=zipfile.ZIP_STORED) as archive:
+        for name, raw in sorted(files.items()):
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.create_system = 3; info.compress_type = zipfile.ZIP_STORED
+            info.external_attr = (stat.S_IFREG | 0o600) << 16
+            archive.writestr(info, raw)
+    return forged, hashlib.sha256(forged.read_bytes()).hexdigest()
+
+
 class ManifestControls(unittest.TestCase):
     def test_repository_manifest_pins_the_new_idle_and_active_installer_artifacts(self):
         value = exporter.strict_json((ROOT / exporter.MANIFEST).read_text())
@@ -338,6 +354,34 @@ class ActivationAndWorkflowControls(unittest.TestCase):
                 publisher.unpack_bundle(bundle, "0" * 64, value, "a" * 40, "b" * 40,
                                         root / "tampered")
 
+    def test_self_consistent_forged_bundle_cannot_expand_or_relabel_committed_exports(self):
+        def extra_png(files, review):
+            raw = b"forged-screened-png"
+            record = copy.deepcopy(review["assets"][0])
+            record.update(asset_name="unexpected-safe.png", bytes=len(raw),
+                          sha256=hashlib.sha256(raw).hexdigest())
+            files[record["asset_name"]] = raw
+            review["assets"].append(record); review["asset_count"] += 1
+            review["png_count"] += 1; review["png_bytes"] += len(raw)
+        def extra_log(files, review):
+            files["unexpected.log"] = b"self-consistent but undeclared"
+        def change(field, value):
+            return lambda files, review: review["assets"][0].__setitem__(field, value)
+        cases = {
+            "unexpected-png": extra_png, "unexpected-log": extra_log,
+            "lane": change("lane", "installer-active"),
+            "artifact": change("artifact_id", 999999),
+            "member": change("member", "screened/other.png"),
+            "dimensions": change("width", 17),
+        }
+        for name, mutation in cases.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary); original, _, value = screened_bundle(root)
+                forged, digest = forge_bundle(root, original, mutation)
+                with self.assertRaises(RuntimeError):
+                    publisher.unpack_bundle(forged, digest, value, "a" * 40, "b" * 40,
+                                            root / "publish")
+
     def test_structured_absence_rejects_non_404_and_preexisting_tag(self):
         with patch.object(publisher, "api_request", return_value=(403, b"{}")):
             with self.assertRaisesRegex(RuntimeError, "HTTP 403"):
@@ -397,10 +441,29 @@ class ActivationAndWorkflowControls(unittest.TestCase):
                     patch.object(publisher, "resolve_tag"), \
                     patch.object(publisher, "api_json",
                                  side_effect=[created_ref, RuntimeError("release failed")]), \
+                    patch.object(publisher, "recover_exact_draft", return_value=42), \
                     patch.object(publisher, "cleanup_created") as cleanup, \
                     self.assertRaisesRegex(RuntimeError, "release failed"):
                 publisher.publish(Path("manifest"), bundle, digest)
-            cleanup.assert_called_once_with(None, value["draft_release"]["tag"], True)
+            cleanup.assert_called_once_with(42, value["draft_release"]["tag"], True)
+
+    def test_lost_create_response_recovers_only_the_exact_private_draft(self):
+        value = manifest(); release = value["draft_release"]; tag = release["tag"]
+        exact = {"id": 42, "draft": True, "prerelease": False, "tag_name": tag,
+                 "name": release["name"], "body": publisher.DRAFT_BODY,
+                 "target_commitish": "b" * 40}
+        with patch.object(publisher, "api_request",
+                          return_value=(200, json.dumps(exact).encode())), \
+                patch.object(publisher, "resolve_tag") as resolve:
+            self.assertEqual(publisher.recover_exact_draft(tag, release, "b" * 40), 42)
+        resolve.assert_called_once_with(tag, "b" * 40)
+        for field, changed in (("draft", False), ("name", "racing draft"),
+                               ("body", "different"), ("target_commitish", "c" * 40)):
+            hostile = exact | {field: changed}
+            with self.subTest(field=field), patch.object(
+                    publisher, "api_request", return_value=(200, json.dumps(hostile).encode())), \
+                    self.assertRaisesRegex(RuntimeError, "nonidentical"):
+                publisher.recover_exact_draft(tag, release, "b" * 40)
 
     def test_successful_publisher_creates_only_draft_and_verifies_uploaded_digests(self):
         with tempfile.TemporaryDirectory() as temporary:

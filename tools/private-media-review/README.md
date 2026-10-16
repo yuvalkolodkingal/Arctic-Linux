@@ -42,7 +42,10 @@ The publication job requires structured HTTP 404 responses for both the release 
 it creates anything. It creates the new tag at the activation commit, proves that tag resolves to
 that commit, creates only a draft release, uploads only the declared files, verifies every asset
 size and GitHub SHA-256 digest, then rechecks the tag and draft state. Any later failure deletes and
-verifies absence of both the newly created release and tag.
+verifies absence of both the confirmed-new release and tag. If the release-create response is lost,
+the publisher recovers it by tag only when draft state, name, body and activation identity all match
+exactly. A nonidentical or unverifiable object is never deleted; the workflow fails and reports that
+the private draft may need manual removal.
 
 After the workflow succeeds, an authenticated collaborator can inspect the hidden draft with:
 
