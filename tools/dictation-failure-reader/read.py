@@ -369,27 +369,36 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         require(type(state['installations']) is dict and set(state['installations']) == {'online', 'offline'}
                 and all(uuid(value) for value in state['installations'].values())
                 and state['installations']['online'] != state['installations']['offline'])
+        # reports() writes and validates the bounded failed report before its
+        # strict require-passed check raises.  The runner therefore retains the
+        # exact JSON member but deliberately does not add a passing receipt for
+        # it to execution.json.  Only the successful live report has a receipt.
         require(type(state['reports']) is dict
-                and set(state['reports']) == {'online-installed-live', 'online-installed'})
+                and set(state['reports']) == {'online-installed-live'})
         reports = {}
-        for key, phase, expected_status in (
-                ('online-installed-live', 'live', 'passed'),
-                ('online-installed', 'online-installed', 'failed')):
-            receipt = state['reports'][key]
-            filename = key + '.json'
-            require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
-                    'installation_id', 'boot_id', 'status'} and receipt['path'] == filename
-                    and receipt['phase'] == phase and receipt['status'] == expected_status
-                    and receipt['installation_id'] == state['installations']['online']
-                    and uuid(receipt['boot_id']) and digest(receipt['sha256']))
-            raw = archive.read(filename)
-            require(sha256(raw) == receipt['sha256'])
-            report = strict_json(raw, 2_000_000)
-            validate_context(report.get('context'), profile, phase, state['installations']['online'])
-            contract.validate(report, report['context'], require_passed=False,
-                              fixture_manifest=fixtures)
-            require(report['status'] == expected_status and report['boot_id'] == receipt['boot_id'])
-            reports[key] = report
+        receipt = state['reports']['online-installed-live']
+        require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
+                'installation_id', 'boot_id', 'status'}
+                and receipt['path'] == 'online-installed-live.json'
+                and receipt['phase'] == 'live' and receipt['status'] == 'passed'
+                and receipt['installation_id'] == state['installations']['online']
+                and uuid(receipt['boot_id']) and digest(receipt['sha256']))
+        live_raw = archive.read('online-installed-live.json')
+        require(sha256(live_raw) == receipt['sha256'])
+        live = strict_json(live_raw, 2_000_000)
+        validate_context(live.get('context'), profile, 'live', state['installations']['online'])
+        contract.validate(live, live['context'], require_passed=False,
+                          fixture_manifest=fixtures)
+        require(live['status'] == 'passed' and live['boot_id'] == receipt['boot_id'])
+        reports['online-installed-live'] = live
+        failed_raw = archive.read('online-installed.json')
+        failed = strict_json(failed_raw, 2_000_000)
+        validate_context(failed.get('context'), profile, 'online-installed',
+                         state['installations']['online'])
+        contract.validate(failed, failed['context'], require_passed=False,
+                          fixture_manifest=fixtures)
+        require(failed['status'] == 'failed')
+        reports['online-installed'] = failed
         require(reports['online-installed-live']['boot_id'] != reports['online-installed']['boot_id'])
         require(type(state['indicators']) is dict and set(state['indicators']) == {'online-installed'})
         validate_indicator(state['indicators']['online-installed'], archive,
