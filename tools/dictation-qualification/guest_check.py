@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -111,6 +111,19 @@ class MicrophoneStageFailure(Invalid):
                 'unknown-microphone-failure-family')
         super().__init__()
         self.failure_stage = MICROPHONE_FAILURE_STAGES[stage]
+        self.error_label = label
+
+
+class GpuStageFailure(Invalid):
+    """Transcript-free projection of one fixed GPU recovery operation."""
+
+    def __init__(self, stage, label):
+        require(type(stage) is str and stage in GPU_FAILURE_STAGES,
+                'unknown-gpu-failure-stage')
+        require(type(label) is str and label in ERROR_LABELS,
+                'unknown-gpu-failure-family')
+        super().__init__()
+        self.failure_stage = GPU_FAILURE_STAGES[stage]
         self.error_label = label
 
 def mark_collector_setup(stage):
@@ -566,7 +579,8 @@ class Checker:
         except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
             label = caught_error_label(error)
             observations = {}
-            if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure):
+            if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure,
+                               GpuStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
@@ -999,6 +1013,17 @@ class Checker:
         except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
             raise MicrophoneStageFailure(stage, caught_error_label(error)) from None
 
+    def gpu_stage(self, stage, fn):
+        """Run one fixed GPU recovery operation without retaining private output."""
+        require(type(stage) is str and stage in GPU_FAILURE_STAGES,
+                'unknown-gpu-failure-stage')
+        try:
+            return fn()
+        except (GpuStageFailure, TranscriptionStageFailure):
+            raise
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            raise GpuStageFailure(stage, caught_error_label(error)) from None
+
     def daemon_ready(self, target, seconds=30):
         """Wait beyond a restart until one unchanged official daemon is usable."""
         previous, stable = None, 0
@@ -1348,67 +1373,80 @@ class Checker:
 
     def gpu_failure(self):
         require(self.profile_id == 'turbo-q5-v3', 'gpu-gate-requires-modern-profile')
-        self.empty()
+        self.gpu_stage('receiver-clear', self.empty)
         # First prove the signed Vulkan payload and Arctic's real local model
         # preflight on the VM's available Vulkan implementation.
-        run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-             str(SETUP), '--backend', 'vulkan'], 750)
+        self.gpu_stage('initial-vulkan-setup', lambda: run(
+            ['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+             str(SETUP), '--backend', 'vulkan'], 750))
         # This path deliberately exercises setup without restarting the user
         # service.  It still changed the authoritative backend, so invalidate
         # the qualification cache before selecting CPU for the failure test.
         self.selected_backend = None
         vulkan = PAYLOAD / ASSETS['vulkan']['name']
-        owned_file(vulkan, ASSETS['vulkan']['bytes'])
-        require(sha(vulkan) == ASSETS['vulkan']['sha256'],
-                'installed-vulkan-payload-sha256')
-        self.select(backend='cpu')
+        def payload_integrity():
+            owned_file(vulkan, ASSETS['vulkan']['bytes'])
+            require(sha(vulkan) == ASSETS['vulkan']['sha256'],
+                    'installed-vulkan-payload-sha256')
+        self.gpu_stage('vulkan-payload-integrity', payload_integrity)
+        self.gpu_stage('cpu-backend-selection', lambda: self.select(backend='cpu'))
 
         # Make the visible language selection deterministic for both recovery screens.
-        self.select(language='he')
-        icd = self.root / 'bad-icd.json'
-        missing = self.root / 'libarctic-missing-vulkan-driver.so'
-        icd.write_text(json.dumps({'file_format_version': '1.0.0',
-            'ICD': {'library_path': str(missing), 'api_version': '1.3.0'}},
-            sort_keys=True) + '\n')
-        os.chmod(icd, 0o600)
-        os.chown(icd, self.account.pw_uid, self.account.pw_gid)
+        self.gpu_stage('language-selection', lambda: self.select(language='he'))
+        def loader_fixture():
+            icd = self.root / 'bad-icd.json'
+            missing = self.root / 'libarctic-missing-vulkan-driver.so'
+            icd.write_text(json.dumps({'file_format_version': '1.0.0',
+                'ICD': {'library_path': str(missing), 'api_version': '1.3.0'}},
+                sort_keys=True) + '\n')
+            os.chmod(icd, 0o600)
+            os.chown(icd, self.account.pw_uid, self.account.pw_gid)
+            return icd
+        icd = self.gpu_stage('loader-fixture', loader_fixture)
         # Exercise Arctic's guarded selection with a loader configuration that
         # cannot open an ICD. Upstream Vulkan deliberately supports automatic
         # CPU fallback, so running a recording under this fixture cannot prove
         # an error and may insert CPU-produced text. Arctic instead must reject
         # the switch, preserve CPU, and publish an actionable error before any
         # recording can start on the requested backend.
-        failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                      'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error',
-                      str(SETUP), '--backend', 'vulkan'], 750, check=False)
-        require(failed.returncode != 0, 'gpu-failure-preflight-succeeded')
-        require((SYSTEM / 'backend').read_text().strip() == 'cpu'
-                and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
-                'gpu-failure-did-not-preserve-cpu')
-        require((self.root / 'received.private').read_bytes() == b'',
-                'gpu-failure-inserted-text')
+        def failed_vulkan_setup():
+            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                          'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error',
+                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
+            require(failed.returncode != 0, 'gpu-failure-preflight-succeeded')
+        self.gpu_stage('failed-vulkan-setup', failed_vulkan_setup)
+        self.gpu_stage('cpu-preservation', lambda: require(
+            (SYSTEM / 'backend').read_text().strip() == 'cpu'
+            and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
+            'gpu-failure-did-not-preserve-cpu'))
+        self.gpu_stage('receiver-empty', lambda: require(
+            (self.root / 'received.private').read_bytes() == b'',
+            'gpu-failure-inserted-text'))
         def actionable():
             status = self.adapter('status')
             error = str(status.get('error', '')).lower()
             return status if (status.get('state') == 'error'
                 and status.get('backend') == 'cpu'
                 and ('vulkan' in error or 'gpu' in error)) else None
-        status = self.observe('gpu-failure-actionable-error', actionable, 10)
-        gpu_failure_capture_ack_sha256 = self.recovery_screen(
-            'gpu_failure', status, expected_language='he')
+        status = self.gpu_stage('actionable-error', lambda: self.observe(
+            'gpu-failure-actionable-error', actionable, 10))
+        gpu_failure_capture_ack_sha256 = self.gpu_stage(
+            'gpu-failure-screen', lambda: self.recovery_screen(
+                'gpu_failure', status, expected_language='he'))
         # The failed setup preserved CPU authoritatively but also published a
         # setup error.  Invalidate the control cache so the supported CPU
         # selection clears that error and restarts the official daemon before
         # the two recovery dictations.
         self.selected_backend = None
-        self.select(backend='cpu')
+        self.gpu_stage('cpu-recovery-selection', lambda: self.select(backend='cpu'))
         for language in ('en', 'he'):
             sample = next(row for row in self.fixtures
                           if row['language'] == language and row['source_row'] == 0)
             self.transcribe(sample, 'cpu-retry')
-        status = self.adapter('status')
-        cpu_ready_capture_ack_sha256 = self.recovery_screen(
-            'cpu_ready', status, expected_language='he')
+        status = self.gpu_stage('cpu-ready-status', lambda: self.adapter('status'))
+        cpu_ready_capture_ack_sha256 = self.gpu_stage(
+            'cpu-ready-screen', lambda: self.recovery_screen(
+                'cpu_ready', status, expected_language='he'))
         return {'gpu_supported': True, 'explicit_cpu_selected': True,
                 'failed_attempt_inserted': False, 'count': 2,
                 'bytes': ASSETS['vulkan']['bytes'],

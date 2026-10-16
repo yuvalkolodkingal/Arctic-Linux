@@ -520,6 +520,19 @@ on_transcription = false
         self.assertEqual({call.args[0].value for call in calls},
                          set(guest.MICROPHONE_FAILURE_STAGES))
 
+    def test_every_gpu_failure_stage_is_used_by_the_checked_path(self):
+        tree = ast.parse((HERE / 'guest_check.py').read_text())
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'gpu_failure')
+        calls = [node for node in ast.walk(method) if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'gpu_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.GPU_FAILURE_STAGES))
+
     def test_daemon_readiness_rejects_stale_and_changing_process_identity(self):
         checker = self.checker()
         old = (101, 1, Path('/usr/bin/voxtype'))
