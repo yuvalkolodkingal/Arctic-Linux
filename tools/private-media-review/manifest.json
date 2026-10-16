@@ -1,0 +1,202 @@
+{
+  "schema": "arctic-private-qualification-media-review-v1",
+  "ready": true,
+  "review_only": true,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "repository_id": 1390608717,
+  "source_branch": "codex/private-media-review-exporter-20261016",
+  "bounds": {
+    "max_artifacts": 8,
+    "max_archive_bytes_each": 250000000,
+    "max_total_archive_bytes": 900000000,
+    "max_zip_members_each": 50000,
+    "max_member_bytes": 128000000,
+    "max_uncompressed_bytes_each": 750000000,
+    "max_exports": 256,
+    "max_png_bytes": 32000000,
+    "max_png_pixels": 16777216,
+    "max_total_export_bytes": 250000000,
+    "max_ocr_bytes": 1000000
+  },
+  "draft_release": {
+    "tag": "private-qualification-review-20261016",
+    "name": "Private Arctic 1.2.1 qualification media review",
+    "draft": true,
+    "prerelease": false,
+    "public": false,
+    "human_review": "pending",
+    "release_acceptance": false
+  },
+  "artifacts": [
+    {
+      "lane": "installer-idle",
+      "run_id": 38874179588,
+      "run_attempt": 1,
+      "head_sha": "81f1fb2357f31e66200ced556ea56a4c253ef40f",
+      "head_branch": "codex/qualification-dispatch-20261010",
+      "workflow_id": 380362453,
+      "workflow_name": "Candidate installer restoration qualification",
+      "workflow_path": ".github/workflows/installer-candidate-20261009.yml",
+      "event": "push",
+      "artifact_id": 12033829931,
+      "artifact_name": "candidate-installer-restoration",
+      "archive_bytes": 1001204,
+      "archive_sha256": "06e44634f252c77ea7ba9eb07caf8d0fb62fc8d57c27ee87eedf8f08aac130a2",
+      "screening_inventory": "upload-screening.json",
+      "screening_scope": "Owned synthetic QEMU VM only; no host desktop, VM disks or credentials",
+      "archive_members": [
+        "capture-build.log",
+        "execution.json",
+        "host/host-execution.json",
+        "host/installer-host-transitions.json",
+        "host/installer-port.log.bounded-prefix.bin",
+        "host/installer-vt-away-0.png",
+        "host/installer-vt-away-1.png",
+        "host/installer-vt-away-2.png",
+        "host/qemu-installer-live.log.bounded-prefix.bin",
+        "host/serial.log",
+        "installer/baseline.png",
+        "installer/installer-provenance.json",
+        "installer/installer-report.json",
+        "installer/installer-state.json",
+        "installer/output-0-relocated.png",
+        "installer/output-0.png",
+        "installer/output-1.png",
+        "installer/output-2-relocated.png",
+        "installer/output-2.png",
+        "installer/serial-installer-report.json",
+        "installer/transport-manifest.json",
+        "installer/vt-0.png",
+        "installer/vt-1.png",
+        "installer/vt-2.png",
+        "installer-harness.log",
+        "provision.log",
+        "upload-screening.json",
+        "vm-base-image-id.txt",
+        "vm-prepared-image-id.txt"
+      ],
+      "exports": [
+        {
+          "member": "host/installer-vt-away-0.png",
+          "asset_name": "installer-idle-vt-away-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "host/installer-vt-away-1.png",
+          "asset_name": "installer-idle-vt-away-1.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "host/installer-vt-away-2.png",
+          "asset_name": "installer-idle-vt-away-2.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/baseline.png",
+          "asset_name": "installer-idle-baseline.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-0-relocated.png",
+          "asset_name": "installer-idle-output-0-relocated.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-0.png",
+          "asset_name": "installer-idle-output-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-1.png",
+          "asset_name": "installer-idle-output-1.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-2-relocated.png",
+          "asset_name": "installer-idle-output-2-relocated.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-2.png",
+          "asset_name": "installer-idle-output-2.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/vt-0.png",
+          "asset_name": "installer-idle-vt-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/vt-1.png",
+          "asset_name": "installer-idle-vt-1.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/vt-2.png",
+          "asset_name": "installer-idle-vt-2.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        }
+      ]
+    }
+  ]
+}

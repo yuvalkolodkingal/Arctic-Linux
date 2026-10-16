@@ -1,0 +1,46 @@
+name: Export pinned qualification media to a private draft
+
+on:
+  push:
+    branches: [codex/private-media-review-exporter-20261016]
+    paths: [.github/private-media-review-export-20261016.activate]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: private-media-review-export-20261016
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'yuvalkolodkingal/Arctic-Linux' &&
+      github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Install bounded image and OCR decoders
+        timeout-minutes: 8
+        run: |
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y python3-pil tesseract-ocr-eng tesseract-ocr-heb
+      - name: Verify pins, screen and export the declared private review set
+        timeout-minutes: 12
+        run: >-
+          python3 -B tools/private-media-review/export.py export
+          --manifest tools/private-media-review/manifest.json
+          --out "$RUNNER_TEMP/arctic-private-media-review"
+      - name: Create and verify the collaborator-only draft release
+        timeout-minutes: 5
+        run: >-
+          python3 -B tools/private-media-review/export.py publish-draft
+          --manifest tools/private-media-review/manifest.json
+          --out "$RUNNER_TEMP/arctic-private-media-review"
