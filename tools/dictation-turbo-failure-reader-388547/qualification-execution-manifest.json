@@ -1,0 +1,39 @@
+{
+  "execution_files": {
+    ".github/workflows/dictation-candidate-20261009.yml": "a2e4b9e7d95e0084b6983d02aded9e9a52a9302a1f1be84e185e70fa07143de3",
+    "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
+    "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
+    "tools/dictation-qualification/contract.py": "a526e8405a2f12aee4ce05d62a4e8599627650fd50d47a6515b62120491975c3",
+    "tools/dictation-qualification/guest_check.py": "956186832281d55c384349ce7f61f0cde6409a75e3c33f16d9fcade08ff139f8",
+    "tools/dictation-qualification/runner.py": "e1dca582167c5a855f84b839899e068fef99cc2f44a44ff8a7d2fe0c0190ec21",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
+  },
+  "fixture_decoder": {
+    "libsndfile": "1.2.2",
+    "pyarrow": "20.0.0",
+    "soundfile": "0.13.1"
+  },
+  "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
+  "hardware_profiles": [
+    "small-v2",
+    "turbo-q5-v3"
+  ],
+  "image": {
+    "archive_bytes": 1936459062,
+    "archive_sha256": "5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23",
+    "artifact_id": 12016177474,
+    "bytes": 1936271360,
+    "name": "Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330",
+    "run_id": 38823208615,
+    "sha256": "c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7",
+    "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228"
+  },
+  "ready": true,
+  "release_acceptance": false
+}
