@@ -38,6 +38,8 @@ ACTION_RESOLUTIONS = {
     'actions/upload-artifact': 'ea165f8d65b6e75b540449e92b4886f43607fa02',
 }
 JOB_LOG_MAX = 32 * 1024 * 1024
+API_JSON_MAX = 20 * 1024 * 1024
+COMMAND_STDOUT_MAX = 512 * 1024 * 1024
 ARTIFACT_ID = 12044990488
 ARTIFACT_NAME = 'native-candidate-qualification'
 ARTIFACT_BYTES = 47945673
@@ -214,10 +216,10 @@ def activation_guard():
 
 def api_endpoint(endpoint):
     require(type(endpoint) is str and re.fullmatch(r'[A-Za-z0-9_./?=&-]{1,256}', endpoint))
-    result = subprocess.run(['gh', 'api', endpoint], stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, timeout=60, check=False)
-    require(result.returncode == 0 and 0 < len(result.stdout) <= 20 * 1024 * 1024)
-    return strict_json(result.stdout, 20 * 1024 * 1024)
+    with tempfile.TemporaryDirectory(prefix='arctic-native-api-') as temp:
+        target = Path(temp) / 'response.json'
+        bounded_command_to_file(['gh', 'api', endpoint], target, API_JSON_MAX, 60)
+        return strict_json(target.read_bytes(), API_JSON_MAX)
 
 
 def api(path):
@@ -256,7 +258,7 @@ def validate_run(run, jobs):
 def bounded_command_to_file(argv, target, maximum, timeout_seconds=180):
     """Capture a fixed command without allowing stdout or stderr to grow unbounded."""
     require(type(argv) is list and argv and all(type(item) is str for item in argv)
-            and not target.exists() and 0 < maximum <= JOB_LOG_MAX
+            and not target.exists() and 0 < maximum <= COMMAND_STDOUT_MAX
             and type(timeout_seconds) is int and 1 <= timeout_seconds <= 300)
     process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                stderr=subprocess.PIPE, close_fds=True)
@@ -351,11 +353,10 @@ def validate_artifact(value):
 def download(target):
     checkpoint('download')
     require(not target.exists())
-    with target.open('xb') as output:
-        result = subprocess.run(
-            ['gh', 'api', REPO_API + '/actions/artifacts/' + str(ARTIFACT_ID) + '/zip'],
-            stdout=output, stderr=subprocess.PIPE, timeout=180, check=False)
-    require(result.returncode == 0 and target.stat().st_size == ARTIFACT_BYTES)
+    captured = bounded_command_to_file(
+        ['gh', 'api', REPO_API + '/actions/artifacts/' + str(ARTIFACT_ID) + '/zip'],
+        target, ARTIFACT_BYTES, 180)
+    require(captured == ARTIFACT_BYTES and target.stat().st_size == ARTIFACT_BYTES)
     with target.open('rb') as source:
         calculated = hashlib.file_digest(source, 'sha256').hexdigest()
     require(calculated == ARTIFACT_SHA256)

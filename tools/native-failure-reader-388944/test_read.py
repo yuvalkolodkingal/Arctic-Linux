@@ -4,6 +4,7 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import stat
 import sys
@@ -327,10 +328,58 @@ class SafeNativeReaderTests(unittest.TestCase):
                 reader.bounded_command_to_file(
                     [sys.executable, '-c', "import sys;sys.stdout.buffer.write(b'x'*4096)"],
                     root / 'oversize.log', 2048, 10)
+            self.assertLessEqual((root / 'oversize.log').stat().st_size, 2048)
             with self.assertRaises(RuntimeError):
                 reader.bounded_command_to_file(
                     [sys.executable, '-c', "import sys;sys.stderr.buffer.write(b'x'*70000);sys.stdout.write('x')"],
                     root / 'stderr.log', 2048, 10)
+            self.assertLessEqual((root / 'stderr.log').stat().st_size, 2048)
+
+    def test_artifact_download_enforces_cap_while_streaming_and_exact_size_hash(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            command = root / 'gh'
+            def writer(size):
+                command.write_text('#!/usr/bin/python3\nimport sys\nsys.stdout.buffer.write(b"x"*'
+                                   + str(size) + ')\n')
+                command.chmod(0o755)
+            exact = b'x' * 2048
+            writer(len(exact))
+            with mock.patch.dict(os.environ, {'PATH': str(root)}), \
+                    mock.patch.object(reader, 'ARTIFACT_BYTES', len(exact)), \
+                    mock.patch.object(reader, 'ARTIFACT_SHA256', hashlib.sha256(exact).hexdigest()):
+                target = root / 'exact.zip'
+                reader.download(target)
+                self.assertEqual(target.stat().st_size, len(exact))
+            writer(4096)
+            with mock.patch.dict(os.environ, {'PATH': str(root)}), \
+                    mock.patch.object(reader, 'ARTIFACT_BYTES', 2048), \
+                    self.assertRaises(RuntimeError):
+                target = root / 'oversize.zip'
+                reader.download(target)
+            self.assertLessEqual(target.stat().st_size, 2048)
+
+    def test_api_json_uses_bounded_streaming_for_stdout_and_stderr(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            command = root / 'gh'
+            command.write_text('#!/usr/bin/python3\nprint("{\\"sha\\":\\"abc\\"}")\n')
+            command.chmod(0o755)
+            with mock.patch.dict(os.environ, {'PATH': str(root)}), \
+                    mock.patch.object(reader, 'API_JSON_MAX', 1024):
+                self.assertEqual(reader.api_endpoint('repos/actions/example'), {'sha': 'abc'})
+            command.write_text('#!/usr/bin/python3\nimport sys\nsys.stdout.buffer.write(b"x"*2048)\n')
+            command.chmod(0o755)
+            with mock.patch.dict(os.environ, {'PATH': str(root)}), \
+                    mock.patch.object(reader, 'API_JSON_MAX', 1024), \
+                    self.assertRaises(RuntimeError):
+                reader.api_endpoint('repos/actions/example')
+            command.write_text('#!/usr/bin/python3\nimport sys\nsys.stderr.buffer.write(b"x"*70000);print("{}")\n')
+            command.chmod(0o755)
+            with mock.patch.dict(os.environ, {'PATH': str(root)}), \
+                    mock.patch.object(reader, 'API_JSON_MAX', 1024), \
+                    self.assertRaises(RuntimeError):
+                reader.api_endpoint('repos/actions/example')
 
     def test_action_commits_must_resolve_to_the_pinned_objects(self):
         def exact(endpoint):
