@@ -84,7 +84,7 @@ jobs:
               assert item.file_size >= 0 and item.compress_size >= 0
 
           def safe_text(raw, name, max_bytes, max_lines):
-              assert 0 < len(raw) <= max_bytes, f'Invalid text member size: {name}'
+              assert len(raw) <= max_bytes, f'Invalid text member size: {name}'
               text = raw.decode('utf-8', errors='strict')
               assert '\x00' not in text and not any(
                   ord(char) < 32 and char not in '\n\r\t' for char in text), f'Control byte in {name}'
@@ -150,6 +150,7 @@ jobs:
                       text = safe_text(archive.read(item), item.filename, 1_000_000, 50_000)
                       name = PurePosixPath(item.filename).name
                       if name == 'BUILD-INFO' or name in (IMAGE_NAME + '.sha256', IMAGE_NAME[:-4] + '.build-info'):
+                          assert text, f'Empty selected metadata member: {name}'
                           assert name not in selected
                           selected[name] = text
                   assert set(selected) == {
@@ -177,6 +178,7 @@ jobs:
                   assert sum(item.file_size for item in items) <= ARTIFACTS['receipt']['expanded_bytes']
                   safe_member(items[0])
                   raw = archive.read(items[0])
+                  assert raw, 'Empty producer receipt'
                   text = safe_text(raw, items[0].filename, 32_768, 500)
                   receipt = json.loads(text, object_pairs_hook=unique)
 
