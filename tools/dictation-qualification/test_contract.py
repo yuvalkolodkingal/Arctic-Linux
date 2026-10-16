@@ -265,7 +265,8 @@ class ContractControls(unittest.TestCase):
                         if row['id'] == 'cpu-hebrew-transcription-insertion')
         cpu['status'] = 'failed'
         for stage, substage in (
-                ('recording-state', 608), ('engine-profile', 704)):
+                ('language-selection', 412), ('recording-state', 608),
+                ('engine-profile', 704), ('transcribing-state', 1210)):
             with self.subTest(stage=stage):
                 changed = copy.deepcopy(cpu)
                 changed_gate = next(row for row in changed['gates']

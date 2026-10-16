@@ -163,11 +163,15 @@ GPU_FAILURE_STAGES = {
     'cpu-ready-screen': 214,
 }
 FAILURE_SUBSTAGES = {
+    TRANSCRIPTION_FAILURE_STAGES['language-selection']: frozenset(
+        {401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414}),
     TRANSCRIPTION_FAILURE_STAGES['recording-state']: frozenset(
         {601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612}),
     TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
     TRANSCRIPTION_FAILURE_STAGES['transcribing-state']: frozenset(
         {1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212}),
+    GPU_FAILURE_STAGES['vulkan-payload-integrity']: frozenset(
+        {2031, 2032, 2033, 2034, 2035, 2036, 2037}),
 }
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
