@@ -98,7 +98,8 @@ OBSERVATIONS = {
     'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
-    'failure_stage', 'pre_activation_engine_count', 'resident_rss_bytes',
+    'failure_stage', 'failure_substage', 'failure_returncode',
+    'pre_activation_engine_count', 'resident_rss_bytes',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 TRANSCRIPTION_FAILURE_STAGES = {
@@ -162,6 +163,10 @@ GPU_FAILURE_STAGES = {
     'cpu-recovery-selection': 212,
     'cpu-ready-status': 213,
     'cpu-ready-screen': 214,
+}
+FAILURE_SUBSTAGES = {
+    TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
+    GPU_FAILURE_STAGES['initial-vulkan-setup']: frozenset({2021, 2022, 2023, 2024}),
 }
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
@@ -363,6 +368,19 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
               and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
                                  | {'microphone-disconnect-error'})):
             require(False, 'gate-failure-stage-missing')
+        substage = observed.get('failure_substage')
+        if substage is not None:
+            require(type(substage) is int
+                    and observed.get('failure_stage') in FAILURE_SUBSTAGES
+                    and substage in FAILURE_SUBSTAGES[observed['failure_stage']],
+                    'gate-failure-substage-value')
+        returncode = observed.get('failure_returncode')
+        if returncode is not None:
+            require(type(returncode) is int and 1 <= returncode <= 255
+                    and observed.get('failure_stage') ==
+                        GPU_FAILURE_STAGES['initial-vulkan-setup']
+                    and substage == 2022,
+                    'gate-failure-returncode-scope')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value

@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -91,7 +91,7 @@ class MicrophoneIsolationUnavailable(Invalid):
 class TranscriptionStageFailure(Invalid):
     """Transcript-free projection of one fixed transcription operation."""
 
-    def __init__(self, stage, label):
+    def __init__(self, stage, label, substage=None):
         require(type(stage) is str and stage in TRANSCRIPTION_FAILURE_STAGES,
                 'unknown-transcription-failure-stage')
         require(type(label) is str and label in ERROR_LABELS,
@@ -99,6 +99,10 @@ class TranscriptionStageFailure(Invalid):
         super().__init__()
         self.failure_stage = TRANSCRIPTION_FAILURE_STAGES[stage]
         self.error_label = label
+        require(substage is None or (type(substage) is int
+                and substage in FAILURE_SUBSTAGES.get(self.failure_stage, ())),
+                'unknown-transcription-failure-substage')
+        self.failure_substage = substage
 
 
 class MicrophoneStageFailure(Invalid):
@@ -117,7 +121,7 @@ class MicrophoneStageFailure(Invalid):
 class GpuStageFailure(Invalid):
     """Transcript-free projection of one fixed GPU recovery operation."""
 
-    def __init__(self, stage, label):
+    def __init__(self, stage, label, substage=None, returncode=None):
         require(type(stage) is str and stage in GPU_FAILURE_STAGES,
                 'unknown-gpu-failure-stage')
         require(type(label) is str and label in ERROR_LABELS,
@@ -125,6 +129,14 @@ class GpuStageFailure(Invalid):
         super().__init__()
         self.failure_stage = GPU_FAILURE_STAGES[stage]
         self.error_label = label
+        require(substage is None or (type(substage) is int
+                and substage in FAILURE_SUBSTAGES.get(self.failure_stage, ())),
+                'unknown-gpu-failure-substage')
+        require(returncode is None or (type(returncode) is int
+                and 1 <= returncode <= 255 and substage == 2022),
+                'unknown-gpu-failure-returncode')
+        self.failure_substage = substage
+        self.failure_returncode = returncode
 
 def mark_collector_setup(stage):
     """Record only one source-owned setup stage; never retain failure material."""
@@ -583,6 +595,11 @@ class Checker:
                                GpuStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
+                if type(error) in (TranscriptionStageFailure, GpuStageFailure):
+                    if error.failure_substage is not None:
+                        observations['failure_substage'] = error.failure_substage
+                if type(error) is GpuStageFailure and error.failure_returncode is not None:
+                    observations['failure_returncode'] = error.failure_returncode
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
             result['observations'] = observations
             if type(error) is MicrophoneIsolationUnavailable:
@@ -946,6 +963,7 @@ class Checker:
         return owned[0].get('is_focused') is True and owned[0].get('is_visible') is True
 
     def capture_link(self):
+        self._capture_engine = None
         engines = self.engines()
         if len(engines) != 1:
             self._wait_last_graph = (False, False, False, False, False)
@@ -961,7 +979,10 @@ class Checker:
         source = any(row.get('type') == 'PipeWire:Interface:Node'
                      and row.get('id') == self.source for row in objects)
         self._wait_last_graph = (unchanged, bool(owned), bool(captures), source, linked)
-        return unchanged and linked
+        accepted = unchanged and linked
+        if accepted:
+            self._capture_engine = engines[0]
+        return accepted
 
     def play(self, sample):
         self.audio = self.root / 'fixture.wav'
@@ -1107,14 +1128,7 @@ class Checker:
         # then pin the exact official process and binary.  A persistent
         # missing, duplicate, changed or unlinked daemon still fails the
         # capture-link stage; a wrong binary still fails engine-profile.
-        def engine_profile():
-            _pid, _ticks, binary = self.engine()
-            cpu_key = 'avx2' if self.profile_id == 'turbo-q5-v3' else 'cpu'
-            require(binary == PAYLOAD / self.names[cpu_key]
-                    and sha(binary) == self.assets[cpu_key]['sha256'],
-                    'cpu-upstream-daemon-profile-pin')
-            return cpu_key
-        cpu_key = self.transcription_stage('engine-profile', engine_profile)
+        cpu_key = self.transcription_stage('engine-profile', self.checked_engine_profile)
         self.transcription_stage('fixture-play-start', lambda: self.play(sample))
         self.transcription_stage('fixture-playback', lambda: require(
             self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
@@ -1163,6 +1177,24 @@ class Checker:
             return item
         item = self.transcription_stage('sample-record', record_sample)
         return item
+
+    def checked_engine_profile(self):
+        """Pin the exact process already authenticated by capture_link()."""
+        cpu_key = {'small-v2': 'cpu', 'turbo-q5-v3': 'avx2'}.get(self.profile_id)
+        if (cpu_key is None or type(self.names.get(cpu_key)) is not str
+                or type(self.assets.get(cpu_key)) is not dict):
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 701)
+        engine = getattr(self, '_capture_engine', None)
+        if (type(engine) is not tuple or len(engine) != 3
+                or type(engine[0]) is not int or type(engine[1]) is not int
+                or not isinstance(engine[2], Path)):
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 702)
+        _pid, _ticks, binary = engine
+        if binary != PAYLOAD / self.names[cpu_key]:
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 703)
+        if sha(binary) != self.assets[cpu_key]['sha256']:
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 704)
+        return cpu_key
 
     def samples(self, language):
         def selected_rows():
@@ -1469,11 +1501,25 @@ class Checker:
 
     def initial_vulkan_setup(self):
         """Run the setup proof without an unrelated resident CPU model."""
-        self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
+        try:
+            self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            raise GpuStageFailure(
+                'initial-vulkan-setup', caught_error_label(error), 2021) from None
         complete = False
         try:
-            result = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                          str(SETUP), '--backend', 'vulkan'], 750)
+            try:
+                result = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                              str(SETUP), '--backend', 'vulkan'], 750, check=False)
+            except subprocess.TimeoutExpired:
+                raise GpuStageFailure('initial-vulkan-setup', 'timeout', 2023) from None
+            except (OSError, ValueError, KeyError, TypeError) as error:
+                raise GpuStageFailure(
+                    'initial-vulkan-setup', caught_error_label(error), 2024) from None
+            if result.returncode != 0:
+                code = result.returncode if 1 <= result.returncode <= 255 else 255
+                raise GpuStageFailure(
+                    'initial-vulkan-setup', 'invalid', 2022, code)
             complete = True
             return result
         finally:

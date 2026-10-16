@@ -186,7 +186,6 @@ class ContractControls(unittest.TestCase):
         report['status'] = 'failed'
         self.assertEqual(c.validate(report, report['context'],
                                     fixture_manifest=FIXTURES)['status'], 'failed')
-
         missing = copy.deepcopy(report)
         next(g for g in missing['gates'] if g['id'] == gate['id'])['observations'] = {}
         with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-missing$'):
@@ -233,6 +232,36 @@ class ContractControls(unittest.TestCase):
             c.validate(report, report['context'], fixture_manifest=FIXTURES)
         gate['observations'] = {}
         self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+
+    def test_failure_substages_and_setup_returncode_are_closed_and_scoped(self):
+        report = synthetic('online-installed')
+        gate = next(gate for gate in report['gates'] if gate['id'] == c.MODERN_GPU_GATE)
+        gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                    observations={
+                        'failure_stage': c.GPU_FAILURE_STAGES['initial-vulkan-setup'],
+                        'failure_substage': 2022, 'failure_returncode': 1})
+        report['status'] = 'failed'
+        self.assertEqual(c.validate(report, report['context'],
+                                    fixture_manifest=FIXTURES)['status'], 'failed')
+        for key, value, code in (
+                ('failure_substage', 9999, 'gate-failure-substage-value'),
+                ('failure_returncode', 0, 'gate-failure-returncode-scope')):
+            changed = copy.deepcopy(report)
+            next(row for row in changed['gates'] if row['id'] == gate['id'])[
+                'observations'][key] = value
+            with self.assertRaisesRegex(c.Invalid, '^' + code + '$'):
+                c.validate(changed, changed['context'], fixture_manifest=FIXTURES)
+
+        cpu = synthetic('online-installed')
+        cpu_gate = next(row for row in cpu['gates']
+                        if row['id'] == 'cpu-hebrew-transcription-insertion')
+        cpu_gate.update(status='failed', code='gate-' + cpu_gate['id'] + '-invalid',
+                        observations={
+                            'failure_stage': c.TRANSCRIPTION_FAILURE_STAGES['engine-profile'],
+                            'failure_substage': 704})
+        cpu['status'] = 'failed'
+        self.assertEqual(c.validate(cpu, cpu['context'],
                                     fixture_manifest=FIXTURES)['status'], 'failed')
 
     def test_failed_microphone_gate_requires_its_own_bounded_stage(self):
