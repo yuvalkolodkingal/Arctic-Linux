@@ -92,7 +92,14 @@ the isolated VM. After the installer's normal cleanup unmounts its target, the
 reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
-drops permanently to UID 1000 for scene work. After observing the exact
+drops permanently to UID 1000 for scene work. It opens the one already-proved
+root-owned virtio channel before that drop, passes only that held descriptor
+through `runuser`, and the non-root helper verifies that the inherited device
+identity still matches the fixed named character device before using it. The
+helper also revalidates the exact graphical environment selected by the root
+launcher instead of racing a second loginctl and `/proc` discovery. This keeps
+scene bootstrap independent of a second uaccess open or session discovery
+during the VT transition without broadening device access. After observing the exact
 candidate's animated greeting, the host sends one empty command terminator. Its
 3D renderer deliberately leaves that single ordinary byte queued for Fish,
 which completes the empty command and establishes its line editor while the

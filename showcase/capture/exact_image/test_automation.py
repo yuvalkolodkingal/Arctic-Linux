@@ -4,6 +4,7 @@ import unittest
 import json
 import os
 import shlex
+import stat
 import subprocess
 import types
 from pathlib import Path
@@ -1640,8 +1641,7 @@ class GuestAutomation(unittest.TestCase):
                 self.closed = True
 
         channel = Channel()
-        waits = iter([(account, 2, {"PATH": "/usr/bin:/bin"}), channel,
-                      c.Invalid("private transcript and exception text")])
+        waits = iter([c.Invalid("private transcript and exception text")])
 
         def wait(*_args, **_kwargs):
             value = next(waits)
@@ -1651,11 +1651,68 @@ class GuestAutomation(unittest.TestCase):
 
         with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
              mock.patch.object(unattended.pwd, "getpwuid", return_value=account), \
+             mock.patch.object(unattended, "Channel", return_value=channel), \
+             mock.patch.object(unattended, "_inherited_graphical_environment",
+                               return_value=(account, {"PATH": "/usr/bin:/bin"})), \
              mock.patch.object(unattended, "_wait", side_effect=wait):
             with self.assertRaisesRegex(c.Invalid, "private transcript"):
-                unattended.installed_scenes(3600)
+                unattended.installed_scenes(3600, 73)
         self.assertEqual(channel.rows, [c.SCENE_FAILURE_PREFIX + "dictationsetup"])
         self.assertTrue(channel.closed)
+
+    def test_inherited_channel_descriptor_must_be_the_exact_protected_device(self):
+        protected = types.SimpleNamespace(st_mode=stat.S_IFCHR | 0o660, st_uid=0,
+                                          st_dev=5, st_ino=9, st_rdev=7)
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.Path, "resolve", return_value=Path("/dev/fixed")), \
+             mock.patch.object(unattended.Path, "lstat", return_value=protected), \
+             mock.patch.object(unattended.os, "fstat", return_value=protected):
+            channel = unattended.Channel(600, require_nonroot=True, descriptor=73)
+        self.assertEqual(channel.fd, 73)
+
+        changed = types.SimpleNamespace(**{**protected.__dict__, "st_ino": 10})
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.Path, "resolve", return_value=Path("/dev/fixed")), \
+             mock.patch.object(unattended.Path, "lstat", return_value=protected), \
+             mock.patch.object(unattended.os, "fstat", return_value=changed), \
+             self.assertRaisesRegex(c.Invalid, "inherited private channel"):
+            unattended.Channel(600, require_nonroot=True, descriptor=73)
+
+    def test_unattended_runner_preserves_only_explicit_fixed_descriptors(self):
+        completed = types.SimpleNamespace(returncode=0, stdout=b"")
+        with mock.patch.object(unattended.subprocess, "run", return_value=completed) as invoke:
+            unattended._run(["/usr/bin/true"], pass_fds=(73,))
+        self.assertEqual(invoke.call_args.kwargs["pass_fds"], (73,))
+        for descriptors in ([73], (73, 73), (2,), (True,)):
+            with self.subTest(descriptors=descriptors), self.assertRaisesRegex(
+                    c.Invalid, "inherited descriptors"):
+                unattended._run(["/usr/bin/true"], pass_fds=descriptors)
+
+    def test_scene_helper_revalidates_the_root_selected_graphical_environment(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name=c.CONTROLLER["account"]["username"],
+                                        pw_dir="/home/" + c.CONTROLLER["account"]["username"])
+        runtime = "/run/user/1000"
+        environment = {
+            "PATH": "/usr/bin:/bin", "HOME": account.pw_dir,
+            "USER": account.pw_name, "LOGNAME": account.pw_name, "LC_ALL": "C",
+            "XDG_RUNTIME_DIR": runtime, "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + runtime + "/bus",
+            "WAYLAND_DISPLAY": "wayland-1",
+        }
+        with mock.patch.object(unattended.pwd, "getpwnam", return_value=account), \
+             mock.patch.dict(unattended.os.environ, environment, clear=True):
+            actual_account, actual = unattended._inherited_graphical_environment(account.pw_name)
+        self.assertEqual(actual_account, account)
+        self.assertEqual(actual, environment)
+
+        for key, value in (("XDG_RUNTIME_DIR", "/run/user/9"),
+                           ("WAYLAND_DISPLAY", "../wayland-1"),
+                           ("USER", "other")):
+            changed = dict(environment, **{key: value})
+            with self.subTest(key=key), \
+                 mock.patch.object(unattended.pwd, "getpwnam", return_value=account), \
+                 mock.patch.dict(unattended.os.environ, changed, clear=True), \
+                 self.assertRaisesRegex(c.Invalid, "inherited graphical environment"):
+                unattended._inherited_graphical_environment(account.pw_name)
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
         account = types.SimpleNamespace(pw_uid=os.geteuid(), pw_name="liveuser",
@@ -1698,6 +1755,15 @@ class GuestAutomation(unittest.TestCase):
                        "WAYLAND_DISPLAY": "wayland-1"}
         calls = []
 
+        class Channel:
+            fd = 73
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        root_channel = Channel()
+
         def run(argv, **kwargs):
             calls.append((argv, kwargs))
             return types.SimpleNamespace(returncode=0, stdout=b"")
@@ -1705,6 +1771,7 @@ class GuestAutomation(unittest.TestCase):
         with mock.patch.object(unattended.os, "geteuid", return_value=0), \
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, environment)), \
+             mock.patch.object(unattended, "Channel", return_value=root_channel), \
              mock.patch.object(unattended, "_run", side_effect=run):
             unattended.installed_root_launch(600)
         self.assertEqual(calls[0][0], ["/usr/bin/chvt", "2"])
@@ -1712,7 +1779,11 @@ class GuestAutomation(unittest.TestCase):
                          ["/usr/sbin/runuser", "-u", c.CONTROLLER["account"]["username"],
                           "--", "/usr/bin/env"])
         self.assertIn("installed-scenes", calls[1][0])
+        self.assertIn("--channel-fd", calls[1][0])
+        self.assertEqual(calls[1][0][calls[1][0].index("--channel-fd") + 1], "73")
+        self.assertEqual(calls[1][1]["pass_fds"], (73,))
         self.assertNotIn("/usr/bin/chvt", calls[1][0])
+        self.assertTrue(root_channel.closed)
 
     def test_completed_install_remounts_only_unique_fixed_disk_root_subvolume(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -47,14 +47,25 @@ class InstallerIpcFailure(c.Invalid):
 
 
 class Channel:
-    def __init__(self, timeout: int, *, require_nonroot: bool):
+    def __init__(self, timeout: int, *, require_nonroot: bool, descriptor=None):
         path = (Path("/dev/virtio-ports") / c.VM_CHANNEL).resolve(strict=True)
         info = path.lstat()
         c.require(stat.S_ISCHR(info.st_mode) and info.st_uid == 0
                   and not info.st_mode & 0o002
                   and ((os.geteuid() > 0) == require_nonroot),
                   "unattended private channel differs")
-        self.fd = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        if descriptor is None:
+            self.fd = os.open(path, os.O_RDWR | getattr(os, "O_NOFOLLOW", 0))
+        else:
+            c.require(type(descriptor) is int and descriptor >= 3,
+                      "inherited private channel descriptor differs")
+            inherited = os.fstat(descriptor)
+            c.require(stat.S_ISCHR(inherited.st_mode) and inherited.st_uid == 0
+                      and not inherited.st_mode & 0o002
+                      and (inherited.st_dev, inherited.st_ino, inherited.st_rdev) ==
+                          (info.st_dev, info.st_ino, info.st_rdev),
+                      "inherited private channel descriptor differs")
+            self.fd = descriptor
         self.timeout = timeout
         self.buffer = bytearray()
 
@@ -121,13 +132,16 @@ class InstallProgress:
             self.emit(self.stage, "failed", failure_reason)
 
 
-def _run(argv, *, env=None, timeout=30, maximum=256_000, check=True):
+def _run(argv, *, env=None, timeout=30, maximum=256_000, check=True, pass_fds=()):
     c.require(type(argv) is list and argv and all(type(item) is str for item in argv),
               "unattended command differs")
+    c.require(type(pass_fds) is tuple and len(pass_fds) == len(set(pass_fds))
+              and all(type(fd) is int and fd >= 3 for fd in pass_fds),
+              "unattended inherited descriptors differ")
     try:
         result = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, env=env, timeout=timeout,
-                                check=False)
+                                check=False, pass_fds=pass_fds)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise c.Invalid("unattended command failed") from error
     c.require(len(result.stdout) <= maximum and (not check or result.returncode == 0),
@@ -195,6 +209,22 @@ def _graphical_environment(username: str):
     environment = {"PATH": "/usr/bin:/bin", "HOME": account.pw_dir, "USER": username,
                    "LOGNAME": username, "LC_ALL": "C", **candidates[0]}
     return account, sessions[0][1], environment
+
+
+def _inherited_graphical_environment(username: str):
+    """Revalidate the exact environment already selected by the root launcher."""
+    account = pwd.getpwnam(username)
+    runtime = "/run/user/" + str(account.pw_uid)
+    expected = {
+        "PATH": "/usr/bin:/bin", "HOME": account.pw_dir, "USER": username,
+        "LOGNAME": username, "LC_ALL": "C", "XDG_RUNTIME_DIR": runtime,
+        "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + runtime + "/bus",
+    }
+    c.require(account.pw_uid == c.CONTROLLER["account"]["uid"]
+              and all(os.environ.get(key) == value for key, value in expected.items())
+              and re.fullmatch(r"wayland-[0-9]+", os.environ.get("WAYLAND_DISPLAY", "")),
+              "inherited graphical environment differs")
+    return account, {**expected, "WAYLAND_DISPLAY": os.environ["WAYLAND_DISPLAY"]}
 
 
 def _as_user(account, environment, argv, *, timeout=30, check=True):
@@ -611,16 +641,13 @@ def _scene_failure(channel, stage: str):
             pass
 
 
-def installed_scenes(timeout: int):
+def installed_scenes(timeout: int, channel_fd: int):
     c.require(os.geteuid() > 0 and pwd.getpwuid(os.geteuid()).pw_name == USERNAME,
               "installed automation account differs")
-    channel = None
+    channel = Channel(timeout, require_nonroot=True, descriptor=channel_fd)
     stage = "bootstrap"
     try:
-        account, vt, environment = _wait(lambda: _graphical_environment(USERNAME), 300,
-                                         "installed graphical session unavailable")
-        channel = _wait(lambda: Channel(timeout, require_nonroot=True), 60,
-                        "installed channel ACL unavailable")
+        account, environment = _inherited_graphical_environment(USERNAME)
         stage = "dictationsetup"
         _wait(lambda: _dictation_ready(environment), min(timeout, 1800),
               "online dictation did not become ready")
@@ -640,8 +667,7 @@ def installed_scenes(timeout: int):
         _scene_failure(channel, stage)
         raise
     finally:
-        if channel is not None:
-            channel.close()
+        channel.close()
 
 
 def installed_root_launch(timeout: int):
@@ -650,40 +676,40 @@ def installed_root_launch(timeout: int):
     account, vt, environment = _wait(lambda: _graphical_environment(USERNAME), 300,
                                      "installed graphical session unavailable")
     _run(["/usr/bin/chvt", str(vt)], timeout=15)
-    argv = ["/usr/sbin/runuser", "-u", USERNAME, "--", "/usr/bin/env"]
-    argv.extend(f"{key}={value}" for key, value in sorted(environment.items()))
-    argv.extend(["/usr/bin/python3", str(Path(__file__).resolve()), "installed-scenes",
-                 "--timeout", str(timeout)])
+    channel = Channel(timeout, require_nonroot=False)
     try:
-        _run(argv, timeout=timeout + 60, maximum=32_768)
+        argv = ["/usr/sbin/runuser", "-u", USERNAME, "--", "/usr/bin/env"]
+        argv.extend(f"{key}={value}" for key, value in sorted(environment.items()))
+        argv.extend(["/usr/bin/python3", str(Path(__file__).resolve()), "installed-scenes",
+                     "--timeout", str(timeout), "--channel-fd", str(channel.fd)])
+        _run(argv, timeout=timeout + 60, maximum=32_768, pass_fds=(channel.fd,))
     except Exception:
-        # The non-root helper normally reports its exact fixed stage. This
-        # fallback covers failure before it can open the ACL-protected port.
-        fallback = None
-        try:
-            fallback = Channel(60, require_nonroot=False)
-            _scene_failure(fallback, "bootstrap")
-        except (c.Invalid, OSError):
-            pass
-        finally:
-            if fallback is not None:
-                fallback.close()
+        # The non-root helper normally reports its fixed stage over this same
+        # inherited channel. This fallback covers failure before Python starts.
+        _scene_failure(channel, "bootstrap")
         raise
+    finally:
+        channel.close()
 
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__, allow_abbrev=False)
     parser.add_argument("mode", choices=("live-install", "installed-root-launch", "installed-scenes"))
     parser.add_argument("--timeout", type=int, default=3600)
+    parser.add_argument("--channel-fd", type=int)
     args = parser.parse_args(argv)
     try:
         c.require(60 <= args.timeout <= 7200, "unattended timeout differs")
         if args.mode == "live-install":
+            c.require(args.channel_fd is None, "live installer channel descriptor differs")
             live_install(args.timeout)
         elif args.mode == "installed-root-launch":
+            c.require(args.channel_fd is None, "root launcher channel descriptor differs")
             installed_root_launch(args.timeout)
         else:
-            installed_scenes(args.timeout)
+            c.require(type(args.channel_fd) is int and args.channel_fd >= 3,
+                      "installed scenes channel descriptor differs")
+            installed_scenes(args.timeout, args.channel_fd)
         return 0
     except (c.Invalid, OSError, UnicodeError, KeyError, ValueError) as error:
         print("unattended showcase failed: " + str(error), file=os.sys.stderr)

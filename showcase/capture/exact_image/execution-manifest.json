@@ -39,7 +39,7 @@
     "showcase/capture/exact_image/contract.py": "77bfce57bdce3b3e993694a9541dabc195464c25f7351410600d02a4f7dd97dc",
     "showcase/capture/exact_image/guest.py": "773244495d0026be76cd336a9bf4fc0d31b61afe30f8ed6d73f23ca907633a2c",
     "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
-    "showcase/capture/exact_image/unattended.py": "7517220dd7d54bb8e281bf39fe230bb0013b6db58da880d314c6d6a837cd9dc2",
+    "showcase/capture/exact_image/unattended.py": "3b3fdb6368db930baf513cd0fa795584b1460139c3ed7f0d12fb5f7bc50cba77",
     "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
