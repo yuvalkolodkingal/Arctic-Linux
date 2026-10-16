@@ -99,13 +99,68 @@ class DirectVoxtypeControls(unittest.TestCase):
         checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
         def command(argv, timeout=20, check=True, **_kwargs):
             calls.append(tuple(argv))
-            return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+            return SimpleNamespace(stdout=(b'000' if argv[:1] == ['curl'] else b''),
+                                   stderr=b'',
+                                   returncode=(7 if argv[:1] == ['curl'] else 0))
         with patch.object(guest, 'run', side_effect=command), \
                 self.assertRaisesRegex(guest.Invalid, '^bad-prefetch$'):
             checker.prepare_vulkan_offline_boundary()
         self.assertIn(('/usr/bin/nmcli', 'networking', 'off'), calls)
+        self.assertTrue(any(argv[:2] == ('curl', '--noproxy') for argv in calls))
         self.assertFalse(any(argv[-2:] in (('--backend', 'vulkan'), ('--backend', 'cpu'))
                              for argv in calls))
+
+    def test_failed_prefetch_prioritizes_failed_network_disable_without_setup(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=b'', stderr=b'', returncode=4)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^vulkan-boundary-network-disable$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(calls, [('/usr/bin/nmcli', 'networking', 'off')])
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_failed_prefetch_prioritizes_reachable_network_without_setup(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'recovery'}
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            if argv == ['/usr/bin/nmcli', 'networking', 'off']:
+                return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+            if argv[:2] == ['curl', '--noproxy']:
+                return SimpleNamespace(stdout=b'200', stderr=b'', returncode=0)
+            raise AssertionError(argv)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^outside-network-response$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(calls[0], ('/usr/bin/nmcli', 'networking', 'off'))
+        self.assertEqual(calls[1][:2], ('curl', '--noproxy'))
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
+
+    def test_unexpected_prefetch_interrupt_is_preserved_after_isolation_attempt(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        interrupt = KeyboardInterrupt()
+        checker.prefetch_vulkan_cache = Mock(side_effect=interrupt)
+        calls = []
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=b'', stderr=b'', returncode=5)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaises(KeyboardInterrupt) as caught:
+            checker.prepare_vulkan_offline_boundary()
+        self.assertIs(caught.exception, interrupt)
+        self.assertEqual(calls, [('/usr/bin/nmcli', 'networking', 'off')])
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
 
     def test_connected_prefetch_authenticates_cache_without_executing_setup(self):
         checker = self.checker()

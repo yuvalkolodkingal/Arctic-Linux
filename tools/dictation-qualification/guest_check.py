@@ -1004,18 +1004,36 @@ class Checker:
         require(self.profile_id == 'turbo-q5-v3'
                 and self.context['phase'] in ('online-installed', 'recovery'),
                 'vulkan-boundary-scope')
-        network_off = None
+
+        def isolate():
+            network_off = run(['/usr/bin/nmcli', 'networking', 'off'],
+                              20, check=False)
+            require(network_off.returncode == 0,
+                    'vulkan-boundary-network-disable')
+            return self.offline()
+
         try:
             # The connected portion only downloads and authenticates bytes.
             # It never invokes VoxType, setup, recording or transcription.
             self.prefetch_vulkan_cache()
-        finally:
-            # Even a failed preparation must not leave an externally reachable
-            # VM available to later collector cleanup or diagnostics.
-            network_off = run(['/usr/bin/nmcli', 'networking', 'off'],
-                              20, check=False)
-        require(network_off.returncode == 0, 'vulkan-boundary-network-disable')
-        isolated = self.offline()
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError):
+            # A preparation failure remains the reported cause only after the
+            # disposable guest proves isolation. A failed disconnect/proof is
+            # more immediate and therefore fails here before the original is
+            # re-raised. Neither path can reach setup below.
+            isolate()
+            raise
+        except BaseException:
+            # Preserve interrupts and other unexpected control flow, while
+            # still making a best effort to isolate the disposable guest. Do
+            # not let a second exception hide the original BaseException.
+            try:
+                isolate()
+            except BaseException:
+                pass
+            raise
+        isolated = isolate()
         # Only after the HTTP 000 proof may official setup run its local
         # Vulkan probe (including its silence.wav transcription) from cache.
         self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'], check=False)
