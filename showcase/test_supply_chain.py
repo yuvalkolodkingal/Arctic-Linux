@@ -89,7 +89,16 @@ class SupplyChainTest(unittest.TestCase):
         self.assertIn("--draft=false", publish)
         self.assertIn("fetch-urls", publish)
         self.assertIn("verify-release", publish)
-        self.assertIn("--cleanup-tag", publish)
+        self.assertIn("--cleanup-tag", (ROOT / "publish_video.py").read_text())
+        self.assertRegex(publish, r"(?m)^permissions:\n  actions: read\n  contents: write$")
+        self.assertIn("require-absent", publish)
+        self.assertIn("cleanup-release", publish)
+        self.assertLess(publish.index("trap cleanup_failed_publication EXIT"),
+                        publish.index("gh release create"))
+        self.assertLess(publish.index("creation_attempted=true"),
+                        publish.index("gh release create"))
+        self.assertNotIn("|| true", publish)
+        self.assertNotIn("HTTP 404", publish)
 
 
 if __name__ == "__main__":

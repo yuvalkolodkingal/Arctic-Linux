@@ -4,6 +4,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read
   contents: write
 
 concurrency:
@@ -69,34 +70,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2> "$RUNNER_TEMP/release-check.err"; then
-            echo "release already exists: $TAG" >&2
-            exit 1
-          fi
-          grep -q 'HTTP 404' "$RUNNER_TEMP/release-check.err"
-          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2> "$RUNNER_TEMP/tag-check.err"; then
-            echo "tag already exists: $TAG" >&2
-            exit 1
-          fi
-          grep -q 'HTTP 404' "$RUNNER_TEMP/tag-check.err"
+          python showcase/publish_video.py require-absent \
+            --endpoint "repos/$GITHUB_REPOSITORY/releases/tags/$TAG"
+          python showcase/publish_video.py require-absent \
+            --endpoint "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG"
 
-          published=false
+          creation_attempted=false
           cleanup_failed_publication() {
             status=$?
-            if [[ "$status" -ne 0 && "$published" = true ]]; then
-              gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes || true
+            trap - EXIT
+            if [[ "$status" -ne 0 && "$creation_attempted" = true ]]; then
+              if ! python showcase/publish_video.py cleanup-release --tag "$TAG"; then
+                echo "failed to prove incomplete release and tag cleanup" >&2
+                exit 1
+              fi
             fi
             exit "$status"
           }
           trap cleanup_failed_publication EXIT
 
+          creation_attempted=true
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Arctic Linux 1.2.1 showcase" \
             --notes-file showcase/release-notes-2026-10-16.md \
             --draft
-          published=true
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" \
             "$RUNNER_TEMP/publication/Arctic-Linux-Showcase-River-1080p.mp4" \
             "$RUNNER_TEMP/publication/Arctic-Linux-Showcase-Poster.png" \

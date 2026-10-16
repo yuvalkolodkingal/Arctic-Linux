@@ -53,6 +53,7 @@ EVIDENCE_NAMES = {
 EXPECTED_MEMBERS = set(PUBLIC_NAMES) | EVIDENCE_NAMES
 HEX40 = re.compile(r"[0-9a-f]{40}")
 HEX64 = re.compile(r"[0-9a-f]{64}")
+HTTP_STATUS = re.compile(rb"HTTP/\S+ ([1-5][0-9]{2})(?:\s|$)")
 
 
 def digest(path: Path) -> str:
@@ -71,6 +72,47 @@ def load_json(path: Path, label: str) -> dict:
     if not isinstance(value, dict):
         raise ValueError(f"{label} is not a JSON object")
     return value
+
+
+def require_github_absent(endpoint: str) -> None:
+    if not re.fullmatch(
+        rf"repos/{re.escape(REPOSITORY_SLUG)}/(?:releases/tags|git/ref/tags)/"
+        r"showcase-[a-z0-9.-]+",
+        endpoint,
+    ):
+        raise ValueError("GitHub absence endpoint is outside the showcase release namespace")
+    result = subprocess.run(
+        ["gh", "api", "--include", endpoint],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=120,
+    )
+    match = HTTP_STATUS.match(result.stdout)
+    if match and match.group(1) == b"404" and result.returncode != 0:
+        return
+    if match and match.group(1) == b"200" and result.returncode == 0:
+        raise ValueError(f"GitHub resource already exists: {endpoint}")
+    status = match.group(1).decode() if match else "unavailable"
+    raise ValueError(f"GitHub resource lookup failed closed (HTTP {status}): {endpoint}")
+
+
+def cleanup_github_release(tag: str) -> None:
+    if tag != RELEASE_TAG:
+        raise ValueError("cleanup tag is not the fixed showcase release tag")
+    subprocess.run(
+        ["gh", "release", "delete", tag, "--repo", REPOSITORY_SLUG,
+         "--cleanup-tag", "--yes"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False, timeout=120,
+    )
+    # The release command may lose its response after deleting only one remote
+    # object. Attempt the ref deletion independently, then prove both absent.
+    subprocess.run(
+        ["gh", "api", "--method", "DELETE",
+         f"repos/{REPOSITORY_SLUG}/git/refs/tags/{tag}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        check=False, timeout=120,
+    )
+    require_github_absent(f"repos/{REPOSITORY_SLUG}/releases/tags/{tag}")
+    require_github_absent(f"repos/{REPOSITORY_SLUG}/git/ref/tags/{tag}")
 
 
 def _safe_members(archive: zipfile.ZipFile) -> dict[str, zipfile.ZipInfo]:
@@ -380,6 +422,10 @@ def main() -> None:
     fetch.add_argument("--release", type=Path, required=True)
     fetch.add_argument("--manifest", type=Path, required=True)
     fetch.add_argument("--output", type=Path, required=True)
+    absent = subparsers.add_parser("require-absent")
+    absent.add_argument("--endpoint", required=True)
+    cleanup = subparsers.add_parser("cleanup-release")
+    cleanup.add_argument("--tag", required=True)
     args = parser.parse_args()
     try:
         if args.command == "stage":
@@ -397,6 +443,12 @@ def main() -> None:
         elif args.command == "verify-files":
             verify_downloaded(args.manifest, args.downloaded)
             print("release asset files verified")
+        elif args.command == "require-absent":
+            require_github_absent(args.endpoint)
+            print("GitHub resource is absent")
+        elif args.command == "cleanup-release":
+            cleanup_github_release(args.tag)
+            print("incomplete GitHub release and tag are absent")
         else:
             fetch_urls(args.release, args.manifest, args.output)
             print("public release asset URLs downloaded")

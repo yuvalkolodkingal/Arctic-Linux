@@ -9,6 +9,7 @@ The MP4 includes English captions. Separate SRT and WebVTT captions, chapter mar
 poster are attached. The narration was generated with ElevenLabs River and approved by a human
 listening review. The private narration source is not part of this public release.
 
-The release workflow admits only the reviewed MP4 and evidence archive, verifies all bound hashes,
-and downloads every published asset through both GitHub's release client and its public URL before
-the release is accepted.
+The release workflow admits the reviewed MP4 from its private evidence archive, verifies all bound
+hashes, and publishes only the MP4, poster, SRT and WebVTT captions, and chapter markers. It downloads
+every published asset through both GitHub's release client and its public URL before accepting the
+release.

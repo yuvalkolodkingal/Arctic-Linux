@@ -2,6 +2,7 @@ import copy
 import hashlib
 import json
 import shutil
+import subprocess
 import tempfile
 import unittest
 import zipfile
@@ -237,6 +238,52 @@ class PublishVideoTest(unittest.TestCase):
             publisher.verify_release(
                 release_path, stage / "publication-manifest.json", downloaded
             )
+
+    def test_github_absence_requires_structured_404(self):
+        endpoint = (
+            "repos/yuvalkolodkingal/Arctic-Linux/releases/tags/"
+            "showcase-2026-10-16"
+        )
+        cases = (
+            (subprocess.CompletedProcess([], 1, stdout=b"HTTP/2.0 404 Not Found\n", stderr=b"release not found\n"), None),
+            (subprocess.CompletedProcess([], 0, stdout=b"HTTP/2.0 200 OK\n", stderr=b""), "already exists"),
+            (subprocess.CompletedProcess([], 1, stdout=b"HTTP/2.0 500 Server Error\n", stderr=b""), "failed closed"),
+            (subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"network failure"), "failed closed"),
+        )
+        for completed, error in cases:
+            with self.subTest(error=error), mock.patch.object(
+                publisher.subprocess, "run", return_value=completed
+            ):
+                if error is None:
+                    publisher.require_github_absent(endpoint)
+                else:
+                    with self.assertRaisesRegex(ValueError, error):
+                        publisher.require_github_absent(endpoint)
+        with self.assertRaisesRegex(ValueError, "outside"):
+            publisher.require_github_absent("repos/example/private")
+
+    def test_cleanup_attempts_both_deletions_and_proves_both_absent(self):
+        missing = subprocess.CompletedProcess(
+            [], 1, stdout=b"HTTP/2.0 404 Not Found\n", stderr=b"not found\n"
+        )
+        attempts = [
+            subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"response lost"),
+            subprocess.CompletedProcess([], 1, stdout=b"", stderr=b"already absent"),
+            missing,
+            missing,
+        ]
+        with mock.patch.object(publisher.subprocess, "run", side_effect=attempts) as run:
+            publisher.cleanup_github_release(publisher.RELEASE_TAG)
+        self.assertEqual(run.call_count, 4)
+        self.assertEqual(run.call_args_list[0].args[0][1:3], ["release", "delete"])
+        self.assertEqual(run.call_args_list[1].args[0][1:4], ["api", "--method", "DELETE"])
+
+        failed = attempts[:2] + [
+            subprocess.CompletedProcess([], 1, stdout=b"HTTP/2.0 500 Error\n", stderr=b""),
+        ]
+        with mock.patch.object(publisher.subprocess, "run", side_effect=failed), \
+                self.assertRaisesRegex(ValueError, "failed closed"):
+            publisher.cleanup_github_release(publisher.RELEASE_TAG)
 
 
 if __name__ == "__main__":
