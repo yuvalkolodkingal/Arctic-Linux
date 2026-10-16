@@ -1,0 +1,19 @@
+{
+  "artifact": {
+    "bytes": 7433,
+    "id": 12035321161,
+    "name": "exact-image-showcase-failure-projection",
+    "sha256": "462f2ecd896135ccbe675a9dc2ed5a1a989ff9edf1271ed2974e7e3587a05f2e"
+  },
+  "contract_sha256": "652a71ff06e6747935a3292f90bdd687c20963056bd83d3bf3f560477ad9c256",
+  "reader_sha256": "2cf945e138ed3ce04d0f0a0eca60462e837852c570d6e001426619d05518c32e",
+  "reader_workflow_sha256": "0790685f25fe16b40c61d244826a71a88f2339adae28730df74f5c28d5ced444",
+  "ready": true,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "run_attempt": 1,
+  "run_id": 38873948934,
+  "schema": "arctic-showcase-failure-reader-v1",
+  "source_branch": "codex/showcase-exact-capture-20261014",
+  "source_sha": "ba44893bd3972c3055229758697981e7815737de",
+  "source_workflow": ".github/workflows/showcase-exact-capture-20261014.yml"
+}
