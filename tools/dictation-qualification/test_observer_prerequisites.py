@@ -1,7 +1,9 @@
 """Qualification-only resource and dependent-gate controls."""
+import hashlib
 import importlib.util
 from pathlib import Path
 from types import SimpleNamespace
+import tempfile
 import unittest
 from unittest import mock
 
@@ -61,6 +63,45 @@ class ObserverPrerequisiteControls(unittest.TestCase):
             mock.call(['systemctl', '--user', 'stop', 'voxtype.service']),
             mock.call(['systemctl', '--user', 'start', 'voxtype.service'], check=False),
         ])
+
+    def test_vulkan_payload_diagnostics_are_closed_and_exact(self):
+        data = b'signed-vulkan-test-payload'
+        asset = {'name': 'voxtype-vulkan', 'bytes': len(data),
+                 'sha256': hashlib.sha256(data).hexdigest()}
+        with tempfile.TemporaryDirectory() as temp, \
+                mock.patch.dict(guest.ASSETS, {'vulkan': asset}), \
+                mock.patch.object(guest, 'PAYLOAD', Path(temp) / 'payload'), \
+                mock.patch.object(guest, 'VULKAN_CACHE', Path(temp) / 'cache'):
+            guest.PAYLOAD.mkdir()
+            checker = self.checker()
+
+            with self.assertRaises(guest.GpuStageFailure) as absent:
+                checker.checked_vulkan_payload()
+            self.assertEqual((absent.exception.error_label,
+                              absent.exception.failure_substage), ('os-error', 2031))
+
+            def cache_only(path):
+                if path == guest.PAYLOAD / asset['name']:
+                    raise FileNotFoundError
+                return SimpleNamespace(st_mode=0o100755, st_uid=0, st_size=len(data))
+            with mock.patch.object(Path, 'lstat', autospec=True, side_effect=cache_only), \
+                    mock.patch.object(guest, 'sha', return_value=asset['sha256']), \
+                    self.assertRaises(guest.GpuStageFailure) as cached:
+                checker.checked_vulkan_payload()
+            self.assertEqual((cached.exception.error_label,
+                              cached.exception.failure_substage), ('os-error', 2032))
+
+            wrong = SimpleNamespace(st_mode=0o100755, st_uid=0, st_size=len(data) + 1)
+            with mock.patch.object(Path, 'lstat', autospec=True, return_value=wrong), \
+                    self.assertRaises(guest.GpuStageFailure) as wrong_size:
+                checker.checked_vulkan_payload()
+            self.assertEqual((wrong_size.exception.error_label,
+                              wrong_size.exception.failure_substage), ('invalid', 2035))
+
+            exact = SimpleNamespace(st_mode=0o100755, st_uid=0, st_size=len(data))
+            with mock.patch.object(Path, 'lstat', autospec=True, return_value=exact), \
+                    mock.patch.object(guest, 'sha', return_value=asset['sha256']):
+                self.assertIs(checker.checked_vulkan_payload(), True)
 
     def privacy_checker(self, phrase_count, prior_failed):
         checker = self.checker()

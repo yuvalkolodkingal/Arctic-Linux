@@ -75,7 +75,7 @@
     ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
     ".github/workflows/publish-qualified-20261008.yml": "6b37e65c482dacdd82946ab566c7231856f2ddaacccf137beb3409d9a491e981",
     ".github/workflows/release-reliability-candidate.yml": "fe2976577a154d72ec9a004abe1f946ef412d28edb240088ed1efa1991f9b7f5",
-    "tools/dictation-qualification/contract.py": "a526e8405a2f12aee4ce05d62a4e8599627650fd50d47a6515b62120491975c3",
+    "tools/dictation-qualification/contract.py": "c2c320ed140ee68db871f2b39abdd24aa17b7a2fcdd060501f0f6967d7e2ba8d",
     "tools/installer-qualification/active-contract.py": "461a2db35e964d24ade505706f1324c235efe7919c274e8604224a7c8145bacd",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",

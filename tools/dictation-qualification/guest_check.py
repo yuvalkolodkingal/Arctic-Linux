@@ -48,6 +48,7 @@ PACKAGED_BINDINGS = Path('/usr/share/arctic/mango/binds.conf')
 PAYLOAD = Path('/opt/arctic/voxtype/1.1.1')
 MODELS = Path('/opt/arctic/voxtype/models')
 SYSTEM = Path('/var/lib/arctic/dictation')
+VULKAN_CACHE = Path('/var/cache/arctic/voxtype/voxtype-1.1.1-linux-x86_64-vulkan')
 COLLECTOR_SETUP_STAGES = ('resource-limits', 'arguments', 'environment', 'context',
                           'source-integrity', 'integration', 'profile', 'hardware',
                           'report', 'desktop', 'workspace', 'journal', 'audit', 'execution')
@@ -996,6 +997,10 @@ class Checker:
                        start_new_session=True)
 
     def select(self, language=None, backend=None):
+        # A transcription gate retains only this closed progress marker if a
+        # supported language change fails.  It never retains command output,
+        # status text, paths, process IDs or transcript material.
+        self._selection_checkpoint = 'entry'
         changed = False
         if backend is not None:
             require(backend in ('cpu', 'vulkan'), 'unknown-backend-selection')
@@ -1017,7 +1022,9 @@ class Checker:
             # The adapter writes config before its restart/readiness boundary.
             # Invalidate before mutation for the same reason as backend setup.
             self.selected_language = None
+            self._selection_checkpoint = 'language-adapter'
             self.adapter('set-language', language)
+            self._selection_checkpoint = 'language-adapter-complete'
             selected = language
             changed = True
         if changed:
@@ -1025,11 +1032,13 @@ class Checker:
             # existing readiness boundary.  It lets a later failed start say
             # whether systemd replaced the daemon without reading or exposing
             # logs, command output, paths or transcript material.
+            self._selection_checkpoint = 'daemon-readiness'
             self._ready_engine = self.daemon_ready('daemon-restart', 30)
             if backend is not None:
                 self.selected_backend = backend
             if selected is not None:
                 self.selected_language = selected
+        self._selection_checkpoint = 'complete'
 
     def transcription_stage(self, stage, fn):
         """Run one fixed operation and retain only its numeric stage/family."""
@@ -1113,12 +1122,8 @@ class Checker:
         self.transcription_stage('receiver-clear', self.empty)
         self.transcription_stage(
             'focus-before', lambda: require(self.focused(), 'receiver-focus-lost'))
-        def choose_language():
-            language = sample['language']
-            require(language in ('en', 'he'), 'fixture-language-invalid')
-            self.select(language=language)
-            return language
-        language = self.transcription_stage('language-selection', choose_language)
+        language = self.transcription_stage(
+            'language-selection', lambda: self.checked_language_selection(sample))
         before = time.monotonic_ns()
         self.transcription_stage('record-start', lambda: self.record('start'))
         self.transcription_stage(
@@ -1179,6 +1184,59 @@ class Checker:
             return item
         item = self.transcription_stage('sample-record', record_sample)
         return item
+
+    def checked_language_selection(self, sample):
+        """Select a fixture language and close only a failed restart diagnosis."""
+        language = sample.get('language') if type(sample) is dict else None
+        if language not in ('en', 'he'):
+            raise TranscriptionStageFailure('language-selection', 'invalid', 401)
+        try:
+            self.select(language=language)
+            return language
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            label = caught_error_label(error)
+            checkpoint = getattr(self, '_selection_checkpoint', None)
+            if checkpoint == 'language-adapter':
+                substage = 402
+            else:
+                try:
+                    active = self.cmd(
+                        ['systemctl', '--user', 'is-active', '--quiet',
+                         'voxtype.service'], check=False)
+                    if active.returncode != 0:
+                        failed = self.cmd(
+                            ['systemctl', '--user', 'is-failed', '--quiet',
+                             'voxtype.service'], check=False)
+                        substage = 403 if failed.returncode == 0 else 404
+                    else:
+                        engines = self.engines()
+                        if len(engines) == 0:
+                            substage = 405
+                        elif len(engines) != 1:
+                            substage = 406
+                        elif engines[0] == getattr(self, '_ready_engine', None):
+                            substage = 407
+                        else:
+                            state = self.state(allow_absent=True)
+                            if state == 'stopped':
+                                substage = 408
+                            elif state == 'recording':
+                                substage = 409
+                            elif state == 'transcribing':
+                                substage = 410
+                            elif state == 'streaming':
+                                substage = 411
+                            elif state == 'idle':
+                                status = self.adapter('status')
+                                substage = 412 if status.get('language') == language else 413
+                            else:
+                                substage = 414
+                except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                        KeyError, TypeError):
+                    substage = 414
+            raise TranscriptionStageFailure(
+                'language-selection', label, substage) from None
 
     def checked_recording_state(self):
         """Keep the ten-second gate and close only its failure diagnosis.
@@ -1289,6 +1347,43 @@ class Checker:
         if sha(binary) != self.assets[cpu_key]['sha256']:
             raise TranscriptionStageFailure('engine-profile', 'invalid', 704)
         return cpu_key
+
+    def checked_vulkan_payload(self):
+        """Classify only fixed integrity states for the optional signed binary."""
+        asset = ASSETS['vulkan']
+        target = PAYLOAD / asset['name']
+
+        def state(path):
+            try:
+                info = path.lstat()
+            except FileNotFoundError:
+                return 'absent'
+            except OSError:
+                return 'unreadable'
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != 0
+                    or info.st_mode & 0o022):
+                return 'unsafe'
+            if info.st_size != asset['bytes']:
+                return 'size'
+            try:
+                return 'exact' if sha(path) == asset['sha256'] else 'sha256'
+            except OSError:
+                return 'unreadable'
+
+        target_state = state(target)
+        if target_state == 'exact':
+            return True
+        if target_state == 'absent':
+            cache_state = state(VULKAN_CACHE)
+            substage = {'absent': 2031, 'exact': 2032}.get(cache_state, 2033)
+            label = 'os-error'
+        else:
+            substage = {
+                'unsafe': 2034, 'size': 2035, 'sha256': 2036,
+                'unreadable': 2037,
+            }[target_state]
+            label = 'os-error' if target_state == 'unreadable' else 'invalid'
+        raise GpuStageFailure('vulkan-payload-integrity', label, substage)
 
     def samples(self, language):
         def selected_rows():
@@ -1519,11 +1614,6 @@ class Checker:
         # virgl, GPU passthrough or another accelerated Vulkan device. It can
         # validate the signed Vulkan payload and the real unsupported-device
         # failure/recovery path, but it cannot certify GPU acceleration.
-        vulkan = PAYLOAD / ASSETS['vulkan']['name']
-        def payload_integrity():
-            owned_file(vulkan, ASSETS['vulkan']['bytes'])
-            require(sha(vulkan) == ASSETS['vulkan']['sha256'],
-                    'installed-vulkan-payload-sha256')
         self.gpu_stage('cpu-backend-selection', lambda: self.select(backend='cpu'))
 
         # Make the visible language selection deterministic for both recovery screens.
@@ -1538,11 +1628,11 @@ class Checker:
         # binary before the unsupported-device proof fails.  Bind those exact
         # retained bytes after that attempt; the normal CPU setup intentionally
         # does not preinstall the optional Vulkan payload.
-        self.gpu_stage('vulkan-payload-integrity', payload_integrity)
         self.gpu_stage('cpu-preservation', lambda: require(
             (SYSTEM / 'backend').read_text().strip() == 'cpu'
             and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
             'gpu-failure-did-not-preserve-cpu'))
+        self.gpu_stage('vulkan-payload-integrity', self.checked_vulkan_payload)
         self.gpu_stage('receiver-empty', lambda: require(
             (self.root / 'received.private').read_bytes() == b'',
             'gpu-failure-inserted-text'))
