@@ -412,6 +412,11 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                                  | {'microphone-disconnect-error'})):
             require(False, 'gate-failure-stage-missing')
         substage = observed.get('failure_substage')
+        if gate['status'] == 'failed' and gate['id'] in READINESS_FAILURE_GATES:
+            require(observed.get('failure_stage') == READINESS_FAILURE_STAGE,
+                    'gate-failure-stage-value')
+            require(substage is not None,
+                    'gate-failure-substage-missing')
         if substage is not None:
             require(type(substage) is int
                     and observed.get('failure_stage') in FAILURE_SUBSTAGES

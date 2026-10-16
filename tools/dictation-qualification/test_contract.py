@@ -341,6 +341,13 @@ class ContractControls(unittest.TestCase):
                     'observations'] = {}
                 self.rejects(missing, 'gate-failure-stage-missing')
 
+                missing_substage = copy.deepcopy(report)
+                next(row for row in missing_substage['gates'] if row['id'] == gate_id)[
+                    'observations'] = {
+                        'failure_stage': c.READINESS_FAILURE_STAGE,
+                    }
+                self.rejects(missing_substage, 'gate-failure-substage-missing')
+
                 unknown = copy.deepcopy(report)
                 next(row for row in unknown['gates'] if row['id'] == gate_id)[
                     'observations']['failure_substage'] = 3999
