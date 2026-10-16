@@ -61,6 +61,18 @@ RECOVERY_MEMBERS = {
 ERROR_FAMILIES = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
 SAFE_FAMILIES = ERROR_FAMILIES | {'none', 'prerequisite', 'isolation'}
 FAILURE_SUBSTAGES = {6: set(range(601, 613)), 7: {701, 702, 703, 704}}
+REJECTION_STAGES = {'manifest', 'run', 'artifact-metadata', 'archive', 'fixtures',
+                    'execution', 'installations', 'report-inventory', 'live-report',
+                    'failed-report', 'indicator', 'recovery', 'projection'}
+REJECTION_STAGE = 'manifest'
+
+
+def checkpoint(stage):
+    global REJECTION_STAGE
+    require(stage in REJECTION_STAGES)
+    REJECTION_STAGE = stage
+
+
 GATE_NAMES = {
     'english': 'cpu-english-transcription-insertion',
     'hebrew': 'cpu-hebrew-transcription-insertion',
@@ -343,6 +355,7 @@ def diagnostic(report, recovery):
 
 
 def inspect_artifact(profile, pin, artifact, archive_raw, contract):
+    checkpoint('artifact-metadata')
     require(type(artifact) is dict and artifact.get('id') == pin['id']
             and artifact.get('name') == pin['name'] and artifact.get('expired') is False
             and artifact.get('size_in_bytes') == pin['bytes']
@@ -353,6 +366,7 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
     require(type(archive_raw) is bytes and len(archive_raw) == pin['bytes']
             and sha256(archive_raw) == pin['sha256'])
     with zipfile.ZipFile(io.BytesIO(archive_raw)) as archive:
+        checkpoint('archive')
         items = archive.infolist()
         names = [item.filename for item in items]
         require(len(names) == len(set(names)) and BASE_MEMBERS <= set(names)
@@ -360,8 +374,10 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
                 and len(items) <= 7 and sum(item.file_size for item in items) <= 8_000_000)
         for item in items:
             safe_member(item, 4_000_000 if item.filename.endswith('.png') else 2_000_000)
+        checkpoint('fixtures')
         fixtures = archive.read('fixtures.json')
         require(len(fixtures) <= 128 * 1024 and sha256(fixtures) == FIXTURE_SHA256)
+        checkpoint('execution')
         state = strict_json(archive.read('execution.json'), 64 * 1024)
         fields = {'schema', 'hardware_profile', 'status', 'release_acceptance', 'image',
                   'execution_checker_head', 'fixture_manifest_sha256', 'reports',
@@ -379,6 +395,7 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
                 and re.fullmatch(r'[0-9T:.+\-]+', state['recorded_at_utc'])
                 and type(state['vm_tool_image_id']) is str
                 and re.fullmatch(r'(?:sha256:)?[0-9a-f]{64}', state['vm_tool_image_id']))
+        checkpoint('installations')
         require(type(state['installations']) is dict and set(state['installations']) == {'online', 'offline'}
                 and all(uuid(value) for value in state['installations'].values())
                 and state['installations']['online'] != state['installations']['offline'])
@@ -386,8 +403,10 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         # strict require-passed check raises.  The runner therefore retains the
         # exact JSON member but deliberately does not add a passing receipt for
         # it to execution.json.  Only the successful live report has a receipt.
+        checkpoint('report-inventory')
         require(type(state['reports']) is dict
                 and set(state['reports']) == {'online-installed-live'})
+        checkpoint('live-report')
         reports = {}
         receipt = state['reports']['online-installed-live']
         require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
@@ -404,6 +423,7 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
                           fixture_manifest=fixtures)
         require(live['status'] == 'passed' and live['boot_id'] == receipt['boot_id'])
         reports['online-installed-live'] = live
+        checkpoint('failed-report')
         failed_raw = archive.read('online-installed.json')
         failed = strict_json(failed_raw, 2_000_000)
         validate_context(failed.get('context'), profile, 'online-installed',
@@ -413,13 +433,16 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         require(failed['status'] == 'failed')
         reports['online-installed'] = failed
         require(reports['online-installed-live']['boot_id'] != reports['online-installed']['boot_id'])
+        checkpoint('indicator')
         require(type(state['indicators']) is dict and set(state['indicators']) == {'online-installed'})
         validate_indicator(state['indicators']['online-installed'], archive,
                            state['installations']['online'], reports['online-installed'])
+        checkpoint('recovery')
         require(type(state['recovery_screens']) is dict
                 and set(state['recovery_screens']) <= {'online-installed'})
         recovery = validate_recovery(state['recovery_screens'].get('online-installed', {}), archive,
                                      state['installations']['online'], reports['online-installed'])
+        checkpoint('projection')
         result = diagnostic(reports['online-installed'], recovery)
         result.update(profile=profile, artifact_id=pin['id'],
                       execution_status=state['status'], current_phase=state['current_phase'])
@@ -427,7 +450,9 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
 
 
 def inspect(manifest, api_call=api, downloader=download):
+    checkpoint('manifest')
     validate_manifest(manifest)
+    checkpoint('run')
     run = api_call('/actions/runs/' + str(RUN_ID))
     jobs = api_call('/actions/runs/' + str(RUN_ID) + '/jobs?filter=all&per_page=100')
     validate_run(run, jobs)
@@ -458,7 +483,12 @@ def main():
     args = parser.parse_args()
     activation_guard()
     manifest = read_json_file(args.manifest, 32_768)
-    emit(inspect(manifest), os.sys.stdout)
+    try:
+        emit(inspect(manifest), os.sys.stdout)
+    except RuntimeError:
+        require(REJECTION_STAGE in REJECTION_STAGES)
+        print('ARCTIC-DICTATION-SAFE-READER-REJECTION=' + REJECTION_STAGE)
+        raise
 
 
 if __name__ == '__main__':
