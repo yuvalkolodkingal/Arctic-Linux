@@ -262,11 +262,11 @@ def _scene_ready(lines: Lines, expected_scene: str, timeout: int,
 
 
 def _first_login_ready(lines: Lines, controller) -> None:
-    """Accept only the fixed pre-Settings signal, then use host pixels/input."""
+    """Bind the fixed pre-Settings signal to the earlier host pixel gate."""
     signal = _scene_line(lines, FIRST_LOGIN_SIGNAL_TIMEOUT)
     c.require(signal == c.FIRST_LOGIN_READY,
               "fresh-account welcome readiness differs")
-    controller.dismiss_first_login()
+    controller.confirm_first_login_observed()
     lines.write(c.FIRST_LOGIN_ACK)
 
 

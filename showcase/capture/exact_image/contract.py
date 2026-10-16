@@ -14,16 +14,16 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso",
-    "bytes": 1_936_271_360,
-    "sha256": "c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7",
-    "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228",
-    "run_id": 38_823_208_615,
-    "artifact_id": 12_016_177_474,
-    "archive_bytes": 1_936_459_062,
-    "archive_sha256": "5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23",
+    "name": "Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso",
+    "bytes": 1_936_308_224,
+    "sha256": "8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a",
+    "source_sha": "4f2595c3ecf11ab3332a615df162518d3f677f59",
+    "run_id": 38_866_458_401,
+    "artifact_id": 12_034_440_723,
+    "archive_bytes": 1_936_495_926,
+    "archive_sha256": "fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330",
+    "producer_receipt_sha256": "7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca",
 }
 REVIEWED_EXECUTION = {
     "repository": "yuvalkolodkingal/Arctic-Linux",
@@ -35,10 +35,19 @@ REVIEWED_EXECUTION = {
     "evidence": "reviewed exact candidate build; capture remains human-review pending",
 }
 SCENES = ("dictationsetup", "winter", "updates")
+DICTATION_EVIDENCE_SCENES = ("dictationrecord", "dictationrecovery")
+ALL_SCENES = SCENES + DICTATION_EVIDENCE_SCENES
 OUTPUTS = {
     "dictationsetup": "showcase/assets/dictation-setup-current.png",
     "winter": "showcase/assets/wallpaper-hide-restore-current.png",
     "updates": "showcase/assets/whats-new-current.png",
+}
+DICTATION_EVIDENCE_OUTPUTS = {
+    "dictationrecord": "showcase/assets/dictation-recording-current.png",
+    "dictationrecovery": {
+        "gpu_failure": "showcase/assets/dictation-recovery-gpu-failure-current.png",
+        "cpu_ready": "showcase/assets/dictation-recovery-cpu-ready-current.png",
+    },
 }
 DICTATION_STATUS_FIELDS = {
     "state", "ready", "error", "version", "upgrade_pending", "language", "backend",
@@ -75,6 +84,16 @@ SCENE_CONTRACTS = {
                "review": "mandatory human visual review of normalized QMP pixels"},
     "updates": {"target": "Arctic What's New",
                 "review": "mandatory human visual review of normalized QMP pixels"},
+}
+DICTATION_EVIDENCE_CONTRACTS = {
+    "dictationrecord": {
+        "target": "official VoxType recording indicator over an empty local receiver",
+        "review": "mandatory human visual review of the normalized qualification pixels",
+    },
+    "dictationrecovery": {
+        "target": "official VoxType Vulkan failure and later explicit CPU-ready state",
+        "review": "mandatory human visual review of both normalized qualification frames",
+    },
 }
 REQUEST_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-REQUEST "
 ACK_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-ACK "
@@ -378,11 +397,17 @@ def controller_trace(value) -> None:
         actual_boot_prefix.append((event["stage"], event["kind"], detail))
     require(actual_boot_prefix == boot_prefix,
             "controller boot selection proof sequence differs")
-    require(any(event["stage"] == "installed-boot" and event["kind"] == "screen"
-                and event["detail"].get("expectation") == "first-login-welcome"
-                for event in events)
-            and any(event["stage"] == "installed-boot" and event["kind"] == "keys"
-                    and event["detail"] == {"names": ["esc"]} for event in events)
+    welcome = [index for index, event in enumerate(events)
+               if event["stage"] == "installed-boot" and event["kind"] == "screen"
+               and event["detail"].get("expectation") == "first-login-welcome"]
+    console_switch = [index for index, event in enumerate(events)
+                      if event["stage"] == "installed-console" and event["kind"] == "keys"
+                      and event["detail"] == {"names": ["ctrl-alt-f6"]}]
+    require(len(welcome) == 1 and welcome[0] + 1 < len(events)
+            and events[welcome[0] + 1]["stage"] == "installed-boot"
+            and events[welcome[0] + 1]["kind"] == "keys"
+            and events[welcome[0] + 1]["detail"] == {"names": ["esc"]}
+            and console_switch and welcome[0] < console_switch[0]
             and any(event["stage"] == "installed-boot" and event["kind"] == "screen"
                     and event["detail"].get("expectation") == "first-login-dismissed"
                     for event in events),
@@ -394,13 +419,13 @@ def controller_trace(value) -> None:
         ("live-boot", "install-boot-menu-selected"),
         ("live-boot", "live-installer-visible"),
         ("live-console", "live-console-login"), ("install-complete", "installer-done"),
+        ("installed-boot", "first-login-welcome"),
         ("installed-boot", "installed-login-ready"),
         ("installed-console", "installed-password-prompt"),
         ("installed-console", "installed-fetch-greeting"),
         ("installed-console", "installed-shell-ready"),
         ("installed-console", "installed-shell"),
         ("installed-console", "installed-sudo-password"),
-        ("installed-boot", "first-login-welcome"),
         ("installed-boot", "first-login-dismissed"),
         ("dictationsetup", "dictation-ready-page"),
         ("dictationsetup", "dictation-ready-page"),

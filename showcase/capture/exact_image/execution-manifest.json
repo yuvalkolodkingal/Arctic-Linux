@@ -23,6 +23,7 @@
     "release_acceptance": false,
     "schema": "arctic-showcase-unattended-controller-v1"
   },
+  "dictation_evidence": null,
   "execution_files": {},
   "image": null,
   "ready": false,

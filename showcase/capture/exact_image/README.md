@@ -1,31 +1,31 @@
 # Exact-image showcase capture
 
-This lane creates three of the five pending showcase images from one installed
-copy of the reviewed ISO: Dictation setup, wallpaper hide/restore and What's New.
-It is capture evidence only. Every receipt remains
+This lane produces all five pending showcase scene contracts for one exact reviewed ISO.
+It installs the ISO once and takes host-owned QMP captures for Dictation setup, wallpaper
+hide/restore and What's New. It also imports the transcript-free recording indicator and
+two-frame Vulkan-failure/CPU-recovery screenshots from the exact ISO's independently
+validated Turbo Q5 v3 qualification artifact. Those frames are losslessly normalized and
+run through the same pinned OCR privacy checks before export. It is capture evidence only. Every receipt remains
 `release_acceptance:false`, `status:captured_unreviewed`, and
 `privacy.human:pending` until a person reviews the exported pixels.
 
-The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
-outside this unattended lane. They remain pending exact-image captures with
-their own complete receipts and human pixel review before the source can render.
-
 The preparation is bound to the reviewed candidate from producer run
-`38823208615`, attempt 1, source
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228`: ISO
-`Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso`, size `1936271360`,
+`38866458401`, attempt 1, source
+`4f2595c3ecf11ab3332a615df162518d3f677f59`: ISO
+`Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso`, size `1936308224`,
 SHA-256
-`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
-The retained artifact is `12016177474`, archive size `1936459062`, archive
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`.
+The retained artifact is `12034440723`, archive size `1936495926`, archive
 SHA-256
-`5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23`,
+`fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330`.
-The execution manifest is ready for a later marker-only activation and remains
-`release_acceptance:false`.
+`7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca`.
+The execution manifest remains deliberately `ready:false` until the successful
+Turbo Q5 v3 qualification artifact is pinned. It remains
+`release_acceptance:false`; this source change does not activate the workflow.
 
 The producer ran from the reviewed marker-only source
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228` by `workflow_dispatch` and passed
+`4f2595c3ecf11ab3332a615df162518d3f677f59` by `workflow_dispatch` and passed
 UEFI Try, BIOS Install and UEFI Safe startup. This preparation preserves the
 existing showcase activation marker byte-for-byte, so its push does not
 activate the workflow. A later marker-only child commit is still required.
@@ -204,11 +204,17 @@ These bounds do not replace or relax any readiness, nonce, screen, privacy or
 human-review gate; they only prevent a failed guest helper from inheriting the
 outer 120-minute channel timeout while QEMU keeps the character device open.
 
-The fresh disposable account's top-layer welcome is expected. The installed
-helper retries the normal one-shot `arctic-welcome` command without `--again`,
-then emits one fixed readiness token. Before Settings opens, the host requires
-`Welcome to Arctic Linux` pixels, sends one QMP Escape and returns one fixed
-acknowledgement. Only then may the helper open the Dictation page. The host
+The fresh disposable account's top-layer welcome is expected. After the
+installed reset, the host waits on the graphical output for the normal
+autologin/autostart `arctic-welcome` path to produce exact `Welcome to Arctic
+Linux` pixels. It requires those pixels and sends one QMP Escape before its
+first VT6 switch, so the observer cannot consume the one-shot marker while the
+graphical gate is hidden. No installed helper or tooling has been delivered at
+that point. Later, after the authenticated Fish and sudo handoff, the installed
+helper retries only the normal one-shot command without `--again` and emits one
+fixed readiness token. The host accepts that token only if its earlier welcome
+pixel gate passed, then returns one fixed acknowledgement. Only then may the
+helper open the Dictation page. The host
 requires both `Dictation is ready` and the reviewed Dictation page copy, and
 checks the same ready screen again after guest diagnostics and immediately
 before capture.
@@ -218,6 +224,26 @@ invocation from the unique visible `Butterfly in Gold` title. A fixed geometric
 offset selects its Hide control. The controller then independently requires the
 real `Hide “Butterfly in Gold”?` dialog text before capture. The dialog remains
 visible while the guest performs the packaged hide/restore diagnostic.
+
+## Qualified VoxType frame admission
+
+The supplement accepts only the successful first-attempt Turbo Q5 v3 artifact pinned in
+`execution-manifest.json`. Before download, the workflow checks the fixed workflow, branch,
+run, head SHA, artifact ID/name/size/digest and exact ISO identity through GitHub's API. A
+closed ZIP extractor rejects paths, links, encryption, duplicates, extra members, oversized
+files and excessive expansion. The importer reruns the repository's strict dictation
+qualification contract, whose exact bytes are pinned in the evidence record and activation
+inventory, over `execution.json`, all reports and the exact public-fixture
+manifest. It then admits only the online-installed recording indicator and the distinct
+Vulkan-failure and CPU-ready frames whose nonces are bound to passed qualification gates.
+
+The imported pixels are never trusted from filenames alone. Their source hashes must match
+the host receipts; the recording receiver must be empty; the recovery frames must be
+distinct and bound to the same boot, installation and ISO. Pinned OCR screens both source
+and normalized pixels for private text. The raw qualification archive, reports and source
+PNGs are not copied into the showcase artifact. The normalized review objects remain
+`release_acceptance:false` and `human:pending`; only a later named human review may admit
+them to `showcase/assets`.
 
 ## Pixel and privacy contract
 
@@ -229,15 +255,17 @@ private sentinels, and optional private transcript fragments are blocked. Raw QM
 PNGs and controller decision screenshots are deleted. Final normalized images
 are rechecked during export and independent validation.
 
-After the three captures, the host quits QEMU, stops the complete process group,
+After the three host-owned captures, the host quits QEMU, stops the complete process group,
 closes the QMP/channel and image descriptors, retains exactly the three screened
 normalized PNGs, and removes the private disk/log/socket/runtime tree before it
 finalizes receipts. That cleanup event and the literal QEMU argv plus its hash
 are present in every receipt. The screened source directory is removed after
 the deterministic bundle is exported.
 
-The deterministic USTAR bundle contains exactly three normalized PNGs, three
-receipts, and `bundle.json`. An external digest contract binds every member, the
+The deterministic base USTAR bundle contains exactly three normalized PNGs, three
+receipts, and `bundle.json`. A second deterministic supplement contains the recording
+indicator, both recovery frames, their two scene receipts and its own closed digest. The
+workflow requires the union of the two manifests to be exactly the five showcase contracts. An external digest contract binds every member, the
 archive, OCR identity, controller trace, image identity, and VM provenance. The
 validator requires the published digest-contract SHA-256 and reruns all pixel and
 privacy checks. Human review remains mandatory after download.

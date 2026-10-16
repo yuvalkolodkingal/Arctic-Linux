@@ -1015,6 +1015,13 @@ class Controller:
     def boot_installed_and_start(self, session_exchange):
         c.require(callable(session_exchange), "installed shell session exchange differs")
         self.installed_startup.start()
+        # The installed account autologs in and its packaged autostart invokes
+        # arctic-welcome.  Observe that real one-shot surface before leaving the
+        # graphical VT: switching immediately to VT6 can let the IPC call consume
+        # the marker while the card is never available to the later host gate.
+        # Keeping the existing exact pixel predicate here proves the normal
+        # first-login path and removes that observer-created race.
+        self.dismiss_first_login()
         # A generic nonblank frame can be firmware or Plymouth. Retry the fixed
         # VT chord until OCR sees the installed system's real login prompt.
         deadline = time.monotonic() + 900
@@ -1125,9 +1132,17 @@ class Controller:
 
     def dismiss_first_login(self):
         """Observe and dismiss the fresh account welcome before Settings opens."""
+        c.require(not getattr(self, "first_login_observed", False),
+                  "fresh-account welcome was already observed")
         self.wait_screen("installed-boot", "first-login-welcome",
                          ("Welcome", "Arctic Linux"), seconds=300, exact_output=True)
         self.press("installed-boot", "esc")
+        self.first_login_observed = True
+
+    def confirm_first_login_observed(self):
+        """Bind the guest's pre-Settings handoff to the earlier host pixel gate."""
+        c.require(getattr(self, "first_login_observed", False),
+                  "fresh-account welcome was not observed before console entry")
 
     def verify_first_login_dismissed(self):
         """Require the reviewed Dictation surface after the welcome was dismissed."""

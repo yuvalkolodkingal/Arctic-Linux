@@ -71,7 +71,7 @@
   },
   "exact_capture_execution_manifest": {
     "path": "showcase/capture/exact_image/execution-manifest.json",
-    "sha256": "486b60e30e1b10755c2c3b166bce2be6d901abf57a147eeff469f353919f6043",
+    "sha256": "47359f1d7bace3b3263608375612767960ee4ee59a779dd01a712c05a46b9ee6",
     "execution_files": 0,
     "all_hashes_recomputed": true
   },
@@ -162,7 +162,7 @@
   "iso_release_qualification": false,
   "pending": [
     "Run human listening review of both fresh 1.1.1 source segments, the join, and the full assembled master.",
-    "Capture and manually review direct-VoxType 1.1.1 setup and recording, the two-frame GPU-failure/CPU-ready recovery pair, wallpaper management and What\u2019s New on the qualified ISO.",
+    "Capture and manually review direct-VoxType 1.1.1 setup and recording, the two-frame GPU-failure/CPU-ready recovery pair, wallpaper management and What’s New on the qualified ISO.",
     "Run strict final render/full decode/subtitle/frame checks, bind the matching qualified ISO, confirm the connected ElevenLabs plan permits publication, and verify public downloads before replacing the public video."
   ],
   "validation_receipt_path": "showcase/revision-2026-10-12/validation-source.json",

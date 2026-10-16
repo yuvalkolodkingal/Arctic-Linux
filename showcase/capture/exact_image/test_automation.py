@@ -379,6 +379,7 @@ class UnattendedController(unittest.TestCase):
     def test_first_login_is_host_observed_dismissed_and_rechecked(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
         self.controller.dismiss_first_login()
+        self.controller.confirm_first_login_observed()
         self.controller.verify_first_login_dismissed()
         self.assertEqual(self.controller.wait_screen.call_args_list[0].args[1],
                          "first-login-welcome")
@@ -388,6 +389,12 @@ class UnattendedController(unittest.TestCase):
         })
         self.assertEqual(self.controller.wait_screen.call_args_list[1].args[1],
                          "first-login-dismissed")
+        with self.assertRaisesRegex(c.Invalid, "already observed"):
+            self.controller.dismiss_first_login()
+
+    def test_first_login_confirmation_rejects_an_unobserved_surface(self):
+        with self.assertRaisesRegex(c.Invalid, "not observed before console entry"):
+            self.controller.confirm_first_login_observed()
 
     def test_first_login_transport_is_fixed_and_precedes_settings(self):
         events = []
@@ -401,11 +408,11 @@ class UnattendedController(unittest.TestCase):
                 events.append(("write", value))
 
         controller = types.SimpleNamespace(
-            dismiss_first_login=lambda: events.append(("dismiss", None)))
+            confirm_first_login_observed=lambda: events.append(("confirm", None)))
         capture_vm._first_login_ready(Lines(), controller)
         self.assertEqual(events, [
             ("read", capture_vm.FIRST_LOGIN_SIGNAL_TIMEOUT),
-            ("dismiss", None),
+            ("confirm", None),
             ("write", c.FIRST_LOGIN_ACK),
         ])
 
@@ -1087,6 +1094,14 @@ uptime   2 mins
                                side_effect=lambda seconds: operations.append(
                                    ("sleep", seconds))):
             self.controller.boot_installed_and_start(shell_session_exchange)
+
+        self.assertEqual(operations[:2], [
+            ("screen", "first-login-welcome", ("Welcome", "Arctic Linux"),
+             {"seconds": 300, "exact_output": True}),
+            ("keys", ("esc",)),
+        ])
+        self.assertLess(operations.index(("keys", ("esc",))),
+                        operations.index(("keys", ("ctrl-alt-f6",))))
 
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
                     {"seconds": 90})
