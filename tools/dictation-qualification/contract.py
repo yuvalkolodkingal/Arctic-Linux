@@ -166,6 +166,8 @@ FAILURE_SUBSTAGES = {
     TRANSCRIPTION_FAILURE_STAGES['recording-state']: frozenset(
         {601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612}),
     TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
+    TRANSCRIPTION_FAILURE_STAGES['transcribing-state']: frozenset(
+        {1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212}),
 }
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
