@@ -3,7 +3,7 @@ name: Read safe Small diagnostics for dictation run 38858151468
 on:
   push:
     branches: [codex/read-dictation-small-388581-20261016]
-    paths: [.github/dictation-small-failure-reader-388581.activate]
+    paths: [.github/dictation-small-fullpath-reader-388581.activate]
 
 permissions:
   contents: read

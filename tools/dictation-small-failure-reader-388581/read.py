@@ -21,7 +21,7 @@ RUN_ID = 38858151468
 RUN_ATTEMPT = 1
 SOURCE_SHA = '851a6a4a135e4293dc6ab01bdb568bb0aa98ba36'
 BRANCH = 'codex/read-dictation-small-388581-20261016'
-ACTIVATION = Path('.github/dictation-small-failure-reader-388581.activate')
+ACTIVATION = Path('.github/dictation-small-fullpath-reader-388581.activate')
 READER = Path('tools/dictation-small-failure-reader-388581/read.py')
 CONTRACT = Path('tools/dictation-qualification/contract.py')
 QUALIFICATION_MANIFEST = Path('tools/dictation-qualification/execution-manifest.json')
@@ -52,8 +52,29 @@ MANIFEST_FIELDS = {'schema', 'ready', 'repository', 'workflow', 'run_id', 'run_a
                    'source_sha', 'reader_sha256', 'contract_sha256',
                    'qualification_manifest_sha256', 'artifacts'}
 ARTIFACT_FIELDS = {'id', 'name', 'bytes', 'sha256'}
-BASE_MEMBERS = {'execution.json', 'fixtures.json', 'online-installed-live.json',
-                'online-installed.json', 'dictation-indicator-online-installed.png'}
+REPORT_SPECS = {
+    'online-installed-live': ('online-installed-live.json', 'live', 'online', 'online-installed'),
+    'online-installed': ('online-installed.json', 'online-installed', 'online', 'online-installed'),
+    'offline-installed-live': ('offline-installed-live.json', 'live', 'offline', 'offline-installed'),
+    'offline-installed': ('offline-installed.json', 'offline-installed', 'offline', 'offline-installed'),
+    'recovery': ('recovery.json', 'recovery', 'offline', 'recovery'),
+    'recovered-offline': ('recovered-offline.json', 'recovered-offline', 'offline', 'recovered-offline'),
+}
+PHASE_REPORTS = {
+    'online-installed': ('online-installed-live', 'online-installed'),
+    'offline-installed': ('offline-installed-live', 'offline-installed'),
+    'recovery': ('recovery',),
+    'recovered-offline': ('recovered-offline',),
+}
+PHASES = tuple(PHASE_REPORTS)
+BASE_MEMBERS = {'execution.json', 'fixtures.json'}
+REPORT_MEMBERS = {spec[0] for spec in REPORT_SPECS.values()}
+INDICATOR_MEMBERS = {
+    'online-installed': 'dictation-indicator-online-installed.png',
+    'recovered-offline': 'dictation-indicator-recovered-offline.png',
+}
+LAUNCH_MEMBERS = {'launch-preterminal-online-installed.json',
+                  'launch-preterminal-online-installed.png'}
 RECOVERY_MEMBERS = {
     'gpu_failure': 'dictation-recovery-online-installed-gpu-failure.png',
     'cpu_ready': 'dictation-recovery-online-installed-cpu-ready.png',
@@ -230,10 +251,11 @@ def validate_context(value, profile, phase, installation_id):
         require(value.get(key) == expected)
 
 
-def validate_indicator(value, archive, installation_id, report):
+def validate_indicator(value, archive, phase, installation_id, report):
+    name = INDICATOR_MEMBERS[phase]
     require(type(value) is dict and set(value) == {'path', 'sha256', 'iso_sha256',
             'installation_id', 'request'}
-            and value['path'] == 'dictation-indicator-online-installed.png'
+            and value['path'] == name
             and digest(value['sha256']) and value['iso_sha256'] == IMAGE['sha256']
             and value['installation_id'] == installation_id)
     request = value['request']
@@ -241,12 +263,41 @@ def validate_indicator(value, archive, installation_id, report):
             'desktop_uid', 'receiver_empty', 'capture_nonce'}
             and request['boot_id'] == report['boot_id']
             and request['installation_id'] == installation_id
-            and request['phase'] == 'online-installed' and request['receiver_empty'] is True
+            and request['phase'] == phase and request['receiver_empty'] is True
             and type(request['desktop_uid']) is int and request['desktop_uid'] > 0
             and digest(request['capture_nonce'], 32))
     raw = archive.read(value['path'])
     require(len(raw) <= 4_000_000 and raw.startswith(b'\x89PNG\r\n\x1a\n')
             and sha256(raw) == value['sha256'])
+
+
+def validate_launch_diagnostic(archive, profile, installation_id):
+    raw = archive.read('launch-preterminal-online-installed.json')
+    record = strict_json(raw, 64 * 1024)
+    require(type(record) is dict and set(record) == {'schema', 'status', 'release_acceptance',
+            'context', 'capture_stage', 'capture_nonce_sha256', 'guest_command_start',
+            'execution_files', 'image'}
+            and record['schema'] == 'arctic-dictation-launch-diagnostic-v1'
+            and record['status'] == 'diagnostic_only' and record['release_acceptance'] is False
+            and record['capture_stage'] == 'before-first-terminal'
+            and digest(record['capture_nonce_sha256'])
+            and record['guest_command_start'] == 'unobserved')
+    validate_context(record['context'], profile, 'online-installed', installation_id)
+    expected_files = ('tools/test-install.sh', 'tools/dictation-qualification/runner.py')
+    require(type(record['execution_files']) is dict
+            and set(record['execution_files']) == set(expected_files)
+            and all(record['execution_files'][path] == sha256((ROOT / path).read_bytes())
+                    for path in expected_files))
+    image = record['image']
+    require(type(image) is dict and set(image) == {'path', 'bytes', 'sha256', 'width', 'height'}
+            and image['path'] == 'launch-preterminal-online-installed.png'
+            and type(image['bytes']) is int and 8 < image['bytes'] <= 4_000_000
+            and digest(image['sha256']) and type(image['width']) is int
+            and type(image['height']) is int and 0 < image['width'] <= 1920
+            and 0 < image['height'] <= 1080)
+    pixels = archive.read(image['path'])
+    require(len(pixels) == image['bytes'] and pixels.startswith(b'\x89PNG\r\n\x1a\n')
+            and sha256(pixels) == image['sha256'])
 
 
 def validate_recovery(value, archive, installation_id, report):
@@ -319,35 +370,21 @@ def bounded_counter(observations, name, maximum):
     return present, value if present else 0
 
 
-def diagnostic(report, recovery):
-    by_name = {gate['id']: gate for gate in report['gates']}
-    english = staged_gate(by_name[GATE_NAMES['english']], set(range(1, 20)))
-    hebrew = staged_gate(by_name[GATE_NAMES['hebrew']], set(range(1, 20)))
-    gpu_name = (GATE_NAMES['gpu'] if report['context']['hardware_profile'] == 'turbo-q5-v3'
-                else GATE_NAMES['legacy_gpu'])
-    gpu_allowed = set(range(1, 20)) | (set(range(201, 215)) if gpu_name == GATE_NAMES['gpu'] else set())
-    gpu = staged_gate(by_name[gpu_name], gpu_allowed)
-    cleanup_gate = by_name[GATE_NAMES['cleanup']]
-    privacy_gate = by_name[GATE_NAMES['privacy']]
-    files_present, files = bounded_counter(cleanup_gate['observations'], 'file_count', 64)
-    matched_present, matched = bounded_counter(privacy_gate['observations'], 'matched', 64)
-    count_present, count = bounded_counter(privacy_gate['observations'], 'count', 64)
-    drained = cleanup_gate['observations'].get('drained')
-    require(drained is None or type(drained) is bool)
-    return {
-        'report_status': report['status'],
-        'english': english, 'hebrew': hebrew, 'gpu': gpu,
-        'cleanup': {'status': cleanup_gate['status'], 'family': family(cleanup_gate),
-                    'file_count_present': files_present, 'file_count': files,
-                    'drained_present': drained is not None,
-                    'drained': drained if drained is not None else False},
-        'privacy': {'status': privacy_gate['status'], 'family': family(privacy_gate),
-                    'matched_present': matched_present, 'matched': matched,
-                    'count_present': count_present, 'count': count},
-        'recovery_receipts': {'entry_present': any(recovery.values()),
-                              'gpu_failure': recovery['gpu_failure'],
-                              'cpu_ready': recovery['cpu_ready']},
-    }
+def failed_diagnostic(name, report, contract):
+    phase = report['context']['phase']
+    allowed_ids = contract.gates(phase, report['context']['hardware_profile'])
+    require(type(allowed_ids) is set and {gate['id'] for gate in report['gates']} == allowed_ids)
+    failed = []
+    stage_inventory = getattr(contract, 'FAILURE_STAGE_GATES')
+    require(type(stage_inventory) is dict)
+    for gate in sorted(report['gates'], key=lambda item: item['id']):
+        if gate['status'] == 'passed':
+            continue
+        detail = staged_gate(gate, set(stage_inventory.get(gate['id'], ())))
+        detail['id'] = gate['id']
+        failed.append(detail)
+    require(report['status'] == 'failed' and failed)
+    return {'name': name, 'phase': phase, 'failed_gates': failed}
 
 
 def inspect_artifact(profile, pin, artifact, archive_raw, contract):
@@ -363,9 +400,10 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
     with zipfile.ZipFile(io.BytesIO(archive_raw)) as archive:
         items = archive.infolist()
         names = [item.filename for item in items]
+        allowed = BASE_MEMBERS | REPORT_MEMBERS | set(INDICATOR_MEMBERS.values()) | LAUNCH_MEMBERS
         require(len(names) == len(set(names)) and BASE_MEMBERS <= set(names)
-                and set(names) <= BASE_MEMBERS | set(RECOVERY_MEMBERS.values())
-                and len(items) <= 7 and sum(item.file_size for item in items) <= 8_000_000)
+                and set(names) <= allowed and len(items) <= 10
+                and sum(item.file_size for item in items) <= 20_000_000)
         for item in items:
             safe_member(item, 4_000_000 if item.filename.endswith('.png') else 2_000_000)
         fixtures = archive.read('fixtures.json')
@@ -381,7 +419,7 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
                 and state['release_acceptance'] is False and state['image'] == IMAGE
                 and state['execution_checker_head'] == SOURCE_SHA
                 and state['fixture_manifest_sha256'] == FIXTURE_SHA256
-                and state['current_phase'] == 'online-installed'
+                and state['current_phase'] in PHASES
                 and state['error'] == 'Qualification failed; inspect private Actions harness logs'
                 and type(state['recorded_at_utc']) is str
                 and re.fullmatch(r'[0-9T:.+\-]+', state['recorded_at_utc'])
@@ -390,47 +428,69 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         require(type(state['installations']) is dict and set(state['installations']) == {'online', 'offline'}
                 and all(uuid(value) for value in state['installations'].values())
                 and state['installations']['online'] != state['installations']['offline'])
-        # reports() writes and validates the bounded failed report before its
-        # strict require-passed check raises.  The runner therefore retains the
-        # exact JSON member but deliberately does not add a passing receipt for
-        # it to execution.json.  Only the successful live report has a receipt.
         require(type(state['reports']) is dict
-                and set(state['reports']) == {'online-installed-live'})
+                and set(state['reports']) <= set(REPORT_SPECS))
         reports = {}
-        receipt = state['reports']['online-installed-live']
-        require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
-                'installation_id', 'boot_id', 'status'}
-                and receipt['path'] == 'online-installed-live.json'
-                and receipt['phase'] == 'live' and receipt['status'] == 'passed'
-                and receipt['installation_id'] == state['installations']['online']
-                and uuid(receipt['boot_id']) and digest(receipt['sha256']))
-        live_raw = archive.read('online-installed-live.json')
-        require(sha256(live_raw) == receipt['sha256'])
-        live = strict_json(live_raw, 2_000_000)
-        validate_context(live.get('context'), profile, 'live', state['installations']['online'])
-        contract.validate(live, live['context'], require_passed=False,
-                          fixture_manifest=fixtures)
-        require(live['status'] == 'passed' and live['boot_id'] == receipt['boot_id'])
-        reports['online-installed-live'] = live
-        failed_raw = archive.read('online-installed.json')
-        failed = strict_json(failed_raw, 2_000_000)
-        validate_context(failed.get('context'), profile, 'online-installed',
-                         state['installations']['online'])
-        contract.validate(failed, failed['context'], require_passed=False,
-                          fixture_manifest=fixtures)
-        require(failed['status'] == 'failed')
-        reports['online-installed'] = failed
-        require(reports['online-installed-live']['boot_id'] != reports['online-installed']['boot_id'])
-        require(type(state['indicators']) is dict and set(state['indicators']) == {'online-installed'})
-        validate_indicator(state['indicators']['online-installed'], archive,
-                           state['installations']['online'], reports['online-installed'])
-        require(type(state['recovery_screens']) is dict
-                and set(state['recovery_screens']) <= {'online-installed'})
-        recovery = validate_recovery(state['recovery_screens'].get('online-installed', {}), archive,
-                                     state['installations']['online'], reports['online-installed'])
-        result = diagnostic(reports['online-installed'], recovery)
-        result.update(profile=profile, artifact_id=pin['id'],
-                      execution_status=state['status'], current_phase=state['current_phase'])
+        present_report_names = {
+            key for key, spec in REPORT_SPECS.items() if spec[0] in names}
+        current_index = PHASES.index(state['current_phase'])
+        prior_names = {key for phase in PHASES[:current_index] for key in PHASE_REPORTS[phase]}
+        current_names = set(PHASE_REPORTS[state['current_phase']])
+        require(prior_names <= set(state['reports'])
+                and present_report_names <= prior_names | current_names
+                and set(state['reports']) <= present_report_names)
+        for key in present_report_names:
+            path, report_phase, installation_kind, _owner_phase = REPORT_SPECS[key]
+            raw = archive.read(path)
+            report = strict_json(raw, 2_000_000)
+            installation_id = state['installations'][installation_kind]
+            validate_context(report.get('context'), profile, report_phase, installation_id)
+            contract.validate(report, report['context'], require_passed=False,
+                              fixture_manifest=fixtures)
+            require(uuid(report['boot_id']))
+            receipt = state['reports'].get(key)
+            if receipt is None:
+                require(key in current_names and report['status'] == 'failed')
+            else:
+                require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
+                        'installation_id', 'boot_id', 'status'}
+                        and receipt['path'] == path and receipt['sha256'] == sha256(raw)
+                        and receipt['phase'] == report_phase and receipt['status'] == 'passed'
+                        and receipt['installation_id'] == installation_id
+                        and receipt['boot_id'] == report['boot_id']
+                        and report['status'] == 'passed')
+            reports[key] = report
+        require(len({report['boot_id'] for report in reports.values()}) == len(reports))
+        require(type(state['indicators']) is dict
+                and set(state['indicators']) <= set(INDICATOR_MEMBERS)
+                and set(state['indicators']) <= {phase for phase in INDICATOR_MEMBERS
+                    if phase in PHASES[:current_index + 1]})
+        if current_index > 0:
+            require('online-installed' in state['indicators'])
+        for phase, proof in state['indicators'].items():
+            require(phase in reports)
+            installation_kind = REPORT_SPECS[phase][2]
+            validate_indicator(proof, archive, phase, state['installations'][installation_kind],
+                               reports[phase])
+        require(type(state['recovery_screens']) is dict and state['recovery_screens'] == {})
+        launch_present = bool(set(names) & LAUNCH_MEMBERS)
+        require(not launch_present or (LAUNCH_MEMBERS <= set(names)
+                and state['current_phase'] == 'online-installed'))
+        if launch_present:
+            validate_launch_diagnostic(archive, profile, state['installations']['online'])
+        expected_names = BASE_MEMBERS | {REPORT_SPECS[key][0] for key in present_report_names}
+        expected_names |= {INDICATOR_MEMBERS[key] for key in state['indicators']}
+        if launch_present:
+            expected_names |= LAUNCH_MEMBERS
+        require(set(names) == expected_names)
+        failures = [failed_diagnostic(key, reports[key], contract)
+                    for key in REPORT_SPECS
+                    if key in reports and reports[key]['status'] == 'failed']
+        require(all(item['name'] in current_names for item in failures))
+        result = {'profile': profile, 'artifact_id': pin['id'],
+                  'execution_status': state['status'], 'current_phase': state['current_phase'],
+                  'failed_report_present': bool(failures),
+                  'failed_report_count': len(failures), 'failed_reports': failures}
         return result
 
 

@@ -17,6 +17,16 @@ SPEC.loader.exec_module(reader)
 
 
 class Contract:
+    FAILURE_STAGE_GATES = {
+        reader.GATE_NAMES['english']: frozenset(range(1, 20)),
+        reader.GATE_NAMES['hebrew']: frozenset(range(1, 20)),
+        reader.GATE_NAMES['legacy_gpu']: frozenset(range(1, 20)),
+    }
+
+    @staticmethod
+    def gates(_phase, _profile):
+        return set(reader.GATE_NAMES.values()) - {reader.GATE_NAMES['gpu']}
+
     @staticmethod
     def validate(report, expected, require_passed=False, fixture_manifest=None):
         assert report['context'] == expected
@@ -48,7 +58,7 @@ class SafeReaderTests(unittest.TestCase):
         return {'context': context, 'boot_id': '11111111-2222-3333-4444-555555555555',
                 'status': 'failed', 'gates': gates}
 
-    def archive(self, profile='small-v2', extra=None):
+    def archive(self, profile='small-v2', extra=None, current_report=True):
         fixture = b'fixed public fixture manifest for unit test'
         fixture_sha = hashlib.sha256(fixture).hexdigest()
         report = self.report(profile, fixture_sha)
@@ -80,7 +90,8 @@ class SafeReaderTests(unittest.TestCase):
             },
             'installations': {'online': installation,
                               'offline': '99999999-8888-7777-6666-555555555555'},
-            'indicators': {'online-installed': proof}, 'recovery_screens': {},
+            'indicators': {'online-installed': proof} if current_report else {},
+            'recovery_screens': {},
             'recorded_at_utc': '2026-10-16T02:00:00+00:00',
             'vm_tool_image_id': 'b' * 64, 'current_phase': 'online-installed',
             'error': 'Qualification failed; inspect private Actions harness logs',
@@ -90,8 +101,9 @@ class SafeReaderTests(unittest.TestCase):
             archive.writestr('execution.json', json.dumps(state, sort_keys=True))
             archive.writestr('fixtures.json', fixture)
             archive.writestr('online-installed-live.json', raw_live)
-            archive.writestr('online-installed.json', raw_report)
-            archive.writestr('dictation-indicator-online-installed.png', indicator)
+            if current_report:
+                archive.writestr('online-installed.json', raw_report)
+                archive.writestr('dictation-indicator-online-installed.png', indicator)
             if extra:
                 archive.writestr(extra, b'private-content')
         return output.getvalue(), fixture_sha
@@ -140,12 +152,12 @@ class SafeReaderTests(unittest.TestCase):
         with mock.patch.object(reader, 'FIXTURE_SHA256', fixture_sha), \
                 mock.patch.dict(reader.CONTEXT_PINS, {'fixture_manifest_sha256': fixture_sha}):
             result = reader.inspect_artifact('small-v2', pin, artifact, raw, Contract)
-        self.assertEqual(result['english']['stage'], 11)
-        self.assertEqual(result['gpu']['stage'], 11)
-        self.assertEqual(result['privacy']['family'], 'invalid')
-        self.assertFalse(result['privacy']['matched_present'])
-        self.assertEqual(result['cleanup']['file_count'], 0)
-        self.assertFalse(result['recovery_receipts']['entry_present'])
+        self.assertTrue(result['failed_report_present'])
+        self.assertEqual(result['failed_report_count'], 1)
+        failures = {row['id']: row for row in result['failed_reports'][0]['failed_gates']}
+        self.assertEqual(failures[reader.GATE_NAMES['english']]['stage'], 11)
+        self.assertEqual(failures[reader.GATE_NAMES['legacy_gpu']]['stage'], 11)
+        self.assertEqual(failures[reader.GATE_NAMES['privacy']]['family'], 'invalid')
         report = {'schema': 'arctic-dictation-safe-diagnostic-v1',
                   'run_id': reader.RUN_ID, 'release_acceptance': False,
                   'profiles': {'small-v2': result}}
@@ -156,6 +168,20 @@ class SafeReaderTests(unittest.TestCase):
         self.assertNotIn('private-content', emitted)
         self.assertNotIn('fixture manifest', emitted)
         self.assertNotIn(reader.IMAGE['sha256'], emitted)
+
+    def test_harness_failure_before_current_report_is_closed_and_safe(self):
+        raw, fixture_sha = self.archive(current_report=False)
+        pin = {'id': 17, 'name': 'dictation-candidate-qualification-small-v2',
+               'bytes': len(raw), 'sha256': hashlib.sha256(raw).hexdigest()}
+        artifact = {'id': 17, 'name': pin['name'], 'expired': False,
+                    'size_in_bytes': len(raw), 'digest': 'sha256:' + pin['sha256'],
+                    'workflow_run': {'id': reader.RUN_ID, 'head_sha': reader.SOURCE_SHA}}
+        with mock.patch.object(reader, 'FIXTURE_SHA256', fixture_sha), \
+                mock.patch.dict(reader.CONTEXT_PINS, {'fixture_manifest_sha256': fixture_sha}):
+            result = reader.inspect_artifact('small-v2', pin, artifact, raw, Contract)
+        self.assertFalse(result['failed_report_present'])
+        self.assertEqual(result['failed_report_count'], 0)
+        self.assertEqual(result['current_phase'], 'online-installed')
 
     def test_unknown_archive_member_is_rejected_without_reading_it(self):
         raw, fixture_sha = self.archive(extra='private.log')
