@@ -1615,6 +1615,36 @@ class GuestAutomation(unittest.TestCase):
         with self.assertRaisesRegex(c.Invalid, "projection differs"):
             c.scene_failure_line(c.SCENE_FAILURE_PREFIX + "dictationsetup private detail")
 
+        class StageLines:
+            def __init__(self, second):
+                self.rows = iter([c.SCENE_STAGE_PREFIX + "dictationsetup", second])
+                self.timeouts = []
+
+            def read(self, timeout=None):
+                self.timeouts.append(timeout)
+                value = next(self.rows)
+                if isinstance(value, Exception):
+                    raise value
+                return value
+
+        clock = iter([10.0, 20.0])
+        staged = StageLines(c.SCENE_FAILURE_PREFIX + "dictationsetup")
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure"):
+            capture_vm._scene_ready(staged, "dictationsetup", 2160,
+                                    clock=lambda: next(clock))
+        self.assertEqual(staged.timeouts, [2160, 2150])
+
+        clock = iter([10.0, 20.0])
+        silent = StageLines(c.Invalid("private capture channel timed out"))
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure") as timed_out:
+            capture_vm._scene_ready(silent, "dictationsetup", 2160,
+                                    clock=lambda: next(clock))
+        self.assertEqual(timed_out.exception.stage, "dictationsetup")
+        self.assertEqual(silent.timeouts, [2160, 2150])
+        self.assertEqual(c.scene_stage_line(c.SCENE_STAGE_PREFIX + "winter"), "winter")
+        with self.assertRaisesRegex(c.Invalid, "stage projection differs"):
+            c.scene_stage_line(c.SCENE_STAGE_PREFIX + "winter private detail")
+
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / "failure.json"
             capture_vm._write_failure_report(
@@ -1659,7 +1689,8 @@ class GuestAutomation(unittest.TestCase):
              mock.patch.object(unattended, "_wait", side_effect=wait):
             with self.assertRaisesRegex(c.Invalid, "private transcript"):
                 unattended.installed_scenes(3600, 73)
-        self.assertEqual(channel.rows, [c.SCENE_FAILURE_PREFIX + "dictationsetup"])
+        self.assertEqual(channel.rows, [c.SCENE_STAGE_PREFIX + "dictationsetup",
+                                        c.SCENE_FAILURE_PREFIX + "dictationsetup"])
         self.assertTrue(channel.closed)
 
     def test_inherited_channel_descriptor_must_be_the_exact_protected_device(self):

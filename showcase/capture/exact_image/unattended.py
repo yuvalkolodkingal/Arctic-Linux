@@ -649,6 +649,7 @@ def installed_scenes(timeout: int, channel_fd: int):
     try:
         account, environment = _inherited_graphical_environment(USERNAME)
         stage = "dictationsetup"
+        channel.write(c.SCENE_STAGE_PREFIX + stage)
         _wait(lambda: _dictation_ready(environment), min(timeout, 1800),
               "online dictation did not become ready")
         _settings(account, environment, "dictation")
@@ -656,11 +657,13 @@ def installed_scenes(timeout: int, channel_fd: int):
         _quit_settings(account, environment)
 
         stage = "winter"
+        channel.write(c.SCENE_STAGE_PREFIX + stage)
         _settings(account, environment, "appearance", "appearance.wallpaper")
         _scene(channel, "winter")
         _quit_settings(account, environment)
 
         stage = "updates"
+        channel.write(c.SCENE_STAGE_PREFIX + stage)
         _as_user(account, environment, ["/usr/bin/arctic-shell-ipc", "whatsnew", "open"])
         _scene(channel, "updates")
     except Exception:

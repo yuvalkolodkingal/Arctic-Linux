@@ -76,6 +76,7 @@ ACK_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-ACK "
 INSTALL_PREFIX = "ARCTIC-SHOWCASE-INSTALL-SEALED "
 INSTALL_ACK = "ARCTIC-SHOWCASE-INSTALL-BOOT-ACK"
 INSTALL_PROGRESS_PREFIX = "ARCTIC-SHOWCASE-INSTALL-PROGRESS "
+SCENE_STAGE_PREFIX = "ARCTIC-SHOWCASE-SCENE-STAGE "
 SCENE_FAILURE_PREFIX = "ARCTIC-SHOWCASE-SCENE-FAILURE "
 AUTOMATION_READY_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-READY "
 AUTOMATION_GO_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-GO "
@@ -562,6 +563,15 @@ def scene_failure_line(line: str) -> str:
     stage = line[len(SCENE_FAILURE_PREFIX):]
     require(stage in SCENE_FAILURE_STAGES,
             "installed scene failure projection differs")
+    return stage
+
+
+def scene_stage_line(line: str) -> str:
+    """Validate one content-free installed-scene start projection."""
+    require(type(line) is str and line.startswith(SCENE_STAGE_PREFIX),
+            "installed scene stage projection differs")
+    stage = line[len(SCENE_STAGE_PREFIX):]
+    require(stage in SCENES, "installed scene stage projection differs")
     return stage
 
 

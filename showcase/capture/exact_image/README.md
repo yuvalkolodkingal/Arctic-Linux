@@ -186,7 +186,11 @@ The installed scene helper has the same fail-closed transport behavior. If it
 fails before a readiness or capture request, it emits only the fixed prefix and
 one of `bootstrap`, `dictationsetup`, `winter` or `updates`; exception text,
 logs, transcript text and pixels never cross the channel. The host validates
-that enum and ends the attempt immediately. It uses a 36-minute transport bound
+that enum and ends the attempt immediately. Before each readiness gate the
+helper also emits only a fixed scene-start prefix and the expected scene enum.
+The host requires the enum in order and binds a later silent timeout to that
+stage without accepting the scene or extending its deadline. It uses a
+36-minute transport bound
 for the online Dictation path so the unchanged 30-minute Dictation readiness
 gate and unchanged two-minute Settings readiness gate can finish their bounded
 subprocess calls and still deliver that fixed failure enum. Wallpaper retains

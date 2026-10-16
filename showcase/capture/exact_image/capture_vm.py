@@ -242,6 +242,24 @@ def _scene_line(lines: Lines, timeout: int) -> str:
     return line
 
 
+def _scene_ready(lines: Lines, expected_scene: str, timeout: int,
+                 clock=time.monotonic) -> str:
+    """Bind a long silent readiness wait to one fixed guest scene stage."""
+    c.require(expected_scene in c.SCENES and type(timeout) is int and timeout > 1,
+              "installed scene readiness contract differs")
+    deadline = clock() + timeout
+    stage = c.scene_stage_line(_scene_line(lines, timeout))
+    c.require(stage == expected_scene, "installed scene stage order differs")
+    remaining = deadline - clock()
+    c.require(remaining > 0, "private capture channel timed out")
+    try:
+        return _scene_line(lines, max(1, int(remaining)))
+    except c.Invalid as error:
+        if str(error) == "private capture channel timed out":
+            raise GuestSceneFailure(stage) from error
+        raise
+
+
 class QMP:
     def __init__(self, path: Path, process: subprocess.Popen, startup_timeout: int):
         self.socket = self.file = None
@@ -637,7 +655,8 @@ def host_mode(args) -> int:
         capture = host.Capture(runtime / "captures", execution, provenance, ocr_identity,
                                qmp.screendump, ocr, fragments)
         for expected_scene in c.SCENES:
-            ready = _scene_line(lines, SCENE_READY_TIMEOUTS[expected_scene])
+            ready = _scene_ready(lines, expected_scene,
+                                 SCENE_READY_TIMEOUTS[expected_scene])
             c.require(ready == c.AUTOMATION_READY_PREFIX + expected_scene,
                       "installed unattended scene readiness missing")
             if expected_scene == "dictationsetup":
