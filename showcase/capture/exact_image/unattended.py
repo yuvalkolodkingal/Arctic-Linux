@@ -13,8 +13,10 @@ import os
 import pwd
 import re
 import select
+import signal
 import stat
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -603,9 +605,42 @@ def _quit_settings(account, environment):
           30, "Settings did not close")
 
 
+def _dictation_status(environment):
+    """Run the fixed status probe without trusting descendant pipe lifetime."""
+    argv = ["/usr/bin/arctic-dictation", "status"]
+    with tempfile.TemporaryFile() as output:
+        try:
+            process = subprocess.Popen(
+                argv, stdin=subprocess.DEVNULL, stdout=output,
+                stderr=subprocess.DEVNULL, env=environment,
+                close_fds=True, start_new_session=True)
+        except OSError as error:
+            raise c.Invalid("dictation status command failed") from error
+        timed_out = False
+        try:
+            returncode = process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            returncode = None
+        finally:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        if timed_out:
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired as error:
+                raise c.Invalid("dictation status command failed") from error
+            raise c.Invalid("dictation status command failed")
+        output.seek(0, os.SEEK_END)
+        c.require(output.tell() <= 32_768, "dictation status output invalid")
+        output.seek(0)
+        return subprocess.CompletedProcess(argv, returncode, output.read())
+
+
 def _dictation_ready(environment):
-    result = _run(["/usr/bin/arctic-dictation", "status"], env=environment,
-                  timeout=30, check=False, maximum=32_768)
+    result = _dictation_status(environment)
     if result.returncode != 0:
         return None
     value = c.strict_json(result.stdout)

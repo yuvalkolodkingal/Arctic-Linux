@@ -158,6 +158,10 @@ The installed helper must prove local dictation is fully ready
 with one supported multilingual profile before the host will observe the
 Dictation scene. A missing model, failed online setup, GPU/CPU mismatch, or timeout
 fails the job; no fixture or alternate screen is substituted.
+The readiness observer runs the fixed `arctic-dictation status` command in its
+own process group with file-backed bounded output. Its existing 30-second
+command timeout kills that complete group, so a surviving descendant cannot
+hold a stdout pipe open past the unchanged 30-minute readiness gate.
 
 Guest diagnostics remain untrusted. They cannot choose an input, scene, OCR
 expectation, pointer target, screenshot, receipt field, or acceptance state. The
