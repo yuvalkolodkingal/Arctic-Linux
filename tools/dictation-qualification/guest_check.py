@@ -1421,13 +1421,10 @@ class Checker:
     def gpu_failure(self):
         require(self.profile_id == 'turbo-q5-v3', 'gpu-gate-requires-modern-profile')
         self.gpu_stage('receiver-clear', self.empty)
-        # First prove the signed Vulkan payload and Arctic's real local model
-        # preflight on the VM's available Vulkan implementation.
-        self.gpu_stage('initial-vulkan-setup', self.initial_vulkan_setup)
-        # This path deliberately exercises setup without restarting the user
-        # service.  It still changed the authoritative backend, so invalidate
-        # the qualification cache before selecting CPU for the failure test.
-        self.selected_backend = None
+        # The frozen GitHub-hosted VM exposes a 2D virtio display without
+        # virgl, GPU passthrough or another accelerated Vulkan device. It can
+        # validate the signed Vulkan payload and the real unsupported-device
+        # failure/recovery path, but it cannot certify GPU acceleration.
         vulkan = PAYLOAD / ASSETS['vulkan']['name']
         def payload_integrity():
             owned_file(vulkan, ASSETS['vulkan']['bytes'])
@@ -1438,28 +1435,12 @@ class Checker:
 
         # Make the visible language selection deterministic for both recovery screens.
         self.gpu_stage('language-selection', lambda: self.select(language='he'))
-        def loader_fixture():
-            icd = self.root / 'bad-icd.json'
-            missing = self.root / 'libarctic-missing-vulkan-driver.so'
-            icd.write_text(json.dumps({'file_format_version': '1.0.0',
-                'ICD': {'library_path': str(missing), 'api_version': '1.3.0'}},
-                sort_keys=True) + '\n')
-            os.chmod(icd, 0o600)
-            os.chown(icd, self.account.pw_uid, self.account.pw_gid)
-            return icd
-        icd = self.gpu_stage('loader-fixture', loader_fixture)
-        # Exercise Arctic's guarded selection with a loader configuration that
-        # cannot open an ICD. Upstream Vulkan deliberately supports automatic
-        # CPU fallback, so running a recording under this fixture cannot prove
-        # an error and may insert CPU-produced text. Arctic instead must reject
-        # the switch, preserve CPU, and publish an actionable error before any
-        # recording can start on the requested backend.
-        def failed_vulkan_setup():
-            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                          'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error',
-                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
-            require(failed.returncode != 0, 'gpu-failure-preflight-succeeded')
-        self.gpu_stage('failed-vulkan-setup', failed_vulkan_setup)
+        # Exercise Arctic's guarded selector against the VM's real unsupported
+        # Vulkan environment. Upstream may fall back internally, so a successful
+        # command would not certify GPU execution and must invalidate this frozen
+        # fixture instead of being counted as recovery evidence. Stop the resident
+        # CPU model to make resource pressure independent of the setup outcome.
+        self.gpu_stage('failed-vulkan-setup', self.vm_vulkan_failure)
         self.gpu_stage('cpu-preservation', lambda: require(
             (SYSTEM / 'backend').read_text().strip() == 'cpu'
             and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
@@ -1492,42 +1473,26 @@ class Checker:
         cpu_ready_capture_ack_sha256 = self.gpu_stage(
             'cpu-ready-screen', lambda: self.recovery_screen(
                 'cpu_ready', status, expected_language='he'))
-        return {'gpu_supported': True, 'explicit_cpu_selected': True,
+        return {'gpu_supported': False, 'explicit_cpu_selected': True,
                 'failed_attempt_inserted': False, 'count': 2,
                 'bytes': ASSETS['vulkan']['bytes'],
                 'sha256': ASSETS['vulkan']['sha256'],
                 'gpu_failure_capture_ack_sha256': gpu_failure_capture_ack_sha256,
                 'cpu_ready_capture_ack_sha256': cpu_ready_capture_ack_sha256}
 
-    def initial_vulkan_setup(self):
-        """Run the setup proof without an unrelated resident CPU model."""
+    def vm_vulkan_failure(self):
+        """Require the frozen non-GPU VM to reject real Vulkan selection."""
+        self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
         try:
-            self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
-        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
-            raise GpuStageFailure(
-                'initial-vulkan-setup', caught_error_label(error), 2021) from None
-        complete = False
-        try:
-            try:
-                result = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                              str(SETUP), '--backend', 'vulkan'], 750, check=False)
-            except subprocess.TimeoutExpired:
-                raise GpuStageFailure('initial-vulkan-setup', 'timeout', 2023) from None
-            except (OSError, ValueError, KeyError, TypeError) as error:
-                raise GpuStageFailure(
-                    'initial-vulkan-setup', caught_error_label(error), 2024) from None
-            if result.returncode != 0:
-                code = result.returncode if 1 <= result.returncode <= 255 else 255
-                raise GpuStageFailure(
-                    'initial-vulkan-setup', 'invalid', 2022, code)
-            complete = True
-            return result
+            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
+            require(failed.returncode != 0, 'vm-vulkan-fixture-unexpectedly-supported')
+            return failed
         finally:
-            # A successful setup leaves the daemon stopped only until the
-            # immediately following supported CPU selection restarts it.  A
-            # failed setup must not contaminate later cleanup/diagnostics.
-            if not complete:
-                self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
+            # The setup failure preserves CPU and publishes an error. Restore
+            # the official daemon so Settings can display that checked state;
+            # the later explicit CPU selection clears the error and restarts it.
+            self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
 
     def recovery_screen(self, stage, status, expected_language):
         """Bind an exact host screenshot to the visible, transcript-free Settings state."""

@@ -20,49 +20,47 @@ class ObserverPrerequisiteControls(unittest.TestCase):
             stdout=b'', stderr=b'', returncode=0))
         return checker
 
-    def test_successful_vulkan_preflight_stops_resident_daemon_until_cpu_selection(self):
+    def test_frozen_runner_has_no_accelerated_vulkan_device(self):
+        harness = (Path(__file__).resolve().parents[2] / 'tools/test-install.sh').read_text()
+        self.assertIn('"-display", "none", "-vga", "virtio"', harness)
+        self.assertNotIn('virgl=on', harness)
+        self.assertNotIn('hostdev', harness)
+
+    def test_frozen_vm_vulkan_failure_stops_resident_daemon_and_restores_it(self):
         checker = self.checker()
-        result = SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
-        with mock.patch.object(guest, 'run', return_value=result) as execute:
-            self.assertIs(checker.initial_vulkan_setup(), result)
-        checker.cmd.assert_called_once_with(
-            ['systemctl', '--user', 'stop', 'voxtype.service'])
+        failed = SimpleNamespace(stdout=b'private', stderr=b'private', returncode=1)
+        with mock.patch.object(guest, 'run', return_value=failed) as execute:
+            self.assertIs(checker.vm_vulkan_failure(), failed)
+        checker.cmd.assert_has_calls([
+            mock.call(['systemctl', '--user', 'stop', 'voxtype.service']),
+            mock.call(['systemctl', '--user', 'start', 'voxtype.service'], check=False),
+        ])
         execute.assert_called_once_with([
             '/usr/bin/env', 'PKEXEC_UID=1000', str(guest.SETUP),
             '--backend', 'vulkan'], 750, check=False)
 
-    def test_failed_vulkan_preflight_exports_only_closed_exit_outcome_and_restores_daemon(self):
+    def test_frozen_vm_vulkan_success_invalidates_fixture_and_restores_daemon(self):
         checker = self.checker()
-        failed = SimpleNamespace(stdout=b'private', stderr=b'private', returncode=1)
-        with mock.patch.object(guest, 'run', return_value=failed):
-            with self.assertRaises(guest.GpuStageFailure) as raised:
-                checker.initial_vulkan_setup()
-        self.assertEqual(raised.exception.failure_stage,
-                         guest.GPU_FAILURE_STAGES['initial-vulkan-setup'])
-        self.assertEqual(raised.exception.failure_substage, 2022)
-        self.assertEqual(raised.exception.failure_returncode, 1)
-        self.assertEqual(raised.exception.error_label, 'invalid')
+        succeeded = SimpleNamespace(stdout=b'private', stderr=b'private', returncode=0)
+        with mock.patch.object(guest, 'run', return_value=succeeded):
+            with self.assertRaisesRegex(
+                    guest.Invalid, '^vm-vulkan-fixture-unexpectedly-supported$'):
+                checker.vm_vulkan_failure()
         self.assertEqual(checker.cmd.call_args_list, [
             mock.call(['systemctl', '--user', 'stop', 'voxtype.service']),
             mock.call(['systemctl', '--user', 'start', 'voxtype.service'], check=False),
         ])
 
-    def test_vulkan_preflight_substages_distinguish_stop_timeout_and_launch_error(self):
+    def test_frozen_vm_vulkan_timeout_restores_daemon(self):
         checker = self.checker()
-        checker.cmd.side_effect = guest.Invalid('command-failed')
-        with self.assertRaises(guest.GpuStageFailure) as stopped:
-            checker.initial_vulkan_setup()
-        self.assertEqual((stopped.exception.failure_substage,
-                          stopped.exception.error_label), (2021, 'invalid'))
-
-        for error, expected in ((guest.subprocess.TimeoutExpired(['private'], 1), (2023, 'timeout')),
-                                (OSError('private'), (2024, 'os-error'))):
-            checker = self.checker()
-            with mock.patch.object(guest, 'run', side_effect=error):
-                with self.assertRaises(guest.GpuStageFailure) as raised:
-                    checker.initial_vulkan_setup()
-            self.assertEqual((raised.exception.failure_substage,
-                              raised.exception.error_label), expected)
+        with mock.patch.object(guest, 'run', side_effect=guest.subprocess.TimeoutExpired(
+                ['private'], 1)):
+            with self.assertRaises(guest.subprocess.TimeoutExpired):
+                checker.vm_vulkan_failure()
+        self.assertEqual(checker.cmd.call_args_list, [
+            mock.call(['systemctl', '--user', 'stop', 'voxtype.service']),
+            mock.call(['systemctl', '--user', 'start', 'voxtype.service'], check=False),
+        ])
 
     def privacy_checker(self, phrase_count, prior_failed):
         checker = self.checker()

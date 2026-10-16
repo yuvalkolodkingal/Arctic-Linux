@@ -195,7 +195,7 @@ class GateDiagnosticControls(unittest.TestCase):
         with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-family$'):
             guest.GpuStageFailure('gpu-failure-screen', 'private-family')
 
-    def test_closed_substages_and_returncode_project_without_command_output(self):
+    def test_closed_engine_substage_projects_without_command_output(self):
         cpu_gate = 'cpu-hebrew-transcription-insertion'
         checker = self.checker(cpu_gate)
         failure = guest.TranscriptionStageFailure('engine-profile', 'invalid', 704)
@@ -203,15 +203,6 @@ class GateDiagnosticControls(unittest.TestCase):
         self.assertEqual(checker.report['gates'][0]['observations'], {
             'failure_stage': guest.TRANSCRIPTION_FAILURE_STAGES['engine-profile'],
             'failure_substage': 704})
-
-        gpu_gate = guest.MODERN_GPU_GATE
-        checker = self.checker(gpu_gate)
-        failure = guest.GpuStageFailure(
-            'initial-vulkan-setup', 'invalid', 2022, 1)
-        self.assertFalse(checker.gate(gpu_gate, self.raising(failure)))
-        self.assertEqual(checker.report['gates'][0]['observations'], {
-            'failure_stage': guest.GPU_FAILURE_STAGES['initial-vulkan-setup'],
-            'failure_substage': 2022, 'failure_returncode': 1})
 
     def test_gpu_wrapper_preserves_nested_transcription_stage(self):
         checker = self.checker(guest.MODERN_GPU_GATE)

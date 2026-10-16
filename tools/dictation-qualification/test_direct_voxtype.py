@@ -641,8 +641,8 @@ on_transcription = false
                    and isinstance(call.args[0], ast.Constant)]
         self.assertIn('gpu-failure-actionable-error', targets)
         source = ast.get_source_segment((HERE / 'guest_check.py').read_text(), method)
-        self.assertIn("'VK_DRIVER_FILES=' + str(icd)", source)
-        self.assertIn("failed.returncode != 0", source)
+        self.assertIn("self.vm_vulkan_failure", source)
+        self.assertNotIn('VK_DRIVER_FILES', source)
         self.assertIn("(SYSTEM / 'backend').read_text().strip() == 'cpu'", source)
         self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
         self.assertIn("status.get('backend') == 'cpu'", source)

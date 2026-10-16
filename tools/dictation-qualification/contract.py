@@ -82,7 +82,7 @@ def pinned(profile):
 LIMITATIONS = [
     'measured-public-read-speech-only', 'no-whisper-parity-claim',
     'virtual-source-not-physical-microphone',
-    'bad-icd-loader-fixture-not-physical-driver-failure',
+    'non-gpu-vm-rejection-not-physical-driver-failure',
     'legacy-profile-does-not-certify-vulkan',
     'hardware-acceleration-not-certified-by-this-vm',
     'visible-indicator-needs-screenshot-review',
@@ -98,7 +98,7 @@ OBSERVATIONS = {
     'gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256',
     'audit_lost_before', 'audit_enabled_before', 'command_count',
     'allowed_state_count', 'language_count', 'input_group_membership', 'bytes',
-    'failure_stage', 'failure_substage', 'failure_returncode',
+    'failure_stage', 'failure_substage',
     'pre_activation_engine_count', 'resident_rss_bytes',
 }
 ERROR_LABELS = {'invalid', 'os-error', 'value-error', 'timeout', 'key-error', 'type-error'}
@@ -150,11 +150,9 @@ MICROPHONE_FAILURE_STAGES = {
 }
 GPU_FAILURE_STAGES = {
     'receiver-clear': 201,
-    'initial-vulkan-setup': 202,
     'vulkan-payload-integrity': 203,
     'cpu-backend-selection': 204,
     'language-selection': 205,
-    'loader-fixture': 206,
     'failed-vulkan-setup': 207,
     'cpu-preservation': 208,
     'receiver-empty': 209,
@@ -166,7 +164,6 @@ GPU_FAILURE_STAGES = {
 }
 FAILURE_SUBSTAGES = {
     TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
-    GPU_FAILURE_STAGES['initial-vulkan-setup']: frozenset({2021, 2022, 2023, 2024}),
 }
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
@@ -197,7 +194,7 @@ EXPECTED_KINDS.update({name: 'config-inspection' for name in (
 EXPECTED_KINDS.update({
     'missing-model-error': 'file-removal-fixture',
     'microphone-disconnect-error': 'device-disconnect-fixture',
-    MODERN_GPU_GATE: 'loader-configuration-fixture',
+    MODERN_GPU_GATE: 'actual-session',
     'transcript-log-notification-leak-scan': 'interval-log-scan',
     'no-new-avcs': 'interval-log-scan',
 })
@@ -223,7 +220,7 @@ REQUIRED_OBSERVATIONS = {
     'missing-model-error': {'ready': False, 'restored': True},
     'microphone-disconnect-error': {'count': 0, 'drained': True, 'restored': True},
     'lock-discards': {'locked': True, 'count': 0, 'drained': True},
-    MODERN_GPU_GATE: {'gpu_supported': True, 'explicit_cpu_selected': True,
+    MODERN_GPU_GATE: {'gpu_supported': False, 'explicit_cpu_selected': True,
                       'failed_attempt_inserted': False, 'count': 2,
                       'bytes': ASSETS['vulkan']['bytes'],
                       'sha256': ASSETS['vulkan']['sha256']},
@@ -374,13 +371,6 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                     and observed.get('failure_stage') in FAILURE_SUBSTAGES
                     and substage in FAILURE_SUBSTAGES[observed['failure_stage']],
                     'gate-failure-substage-value')
-        returncode = observed.get('failure_returncode')
-        if returncode is not None:
-            require(type(returncode) is int and 1 <= returncode <= 255
-                    and observed.get('failure_stage') ==
-                        GPU_FAILURE_STAGES['initial-vulkan-setup']
-                    and substage == 2022,
-                    'gate-failure-returncode-scope')
         if gate['status'] == 'passed':
             required = REQUIRED_OBSERVATIONS.get(gate['id'], {})
             require(all(type(observed.get(key)) is type(value) and observed.get(key) == value
