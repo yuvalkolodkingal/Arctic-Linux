@@ -4,6 +4,7 @@ import unittest
 import json
 import os
 import shlex
+import signal
 import stat
 import subprocess
 import types
@@ -1855,14 +1856,28 @@ class GuestAutomation(unittest.TestCase):
                 "model_download_bytes": 487601967, "download_bytes": 506440871,
                 "compatibility_required": False}
         result = types.SimpleNamespace(returncode=0, stdout=json.dumps(good).encode())
-        with mock.patch.object(unattended, "_run", return_value=result):
+        with mock.patch.object(unattended, "_dictation_status", return_value=result):
             self.assertTrue(unattended._dictation_ready({}))
         for field, value in (("ready", False), ("state", "error"),
                              ("download_bytes", 9), ("compatibility_required", True)):
             bad = dict(good, **{field: value})
             result = types.SimpleNamespace(returncode=0, stdout=json.dumps(bad).encode())
-            with mock.patch.object(unattended, "_run", return_value=result):
+            with mock.patch.object(unattended, "_dictation_status", return_value=result):
                 self.assertIsNone(unattended._dictation_ready({}))
+
+    def test_dictation_status_timeout_kills_the_private_process_group(self):
+        argv = ["/usr/bin/arctic-dictation", "status"]
+        process = mock.Mock(pid=4242)
+        process.wait.side_effect = [subprocess.TimeoutExpired(argv, 30), 0]
+        with mock.patch.object(unattended.subprocess, "Popen", return_value=process) as popen, \
+             mock.patch.object(unattended.os, "killpg") as killpg, \
+             self.assertRaisesRegex(c.Invalid, "status command failed"):
+            unattended._dictation_status({"LC_ALL": "C"})
+        self.assertTrue(popen.call_args.kwargs["start_new_session"])
+        self.assertIsNot(popen.call_args.kwargs["stdout"], subprocess.PIPE)
+        self.assertEqual(process.wait.call_args_list,
+                         [mock.call(timeout=30), mock.call(timeout=5)])
+        killpg.assert_called_once_with(4242, signal.SIGKILL)
 
 
 if __name__ == "__main__":
