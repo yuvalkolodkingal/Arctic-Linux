@@ -1,8 +1,8 @@
-name: Inspect candidate 37903438836 metadata
+name: Inspect candidate 38866458401 small metadata
 
 on:
   push:
-    branches: [codex/inspect-candidate-379034]
+    branches: [codex/inspect-candidate-388664]
     paths: [.github/workflows/inspect-built-qualification-20261009.yml]
 
 permissions:
@@ -15,43 +15,222 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Verify fixed retained metadata archive and report image identity
+      - name: Verify fixed small artifacts and report candidate identity
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           python3 -B - <<'PY'
-          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
-          from pathlib import Path
-          assert os.environ['GITHUB_REPOSITORY'] == 'yuvalkolodkingal/Arctic-Linux'
-          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-candidate-379034'
-          endpoint = 'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/11604117213'
-          digest = '12753a67841065e424587b57829ca5d5631c1574326473e3cdd82e101fde08c2'
-          metadata = json.loads(subprocess.check_output(['gh', 'api', endpoint]))
-          assert metadata['name'] == 'arctic-iso-metadata' and not metadata['expired']
-          assert metadata['workflow_run']['id'] == 37903438836
-          assert metadata['workflow_run']['head_sha'] == 'e2a62bb8945f7fe9975cb862986af4dd2be0873d'
-          assert metadata['size_in_bytes'] == 31830 and metadata['digest'] == 'sha256:' + digest
-          sensitive = re.compile(r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|-----BEGIN[^\n]*PRIVATE KEY|password\s*[:=]\s*\S+|Authorization\s*[:=]|https?://[^\s]*\?[^\s]', re.I)
-          with tempfile.TemporaryDirectory(prefix='arctic-iso-metadata-') as folder:
-              path = Path(folder) / 'retained.zip'
-              with path.open('xb') as output:
-                  subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True)
-              assert path.stat().st_size == 31830 and hashlib.sha256(path.read_bytes()).hexdigest() == digest
-              with zipfile.ZipFile(path) as archive:
+          import hashlib
+          import json
+          import os
+          from pathlib import Path, PurePosixPath
+          import re
+          import stat
+          import subprocess
+          import tempfile
+          import zipfile
+
+          REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
+          RUN_ID = 38866458401
+          SOURCE_SHA = '4f2595c3ecf11ab3332a615df162518d3f677f59'
+          SOURCE_BRANCH = 'codex/final-source-candidate-20261015'
+          IMAGE_NAME = f'Arctic-Linux-1.2-candidate-{RUN_ID}-1-x86_64.iso'
+          ARTIFACTS = {
+              'metadata': {
+                  'id': 12031609601,
+                  'name': 'arctic-iso-metadata',
+                  'bytes': 31876,
+                  'sha256': '995853d8b2bc1f4aabc2a10000fa9c346535a464b90bca65d6102709264d0619',
+                  'members': 40,
+                  'expanded_bytes': 2_000_000,
+              },
+              'receipt': {
+                  'id': 12034066256,
+                  'name': 'arctic-external-producer-receipt',
+                  'bytes': 1700,
+                  'sha256': '56c163afbdb502645b351081d1c46f24c518076fc384f8ab189d7f23ed03c3dd',
+                  'members': 1,
+                  'expanded_bytes': 32_768,
+              },
+          }
+          HEX64 = re.compile(r'[0-9a-f]{64}')
+          SENSITIVE = re.compile(
+              r'gh[pousr]_[A-Za-z0-9]{20,}|github_pat_|(?:AKIA|ASIA)[A-Z0-9]{16}|'
+              r'-----BEGIN[^\n]*PRIVATE KEY|(?:password|token|secret)\s*[:=]\s*\S+|'
+              r'Authorization\s*[:=]|https?://[^\s]*\?[^\s]', re.I)
+
+          def api(endpoint):
+              return json.loads(subprocess.check_output(
+                  ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}'], timeout=60))
+
+          def unique(pairs):
+              result = {}
+              for key, value in pairs:
+                  assert key not in result, 'Duplicate JSON field'
+                  result[key] = value
+              return result
+
+          def safe_member(item):
+              name = item.filename
+              path = PurePosixPath(name)
+              mode = item.external_attr >> 16
+              kind = stat.S_IFMT(mode)
+              assert name and len(name.encode()) <= 1024
+              assert '\\' not in name and '\x00' not in name
+              assert not path.is_absolute() and all(part not in ('', '.', '..') for part in path.parts)
+              assert not item.is_dir() and not name.endswith('/')
+              assert kind in (0, stat.S_IFREG), f'Unsupported artifact member type: {name}'
+              assert not item.flag_bits & 0x1, f'Encrypted artifact member refused: {name}'
+              assert item.file_size >= 0 and item.compress_size >= 0
+
+          def safe_text(raw, name, max_bytes, max_lines):
+              assert 0 < len(raw) <= max_bytes, f'Invalid text member size: {name}'
+              text = raw.decode('utf-8', errors='strict')
+              assert '\x00' not in text and not any(
+                  ord(char) < 32 and char not in '\n\r\t' for char in text), f'Control byte in {name}'
+              assert len(text.splitlines()) <= max_lines, f'Too many lines in {name}'
+              assert not SENSITIVE.search(text), f'Sensitive text refused: {name}'
+              return text
+
+          def key_values(text, name):
+              values = {}
+              for line in text.splitlines():
+                  if not line or line.startswith(('rpms=', 'srpms=')):
+                      continue
+                  assert '=' in line, f'Invalid key/value line in {name}'
+                  key, value = line.split('=', 1)
+                  assert key and key not in values, f'Duplicate key in {name}'
+                  values[key] = value
+              return values
+
+          assert os.environ['GITHUB_REPOSITORY'] == REPOSITORY
+          assert os.environ['GITHUB_REF'] == 'refs/heads/codex/inspect-candidate-388664'
+          assert os.environ['GITHUB_RUN_ATTEMPT'] == '1'
+          run = api(f'actions/runs/{RUN_ID}')
+          assert run['id'] == RUN_ID
+          assert run['name'] == 'ISO' and run['path'] == '.github/workflows/iso.yml'
+          assert run['workflow_id'] == 368518403
+          assert run['head_branch'] == SOURCE_BRANCH and run['head_sha'] == SOURCE_SHA
+          assert run['event'] == 'workflow_dispatch' and run['run_attempt'] == 1
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['repository']['full_name'] == REPOSITORY
+          assert run['head_repository']['full_name'] == REPOSITORY
+
+          with tempfile.TemporaryDirectory(prefix='arctic-small-artifacts-') as folder:
+              root = Path(folder)
+              archives = {}
+              for label, expected in ARTIFACTS.items():
+                  endpoint = f'actions/artifacts/{expected["id"]}'
+                  metadata = api(endpoint)
+                  assert metadata['id'] == expected['id'] and metadata['name'] == expected['name']
+                  assert metadata['expired'] is False
+                  assert metadata['workflow_run']['id'] == RUN_ID
+                  assert metadata['workflow_run']['head_sha'] == SOURCE_SHA
+                  assert metadata['workflow_run']['head_branch'] == SOURCE_BRANCH
+                  assert metadata['size_in_bytes'] == expected['bytes']
+                  assert metadata['digest'] == 'sha256:' + expected['sha256']
+                  archive_path = root / f'{label}.zip'
+                  with archive_path.open('xb') as output:
+                      subprocess.run(
+                          ['gh', 'api', f'repos/{REPOSITORY}/{endpoint}/zip'],
+                          stdout=output, check=True, timeout=60)
+                  assert archive_path.stat().st_size == expected['bytes']
+                  assert hashlib.sha256(archive_path.read_bytes()).hexdigest() == expected['sha256']
+                  archives[label] = archive_path
+
+              selected = {}
+              with zipfile.ZipFile(archives['metadata']) as archive:
+                  assert archive.testzip() is None, 'Metadata ZIP CRC failure'
                   items = archive.infolist()
-                  assert len(items) <= 30 and sum(item.file_size for item in items) < 2_000_000
+                  assert 1 <= len(items) <= ARTIFACTS['metadata']['members']
                   assert len({item.filename for item in items}) == len(items)
+                  assert sum(item.file_size for item in items) < ARTIFACTS['metadata']['expanded_bytes']
                   for item in items:
-                      p = Path(item.filename)
-                      assert not p.is_absolute() and '..' not in p.parts
-                      assert (item.external_attr >> 16 & 0o170000) in (0, 0o100000), 'Unsupported metadata member type'
-                      print('ARCTIC-ISO-METADATA-MEMBER', item.filename, item.file_size)
-                      if p.name == 'BUILD-INFO' or p.suffix in ('.sha256', '.build-info'):
-                          assert item.file_size < 100_000
-                          text = archive.read(item).decode('utf-8', errors='strict')
-                          assert not sensitive.search(text), 'Sensitive metadata refused'
-                          assert len(text.splitlines()) <= 300
-                          print('ARCTIC-ISO-METADATA-BEGIN', item.filename)
-                          print(text)
-                          print('ARCTIC-ISO-METADATA-END', item.filename)
+                      safe_member(item)
+                      text = safe_text(archive.read(item), item.filename, 1_000_000, 50_000)
+                      name = PurePosixPath(item.filename).name
+                      if name == 'BUILD-INFO' or name in (IMAGE_NAME + '.sha256', IMAGE_NAME[:-4] + '.build-info'):
+                          assert name not in selected
+                          selected[name] = text
+                  assert set(selected) == {
+                      'BUILD-INFO', IMAGE_NAME + '.sha256', IMAGE_NAME[:-4] + '.build-info'}
+
+              checksum_text = selected[IMAGE_NAME + '.sha256']
+              checksum_fields = checksum_text.strip().split()
+              assert len(checksum_fields) == 2 and HEX64.fullmatch(checksum_fields[0])
+              assert checksum_fields[1] == IMAGE_NAME
+              build_values = key_values(selected[IMAGE_NAME[:-4] + '.build-info'], 'image build-info')
+              assert build_values['git_commit'] == SOURCE_SHA
+              assert build_values['build_tool_commit'] == SOURCE_SHA
+              assert build_values['arctic_repos'] == 'enabled'
+              assert build_values['size_target_bytes'] == '1999999999'
+              assert build_values['size_target_met'] == 'yes'
+              assert build_values['preferred_size_target_bytes'] == '1599999999'
+              assert build_values['preferred_size_target_met'] in ('yes', 'no')
+              assert int(build_values['iso_bytes']) < 2_000_000_000
+
+              with zipfile.ZipFile(archives['receipt']) as archive:
+                  assert archive.testzip() is None, 'Receipt ZIP CRC failure'
+                  items = archive.infolist()
+                  assert len(items) == ARTIFACTS['receipt']['members']
+                  assert items[0].filename == 'PERFORMANCE-PLAN.json'
+                  assert sum(item.file_size for item in items) <= ARTIFACTS['receipt']['expanded_bytes']
+                  safe_member(items[0])
+                  raw = archive.read(items[0])
+                  text = safe_text(raw, items[0].filename, 32_768, 500)
+                  receipt = json.loads(text, object_pairs_hook=unique)
+
+              assert set(receipt) == {
+                  'schema', 'repository', 'workflow', 'event', 'source_sha', 'run_id',
+                  'run_attempt', 'mode', 'release_acceptance', 'inputs', 'image', 'startup_results'}
+              assert receipt['schema'] == 'arctic-producer-performance-receipt-v1'
+              assert receipt['repository'] == REPOSITORY
+              assert receipt['workflow'] == '.github/workflows/iso.yml'
+              assert receipt['event'] == 'workflow_dispatch'
+              assert receipt['source_sha'] == SOURCE_SHA
+              assert receipt['run_id'] == RUN_ID and type(receipt['run_id']) is int
+              assert receipt['run_attempt'] == 1 and type(receipt['run_attempt']) is int
+              assert receipt['mode'] == 'frozen-external-paired-v1'
+              assert receipt['release_acceptance'] is False
+              assert receipt['inputs'] == {
+                  'expected_source_sha': SOURCE_SHA,
+                  'release': False,
+                  'tag': '',
+                  'prerelease': True,
+                  'draft': False,
+                  'nix_acceptance': False,
+                  'performance_acceptance': False,
+                  'boot_test': True,
+                  'performance_mode': 'frozen-external-paired-v1',
+              }
+              image = receipt['image']
+              assert set(image) == {'name', 'bytes', 'sha256'}
+              assert image['name'] == IMAGE_NAME
+              assert type(image['bytes']) is int and 0 < image['bytes'] < 2_000_000_000
+              assert image['bytes'] == int(build_values['iso_bytes'])
+              assert image['sha256'] == checksum_fields[0]
+              lanes = {
+                  'uefi-try': ('uefi', 'try'),
+                  'bios-install': ('bios', 'install'),
+                  'uefi-safe': ('uefi', 'safe'),
+              }
+              assert isinstance(receipt['startup_results'], dict)
+              assert set(receipt['startup_results']) == set(lanes)
+              for lane, (firmware, mode) in lanes.items():
+                  result = receipt['startup_results'][lane]
+                  assert set(result) == {'firmware', 'mode', 'status', 'serial_bytes', 'serial_sha256'}
+                  assert result['firmware'] == firmware and result['mode'] == mode
+                  assert result['status'] == 'passed'
+                  assert type(result['serial_bytes']) is int and 0 < result['serial_bytes'] <= 10_000_000
+                  assert type(result['serial_sha256']) is str and HEX64.fullmatch(result['serial_sha256'])
+
+              receipt_sha256 = hashlib.sha256(raw).hexdigest()
+              for name in ('BUILD-INFO', IMAGE_NAME + '.sha256', IMAGE_NAME[:-4] + '.build-info'):
+                  print('ARCTIC-ISO-METADATA-BEGIN', name)
+                  print(selected[name], end='' if selected[name].endswith('\n') else '\n')
+                  print('ARCTIC-ISO-METADATA-END', name)
+              print('ARCTIC-PERFORMANCE-PLAN-SHA256', receipt_sha256)
+              print('ARCTIC-PERFORMANCE-PLAN-BEGIN')
+              print(text, end='' if text.endswith('\n') else '\n')
+              print('ARCTIC-PERFORMANCE-PLAN-END')
           PY
