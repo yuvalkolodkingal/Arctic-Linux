@@ -175,6 +175,17 @@ that; only the real installation stage retains its 90-minute allowance. An
 unexpected Python `Exception` is re-raised after a best-effort fixed failure
 record, so its message and guest content never cross the private channel.
 
+The installed scene helper has the same fail-closed transport behavior. If it
+fails before a readiness or capture request, it emits only the fixed prefix and
+one of `bootstrap`, `dictationsetup`, `winter` or `updates`; exception text,
+logs, transcript text and pixels never cross the channel. The host validates
+that enum and ends the attempt immediately. It also uses a 34-minute bound for
+the online Dictation readiness path, five minutes for Wallpaper, three minutes
+for What's New and five minutes for each post-authorization diagnostic request.
+These bounds do not replace or relax any readiness, nonce, screen, privacy or
+human-review gate; they only prevent a failed guest helper from inheriting the
+outer 120-minute channel timeout while QEMU keeps the character device open.
+
 The fresh disposable account's top-layer welcome is expected. After the
 Dictation page is open behind it, the host requires `Welcome to Arctic Linux`
 pixels, sends one QMP Escape, and requires both `Dictation is ready` and the

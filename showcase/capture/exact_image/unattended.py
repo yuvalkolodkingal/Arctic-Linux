@@ -600,28 +600,48 @@ def _scene(channel: Channel, scene: str):
     session.accept(channel.read())
 
 
+def _scene_failure(channel, stage: str):
+    """Best-effort fixed failure signal; never send exception or guest content."""
+    c.require(stage in c.SCENE_FAILURE_STAGES,
+              "installed scene failure projection differs")
+    if channel is not None:
+        try:
+            channel.write(c.SCENE_FAILURE_PREFIX + stage)
+        except (c.Invalid, OSError):
+            pass
+
+
 def installed_scenes(timeout: int):
     c.require(os.geteuid() > 0 and pwd.getpwuid(os.geteuid()).pw_name == USERNAME,
               "installed automation account differs")
-    account, vt, environment = _wait(lambda: _graphical_environment(USERNAME), 300,
-                                     "installed graphical session unavailable")
-    channel = _wait(lambda: Channel(timeout, require_nonroot=True), 60,
-                    "installed channel ACL unavailable")
+    channel = None
+    stage = "bootstrap"
     try:
+        account, vt, environment = _wait(lambda: _graphical_environment(USERNAME), 300,
+                                         "installed graphical session unavailable")
+        channel = _wait(lambda: Channel(timeout, require_nonroot=True), 60,
+                        "installed channel ACL unavailable")
+        stage = "dictationsetup"
         _wait(lambda: _dictation_ready(environment), min(timeout, 1800),
               "online dictation did not become ready")
         _settings(account, environment, "dictation")
         _scene(channel, "dictationsetup")
         _quit_settings(account, environment)
 
+        stage = "winter"
         _settings(account, environment, "appearance", "appearance.wallpaper")
         _scene(channel, "winter")
         _quit_settings(account, environment)
 
+        stage = "updates"
         _as_user(account, environment, ["/usr/bin/arctic-shell-ipc", "whatsnew", "open"])
         _scene(channel, "updates")
+    except Exception:
+        _scene_failure(channel, stage)
+        raise
     finally:
-        channel.close()
+        if channel is not None:
+            channel.close()
 
 
 def installed_root_launch(timeout: int):
@@ -634,7 +654,21 @@ def installed_root_launch(timeout: int):
     argv.extend(f"{key}={value}" for key, value in sorted(environment.items()))
     argv.extend(["/usr/bin/python3", str(Path(__file__).resolve()), "installed-scenes",
                  "--timeout", str(timeout)])
-    _run(argv, timeout=timeout + 60, maximum=32_768)
+    try:
+        _run(argv, timeout=timeout + 60, maximum=32_768)
+    except Exception:
+        # The non-root helper normally reports its exact fixed stage. This
+        # fallback covers failure before it can open the ACL-protected port.
+        fallback = None
+        try:
+            fallback = Channel(60, require_nonroot=False)
+            _scene_failure(fallback, "bootstrap")
+        except (c.Invalid, OSError):
+            pass
+        finally:
+            if fallback is not None:
+                fallback.close()
+        raise
 
 
 def main(argv=None):

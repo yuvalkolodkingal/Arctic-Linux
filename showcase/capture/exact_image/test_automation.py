@@ -1591,7 +1591,71 @@ class GuestAutomation(unittest.TestCase):
             self.assertEqual(value["failure_code"], "private-channel-timeout")
             self.assertEqual(value["live_startup"]["release_acceptance"], False)
             self.assertEqual(value["installed_startup"]["release_acceptance"], False)
+            self.assertIsNone(value["guest_scene_stage"])
             self.assertNotIn("private capture channel timed out", path.read_text())
+
+    def test_scene_failure_is_fixed_bounded_and_interrupts_long_host_read(self):
+        class Lines:
+            def __init__(self, line):
+                self.line = line
+                self.timeouts = []
+
+            def read(self, timeout=None):
+                self.timeouts.append(timeout)
+                return self.line
+
+        lines = Lines(c.SCENE_FAILURE_PREFIX + "dictationsetup")
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure") as raised:
+            capture_vm._scene_line(lines, 2040)
+        self.assertEqual(raised.exception.stage, "dictationsetup")
+        self.assertEqual(lines.timeouts, [2040])
+        with self.assertRaisesRegex(c.Invalid, "projection differs"):
+            c.scene_failure_line(c.SCENE_FAILURE_PREFIX + "dictationsetup private detail")
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "failure.json"
+            capture_vm._write_failure_report(
+                path, "capture-scenes", [], raised.exception, None,
+                automation.LiveStartupDiagnostic().projection(),
+                automation.InstalledStartupDiagnostic().projection())
+            value = c.strict_json(path.read_bytes())
+            c.capture_failure(value)
+            self.assertEqual(value["failure_code"], "guest-scene-failed")
+            self.assertEqual(value["guest_scene_stage"], "dictationsetup")
+            self.assertNotIn("private detail", path.read_text())
+
+    def test_installed_scene_failure_reports_only_enumerated_stage(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name=c.CONTROLLER["account"]["username"],
+                                        pw_dir="/home/" + c.CONTROLLER["account"]["username"])
+
+        class Channel:
+            def __init__(self):
+                self.rows = []
+                self.closed = False
+
+            def write(self, line):
+                self.rows.append(line)
+
+            def close(self):
+                self.closed = True
+
+        channel = Channel()
+        waits = iter([(account, 2, {"PATH": "/usr/bin:/bin"}), channel,
+                      c.Invalid("private transcript and exception text")])
+
+        def wait(*_args, **_kwargs):
+            value = next(waits)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.pwd, "getpwuid", return_value=account), \
+             mock.patch.object(unattended, "_wait", side_effect=wait):
+            with self.assertRaisesRegex(c.Invalid, "private transcript"):
+                unattended.installed_scenes(3600)
+        self.assertEqual(channel.rows, [c.SCENE_FAILURE_PREFIX + "dictationsetup"])
+        self.assertTrue(channel.closed)
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
         account = types.SimpleNamespace(pw_uid=os.geteuid(), pw_name="liveuser",

@@ -76,6 +76,7 @@ ACK_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-ACK "
 INSTALL_PREFIX = "ARCTIC-SHOWCASE-INSTALL-SEALED "
 INSTALL_ACK = "ARCTIC-SHOWCASE-INSTALL-BOOT-ACK"
 INSTALL_PROGRESS_PREFIX = "ARCTIC-SHOWCASE-INSTALL-PROGRESS "
+SCENE_FAILURE_PREFIX = "ARCTIC-SHOWCASE-SCENE-FAILURE "
 AUTOMATION_READY_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-READY "
 AUTOMATION_GO_PREFIX = "ARCTIC-SHOWCASE-AUTOMATION-GO "
 SHELL_CHALLENGE_PREFIX = "ARCTIC-SHOWCASE-SHELL-CHALLENGE "
@@ -94,6 +95,7 @@ INSTALLER_IPC_FAILURE_REASONS = (
     "installer-ipc-response-invalid",
     "installer-never-ready",
 )
+SCENE_FAILURE_STAGES = ("bootstrap",) + SCENES
 HEX32 = re.compile(r"[0-9a-f]{32}")
 
 
@@ -553,13 +555,23 @@ def install_progress(value) -> None:
         "installation progress differs")
 
 
+def scene_failure_line(line: str) -> str:
+    """Validate one content-free installed-scene failure projection."""
+    require(type(line) is str and line.startswith(SCENE_FAILURE_PREFIX),
+            "installed scene failure projection differs")
+    stage = line[len(SCENE_FAILURE_PREFIX):]
+    require(stage in SCENE_FAILURE_STAGES,
+            "installed scene failure projection differs")
+    return stage
+
+
 def capture_failure(value) -> None:
     """Validate the bounded host projection exported after a failed attempt."""
     require(type(value) is dict and set(value) == {
         "schema", "status", "release_acceptance", "image", "host_phase",
         "failure_code", "guest_progress", "private_runtime_removed",
         "screens_exported", "logs_exported", "pixels_exported", "privacy",
-        "live_startup", "installed_startup"
+        "live_startup", "installed_startup", "guest_scene_stage"
     } and value["schema"] == "arctic-showcase-capture-failure-v1"
         and value["status"] == "failed" and value["release_acceptance"] is False
         and value["host_phase"] in (
@@ -568,8 +580,13 @@ def capture_failure(value) -> None:
         )
         and value["failure_code"] in (
             "private-channel-timeout", "guest-install-failed", "capture-contract-failed",
-            "vm-exited", "cleanup-failed", "host-io-failed"
+            "guest-scene-failed", "vm-exited", "cleanup-failed", "host-io-failed"
         )
+        and (value["guest_scene_stage"] in SCENE_FAILURE_STAGES
+             if value["failure_code"] == "guest-scene-failed"
+             else value["guest_scene_stage"] is None)
+        and (value["host_phase"] == "capture-scenes"
+             if value["failure_code"] == "guest-scene-failed" else True)
         and value["private_runtime_removed"] is True
         and value["screens_exported"] is False and value["logs_exported"] is False
         and value["pixels_exported"] is False
