@@ -1,9 +1,9 @@
-name: Read bounded showcase failure for run 38839101249
+name: Read bounded showcase failure for run 38842961391
 
 on:
   push:
-    branches: [codex/read-showcase-failure-388391-20261016]
-    paths: [.github/showcase-failure-reader-388391.activate]
+    branches: [codex/read-showcase-failure-388429-20261016]
+    paths: [.github/showcase-failure-reader-388429.activate]
 
 permissions:
   contents: read
