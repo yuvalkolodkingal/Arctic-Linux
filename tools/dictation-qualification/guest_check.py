@@ -1138,8 +1138,7 @@ class Checker:
             'fixture-playback-failed'))
         self.transcription_stage('record-stop', lambda: self.record('stop'))
         self.transcription_stage(
-            'transcribing-state', lambda: self.observe(
-                'transcribing-state', lambda: self.state() in ('transcribing', 'idle'), 10))
+            'transcribing-state', self.checked_transcribing_state)
         self.transcription_stage(
             'terminal-state', lambda: self.daemon_idle('terminal-state', 240))
         elapsed = time.monotonic_ns() - before
@@ -1232,6 +1231,46 @@ class Checker:
                 substage = 612
             raise TranscriptionStageFailure(
                 'recording-state', label, substage) from None
+
+    def checked_transcribing_state(self):
+        """Keep the ten-second post-stop gate and close only its diagnosis."""
+        try:
+            return self.observe(
+                'transcribing-state', lambda: self.state() in ('transcribing', 'idle'), 10)
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            label = caught_error_label(error)
+            try:
+                active = self.cmd(
+                    ['systemctl', '--user', 'is-active', '--quiet',
+                     'voxtype.service'], check=False)
+                if active.returncode != 0:
+                    failed = self.cmd(
+                        ['systemctl', '--user', 'is-failed', '--quiet',
+                         'voxtype.service'], check=False)
+                    substage = 1201 if failed.returncode == 0 else 1202
+                else:
+                    engines = self.engines()
+                    if len(engines) == 0:
+                        substage = 1203
+                    elif len(engines) != 1:
+                        substage = 1204
+                    elif engines[0] != getattr(self, '_capture_engine', None):
+                        substage = 1205
+                    else:
+                        state = self.state(allow_absent=True)
+                        substage = {
+                            'stopped': 1206,
+                            'recording': 1207,
+                            'streaming': 1208,
+                            'transcribing': 1209,
+                            'idle': 1210,
+                        }.get(state, 1211)
+            except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                    KeyError, TypeError):
+                substage = 1212
+            raise TranscriptionStageFailure(
+                'transcribing-state', label, substage) from None
 
     def checked_engine_profile(self):
         """Pin the exact process already authenticated by capture_link()."""
@@ -1485,7 +1524,6 @@ class Checker:
             owned_file(vulkan, ASSETS['vulkan']['bytes'])
             require(sha(vulkan) == ASSETS['vulkan']['sha256'],
                     'installed-vulkan-payload-sha256')
-        self.gpu_stage('vulkan-payload-integrity', payload_integrity)
         self.gpu_stage('cpu-backend-selection', lambda: self.select(backend='cpu'))
 
         # Make the visible language selection deterministic for both recovery screens.
@@ -1496,6 +1534,11 @@ class Checker:
         # fixture instead of being counted as recovery evidence. Stop the resident
         # CPU model to make resource pressure independent of the setup outcome.
         self.gpu_stage('failed-vulkan-setup', self.vm_vulkan_failure)
+        # The explicit setup attempt downloads and verifies the signed Vulkan
+        # binary before the unsupported-device proof fails.  Bind those exact
+        # retained bytes after that attempt; the normal CPU setup intentionally
+        # does not preinstall the optional Vulkan payload.
+        self.gpu_stage('vulkan-payload-integrity', payload_integrity)
         self.gpu_stage('cpu-preservation', lambda: require(
             (SYSTEM / 'backend').read_text().strip() == 'cpu'
             and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
