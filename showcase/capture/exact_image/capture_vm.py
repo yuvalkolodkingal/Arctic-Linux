@@ -36,7 +36,11 @@ GO_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-GO "
 QEMU = Path("/usr/bin/qemu-system-x86_64")
 MAX_LINE = 256_000
 TOOLING_FILES = ("capture_vm.py", "contract.py", "guest.py", "capture_probe.py", "unattended.py")
-SCENE_READY_TIMEOUTS = {"dictationsetup": 2_040, "winter": 300, "updates": 180}
+# The Dictation transport ceiling includes the unchanged 1,800-second readiness
+# gate, Settings' unchanged 120-second readiness gate, their bounded subprocess
+# overruns, and enough time for the guest to deliver its fixed failure enum.  It
+# does not extend either readiness gate or any screen/acceptance predicate.
+SCENE_READY_TIMEOUTS = {"dictationsetup": 2_160, "winter": 300, "updates": 180}
 SCENE_REQUEST_TIMEOUT = 300
 
 

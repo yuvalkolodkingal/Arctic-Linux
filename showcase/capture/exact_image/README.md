@@ -186,9 +186,12 @@ The installed scene helper has the same fail-closed transport behavior. If it
 fails before a readiness or capture request, it emits only the fixed prefix and
 one of `bootstrap`, `dictationsetup`, `winter` or `updates`; exception text,
 logs, transcript text and pixels never cross the channel. The host validates
-that enum and ends the attempt immediately. It also uses a 34-minute bound for
-the online Dictation readiness path, five minutes for Wallpaper, three minutes
-for What's New and five minutes for each post-authorization diagnostic request.
+that enum and ends the attempt immediately. It uses a 36-minute transport bound
+for the online Dictation path so the unchanged 30-minute Dictation readiness
+gate and unchanged two-minute Settings readiness gate can finish their bounded
+subprocess calls and still deliver that fixed failure enum. Wallpaper retains
+its five-minute bound, What's New its three-minute bound, and each
+post-authorization diagnostic request its five-minute bound.
 These bounds do not replace or relax any readiness, nonce, screen, privacy or
 human-review gate; they only prevent a failed guest helper from inheriting the
 outer 120-minute channel timeout while QEMU keeps the character device open.

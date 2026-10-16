@@ -1605,11 +1605,13 @@ class GuestAutomation(unittest.TestCase):
                 self.timeouts.append(timeout)
                 return self.line
 
+        self.assertEqual(capture_vm.SCENE_READY_TIMEOUTS,
+                         {"dictationsetup": 2160, "winter": 300, "updates": 180})
         lines = Lines(c.SCENE_FAILURE_PREFIX + "dictationsetup")
         with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure") as raised:
-            capture_vm._scene_line(lines, 2040)
+            capture_vm._scene_line(lines, capture_vm.SCENE_READY_TIMEOUTS["dictationsetup"])
         self.assertEqual(raised.exception.stage, "dictationsetup")
-        self.assertEqual(lines.timeouts, [2040])
+        self.assertEqual(lines.timeouts, [2160])
         with self.assertRaisesRegex(c.Invalid, "projection differs"):
             c.scene_failure_line(c.SCENE_FAILURE_PREFIX + "dictationsetup private detail")
 
