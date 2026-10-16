@@ -1,5 +1,6 @@
 """Fixed, transcript-free gate and collector failure projection controls."""
 import importlib.util
+import inspect
 import json
 from pathlib import Path
 import subprocess
@@ -194,6 +195,50 @@ class GateDiagnosticControls(unittest.TestCase):
             checker.gpu_stage('private-stage', lambda: None)
         with self.assertRaisesRegex(guest.Invalid, '^unknown-gpu-failure-family$'):
             guest.GpuStageFailure('gpu-failure-screen', 'private-family')
+
+    def test_first_recovery_screen_projects_only_closed_substage_and_family(self):
+        errors = (
+            (PrivateInvalid('sensitive-canary transcript'), 'invalid'),
+            (OSError('sensitive-canary path'), 'os-error'),
+            (ValueError('sensitive-canary value'), 'value-error'),
+            (subprocess.TimeoutExpired(['sensitive-canary'], 1,
+                                       output=b'sensitive-canary'), 'timeout'),
+            (KeyError('sensitive-canary key'), 'key-error'),
+            (TypeError('sensitive-canary type'), 'type-error'),
+        )
+        for substage, number in guest.RECOVERY_SCREEN_FAILURE_SUBSTAGES.items():
+            for error, label in errors:
+                with self.subTest(substage=substage, label=label):
+                    checker = self.checker(guest.MODERN_GPU_GATE)
+                    self.assertFalse(checker.gate(
+                        guest.MODERN_GPU_GATE,
+                        lambda: checker.recovery_screen_stage(
+                            'gpu_failure', substage, self.raising(error))))
+                    result = checker.report['gates'][0]
+                    self.assertEqual(result['code'],
+                                     'gate-' + guest.MODERN_GPU_GATE + '-' + label)
+                    self.assertEqual(result['observations'], {
+                        'failure_stage': guest.GPU_FAILURE_STAGES['gpu-failure-screen'],
+                        'failure_substage': number})
+                    self.assertNotIn('sensitive-canary', json.dumps(result))
+
+    def test_recovery_screen_substage_inventory_is_closed_and_first_screen_only(self):
+        checker = self.checker(guest.MODERN_GPU_GATE)
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-recovery-screen-capture-stage$'):
+            checker.recovery_screen_stage('private', 'preconditions', lambda: None)
+        with self.assertRaisesRegex(guest.Invalid,
+                                    '^unknown-recovery-screen-failure-substage$'):
+            checker.recovery_screen_stage('gpu_failure', 'private', lambda: None)
+        private = PrivateInvalid('sensitive-canary transcript')
+        with self.assertRaises(PrivateInvalid) as raised:
+            checker.recovery_screen_stage(
+                'cpu_ready', 'preconditions', self.raising(private))
+        self.assertIs(raised.exception, private)
+
+        source = inspect.getsource(guest.Checker.recovery_screen)
+        for substage in guest.RECOVERY_SCREEN_FAILURE_SUBSTAGES:
+            self.assertEqual(source.count("stage, '" + substage + "'"), 1)
 
     def test_closed_engine_substage_projects_without_command_output(self):
         cpu_gate = 'cpu-hebrew-transcription-insertion'

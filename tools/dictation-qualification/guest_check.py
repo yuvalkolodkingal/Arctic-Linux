@@ -28,6 +28,7 @@ from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES,
                       GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS,
                       MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS,
                       PROFILES, READINESS_FAILURE_STAGE, READINESS_FAILURE_SUBSTAGES,
+                      RECOVERY_SCREEN_FAILURE_SUBSTAGES,
                       SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM,
                       VULKAN_ISOLATION_GATE, Invalid, context, gates, pinned,
                       require, validate)
@@ -1337,6 +1338,23 @@ class Checker:
         except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
             raise GpuStageFailure(stage, caught_error_label(error)) from None
 
+    def recovery_screen_stage(self, capture_stage, substage, fn):
+        """Project only a fixed substage for the first GPU recovery screen."""
+        require(capture_stage in ('gpu_failure', 'cpu_ready'),
+                'unknown-recovery-screen-capture-stage')
+        require(substage in RECOVERY_SCREEN_FAILURE_SUBSTAGES,
+                'unknown-recovery-screen-failure-substage')
+        if capture_stage != 'gpu_failure':
+            return fn()
+        try:
+            return fn()
+        except (GpuStageFailure, TranscriptionStageFailure):
+            raise
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired, KeyError, TypeError) as error:
+            raise GpuStageFailure(
+                'gpu-failure-screen', caught_error_label(error),
+                RECOVERY_SCREEN_FAILURE_SUBSTAGES[substage]) from None
+
     def daemon_ready(self, target, seconds=30):
         """Wait beyond a restart until one unchanged official daemon is usable."""
         previous, stable = None, 0
@@ -1948,16 +1966,20 @@ class Checker:
 
     def recovery_screen(self, stage, status, expected_language):
         """Bind an exact host screenshot to the visible, transcript-free Settings state."""
-        require(stage in ('gpu_failure', 'cpu_ready'), 'recovery-screen-stage')
-        require((status.get('state'), status.get('backend')) ==
-                (('error', 'cpu') if stage == 'gpu_failure' else ('ready', 'cpu')),
-                'recovery-screen-status')
-        require(expected_language is None or status.get('language') == expected_language,
-                'recovery-screen-language')
-        require(stage != 'cpu_ready' or status.get('ready') is True,
-                'recovery-screen-not-ready')
-        self.empty()
-        self.cmd(['/usr/bin/arctic-settings', 'dictation'])
+        def preconditions():
+            require(stage in ('gpu_failure', 'cpu_ready'), 'recovery-screen-stage')
+            require((status.get('state'), status.get('backend')) ==
+                    (('error', 'cpu') if stage == 'gpu_failure' else ('ready', 'cpu')),
+                    'recovery-screen-status')
+            require(expected_language is None or status.get('language') == expected_language,
+                    'recovery-screen-language')
+            require(stage != 'cpu_ready' or status.get('ready') is True,
+                    'recovery-screen-not-ready')
+            self.empty()
+        self.recovery_screen_stage(stage, 'preconditions', preconditions)
+        self.recovery_screen_stage(
+            stage, 'settings-launch',
+            lambda: self.cmd(['/usr/bin/arctic-settings', 'dictation']))
 
         def visible():
             page = self.cmd(['/usr/bin/quickshell', 'ipc', 'call', 'settings', 'page'],
@@ -1973,29 +1995,44 @@ class Checker:
                     and len(rows) == 1 and rows[0].get('is_visible') is True
                     and rows[0].get('is_focused') is True
                     and Path('/proc', str(rows[0]['pid'])).stat().st_uid == self.account.pw_uid)
-        self.observe('recovery-settings-visible', visible, 30)
-        # DictationPage refreshes its service model asynchronously when shown.
-        time.sleep(2)
-        # Refresh after opening and bind the screen to the same checked state.
-        shown = self.adapter('status')
-        require(shown == status, 'recovery-screen-status-changed')
-        screenshot = self.root / ('dictation-recovery-' + stage + '.png')
-        self.cmd(['/usr/bin/grim', str(screenshot)])
-        require(screenshot.is_file() and screenshot.stat().st_size > 1000,
-                'recovery-screen-guest-screenshot-missing')
-        require((self.root / 'received.private').read_bytes() == b'',
-                'recovery-screen-receiver-not-empty')
-        nonce = os.urandom(16).hex()
-        print('ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED ' + json.dumps({
-            'boot_id': self.report['boot_id'],
-            'installation_id': self.context['installation_id'],
-            'phase': self.context['phase'], 'desktop_uid': self.account.pw_uid,
-            'receiver_empty': True, 'stage': stage, 'state': shown['state'],
-            'backend': shown['backend'], 'language': shown['language'],
-            'capture_nonce': nonce}), flush=True)
-        wait(lambda: (self.root / 'received.private').read_text() == nonce, 45)
-        self.empty()
-        return hashlib.sha256(nonce.encode()).hexdigest()
+        self.recovery_screen_stage(
+            stage, 'settings-visibility',
+            lambda: self.observe('recovery-settings-visible', visible, 30))
+
+        def unchanged_status():
+            # DictationPage refreshes its service model asynchronously when shown.
+            time.sleep(2)
+            shown_status = self.adapter('status')
+            require(shown_status == status, 'recovery-screen-status-changed')
+            return shown_status
+        shown = self.recovery_screen_stage(stage, 'status-drift', unchanged_status)
+
+        def capture():
+            path = self.root / ('dictation-recovery-' + stage + '.png')
+            self.cmd(['/usr/bin/grim', str(path)])
+            require(path.is_file() and path.stat().st_size > 1000,
+                    'recovery-screen-guest-screenshot-missing')
+            return path
+        self.recovery_screen_stage(stage, 'screenshot', capture)
+        self.recovery_screen_stage(
+            stage, 'receiver-empty',
+            lambda: require((self.root / 'received.private').read_bytes() == b'',
+                            'recovery-screen-receiver-not-empty'))
+
+        def host_acknowledgement():
+            nonce = os.urandom(16).hex()
+            print('ARCTIC-DICTATION-RECOVERY-SCREEN-REQUESTED ' + json.dumps({
+                'boot_id': self.report['boot_id'],
+                'installation_id': self.context['installation_id'],
+                'phase': self.context['phase'], 'desktop_uid': self.account.pw_uid,
+                'receiver_empty': True, 'stage': stage, 'state': shown['state'],
+                'backend': shown['backend'], 'language': shown['language'],
+                'capture_nonce': nonce}), flush=True)
+            wait(lambda: (self.root / 'received.private').read_text() == nonce, 45)
+            self.empty()
+            return hashlib.sha256(nonce.encode()).hexdigest()
+        return self.recovery_screen_stage(
+            stage, 'host-ack-timeout', host_acknowledgement)
 
     def legacy_gpu(self):
         require(self.profile_id == 'small-v2' and 'vulkan' not in self.assets,

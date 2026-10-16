@@ -165,6 +165,15 @@ GPU_FAILURE_STAGES = {
     'cpu-ready-status': 213,
     'cpu-ready-screen': 214,
 }
+RECOVERY_SCREEN_FAILURE_SUBSTAGES = {
+    'preconditions': 2111,
+    'settings-launch': 2112,
+    'settings-visibility': 2113,
+    'status-drift': 2114,
+    'screenshot': 2115,
+    'receiver-empty': 2116,
+    'host-ack-timeout': 2117,
+}
 READINESS_FAILURE_STAGE = 301
 READINESS_FAILURE_SUBSTAGES = {
     'status-ready': 3011,
@@ -200,6 +209,8 @@ FAILURE_SUBSTAGES = {
         {1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212}),
     GPU_FAILURE_STAGES['vulkan-payload-integrity']: frozenset(
         {2031, 2032, 2033, 2034, 2035, 2036, 2037}),
+    GPU_FAILURE_STAGES['gpu-failure-screen']:
+        frozenset(RECOVERY_SCREEN_FAILURE_SUBSTAGES.values()),
     READINESS_FAILURE_STAGE: frozenset(READINESS_FAILURE_SUBSTAGES.values()),
 }
 TRANSCRIPTION_GATES = {

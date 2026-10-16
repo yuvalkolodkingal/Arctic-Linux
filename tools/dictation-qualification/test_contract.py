@@ -258,6 +258,34 @@ class ContractControls(unittest.TestCase):
         self.assertEqual(c.validate(report, report['context'],
                                     fixture_manifest=FIXTURES)['status'], 'failed')
 
+    def test_gpu_failure_screen_substages_are_closed_and_scoped_to_stage_211(self):
+        for substage in c.RECOVERY_SCREEN_FAILURE_SUBSTAGES.values():
+            report = synthetic('online-installed')
+            gate = next(row for row in report['gates']
+                        if row['id'] == c.MODERN_GPU_GATE)
+            gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                        observations={
+                            'failure_stage': c.GPU_FAILURE_STAGES['gpu-failure-screen'],
+                            'failure_substage': substage})
+            report['status'] = 'failed'
+            self.assertEqual(c.validate(
+                report, report['context'], fixture_manifest=FIXTURES)['status'], 'failed')
+
+            wrong_stage = copy.deepcopy(report)
+            changed = next(row for row in wrong_stage['gates']
+                           if row['id'] == c.MODERN_GPU_GATE)
+            changed['observations']['failure_stage'] = c.GPU_FAILURE_STAGES['cpu-ready-screen']
+            self.rejects(wrong_stage, 'gate-failure-substage-value')
+
+        report = synthetic('online-installed')
+        gate = next(row for row in report['gates'] if row['id'] == c.MODERN_GPU_GATE)
+        gate.update(status='failed', code='gate-' + gate['id'] + '-invalid',
+                    observations={
+                        'failure_stage': c.GPU_FAILURE_STAGES['gpu-failure-screen'],
+                        'failure_substage': 2118})
+        report['status'] = 'failed'
+        self.rejects(report, 'gate-failure-substage-value')
+
     def test_failure_substages_are_closed_and_scoped_to_engine_identity(self):
         report = synthetic('online-installed')
         gate = next(row for row in report['gates']
