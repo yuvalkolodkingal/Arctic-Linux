@@ -337,11 +337,11 @@ def bounded_counter(observations, name, maximum):
     return present, value if present else 0
 
 
-def nonpassed_gates(report):
-    """Project only contract-validated nonpassing gates and numeric stage codes."""
+def failed_gates(report):
+    """Project only contract-validated failed gates and numeric stage codes."""
     result = []
     for gate in report['gates']:
-        if gate['status'] == 'passed':
+        if gate['status'] != 'failed':
             continue
         observed = gate['observations']
         stage = observed.get('failure_stage')
@@ -353,7 +353,7 @@ def nonpassed_gates(report):
                        'family': family(gate),
                        'stage_present': stage is not None, 'stage': stage or 0,
                        'substage_present': substage is not None, 'substage': substage or 0})
-    require(0 < len(result) <= 16)
+    require(len(result) <= 4)
     return result
 
 
@@ -374,7 +374,7 @@ def diagnostic(report, recovery):
     require(drained is None or type(drained) is bool)
     return {
         'report_status': report['status'],
-        'nonpassed_gates': nonpassed_gates(report),
+        'failed_gates': failed_gates(report),
         'english': english, 'hebrew': hebrew, 'gpu': gpu,
         'cleanup': {'status': cleanup_gate['status'], 'family': family(cleanup_gate),
                     'file_count_present': files_present, 'file_count': files,

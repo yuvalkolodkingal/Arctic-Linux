@@ -9,7 +9,7 @@
   },
   "contract_sha256": "5a86ba1643d5bf90374750d394acfa92a83a1ea7cd2cee0a04e28b40883f1884",
   "qualification_manifest_sha256": "ca13d36cb7b961f6699ec9b4ae2b5175ed45687af3ab612e34a47a0146cee470",
-  "reader_sha256": "816d2a76fc90f4e426ab7c68000695c5dd80d1cf9af2ed6b29e844cb7064bada",
+  "reader_sha256": "d354d3b43fe300decbdb01b778932cf482468e5cf906ff8ce8336ec0a9fa54f4",
   "ready": true,
   "repository": "yuvalkolodkingal/Arctic-Linux",
   "run_attempt": 1,
