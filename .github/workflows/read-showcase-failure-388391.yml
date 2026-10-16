@@ -1,0 +1,29 @@
+name: Read bounded showcase failure for run 38839101249
+
+on:
+  push:
+    branches: [codex/read-showcase-failure-388391-20261016]
+    paths: [.github/showcase-failure-reader-388391.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-failure:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate the closed-vocabulary reader
+        run: python3 -B -m unittest tools/showcase-failure-reader/test_read.py
+      - name: Read only the validated bounded projection
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/showcase-failure-reader/read.py
+          --manifest tools/showcase-failure-reader/execution-manifest.json
