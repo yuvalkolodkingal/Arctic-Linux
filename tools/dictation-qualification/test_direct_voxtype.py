@@ -687,6 +687,44 @@ on_transcription = false
         self.assertEqual({call.args[0].value for call in calls},
                          set(guest.TRANSCRIPTION_FAILURE_STAGES))
 
+    def test_every_readiness_failure_substage_is_used_by_ready(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'ready')
+        calls = [node for node in ast.walk(method)
+                 if isinstance(node, ast.Call)
+                 and isinstance(node.func, ast.Attribute)
+                 and node.func.attr == 'readiness_stage'
+                 and node.args and isinstance(node.args[0], ast.Constant)]
+        self.assertEqual({call.args[0].value for call in calls},
+                         set(guest.READINESS_FAILURE_SUBSTAGES))
+
+    def test_readiness_failure_projection_is_closed_and_drops_error_material(self):
+        checker = self.checker()
+        checker.gates = {'recovered-ready'}
+        checker.report = {'gates': []}
+
+        def fails():
+            raise guest.Invalid('private readiness details')
+
+        passed = checker.gate(
+            'recovered-ready',
+            lambda: checker.readiness_stage('recording-observed', fails))
+        self.assertFalse(passed)
+        self.assertEqual(checker.report['gates'], [{
+            'id': 'recovered-ready', 'status': 'failed',
+            'evidence_kind': guest.EXPECTED_KINDS['recovered-ready'],
+            'code': 'gate-recovered-ready-invalid',
+            'observations': {
+                'failure_stage': guest.READINESS_FAILURE_STAGE,
+                'failure_substage':
+                    guest.READINESS_FAILURE_SUBSTAGES['recording-observed'],
+            },
+        }])
+
     def test_transcription_authenticates_capture_before_pinning_engine_profile(self):
         source = (HERE / 'guest_check.py').read_text()
         tree = ast.parse(source)

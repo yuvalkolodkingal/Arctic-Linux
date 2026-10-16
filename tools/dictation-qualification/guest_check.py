@@ -24,7 +24,13 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, VULKAN_ISOLATION_GATE, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES,
+                      GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS,
+                      MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS,
+                      PROFILES, READINESS_FAILURE_STAGE, READINESS_FAILURE_SUBSTAGES,
+                      SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM,
+                      VULKAN_ISOLATION_GATE, Invalid, context, gates, pinned,
+                      require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -151,6 +157,20 @@ class GpuStageFailure(Invalid):
                 'unknown-gpu-failure-returncode')
         self.failure_substage = substage
         self.failure_returncode = returncode
+
+
+class ReadinessStageFailure(Invalid):
+    """Transcript-free projection of one fixed first-activation operation."""
+
+    def __init__(self, substage, label):
+        require(type(substage) is str and substage in READINESS_FAILURE_SUBSTAGES,
+                'unknown-readiness-failure-substage')
+        require(type(label) is str and label in ERROR_LABELS,
+                'unknown-readiness-failure-family')
+        super().__init__()
+        self.failure_stage = READINESS_FAILURE_STAGE
+        self.failure_substage = READINESS_FAILURE_SUBSTAGES[substage]
+        self.error_label = label
 
 def mark_collector_setup(stage):
     """Record only one source-owned setup stage; never retain failure material."""
@@ -606,10 +626,11 @@ class Checker:
             label = caught_error_label(error)
             observations = {}
             if type(error) in (TranscriptionStageFailure, MicrophoneStageFailure,
-                               GpuStageFailure):
+                               GpuStageFailure, ReadinessStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
-                if type(error) in (TranscriptionStageFailure, GpuStageFailure):
+                if type(error) in (TranscriptionStageFailure, GpuStageFailure,
+                                   ReadinessStageFailure):
                     if error.failure_substage is not None:
                         observations['failure_substage'] = error.failure_substage
                 if type(error) is GpuStageFailure and error.failure_returncode is not None:
@@ -761,43 +782,108 @@ class Checker:
         self.report['payload'] = pinned(self.profile_id)
         return {'file_count': len(self.assets)}
 
+    def readiness_stage(self, substage, operation):
+        """Run one closed first-activation step without retaining error material."""
+        require(substage in READINESS_FAILURE_SUBSTAGES,
+                'unknown-readiness-failure-substage')
+        try:
+            return operation()
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            raise ReadinessStageFailure(substage, caught_error_label(error)) from None
+
     def ready(self):
-        value = self.adapter('status')
-        require(value.get('ready') is True and value.get('state') == 'ready'
-                and value.get('profile') == self.profile_id
-                and value.get('backend') in ('cpu', 'vulkan')
-                and not (SYSTEM / 'pending').exists(), 'upstream-not-ready')
+        value = self.readiness_stage('status-ready', lambda: self.adapter('status'))
+        self.readiness_stage('status-ready',
+                             lambda: require(value.get('ready') is True,
+                                             'upstream-not-ready'))
+        self.readiness_stage('status-state',
+                             lambda: require(value.get('state') == 'ready',
+                                             'upstream-not-ready'))
+        self.readiness_stage('status-profile',
+                             lambda: require(value.get('profile') == self.profile_id,
+                                             'upstream-not-ready'))
+        self.readiness_stage('status-backend',
+                             lambda: require(value.get('backend') in ('cpu', 'vulkan'),
+                                             'upstream-not-ready'))
+        self.readiness_stage('pending-absent',
+                             lambda: require(not (SYSTEM / 'pending').exists(),
+                                             'upstream-not-ready'))
         marker = SYSTEM / 'upstream-direct-v1'
-        owned_file(marker)
-        require(marker.read_text() == 'upstream-direct-v1\n',
-                'upstream-readiness-marker-invalid')
-        service = self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
-                           check=False)
-        require(service.stdout.strip() != b'active' and not self.state_path.exists()
-                and self.engines() == [], 'upstream-lazy-login-resident')
+        self.readiness_stage('marker-ownership', lambda: owned_file(marker))
+        self.readiness_stage(
+            'marker-content',
+            lambda: require(marker.read_text() == 'upstream-direct-v1\n',
+                            'upstream-readiness-marker-invalid'))
+        service = self.readiness_stage(
+            'service-inactive',
+            lambda: self.cmd(['systemctl', '--user', 'is-active', 'voxtype.service'],
+                             check=False))
+        self.readiness_stage(
+            'service-inactive',
+            lambda: require(service.stdout.strip() != b'active',
+                            'upstream-lazy-login-resident'))
+        self.readiness_stage(
+            'state-absent',
+            lambda: require(not self.state_path.exists(),
+                            'upstream-lazy-login-resident'))
+        self.readiness_stage(
+            'engine-absent',
+            lambda: require(self.engines() == [], 'upstream-lazy-login-resident'))
         session_marker = self.runtime / 'arctic-dictation/voxtype-session-started-v1'
-        require(not session_marker.exists(), 'upstream-lazy-session-marker-present')
+        self.readiness_stage(
+            'session-marker-absent',
+            lambda: require(not session_marker.exists(),
+                            'upstream-lazy-session-marker-present'))
 
         # Establish the deterministic PipeWire route before exercising the same
         # first guarded activation that Mango exposes. This is the only start;
         # later gates reuse the resident official daemon.
-        self.route()
-        activation = self.cmd([str(TOGGLE)], timeout=75, check=False)
-        require(activation.returncode == 0 and len(activation.stdout) <= 16384
-                and len(activation.stderr) <= 16384,
-                'upstream-first-activation-failed')
-        self.observe('upstream-first-activation-recording',
-                     lambda: self.state(allow_absent=True) == 'recording', 20)
-        require(session_marker.is_dir() and not session_marker.is_symlink(),
-                'upstream-lazy-session-marker-missing')
-        self.record('cancel')
-        self.daemon_ready('upstream-first-activation-resident', 60)
-        engines = self.engines()
-        require(len(engines) == 1, 'upstream-daemon-not-unique')
-        status = (Path('/proc') / str(engines[0][0]) / 'status').read_text()
-        rss = re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M)
-        require(rss is not None and int(rss.group(1)) > 0,
-                'upstream-resident-rss-unavailable')
+        self.readiness_stage('route', self.route)
+        activation = self.readiness_stage(
+            'activation-returncode',
+            lambda: self.cmd([str(TOGGLE)], timeout=75, check=False))
+        self.readiness_stage(
+            'activation-returncode',
+            lambda: require(activation.returncode == 0,
+                            'upstream-first-activation-failed'))
+        self.readiness_stage(
+            'activation-stdout-bound',
+            lambda: require(len(activation.stdout) <= 16384,
+                            'upstream-first-activation-failed'))
+        self.readiness_stage(
+            'activation-stderr-bound',
+            lambda: require(len(activation.stderr) <= 16384,
+                            'upstream-first-activation-failed'))
+        self.readiness_stage(
+            'recording-observed',
+            lambda: self.observe('upstream-first-activation-recording',
+                                 lambda: self.state(allow_absent=True) == 'recording', 20))
+        self.readiness_stage(
+            'session-marker-directory',
+            lambda: require(session_marker.is_dir(),
+                            'upstream-lazy-session-marker-missing'))
+        self.readiness_stage(
+            'session-marker-symlink',
+            lambda: require(not session_marker.is_symlink(),
+                            'upstream-lazy-session-marker-missing'))
+        self.readiness_stage('cancel', lambda: self.record('cancel'))
+        self.readiness_stage(
+            'daemon-ready',
+            lambda: self.daemon_ready('upstream-first-activation-resident', 60))
+        engines = self.readiness_stage('engine-unique', self.engines)
+        self.readiness_stage(
+            'engine-unique',
+            lambda: require(len(engines) == 1, 'upstream-daemon-not-unique'))
+        status = self.readiness_stage(
+            'resident-rss',
+            lambda: (Path('/proc') / str(engines[0][0]) / 'status').read_text())
+        rss = self.readiness_stage(
+            'resident-rss', lambda: re.search(r'^VmRSS:\s+(\d+) kB$', status, re.M))
+        self.readiness_stage(
+            'resident-rss',
+            lambda: require(rss is not None and int(rss.group(1)) > 0,
+                            'upstream-resident-rss-unavailable'))
         return {'ready': True, 'pending': False,
                 'pre_activation_engine_count': 0,
                 'resident_rss_bytes': int(rss.group(1)) * 1024}

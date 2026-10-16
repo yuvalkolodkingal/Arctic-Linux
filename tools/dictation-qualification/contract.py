@@ -165,6 +165,31 @@ GPU_FAILURE_STAGES = {
     'cpu-ready-status': 213,
     'cpu-ready-screen': 214,
 }
+READINESS_FAILURE_STAGE = 301
+READINESS_FAILURE_SUBSTAGES = {
+    'status-ready': 3011,
+    'status-state': 3012,
+    'status-profile': 3013,
+    'status-backend': 3014,
+    'pending-absent': 3015,
+    'marker-ownership': 3016,
+    'marker-content': 3017,
+    'service-inactive': 3018,
+    'state-absent': 3019,
+    'engine-absent': 3020,
+    'session-marker-absent': 3021,
+    'route': 3022,
+    'activation-returncode': 3023,
+    'activation-stdout-bound': 3024,
+    'activation-stderr-bound': 3025,
+    'recording-observed': 3026,
+    'session-marker-directory': 3027,
+    'session-marker-symlink': 3028,
+    'cancel': 3029,
+    'daemon-ready': 3030,
+    'engine-unique': 3031,
+    'resident-rss': 3032,
+}
 FAILURE_SUBSTAGES = {
     TRANSCRIPTION_FAILURE_STAGES['language-selection']: frozenset(
         {401, 402, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414}),
@@ -175,6 +200,7 @@ FAILURE_SUBSTAGES = {
         {1201, 1202, 1203, 1204, 1205, 1206, 1207, 1208, 1209, 1210, 1211, 1212}),
     GPU_FAILURE_STAGES['vulkan-payload-integrity']: frozenset(
         {2031, 2032, 2033, 2034, 2035, 2036, 2037}),
+    READINESS_FAILURE_STAGE: frozenset(READINESS_FAILURE_SUBSTAGES.values()),
 }
 TRANSCRIPTION_GATES = {
     'cpu-english-transcription-insertion',
@@ -191,10 +217,13 @@ FAILURE_STAGE_GATES[MODERN_GPU_GATE] = frozenset(
     set(TRANSCRIPTION_FAILURE_STAGES.values()) | set(GPU_FAILURE_STAGES.values()))
 FAILURE_STAGE_GATES[VULKAN_ISOLATION_GATE] = frozenset(
     {GPU_FAILURE_STAGES['vulkan-payload-integrity']})
+for readiness_gate in ('online-installer-ready', 'recovered-ready'):
+    FAILURE_STAGE_GATES[readiness_gate] = frozenset({READINESS_FAILURE_STAGE})
 TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',
 }
+READINESS_FAILURE_GATES = {'online-installer-ready', 'recovered-ready'}
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
@@ -379,6 +408,7 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
                     'gate-failure-stage-value')
         elif (gate['status'] == 'failed'
               and gate['id'] in (TRANSCRIPTION_REQUIRED_FAILURE_GATES
+                                 | READINESS_FAILURE_GATES
                                  | {'microphone-disconnect-error'})):
             require(False, 'gate-failure-stage-missing')
         substage = observed.get('failure_substage')

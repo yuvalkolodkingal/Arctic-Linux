@@ -318,6 +318,34 @@ class ContractControls(unittest.TestCase):
         with self.assertRaisesRegex(c.Invalid, '^gate-failure-stage-value$'):
             c.validate(wrong_inventory, wrong_inventory['context'], fixture_manifest=FIXTURES)
 
+    def test_failed_readiness_gate_requires_closed_stage_and_substage(self):
+        for phase, gate_id in (('online-installed', 'online-installer-ready'),
+                               ('recovered-offline', 'recovered-ready')):
+            with self.subTest(phase=phase):
+                report = synthetic(phase)
+                gate = next(row for row in report['gates'] if row['id'] == gate_id)
+                gate.update(
+                    status='failed', code='gate-' + gate_id + '-invalid',
+                    observations={
+                        'failure_stage': c.READINESS_FAILURE_STAGE,
+                        'failure_substage':
+                            c.READINESS_FAILURE_SUBSTAGES['recording-observed'],
+                    })
+                report['status'] = 'failed'
+                self.assertEqual(c.validate(
+                    report, report['context'], fixture_manifest=FIXTURES)['status'],
+                    'failed')
+
+                missing = copy.deepcopy(report)
+                next(row for row in missing['gates'] if row['id'] == gate_id)[
+                    'observations'] = {}
+                self.rejects(missing, 'gate-failure-stage-missing')
+
+                unknown = copy.deepcopy(report)
+                next(row for row in unknown['gates'] if row['id'] == gate_id)[
+                    'observations']['failure_substage'] = 3999
+                self.rejects(unknown, 'gate-failure-substage-value')
+
     def test_dependent_unrun_gates_require_a_concrete_source_owned_failure(self):
         report = synthetic('online-installed')
         failed, dependent = report['gates'][:2]
