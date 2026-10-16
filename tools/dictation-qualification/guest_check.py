@@ -1021,7 +1021,11 @@ class Checker:
             selected = language
             changed = True
         if changed:
-            self.daemon_ready('daemon-restart', 30)
+            # Retain only the authenticated process tuple returned by the
+            # existing readiness boundary.  It lets a later failed start say
+            # whether systemd replaced the daemon without reading or exposing
+            # logs, command output, paths or transcript material.
+            self._ready_engine = self.daemon_ready('daemon-restart', 30)
             if backend is not None:
                 self.selected_backend = backend
             if selected is not None:
@@ -1118,8 +1122,7 @@ class Checker:
         before = time.monotonic_ns()
         self.transcription_stage('record-start', lambda: self.record('start'))
         self.transcription_stage(
-            'recording-state', lambda: self.observe(
-                'recording-state', lambda: self.state() == 'recording', 10))
+            'recording-state', self.checked_recording_state)
         self.transcription_stage(
             'capture-link', lambda: self.observe('capture-link', self.capture_link, 10))
         # The native state file can report recording before PipeWire has
@@ -1177,6 +1180,58 @@ class Checker:
             return item
         item = self.transcription_stage('sample-record', record_sample)
         return item
+
+    def checked_recording_state(self):
+        """Keep the ten-second gate and close only its failure diagnosis.
+
+        The official command returns after delivering SIGUSR1, before the
+        daemon publishes its native state.  On a timeout, classify fixed
+        service/process/state outcomes.  No command output, journal message,
+        path, PID or transcript enters the report.
+        """
+        try:
+            return self.observe(
+                'recording-state', lambda: self.state() == 'recording', 10)
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            label = caught_error_label(error)
+            try:
+                active = self.cmd(
+                    ['systemctl', '--user', 'is-active', '--quiet',
+                     'voxtype.service'], check=False)
+                if active.returncode != 0:
+                    failed = self.cmd(
+                        ['systemctl', '--user', 'is-failed', '--quiet',
+                         'voxtype.service'], check=False)
+                    substage = 601 if failed.returncode == 0 else 602
+                else:
+                    engines = self.engines()
+                    if len(engines) == 0:
+                        substage = 603
+                    elif len(engines) != 1:
+                        substage = 604
+                    elif engines[0] != getattr(self, '_ready_engine', None):
+                        substage = 605
+                    else:
+                        state = self.state(allow_absent=True)
+                        if state == 'stopped':
+                            substage = 606
+                        elif state == 'idle':
+                            substage = (607 if (self.runtime / 'voxtype/start_requested').exists()
+                                        else 608)
+                        elif state == 'transcribing':
+                            substage = 609
+                        elif state == 'streaming':
+                            substage = 610
+                        elif state == 'recording':
+                            substage = 611
+                        else:
+                            substage = 612
+            except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                    KeyError, TypeError):
+                substage = 612
+            raise TranscriptionStageFailure(
+                'recording-state', label, substage) from None
 
     def checked_engine_profile(self):
         """Pin the exact process already authenticated by capture_link()."""

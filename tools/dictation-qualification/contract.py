@@ -163,6 +163,8 @@ GPU_FAILURE_STAGES = {
     'cpu-ready-screen': 214,
 }
 FAILURE_SUBSTAGES = {
+    TRANSCRIPTION_FAILURE_STAGES['recording-state']: frozenset(
+        {601, 602, 603, 604, 605, 606, 607, 608, 609, 610, 611, 612}),
     TRANSCRIPTION_FAILURE_STAGES['engine-profile']: frozenset({701, 702, 703, 704}),
 }
 TRANSCRIPTION_GATES = {

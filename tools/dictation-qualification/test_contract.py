@@ -260,6 +260,25 @@ class ContractControls(unittest.TestCase):
             changed_gate['observations'][key] = value
             self.rejects(changed, code)
 
+        cpu = synthetic('online-installed')
+        cpu_gate = next(row for row in cpu['gates']
+                        if row['id'] == 'cpu-hebrew-transcription-insertion')
+        cpu['status'] = 'failed'
+        for stage, substage in (
+                ('recording-state', 608), ('engine-profile', 704)):
+            with self.subTest(stage=stage):
+                changed = copy.deepcopy(cpu)
+                changed_gate = next(row for row in changed['gates']
+                                    if row['id'] == cpu_gate['id'])
+                changed_gate.update(
+                    status='failed', code='gate-' + changed_gate['id'] + '-invalid',
+                    observations={
+                        'failure_stage': c.TRANSCRIPTION_FAILURE_STAGES[stage],
+                        'failure_substage': substage})
+                self.assertEqual(c.validate(
+                    changed, changed['context'],
+                    fixture_manifest=FIXTURES)['status'], 'failed')
+
     def test_failed_microphone_gate_requires_its_own_bounded_stage(self):
         report = synthetic('online-installed')
         gate = next(gate for gate in report['gates']
