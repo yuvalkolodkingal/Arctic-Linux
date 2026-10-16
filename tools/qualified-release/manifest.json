@@ -5,7 +5,17 @@
   "tag": "v1.2.1",
   "main_sha": null,
   "image": null,
-  "performance": null,
+  "performance": {
+    "run_id": 38841063654,
+    "source_sha": "8dde4600e295964c0ddfa0fdb76af2676efc7116",
+    "reviewed_parent_sha": "8c9571f24cad0f6e2c6d016ca0225bffc377fd71",
+    "artifact_id": 12025875027,
+    "archive_bytes": 19633955,
+    "archive_sha256": "b34dd39aa1c8f01bdf63448f7667eeefb8efd5cf43d7f2b98bd42eb3183f83e6",
+    "plan_sha256": "7914eaad9c4ea3158aa6a2651d233fc6ea29e0e0d0c8b5903b41e7cbd4d12cb3",
+    "execution_json_sha256": "c3ee4b2ed75f3bde10969ad24f94f6584e1fa0e897767fc55cc1be9c9b15104d",
+    "performance_mode": "frozen-external-paired-v1"
+  },
   "reliability": null,
   "native": null,
   "taskbar_media_review": null,
