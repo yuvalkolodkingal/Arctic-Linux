@@ -591,6 +591,19 @@ class Checker:
         self.report['gates'].append(result)
         return result['status'] == 'passed'
 
+    def dependent_unrun(self, name):
+        """Record a dependent gate only after a concrete checked failure."""
+        require(name in self.gates
+                and not any(gate.get('id') == name for gate in self.report['gates']),
+                'unknown-or-duplicate-dependent-gate')
+        require(any(gate.get('status') == 'failed' for gate in self.report['gates']),
+                'dependent-gate-without-concrete-failure')
+        self.report['gates'].append({
+            'id': name, 'status': 'unrun',
+            'evidence_kind': EXPECTED_KINDS[name],
+            'code': 'prerequisite-or-collector-failed', 'observations': {}})
+        return False
+
     def adapter(self, *args, check=True):
         result = self.cmd([str(ADAPTER), *args], check=check)
         require(len(result.stdout) <= 16384 and len(result.stderr) <= 16384,
@@ -934,19 +947,21 @@ class Checker:
 
     def capture_link(self):
         engines = self.engines()
-        require(len(engines) == 1, 'recording-engine-not-unique')
+        if len(engines) != 1:
+            self._wait_last_graph = (False, False, False, False, False)
+            return False
         pid = engines[0][0]
         objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
         owned, captures = authenticated_capture_nodes(objects, pid, self.account.pw_uid)
-        require(self.engines() == engines, 'recording-engine-changed')
+        unchanged = self.engines() == engines
         linked = any(row.get('type') == 'PipeWire:Interface:Link'
                      and row.get('info', {}).get('output-node-id') == self.source
                      and row.get('info', {}).get('input-node-id') in captures
                      for row in objects) if captures else False
         source = any(row.get('type') == 'PipeWire:Interface:Node'
                      and row.get('id') == self.source for row in objects)
-        self._wait_last_graph = (True, bool(owned), bool(captures), source, linked)
-        return linked
+        self._wait_last_graph = (unchanged, bool(owned), bool(captures), source, linked)
+        return unchanged and linked
 
     def play(self, sample):
         self.audio = self.root / 'fixture.wav'
@@ -1376,9 +1391,7 @@ class Checker:
         self.gpu_stage('receiver-clear', self.empty)
         # First prove the signed Vulkan payload and Arctic's real local model
         # preflight on the VM's available Vulkan implementation.
-        self.gpu_stage('initial-vulkan-setup', lambda: run(
-            ['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-             str(SETUP), '--backend', 'vulkan'], 750))
+        self.gpu_stage('initial-vulkan-setup', self.initial_vulkan_setup)
         # This path deliberately exercises setup without restarting the user
         # service.  It still changed the authoritative backend, so invalidate
         # the qualification cache before selecting CPU for the failure test.
@@ -1453,6 +1466,22 @@ class Checker:
                 'sha256': ASSETS['vulkan']['sha256'],
                 'gpu_failure_capture_ack_sha256': gpu_failure_capture_ack_sha256,
                 'cpu_ready_capture_ack_sha256': cpu_ready_capture_ack_sha256}
+
+    def initial_vulkan_setup(self):
+        """Run the setup proof without an unrelated resident CPU model."""
+        self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
+        complete = False
+        try:
+            result = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                          str(SETUP), '--backend', 'vulkan'], 750)
+            complete = True
+            return result
+        finally:
+            # A successful setup leaves the daemon stopped only until the
+            # immediately following supported CPU selection restarts it.  A
+            # failed setup must not contaminate later cleanup/diagnostics.
+            if not complete:
+                self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
 
     def recovery_screen(self, stage, status, expected_language):
         """Bind an exact host screenshot to the visible, transcript-free Settings state."""
@@ -1575,6 +1604,13 @@ class Checker:
             require(not any(fragment in material for fragment in fragments),
                     'transcript-found-in-public-surface')
         return {'count': len(self.phrases), 'matched': 0}
+
+    def privacy_gate(self):
+        name = 'transcript-log-notification-leak-scan'
+        if len(self.phrases) < 12 and any(
+                gate.get('status') == 'failed' for gate in self.report['gates']):
+            return self.dependent_unrun(name)
+        return self.gate(name, self.leakage)
 
     def pending(self):
         def settled():
@@ -1721,7 +1757,7 @@ class Checker:
         else:
             self.gate(LEGACY_GPU_GATE, self.legacy_gpu)
         self.gate('transcript-private-cleanup', self.cleanup_check)
-        self.gate('transcript-log-notification-leak-scan', self.leakage)
+        self.privacy_gate()
 
     def execute(self):
         phase = self.context['phase']

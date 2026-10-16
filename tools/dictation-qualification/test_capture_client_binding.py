@@ -151,13 +151,29 @@ class CaptureClientBindingControls(unittest.TestCase):
                       [(42, 123, Path('/synthetic-owned-engine'))],
                       [(41, 123, Path('/different-engine'))], before * 2):
             checker = self.checker(); checker.engines.side_effect = [before, after]
-            with self.assertRaisesRegex(c.Invalid, '^recording-engine-changed$'):
-                checker.capture_link()
+            self.assertIs(checker.capture_link(), False)
+            self.assertEqual(checker._wait_last_graph[0], False)
         for value in ([], before * 2):
             checker = self.checker(); checker.engines.return_value = value
-            with self.assertRaisesRegex(c.Invalid, '^recording-engine-not-unique$'):
-                checker.capture_link()
+            self.assertIs(checker.capture_link(), False)
+            self.assertEqual(checker._wait_last_graph,
+                             (False, False, False, False, False))
             checker.cmd.assert_not_called()
+
+    def test_observation_retries_transient_engine_snapshot_within_existing_boundary(self):
+        before = [(41, 123, Path('/synthetic-owned-engine'))]
+        changed = [(41, 124, Path('/synthetic-owned-engine'))]
+        checker = self.checker()
+        checker.engines.side_effect = [before, changed, before, before]
+
+        def bounded(fn, seconds):
+            self.assertEqual(seconds, 10)
+            self.assertIs(fn(), False)
+            return fn()
+
+        with mock.patch.object(guest, 'wait', side_effect=bounded):
+            self.assertIs(checker.observe('capture-link', checker.capture_link, 10), True)
+        self.assertEqual(checker.engines.call_count, 4)
 
 if __name__ == '__main__':
     unittest.main()
