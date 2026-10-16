@@ -36,6 +36,7 @@ args.out.mkdir(parents=True, exist_ok=True)
 os.environ['OUT'] = str(args.out)
 sys.path.insert(0, str(root/'tools/lib'))
 import vmtest
+import offline_screen
 
 qmp = f'/tmp/arctic-offline-update-{os.getpid()}.sock'
 argv = ['qemu-system-x86_64', '-machine', 'q35', '-accel', 'tcg,thread=multi',
@@ -71,12 +72,20 @@ try:
     vm.shot('01-default-boot-menu')
     vm.keys('ret')
     prompt = None
+    plain_prompt_seen = False
+    prompt_detected = False
     while vm.alive() and time.monotonic()-start < 300:
         prompt = vm.shot('02-unlock-probe')
-        if prompt and vmtest.classify(prompt) == 'prompt':
+        themed = bool(prompt and vmtest.classify(prompt) == 'prompt')
+        plain = bool(prompt and offline_screen.looks_like_plain_luks_prompt(prompt))
+        # The highly constrained text fallback must persist across two probes.
+        # This prevents a transient boot-console frame from receiving a secret.
+        prompt_detected = themed or (plain and plain_prompt_seen)
+        if prompt_detected:
             break
+        plain_prompt_seen = plain
         time.sleep(10)
-    if not vm.alive() or not prompt or vmtest.classify(prompt) != 'prompt':
+    if not vm.alive() or not prompt or not prompt_detected:
         raise RuntimeError('No encryption prompt; inspect screenshots/serial')
     vm.shot('03-encryption-prompt')
     # The same known disposable-test passphrase used by test-install.sh.
