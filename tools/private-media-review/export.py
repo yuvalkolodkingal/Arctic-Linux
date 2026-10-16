@@ -5,7 +5,6 @@ import argparse
 import hashlib
 import io
 import json
-import math
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -14,7 +13,6 @@ import stat
 import struct
 import subprocess
 import tempfile
-from urllib.parse import quote
 import zipfile
 import zlib
 
@@ -60,11 +58,11 @@ SAFE_ASSET_NAME = re.compile(r"[a-z0-9][a-z0-9._-]{0,199}")
 SENSITIVE_OCR = re.compile(
     r"(?i)(?:gh[pousr]_|github_pat_)[a-z0-9_]+"
     r"|AKIA[A-Z0-9]{16}"
-    r"|authorization\s*:\s*\S+"
+    r"|authorization[ \t]*:[ \t]*\S+"
     r"|[\w.+-]+@[\w.-]+\.[a-z]{2,}"
     r"|https?://\S*\?\S+"
-    r"|(?:password|passwd|token|access[_ -]?token|api[_ -]?key|client[_ -]?secret|secret)\s*[:=]\s*\S+"
-    r"|(?:transcript|transcription|recognized\s+text|dictation\s+(?:text|result)|תמלול|תמליל)\s*[:=]"
+    r"|(?:password|passwd|token|access[_ -]?token|api[_ -]?key|client[_ -]?secret|secret)[ \t]*[:=][ \t]*\S+"
+    r"|(?:transcript|transcription|recognized[ \t]+text|dictation[ \t]+(?:text|result)|תמלול|תמליל)[ \t]*[:=]"
 )
 PNG_CHUNKS = {b"IHDR", b"IDAT", b"IEND"}
 
@@ -330,7 +328,14 @@ def screen_png_ocr(raw, languages):
         text = result.stdout.decode("utf-8")
     except UnicodeDecodeError as error:
         raise RuntimeError("PNG OCR is not UTF-8") from error
-    require(SENSITIVE_OCR.search(text) is None, "Sensitive text shape detected in review PNG")
+    for line in text.splitlines():
+        # The active-installer lane deliberately reviews a real getty password
+        # prompt. A cursor-only prompt contains no entered value; keep this
+        # exact line reviewable without granting a general password exception.
+        if line in ("Password: _", "Password: |"):
+            continue
+        require(SENSITIVE_OCR.search(line) is None,
+                "Sensitive text shape detected in review PNG")
 
 
 def validate_zip_info(info):
@@ -474,85 +479,44 @@ def export(manifest_path, output):
         raise
 
 
-def gh_json(args, payload=None, timeout=180):
-    command = ["gh", "api", *args]
-    if payload is None:
-        raw = subprocess.check_output(command, timeout=timeout)
-    else:
-        raw = subprocess.check_output(command, input=json.dumps(payload).encode(), timeout=timeout)
-    return strict_json(raw.decode())
-
-
-def publish_draft(manifest_path, output):
-    manifest, preparation, activation = validate_activation(manifest_path)
-    output = Path(output)
+def bundle_review(output, bundle, github_output):
+    """Create the sole hash-bound handoff to the write-capable publication job."""
+    output, bundle = Path(output), Path(bundle)
+    require(output.is_dir() and not output.is_symlink()
+            and not bundle.exists() and not bundle.is_symlink(), "Screened bundle paths are invalid")
     review_path = output / "REVIEW-MANIFEST.json"
     result = strict_json(review_path.read_text())
-    require(result.get("schema") == REVIEW_SCHEMA and result.get("preparation_sha") == preparation
-            and result.get("activation_sha") == activation and result.get("human_review") == "pending"
-            and result.get("release_acceptance") is False, "Review result is not bound to this activation")
-    expected = {item["asset_name"]: item for item in result["assets"]}
-    expected["REVIEW-MANIFEST.json"] = {
-        "bytes": review_path.stat().st_size, "sha256": digest_file(review_path), "kind": "json"
-    }
+    require(result.get("schema") == REVIEW_SCHEMA and result.get("human_review") == "pending"
+            and result.get("release_acceptance") is False and result.get("review_only") is True,
+            "Screened result is not a pending review object")
+    expected = {item["asset_name"]: (item["bytes"], item["sha256"])
+                for item in result.get("assets", [])}
+    require(len(expected) == len(result.get("assets", [])), "Screened assets are duplicated")
+    expected[review_path.name] = (review_path.stat().st_size, digest_file(review_path))
     require(set(path.name for path in output.iterdir()) == set(expected),
-            "Draft upload directory contains undeclared assets")
-    release = manifest["draft_release"]
-    existing = subprocess.run(["gh", "api", f"repos/{REPOSITORY}/releases/tags/{release['tag']}"],
-                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-    require(existing.returncode != 0, "Private review draft tag already exists")
-    body = ("Private qualification media for collaborator review only. "
-            "Human review is pending; this draft is not release acceptance and must not be published.")
-    created = gh_json(["--method", "POST", f"repos/{REPOSITORY}/releases",
-                       "-H", "Content-Type: application/json", "--input", "-"], {
-        "tag_name": release["tag"], "target_commitish": activation, "name": release["name"],
-        "body": body, "draft": True, "prerelease": False, "make_latest": "false",
-    })
-    release_id = created.get("id")
-    require(type(release_id) is int and created.get("draft") is True
-            and created.get("prerelease") is False and created.get("tag_name") == release["tag"],
-            "Created review destination is not the exact private draft")
-    require(created.get("target_commitish") == activation,
-            "Private draft target differs from the activation commit")
-    try:
+            "Screened directory contains undeclared assets")
+    with zipfile.ZipFile(bundle, "x", compression=zipfile.ZIP_STORED, allowZip64=False) as archive:
         for name in sorted(expected):
+            if name == review_path.name:
+                require(name == "REVIEW-MANIFEST.json", "Review manifest asset name differs")
+            else:
+                safe_asset(name, ".png")
             path = output / name
             require(path.is_file() and not path.is_symlink()
-                    and path.stat().st_size == expected[name]["bytes"]
-                    and digest_file(path) == expected[name]["sha256"],
-                    "Draft asset bytes differ before upload")
-            content_type = "image/png" if name.endswith(".png") else "application/json"
-            uploaded = gh_json(["--method", "POST",
-                f"https://uploads.github.com/repos/{REPOSITORY}/releases/{release_id}/assets?name={quote(name)}",
-                "-H", f"Content-Type: {content_type}", "--input", str(path)], timeout=600)
-            require(uploaded.get("name") == name and uploaded.get("size") == expected[name]["bytes"]
-                    and uploaded.get("digest") == "sha256:" + expected[name]["sha256"],
-                    "Uploaded draft asset identity differs")
-        final = fetch_json(f"repos/{REPOSITORY}/releases/{release_id}")
-        assets = []
-        for page in range(1, math.ceil(len(expected) / 100) + 1):
-            batch = fetch_json(
-                f"repos/{REPOSITORY}/releases/{release_id}/assets?per_page=100&page={page}")
-            require(type(batch) is list and 1 <= len(batch) <= 100,
-                    "Private draft asset page is malformed")
-            assets.extend(batch)
-        require(final.get("draft") is True and final.get("prerelease") is False
-                and final.get("tag_name") == release["tag"] and final.get("name") == release["name"]
-                and final.get("target_commitish") == activation
-                and type(assets) is list and {asset.get("name") for asset in assets} == set(expected),
-                "Private draft release verification differs")
-        by_name = {asset["name"]: asset for asset in assets}
-        for name, pin in expected.items():
-            require(by_name[name].get("size") == pin["bytes"]
-                    and by_name[name].get("digest") == "sha256:" + pin["sha256"],
-                    "Private draft asset verification differs")
-        print(json.dumps({"draft_release_id": release_id, "draft": True,
-                          "human_review": "pending", "asset_count": len(expected)}, sort_keys=True))
-    except BaseException:
-        subprocess.run(["gh", "api", "--method", "DELETE",
-                        f"repos/{REPOSITORY}/releases/{release_id}"],
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=120)
-        raise
+                    and path.stat().st_size == expected[name][0]
+                    and digest_file(path) == expected[name][1],
+                    "Screened asset differs before bundling")
+            info = zipfile.ZipInfo(name, date_time=(2026, 1, 1, 0, 0, 0))
+            info.create_system = 3
+            info.compress_type = zipfile.ZIP_STORED
+            info.external_attr = (stat.S_IFREG | 0o600) << 16
+            archive.writestr(info, path.read_bytes())
+    require(0 < bundle.stat().st_size <= BOUNDS["max_total_export_bytes"] + 2_000_000,
+            "Screened bundle byte bound exceeded")
+    digest = digest_file(bundle)
+    with Path(github_output).open("a") as stream:
+        stream.write(f"bundle_sha256={digest}\nbundle_bytes={bundle.stat().st_size}\n")
+    return digest
 
 
 def main():
@@ -563,16 +527,17 @@ def main():
     export_parser = sub.add_parser("export")
     export_parser.add_argument("--manifest", type=Path, required=True)
     export_parser.add_argument("--out", type=Path, required=True)
-    publish = sub.add_parser("publish-draft")
-    publish.add_argument("--manifest", type=Path, required=True)
-    publish.add_argument("--out", type=Path, required=True)
+    bundle = sub.add_parser("bundle")
+    bundle.add_argument("--input", type=Path, required=True)
+    bundle.add_argument("--out", type=Path, required=True)
+    bundle.add_argument("--github-output", type=Path, required=True)
     args = parser.parse_args()
     if args.command == "validate-manifest":
         validate_manifest(strict_json(args.manifest.read_text()))
     elif args.command == "export":
         export(args.manifest, args.out)
     else:
-        publish_draft(args.manifest, args.out)
+        bundle_review(args.input, args.out, args.github_output)
 
 
 if __name__ == "__main__":

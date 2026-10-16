@@ -7,8 +7,11 @@ draft, updates a release gate, or marks human review complete.
 
 The initial manifest pins idle-installer run `38874179588`, attempt 1, and artifact
 `12033829931` (`candidate-installer-restoration`, 1,001,204 archive bytes, SHA-256
-`06e44634f252c77ea7ba9eb07caf8d0fb62fc8d57c27ee87eedf8f08aac130a2`). It exports only the
-12 declared 1280×720 PNG captures and a generated `REVIEW-MANIFEST.json`. Logs, raw archives,
+`06e44634f252c77ea7ba9eb07caf8d0fb62fc8d57c27ee87eedf8f08aac130a2`), plus active-installer
+run `38874201005`, attempt 1, and artifact `12035641163`
+(`candidate-installer-active-restoration`, 433,734 archive bytes, SHA-256
+`1efe81599bb06b836f1e7565de2250c7f122f1811644405e29124a018a95757c`). It exports only the
+19 declared 1280×720 PNG captures and a generated `REVIEW-MANIFEST.json`. Logs, raw archives,
 audio, transcripts and VM images are never copied to the draft release.
 
 Before export, the reader verifies the repository, completed successful run, attempt, head branch
@@ -18,6 +21,8 @@ members. Every member is streamed to verify its CRC and SHA-256 against the prod
 `upload-screening.json` inventory. Selected PNGs must decode at their declared dimensions, contain
 only `IHDR`/`IDAT`/`IEND` chunks, carry no metadata or trailing bytes, and pass bounded English and
 Hebrew OCR screening for credential, identity, queried-URL and transcript shapes.
+The active getty capture may contain only the exact cursor-only OCR line `Password: _` (or
+`Password: |`); any value-shaped password text still fails closed.
 
 The manifest format accepts additional fixed artifact declarations for the active-installer,
 native, dictation and showcase workflow paths. Each addition must pin the new successful run and
@@ -27,9 +32,17 @@ file, archive, expansion and export limits remain fixed.
 Activation uses a marker-only child commit on
 `codex/private-media-review-exporter-20261016`. The marker
 `.github/private-media-review-export-20261016.activate` must contain the reviewed preparation
-commit. The workflow refuses an existing release tag, uploads only the declared PNGs and generated
-metadata, checks every release-asset size and GitHub SHA-256 digest, and rechecks that the release
-is still a draft. A failed upload deletes only the new incomplete draft.
+commit. A read-only job owns artifact download, Pillow/Tesseract decoding and privacy screening.
+It writes a new deterministic ZIP containing only the screened PNGs and metadata, and passes its
+SHA-256 through the workflow dependency. A separate publication job has write permission, does not
+install or invoke any image or OCR decoder, and rejects any bundle that differs from that hash or
+its internal file hashes.
+
+The publication job requires structured HTTP 404 responses for both the release and Git ref before
+it creates anything. It creates the new tag at the activation commit, proves that tag resolves to
+that commit, creates only a draft release, uploads only the declared files, verifies every asset
+size and GitHub SHA-256 digest, then rechecks the tag and draft state. Any later failure deletes and
+verifies absence of both the newly created release and tag.
 
 After the workflow succeeds, an authenticated collaborator can inspect the hidden draft with:
 

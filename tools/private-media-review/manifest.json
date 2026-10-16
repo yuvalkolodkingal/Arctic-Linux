@@ -197,6 +197,124 @@
           "ocr_languages": "eng+heb"
         }
       ]
+    },
+    {
+      "lane": "installer-active",
+      "run_id": 38874201005,
+      "run_attempt": 1,
+      "head_sha": "1326c72930e34cc011369d26ebe4ecb68148d834",
+      "head_branch": "codex/qualification-dispatch-20261010",
+      "workflow_id": 380362471,
+      "workflow_name": "Candidate active installer restoration qualification",
+      "workflow_path": ".github/workflows/installer-active-candidate-20261009.yml",
+      "event": "push",
+      "artifact_id": 12035641163,
+      "artifact_name": "candidate-installer-active-restoration",
+      "archive_bytes": 433734,
+      "archive_sha256": "1efe81599bb06b836f1e7565de2250c7f122f1811644405e29124a018a95757c",
+      "screening_inventory": "upload-screening.json",
+      "screening_scope": "Owned synthetic QEMU VM only; no host desktop, VM disks or credentials",
+      "archive_members": [
+        "capture-build.log",
+        "execution.json",
+        "host/host-execution.json",
+        "host/installed-boot.json",
+        "host/installed-getty-password.png",
+        "host/installed-sudo-password.png",
+        "host/installer-host-transitions.json",
+        "host/installer-port.log.bounded-prefix.bin",
+        "host/installer-vt-away-0.png",
+        "host/qemu-installer-installed.log.bounded-prefix.bin",
+        "host/qemu-installer-live.log.bounded-prefix.bin",
+        "host/serial-installed.log",
+        "host/serial.log",
+        "installer/baseline.png",
+        "installer/installer-provenance.json",
+        "installer/installer-report.json",
+        "installer/installer-state.json",
+        "installer/output-0-relocated.png",
+        "installer/output-0.png",
+        "installer/serial-installer-report.json",
+        "installer/transport-manifest.json",
+        "installer/vt-0.png",
+        "installer-harness.log",
+        "provision.log",
+        "upload-screening.json",
+        "vm-base-image-id.txt",
+        "vm-prepared-image-id.txt"
+      ],
+      "exports": [
+        {
+          "member": "host/installed-getty-password.png",
+          "asset_name": "installer-active-installed-getty-password.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "host/installed-sudo-password.png",
+          "asset_name": "installer-active-installed-sudo-password.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "host/installer-vt-away-0.png",
+          "asset_name": "installer-active-vt-away-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/baseline.png",
+          "asset_name": "installer-active-baseline.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-0-relocated.png",
+          "asset_name": "installer-active-output-0-relocated.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/output-0.png",
+          "asset_name": "installer-active-output-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        },
+        {
+          "member": "installer/vt-0.png",
+          "asset_name": "installer-active-vt-0.png",
+          "kind": "png",
+          "privacy_class": "screened-synthetic-vm-ui",
+          "max_bytes": 2000000,
+          "width": 1280,
+          "height": 720,
+          "ocr_languages": "eng+heb"
+        }
+      ]
     }
   ]
 }
