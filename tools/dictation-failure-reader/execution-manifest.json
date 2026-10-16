@@ -1,0 +1,26 @@
+{
+  "artifacts": {
+    "small-v2": {
+      "bytes": 157613,
+      "id": 12020297149,
+      "name": "dictation-candidate-qualification-small-v2",
+      "sha256": "d779e771eea532f5a36869ea37530795106bc346a822aac96a8ce4a436aabf8b"
+    },
+    "turbo-q5-v3": {
+      "bytes": 156871,
+      "id": 12019154517,
+      "name": "dictation-candidate-qualification-turbo-q5-v3",
+      "sha256": "0590ba59d731dea8c5b32b47ea4b11baf7cbc5ac56b94caf38c21165bbe44624"
+    }
+  },
+  "contract_sha256": "7b7a3c999bd37163d48d0a07115a79771a90479b30a27ee3a465432de4a96fc9",
+  "qualification_manifest_sha256": "1d8a838ad4678d772b41b705a6839f49b67b0064d0ef3f9e984cbd77bfac79cb",
+  "reader_sha256": "da125029cb9e5ef92c0d0b194475600bc875bdc316775dc191b4c31b76e25e5d",
+  "ready": true,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "run_attempt": 1,
+  "run_id": 38836006203,
+  "schema": "arctic-dictation-failure-reader-v1",
+  "source_sha": "71dcd1cb80cda7f1f630d1be8637ad249d3ae52b",
+  "workflow": ".github/workflows/dictation-candidate-20261009.yml"
+}
