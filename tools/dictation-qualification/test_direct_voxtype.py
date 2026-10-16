@@ -36,6 +36,85 @@ class DirectVoxtypeControls(unittest.TestCase):
         with self.assertRaisesRegex(guest.Invalid, '^unknown-upstream-record-command$'):
             checker.record('status')
 
+    def test_connected_vulkan_preparation_isolates_before_any_session(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'online-installed'}
+        checker.engines = Mock(return_value=[])
+        checker.record = Mock()
+        checker.checked_vulkan_payload = Mock(return_value=True)
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            system = root / 'state'; system.mkdir()
+            state_path = root / 'runtime-state'
+            checker.state_path = state_path
+            def command(argv, timeout=20, check=True, **_kwargs):
+                calls.append(tuple(argv))
+                if argv[:3] == ['/usr/bin/env', 'PKEXEC_UID=' + str(os.getuid()),
+                                str(guest.SETUP)]:
+                    backend = argv[-1]
+                    (system / 'backend').write_text('cpu\n')
+                    if backend == 'vulkan':
+                        (system / 'setup.error').write_text('backend-vulkan\n')
+                        return SimpleNamespace(stdout=b'', stderr=b'', returncode=1)
+                    (system / 'setup.error').unlink()
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv == ['/usr/bin/nmcli', 'networking', 'off']:
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[:2] == ['curl', '--noproxy']:
+                    return SimpleNamespace(stdout=b'000', stderr=b'', returncode=7)
+                raise AssertionError(argv)
+            with patch.object(guest, 'SYSTEM', system), patch.object(guest, 'run', side_effect=command):
+                result = checker.prepare_vulkan_offline_boundary()
+        self.assertEqual(result, {
+            'gpu_supported': False, 'explicit_cpu_selected': True,
+            'bytes': guest.ASSETS['vulkan']['bytes'],
+            'sha256': guest.ASSETS['vulkan']['sha256'], 'returncode': 7})
+        self.assertEqual(calls[-2], ('/usr/bin/nmcli', 'networking', 'off'))
+        self.assertEqual(calls[-1][0], 'curl')
+        checker.record.assert_not_called()
+        checker.checked_vulkan_payload.assert_called_once_with()
+
+    def test_failed_connected_preparation_still_disables_network(self):
+        checker = self.checker()
+        checker.profile_id = 'turbo-q5-v3'
+        checker.context = {'phase': 'recovery'}
+        checker.state_path = Path('/does-not-exist')
+        checker.engines = Mock(return_value=[])
+        checker.cmd = Mock(return_value=SimpleNamespace(
+            stdout=b'', stderr=b'', returncode=0))
+        calls = []
+        with tempfile.TemporaryDirectory() as temp:
+            system = Path(temp)
+            (system / 'backend').write_text('cpu\n')
+            (system / 'setup.error').write_text('backend-vulkan\n')
+            def command(argv, timeout=20, check=True, **_kwargs):
+                calls.append(tuple(argv))
+                return SimpleNamespace(stdout=b'', stderr=b'',
+                                       returncode=(1 if argv[-1:] == ['vulkan'] else 0))
+            checker.checked_vulkan_payload = Mock(side_effect=guest.Invalid('bad-payload'))
+            with patch.object(guest, 'SYSTEM', system), patch.object(guest, 'run', side_effect=command), \
+                    self.assertRaisesRegex(guest.Invalid, '^bad-payload$'):
+                checker.prepare_vulkan_offline_boundary()
+        self.assertIn(('/usr/bin/nmcli', 'networking', 'off'), calls)
+
+    def test_execute_places_isolation_before_ready_and_session(self):
+        source = (HERE / 'guest_check.py').read_text()
+        tree = ast.parse(source)
+        checker = next(node for node in tree.body
+                       if isinstance(node, ast.ClassDef) and node.name == 'Checker')
+        method = next(node for node in checker.body
+                      if isinstance(node, ast.FunctionDef) and node.name == 'execute')
+        body = ast.get_source_segment(source, method)
+        boundary = body.index('self.prepare_vulkan_offline_boundary')
+        readiness = body.index('self.ready')
+        session = body.index('self.session')
+        self.assertLess(boundary, readiness)
+        self.assertLess(readiness, session)
+
     def test_adapter_is_never_used_for_recording_in_session_methods(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
         checker = next(node for node in tree.body

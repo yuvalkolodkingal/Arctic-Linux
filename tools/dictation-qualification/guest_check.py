@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, VULKAN_ISOLATION_GATE, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -880,6 +880,51 @@ class Checker:
                       'http://fedoraproject.org/'], check=False)
         require(result.returncode != 0 and result.stdout == b'000', 'outside-network-response')
         return {'returncode': result.returncode}
+
+    def prepare_vulkan_offline_boundary(self):
+        """Fetch and verify optional Vulkan, then remove outside reachability.
+
+        This runs only in a disposable Turbo boot whose host network was
+        explicitly enabled for the download.  It performs no recording or
+        transcription.  The normal GPU gate later repeats the unsupported
+        Vulkan attempt and both CPU recovery transcriptions while offline.
+        """
+        require(self.profile_id == 'turbo-q5-v3'
+                and self.context['phase'] in ('online-installed', 'recovery'),
+                'vulkan-boundary-scope')
+        network_off = None
+        try:
+            # Preserve the lazy-login contract: setup may run the signed
+            # command-line Vulkan probe, but no resident user daemon starts.
+            self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'], check=False)
+            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
+            require(failed.returncode != 0,
+                    'vm-vulkan-fixture-unexpectedly-supported')
+            require((SYSTEM / 'backend').read_text().strip() == 'cpu'
+                    and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
+                    'vulkan-boundary-cpu-not-preserved')
+            self.checked_vulkan_payload()
+            # Use the product's supported selector to clear the checked
+            # failure while keeping the daemon stopped for readiness testing.
+            run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                 str(SETUP), '--backend', 'cpu'], 750)
+            require((SYSTEM / 'backend').read_text().strip() == 'cpu'
+                    and not (SYSTEM / 'setup.error').exists(),
+                    'vulkan-boundary-cpu-not-restored')
+            require(not self.engines() and not self.state_path.exists(),
+                    'vulkan-boundary-resident-session')
+        finally:
+            # Even a failed preparation must not leave an externally reachable
+            # VM available to later collector cleanup or diagnostics.
+            network_off = run(['/usr/bin/nmcli', 'networking', 'off'],
+                              20, check=False)
+        require(network_off.returncode == 0, 'vulkan-boundary-network-disable')
+        isolated = self.offline()
+        return {'gpu_supported': False, 'explicit_cpu_selected': True,
+                'bytes': ASSETS['vulkan']['bytes'],
+                'sha256': ASSETS['vulkan']['sha256'],
+                'returncode': isolated['returncode']}
 
     def route(self):
         for name in ('pw-loopback', 'pw-play', 'pw-dump', 'wpctl'):
@@ -1970,13 +2015,21 @@ class Checker:
                 self.gate('offline-setup-pending', self.pending)
                 self.gate('offline-os-healthy', self.os_healthy)
             elif phase == 'recovery':
-                self.gate('explicit-service-recovery-ready', self.recovery)
-                self.gate('installed-payload-integrity', self.payload)
+                available = self.gate('explicit-service-recovery-ready', self.recovery)
+                integrity = self.gate('installed-payload-integrity', self.payload)
+                if available and integrity and self.profile_id == 'turbo-q5-v3':
+                    self.gate(VULKAN_ISOLATION_GATE,
+                              self.prepare_vulkan_offline_boundary)
             else:
                 readiness = 'online-installer-ready' if phase == 'online-installed' else 'recovered-ready'
-                available = self.gate(readiness, self.ready)
                 integrity = self.gate('installed-payload-integrity', self.payload)
-                if available and integrity:
+                isolated = True
+                if (integrity and phase == 'online-installed'
+                        and self.profile_id == 'turbo-q5-v3'):
+                    isolated = self.gate(VULKAN_ISOLATION_GATE,
+                                         self.prepare_vulkan_offline_boundary)
+                available = self.gate(readiness, self.ready) if integrity and isolated else False
+                if available and integrity and isolated:
                     self.session()
         self.gate('no-new-avcs', self.avcs)
         present = {gate['id'] for gate in self.report['gates']}

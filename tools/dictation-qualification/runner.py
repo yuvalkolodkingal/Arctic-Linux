@@ -69,6 +69,18 @@ HOST_STAGES = frozenset({
     'boot-recovery-poll-system-exit', 'boot-recovery-poll-keyboard-interrupt',
     'boot-recovery-poll-other-error'})
 PHASES = frozenset({'online-installed', 'offline-installed', 'recovery', 'recovered-offline'})
+# Only the Turbo online-installed boot needs temporary networking to fetch the
+# separately disclosed signed Vulkan binary.  Its guest collector removes
+# external reachability and proves HTTP 000 before starting any VoxType
+# session.  Small, offline-installed and recovered-offline boots stay host
+# restricted; recovery is the explicit connected retry for queued payloads.
+# Keeping this plan source-owned makes each boundary reviewable.
+PHASE_PLAN = (
+    ('online-installed', 'online', 'all', 'online', 'optional-vulkan', 85 * 60),
+    ('offline-installed', 'offline', 'all', 'offline', 'offline', 65 * 60),
+    ('recovery', 'offline', 'boot', 'offline', 'online', 40 * 60),
+    ('recovered-offline', 'offline', 'boot', 'offline', 'offline', 65 * 60),
+)
 CATCH_STAGES = frozenset({'harness', 'report-live', 'report-installed', 'indicator', 'recovery-screens'})
 TRUSTED_ERRORS = {
     'Private dictation harness command failed': 'command-failed',
@@ -344,6 +356,17 @@ def require(value, reason):
         raise RuntimeError(reason)
 
 
+def resolved_boot_network(mode, hardware_profile):
+    """Resolve the reviewed optional-download lane before invoking the VM."""
+    require(mode in ('offline', 'online', 'optional-vulkan'),
+            'Unreviewed dictation boot network mode')
+    require(hardware_profile in ('small-v2', 'turbo-q5-v3'),
+            'Unreviewed dictation hardware profile')
+    if mode == 'optional-vulkan':
+        return 'online' if hardware_profile == 'turbo-q5-v3' else 'offline'
+    return mode
+
+
 def sha(path):
     result = hashlib.sha256()
     with Path(path).open('rb') as stream:
@@ -605,12 +628,9 @@ def run(args):
         state['vm_tool_image_id'] = prepared
         for kind in ('online', 'offline'):
             state['installations'][kind] = str(uuid.uuid4())
-        phases = [('online-installed', 'online', 'all', 'online', 'offline', 85 * 60),
-                  ('offline-installed', 'offline', 'all', 'offline', 'offline', 65 * 60),
-                  ('recovery', 'offline', 'boot', 'offline', 'online', 40 * 60),
-                  ('recovered-offline', 'offline', 'boot', 'offline', 'offline', 65 * 60)]
-        for phase, kind, stage, install_network, boot_network, limit in phases:
+        for phase, kind, stage, install_network, boot_network_mode, limit in PHASE_PLAN:
             verify(args)  # Exact ISO/source are rehashed immediately before every VM phase.
+            boot_network = resolved_boot_network(boot_network_mode, args.hardware_profile)
             payload = private / ('payload-' + phase)
             payload.mkdir(mode=0o700)
             shutil.copytree(HERE, payload / 'dictation-qualification', ignore=shutil.ignore_patterns('__pycache__', 'test_*.py'))

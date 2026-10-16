@@ -135,6 +135,24 @@ class RunnerGuards(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'lacks direct VoxType integration file'):
                 runner.integration_sha(root)
 
+    def test_phase_plan_limits_optional_download_to_turbo_and_preserves_offline_lanes(self):
+        self.assertEqual(runner.PHASE_PLAN, (
+            ('online-installed', 'online', 'all', 'online', 'optional-vulkan', 85 * 60),
+            ('offline-installed', 'offline', 'all', 'offline', 'offline', 65 * 60),
+            ('recovery', 'offline', 'boot', 'offline', 'online', 40 * 60),
+            ('recovered-offline', 'offline', 'boot', 'offline', 'offline', 65 * 60),
+        ))
+        self.assertEqual({row[0] for row in runner.PHASE_PLAN}, runner.PHASES)
+        self.assertEqual(runner.resolved_boot_network('optional-vulkan', 'turbo-q5-v3'),
+                         'online')
+        self.assertEqual(runner.resolved_boot_network('optional-vulkan', 'small-v2'),
+                         'offline')
+        self.assertEqual([row[0] for row in runner.PHASE_PLAN if row[4] == 'online'],
+                         ['recovery'])
+        for mode in ('anything', ''):
+            with self.assertRaisesRegex(RuntimeError, 'boot network mode'):
+                runner.resolved_boot_network(mode, 'turbo-q5-v3')
+
     def test_unresponsive_docker_still_terminates_owned_host_process_group(self):
         child = Mock(pid=123, poll=Mock(return_value=None),
                      wait=Mock(side_effect=[runner.subprocess.TimeoutExpired('fixture', 1), 0]))

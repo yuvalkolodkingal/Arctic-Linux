@@ -57,6 +57,7 @@ SESSION = {
 }
 MODERN_GPU_GATE = 'gpu-failure-explicit-cpu-fallback'
 LEGACY_GPU_GATE = 'legacy-no-vulkan-explicit-cpu'
+VULKAN_ISOLATION_GATE = 'vulkan-download-offline-boundary'
 GATES = {
     'live': COMMON | {'live-payload-model-absent', 'live-voxtype-unavailable'},
     'online-installed': COMMON | SESSION | {'encrypted-installed-boot', 'online-installer-ready'},
@@ -69,6 +70,8 @@ GATES = {
 
 def gates(phase, profile):
     expected = set(GATES[phase])
+    if profile == 'turbo-q5-v3' and phase in ('online-installed', 'recovery'):
+        expected.add(VULKAN_ISOLATION_GATE)
     if phase in ('online-installed', 'recovered-offline'):
         expected.add(MODERN_GPU_GATE if profile == 'turbo-q5-v3' else LEGACY_GPU_GATE)
     return expected
@@ -186,6 +189,8 @@ FAILURE_STAGE_GATES = {
 }
 FAILURE_STAGE_GATES[MODERN_GPU_GATE] = frozenset(
     set(TRANSCRIPTION_FAILURE_STAGES.values()) | set(GPU_FAILURE_STAGES.values()))
+FAILURE_STAGE_GATES[VULKAN_ISOLATION_GATE] = frozenset(
+    {GPU_FAILURE_STAGES['vulkan-payload-integrity']})
 TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
     'cpu-english-transcription-insertion',
     'cpu-hebrew-transcription-insertion',
@@ -193,7 +198,7 @@ TRANSCRIPTION_REQUIRED_FAILURE_GATES = {
 EXPECTED_KINDS = {name: 'actual-session' for names in GATES.values() for name in names}
 EXPECTED_KINDS.update({name: 'actual-boot' for name in (
     'selinux-enforcing', 'encrypted-installed-boot', 'offline-os-healthy',
-    'local-offline-transcription')})
+    'local-offline-transcription', VULKAN_ISOLATION_GATE)})
 EXPECTED_KINDS.update({name: 'actual-installed-files' for name in (
     'live-payload-model-absent', 'installed-payload-integrity')})
 EXPECTED_KINDS.update({name: 'config-inspection' for name in (
@@ -236,6 +241,9 @@ REQUIRED_OBSERVATIONS = {
     'transcript-private-cleanup': {'file_count': 0, 'drained': True},
     'transcript-log-notification-leak-scan': {'matched': 0},
     'no-new-avcs': {'avcs': 0},
+    VULKAN_ISOLATION_GATE: {'gpu_supported': False, 'explicit_cpu_selected': True,
+                            'bytes': ASSETS['vulkan']['bytes'],
+                            'sha256': ASSETS['vulkan']['sha256']},
 }
 
 
@@ -408,6 +416,9 @@ def validate(report, expected, require_passed=False, fixture_manifest=None):
             if gate['id'] == 'local-offline-transcription':
                 require(type(observed.get('returncode')) is int and observed['returncode'] > 0,
                         'offline-network-check-successful-response')
+            if gate['id'] == VULKAN_ISOLATION_GATE:
+                require(type(observed.get('returncode')) is int and observed['returncode'] > 0,
+                        'vulkan-boundary-network-check-successful-response')
             if gate['id'] == 'no-new-avcs':
                 require(observed.get('audit_enabled') in (1, 2)
                         and observed.get('audit_enabled_before') == observed.get('audit_enabled')

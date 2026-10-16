@@ -63,7 +63,7 @@ def synthetic(phase='live', installation=1, boot=1, profile='turbo-q5-v3'):
             observed['resident_rss_bytes'] = 600_000_000
         if name == 'installed-payload-integrity':
             observed['file_count'] = len(c.PROFILE_ASSETS[profile])
-        if name == 'local-offline-transcription':
+        if name in ('local-offline-transcription', c.VULKAN_ISOLATION_GATE):
             observed['returncode'] = 7
         if name == 'recording-status-published':
             observed.update(snapshot_sha256='d' * 64, sha256='e' * 64)
@@ -140,6 +140,22 @@ class ContractControls(unittest.TestCase):
         gate = next(row for row in report['gates'] if row['id'] == c.MODERN_GPU_GATE)
         gate['observations']['gpu_supported'] = True
         self.rejects(report, 'gate-contradictory-or-missing-observations')
+
+    def test_turbo_connected_preparation_has_an_explicit_offline_boundary(self):
+        for phase in ('online-installed', 'recovery'):
+            report = synthetic(phase)
+            gate = next(row for row in report['gates']
+                        if row['id'] == c.VULKAN_ISOLATION_GATE)
+            self.assertEqual(gate['evidence_kind'], 'actual-boot')
+            self.assertGreater(gate['observations']['returncode'], 0)
+            gate['observations']['returncode'] = 0
+            self.rejects(report, 'vulkan-boundary-network-check-successful-response')
+        for phase in ('live', 'offline-installed', 'recovered-offline'):
+            self.assertNotIn(c.VULKAN_ISOLATION_GATE,
+                             c.gates(phase, 'turbo-q5-v3'))
+        for phase in c.PHASES:
+            self.assertNotIn(c.VULKAN_ISOLATION_GATE,
+                             c.gates(phase, 'small-v2'))
 
     def test_modern_gpu_gate_requires_both_recovery_screen_acknowledgements(self):
         for key in ('gpu_failure_capture_ack_sha256', 'cpu_ready_capture_ack_sha256'):
