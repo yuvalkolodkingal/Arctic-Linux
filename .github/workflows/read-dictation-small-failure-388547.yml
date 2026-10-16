@@ -1,0 +1,29 @@
+name: Read safe Small diagnostics for dictation run 38854727754
+
+on:
+  push:
+    branches: [codex/read-dictation-small-388547-20261016]
+    paths: [.github/dictation-small-failure-reader-388547.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-diagnostics:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-dictation-small-388547-20261016' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate the closed-vocabulary reader
+        run: python3 -B -m unittest tools/dictation-small-failure-reader-388547/test_read.py
+      - name: Read only validated staged diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/dictation-small-failure-reader-388547/read.py
+          --manifest tools/dictation-small-failure-reader-388547/execution-manifest.json
