@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 from pathlib import Path
+import stat
 import tempfile
 import unittest
 from unittest import mock
@@ -203,15 +204,70 @@ class SafeNativeReaderTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'artifact.zip'; path.write_bytes(raw)
             with mock.patch.object(reader, 'ARTIFACT_BYTES', len(raw)), \
-                    self.assertRaises(RuntimeError):
+                    self.assertRaises(reader.ArchiveReject):
                 with zipfile.ZipFile(path) as archive:
                     reader.fixed_members(archive)
+            self.assertEqual((reader.ARCHIVE_ROLE, reader.ARCHIVE_REASON),
+                             ('harness', 'duplicate'))
         values = self.raws()
         screening = json.loads(values['upload-screening.json'])
         screening['files']['native-harness.log']['uploaded_sha256'] = '0' * 64
         values['upload-screening.json'] = json.dumps(screening).encode()
         with self.assertRaises(RuntimeError):
             self.inspect(values)
+
+    def test_optional_native_members_can_be_absent_with_closed_presence(self):
+        values = self.raws()
+        screening = json.loads(values['upload-screening.json'])
+        for name in ('harness/qemu-install.log', 'harness/taskbar-display-install.json'):
+            values.pop(name); screening['files'].pop(name)
+        values['upload-screening.json'] = json.dumps(screening, sort_keys=True).encode()
+        result = self.inspect(values)
+        self.assertEqual(result['qemu'], {'present': False})
+        self.assertEqual(result['display'], {'present': False})
+        self.assertEqual(result['stage_logs'], {
+            'stage_log': {'present': False}, 'current_stage_log': {'present': False}})
+        self.assertEqual(result['host_frame'], {'present': False})
+
+    def test_archive_rejections_use_only_closed_role_and_reason(self):
+        values = self.raws(); values.pop('native-harness.log')
+        raw = self.archive(values)
+        with zipfile.ZipFile(io.BytesIO(raw)) as archive, \
+                self.assertRaises(reader.ArchiveReject):
+            reader.fixed_members(archive)
+        self.assertEqual((reader.ARCHIVE_ROLE, reader.ARCHIVE_REASON),
+                         ('harness', 'missing-required'))
+
+        mutations = (
+            ('type', lambda item: setattr(item, 'external_attr',
+                                          (stat.S_IFDIR | 0o755) << 16), None),
+            ('encryption', lambda item: setattr(item, 'flag_bits', item.flag_bits | 1), None),
+            ('compression', lambda item: setattr(item, 'compress_type', 99), None),
+            ('size', lambda item: setattr(item, 'file_size', 2 * 1024 * 1024), None),
+            ('crc', lambda _item: None, zipfile.BadZipFile('private crc detail')),
+            ('read', lambda _item: None, OSError('private path detail')),
+        )
+        complete = self.archive(self.raws())
+        for expected, mutate, failure in mutations:
+            with self.subTest(reason=expected), zipfile.ZipFile(io.BytesIO(complete)) as archive:
+                item = next(row for row in archive.infolist()
+                            if row.filename == 'upload-screening.json')
+                mutate(item)
+                context = (mock.patch.object(archive, 'read', side_effect=failure)
+                           if failure is not None else contextlib.nullcontext())
+                with context, self.assertRaises(reader.ArchiveReject):
+                    reader.fixed_members(archive)
+                self.assertEqual((reader.ARCHIVE_ROLE, reader.ARCHIVE_REASON),
+                                 ('screening', expected))
+
+        with self.assertRaises(reader.ArchiveReject):
+            reader.archive_reject('private/path', 'password=private')
+        stream = io.StringIO()
+        with contextlib.redirect_stdout(stream):
+            reader.write_rejection('archive')
+        self.assertEqual(stream.getvalue(),
+                         'ARCTIC-NATIVE-READER-REJECTION=archive:archive:read\n')
+        self.assertNotIn('private', stream.getvalue())
 
     def test_stop_contract_rejects_changed_deadline_marker_and_nonfinite(self):
         base = json.loads(self.raws()['harness/native-stop-install.json'])

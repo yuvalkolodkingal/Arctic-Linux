@@ -1,9 +1,9 @@
-name: Read safe Native diagnostics for run 38887521541
+name: Read safe Native diagnostics v2 for run 38887521541
 
 on:
   push:
-    branches: [codex/read-native-failure-388875-20261016]
-    paths: [.github/native-failure-reader-388875.activate]
+    branches: [codex/read-native-failure-388875-v2-20261016]
+    paths: [.github/native-failure-reader-388875-v2.activate]
 
 permissions:
   contents: read
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   read-safe-diagnostics:
-    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-native-failure-388875-20261016' && github.run_attempt == 1 }}
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-native-failure-388875-v2-20261016' && github.run_attempt == 1 }}
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

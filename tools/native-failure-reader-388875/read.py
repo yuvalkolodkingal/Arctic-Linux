@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
 REPO_API = 'repos/' + REPOSITORY
 WORKFLOW = '.github/workflows/native-candidate-20261008.yml'
-READER_WORKFLOW = Path('.github/workflows/read-native-failure-388875.yml')
-BRANCH = 'codex/read-native-failure-388875-20261016'
-ACTIVATION = Path('.github/native-failure-reader-388875.activate')
+READER_WORKFLOW = Path('.github/workflows/read-native-failure-388875-v2.yml')
+BRANCH = 'codex/read-native-failure-388875-v2-20261016'
+ACTIVATION = Path('.github/native-failure-reader-388875-v2.activate')
 READER = Path('tools/native-failure-reader-388875/read.py')
 VALIDATOR = Path('tools/native-functional/screen-evidence.py')
 QUALIFICATION = Path('tools/native-failure-reader-388875/qualification-execution-manifest.json')
@@ -39,10 +39,10 @@ REQUIRED_MEMBERS = {
     'execution': ('execution.json', 1024 * 1024),
     'stop': ('harness/native-stop-install.json', 4096),
     'harness': ('native-harness.log', 16 * 1024 * 1024),
-    'qemu': ('harness/qemu-install.log', 1024 * 1024),
-    'display': ('harness/taskbar-display-install.json', 64 * 1024),
 }
 OPTIONAL_MEMBERS = {
+    'qemu': ('harness/qemu-install.log', 1024 * 1024),
+    'display': ('harness/taskbar-display-install.json', 64 * 1024),
     'stage_log': ('harness/test-install-stage.log', 4 * 1024 * 1024),
     'current_stage_log': ('harness/test.log', 4 * 1024 * 1024),
     'host_frame_receipt': ('harness/native-host-frame-live.json', 128 * 1024),
@@ -58,6 +58,25 @@ REJECTION_STAGES = {'activation', 'manifest', 'run', 'jobs', 'artifact-metadata'
                     'download', 'archive', 'screening', 'execution', 'stop',
                     'harness', 'projection'}
 REJECTION_STAGE = 'manifest'
+ARCHIVE_ROLES = {'archive', *MEMBERS}
+ARCHIVE_REASONS = {'missing-required', 'duplicate', 'type', 'encryption',
+                   'compression', 'size', 'crc', 'read'}
+ARCHIVE_ROLE = 'archive'
+ARCHIVE_REASON = 'read'
+
+
+class ArchiveReject(RuntimeError):
+    pass
+
+
+def archive_reject(role, reason):
+    global ARCHIVE_ROLE, ARCHIVE_REASON
+    if role not in ARCHIVE_ROLES:
+        role = 'archive'
+    if reason not in ARCHIVE_REASONS:
+        reason = 'read'
+    ARCHIVE_ROLE, ARCHIVE_REASON = role, reason
+    raise ArchiveReject('safe Native reader rejected archive')
 
 
 def require(value):
@@ -101,7 +120,7 @@ def read_json_file(path, maximum):
 
 def validate_manifest(value):
     require(type(value) is dict and set(value) == MANIFEST_FIELDS)
-    require(value['schema'] == 'arctic-native-failure-reader-v1'
+    require(value['schema'] == 'arctic-native-failure-reader-v2'
             and value['ready'] is True and value['repository'] == REPOSITORY
             and value['workflow'] == WORKFLOW
             and value['reader_workflow'] == READER_WORKFLOW.as_posix()
@@ -157,7 +176,7 @@ def activation_guard():
             and os.environ.get('GITHUB_EVENT_NAME') == 'push'
             and os.environ.get('GITHUB_REF') == 'refs/heads/' + BRANCH
             and os.environ.get('GITHUB_WORKFLOW') ==
-                'Read safe Native diagnostics for run 38887521541'
+                'Read safe Native diagnostics v2 for run 38887521541'
             and os.environ.get('GITHUB_RUN_ATTEMPT') == '1')
     child = os.environ.get('GITHUB_SHA', '')
     require(digest(child, 40))
@@ -235,23 +254,37 @@ def download(target):
 
 def fixed_members(archive):
     checkpoint('archive')
-    require(type(archive) is zipfile.ZipFile and len(archive.infolist()) <= 1002)
+    if type(archive) is not zipfile.ZipFile:
+        archive_reject('archive', 'type')
+    if len(archive.infolist()) > 1002:
+        archive_reject('archive', 'size')
     result = {}
     for role, (name, maximum) in MEMBERS.items():
         matches = [item for item in archive.infolist() if item.filename == name]
-        require(len(matches) <= 1)
+        if len(matches) > 1:
+            archive_reject(role, 'duplicate')
         if not matches:
-            require(role in OPTIONAL_MEMBERS)
+            if role not in OPTIONAL_MEMBERS:
+                archive_reject(role, 'missing-required')
             continue
         item = matches[0]
         mode = item.external_attr >> 16
-        require(not item.is_dir() and stat.S_IFMT(mode) in (0, stat.S_IFREG)
-                and not (item.flag_bits & 0x1)
-                and item.compress_type in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED)
-                and 0 <= item.file_size <= maximum
-                and 0 <= item.compress_size <= ARTIFACT_BYTES)
-        raw = archive.read(item)
-        require(len(raw) == item.file_size)
+        if item.is_dir() or stat.S_IFMT(mode) not in (0, stat.S_IFREG):
+            archive_reject(role, 'type')
+        if item.flag_bits & 0x1:
+            archive_reject(role, 'encryption')
+        if item.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            archive_reject(role, 'compression')
+        if not (0 <= item.file_size <= maximum and 0 <= item.compress_size <= ARTIFACT_BYTES):
+            archive_reject(role, 'size')
+        try:
+            raw = archive.read(item)
+        except (zipfile.BadZipFile, zlib.error):
+            archive_reject(role, 'crc')
+        except (OSError, RuntimeError, ValueError):
+            archive_reject(role, 'read')
+        if len(raw) != item.file_size:
+            archive_reject(role, 'read')
         result[role] = raw
     return result
 
@@ -453,11 +486,12 @@ def validate_qemu(raw, validator):
             families.add('display-error')
     if raw and not families:
         families.add('unclassified')
-    return {'bytes': len(raw), 'nonempty': bool(raw), 'families': sorted(families)}
+    return {'present': True, 'bytes': len(raw), 'nonempty': bool(raw),
+            'families': sorted(families)}
 
 
 def validate_display(raw, controller_sha256):
-    value = strict_json(raw, REQUIRED_MEMBERS['display'][1])
+    value = strict_json(raw, MEMBERS['display'][1])
     require(type(value) is dict and value.get('schema') == 'arctic-qemu-taskbar-display-v1'
             and value.get('status') == 'uiinfo_applied_pending_guest_two_output_evidence'
             and type(value.get('qemu_pid')) is int and value['qemu_pid'] > 1
@@ -490,7 +524,7 @@ def validate_display(raw, controller_sha256):
         console_ids.add(head['console_id'])
         addresses.add(head['device_address'])
     require(sorted(projected) == [0, 1] and len(console_ids) == 2 and len(addresses) == 1)
-    return {'status': 'uiinfo-applied', 'heads': 2, 'geometry': '2560x720',
+    return {'present': True, 'status': 'uiinfo-applied', 'heads': 2, 'geometry': '2560x720',
             'guest_monitor_verification_required': True}
 
 
@@ -593,9 +627,19 @@ def validate_host_frame(raws, native_source_sha256):
 
 def inspect_archive(path, manifest, qualification):
     checkpoint('archive')
-    require(path.is_file() and not path.is_symlink() and path.stat().st_size == ARTIFACT_BYTES)
-    with zipfile.ZipFile(path) as archive:
-        raws = fixed_members(archive)
+    if not path.is_file() or path.is_symlink():
+        archive_reject('archive', 'type')
+    if path.stat().st_size != ARTIFACT_BYTES:
+        archive_reject('archive', 'size')
+    try:
+        with zipfile.ZipFile(path) as archive:
+            raws = fixed_members(archive)
+    except ArchiveReject:
+        raise
+    except zipfile.BadZipFile:
+        archive_reject('archive', 'type')
+    except (OSError, RuntimeError, ValueError):
+        archive_reject('archive', 'read')
     records = validate_screening(raws)
     pins = load_source_provenance(qualification)
     require(digest(pins['taskbar_display_sha256']))
@@ -603,8 +647,10 @@ def inspect_archive(path, manifest, qualification):
     stop = validate_stop(raws['stop'])
     validator = load_validator(manifest['validator_sha256'])
     harness = validate_harness(raws['harness'], validator)
-    qemu = validate_qemu(raws['qemu'], validator)
-    display = validate_display(raws['display'], pins['taskbar_display_sha256'])
+    qemu = (validate_qemu(raws['qemu'], validator) if 'qemu' in raws
+            else {'present': False})
+    display = (validate_display(raws['display'], pins['taskbar_display_sha256'])
+               if 'display' in raws else {'present': False})
     stage_logs = {}
     for role in ('stage_log', 'current_stage_log'):
         stage_logs[role] = (validate_stage_log(raws[role], validator) if role in raws
@@ -647,7 +693,8 @@ def write_rejection(stage):
                 stream.write('rejection=' + stage + '\n')
         except OSError:
             pass
-    print('ARCTIC-NATIVE-READER-REJECTION=' + stage, flush=True)
+    suffix = (':' + ARCHIVE_ROLE + ':' + ARCHIVE_REASON) if stage == 'archive' else ''
+    print('ARCTIC-NATIVE-READER-REJECTION=' + stage + suffix, flush=True)
 
 
 def run(manifest_path):
