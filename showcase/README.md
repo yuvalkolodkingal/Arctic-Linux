@@ -83,7 +83,7 @@ npm run check -- --samples 38 --strict
 `package-lock.json` pins every HyperFrames dependency and registry integrity digest; the npm scripts
 invoke that installed CLI rather than resolving a package with `npx`. Asset preparation accepts the
 committed GSAP 3.14.2 file only at 72,777 bytes and SHA-256
-`19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee`. The two showcase workflows
+`19e3ad578c9c583ddf9bdca2ad87bb55c3d70b331058e28abacab898f799b2ee`. The showcase workflows
 also pin each official GitHub Action to a reviewed full commit SHA.
 
 The superseded custom-controller River master remains recorded with its exact SHA-256, duration and generation receipts
@@ -111,6 +111,37 @@ exact source commit, render run and artifact, MP4 bytes, duration and SHA-256, f
 subtitle checks, and human review of the eight representative frames. `--purpose
 publish-video-with-source-audio` is the only mode that accepts redistribution of the source MP3,
 and it requires the broader explicit `public_video_and_source_audio_redistribution` scope.
+
+## Public video publication
+
+[`showcase-river-publish.yml`](../.github/workflows/showcase-river-publish.yml) is a manual,
+input-free publisher for the reviewed River edition. It is inert until a maintainer dispatches it
+from `main`. The checked-out commit must equal the qualified-release manifest's `main_sha`; the
+voice resolver must independently admit `--purpose publish-video`; and the live render run and
+artifact metadata, archive byte count and SHA-256 must reproduce the approved final-render receipt.
+
+The candidate ZIP has a closed member inventory and bounded expanded size. Before staging, the
+publisher verifies its MP4 bytes and SHA-256, all eight human-reviewed frame hashes, render and
+caption validation records, 130 matching SRT/WebVTT/muxed caption cues, the exact committed poster,
+captions, chapters, timing and provenance, and the archived private-render receipt. That archived
+receipt may differ from the final receipt only in post-render listening, frame, final-render and
+publisher-plan approvals. Unexpected members, including any MP3, stop publication. The workflow
+publishes only:
+
+- `Arctic-Linux-Showcase-River-1080p.mp4`
+- `Arctic-Linux-Showcase-Poster.png`
+- `captions.srt`
+- `captions.vtt`
+- `chapters.txt`
+
+The tag and release must not already exist. The workflow first creates a draft, uploads all five
+assets, downloads them through the authenticated GitHub release client, and verifies their byte
+counts and SHA-256 values. It then makes the release public, downloads each public asset URL
+independently, and verifies the public metadata and both copies. If any creation or verification
+step fails, the workflow removes the incomplete release and tag. Source-audio publication is
+outside this workflow; the resolver
+permits it only through the separate `publish-video-with-source-audio` purpose and the broader
+`public_video_and_source_audio_redistribution` confirmation.
 
 ## Source and verification records
 

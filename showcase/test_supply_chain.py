@@ -60,6 +60,7 @@ class SupplyChainTest(unittest.TestCase):
         }
         expected = {
             "showcase-exact-capture-20261014.yml": {"checkout", "upload-artifact"},
+            "showcase-river-publish.yml": {"checkout"},
             "showcase-river-render.yml": {"checkout", "setup-python", "setup-node", "upload-artifact"},
             "showcase-river-verify.yml": {"checkout", "setup-python", "upload-artifact"},
         }
@@ -76,6 +77,19 @@ class SupplyChainTest(unittest.TestCase):
         render = workflows["showcase-river-render.yml"]
         self.assertIn("npm ci --ignore-scripts --no-audit --no-fund", render)
         self.assertIn("cache-dependency-path: showcase/package-lock.json", render)
+
+        publish = workflows["showcase-river-publish.yml"]
+        self.assertRegex(publish, r"(?m)^  workflow_dispatch:\s*$")
+        self.assertNotIn("workflow_dispatch:\n    inputs:", publish)
+        self.assertIn("--purpose publish-video", publish)
+        self.assertNotIn("publish-video-with-source-audio", publish)
+        self.assertIn("gh release download", publish)
+        self.assertIn("--draft", publish)
+        self.assertIn("verify-files", publish)
+        self.assertIn("--draft=false", publish)
+        self.assertIn("fetch-urls", publish)
+        self.assertIn("verify-release", publish)
+        self.assertIn("--cleanup-tag", publish)
 
 
 if __name__ == "__main__":
