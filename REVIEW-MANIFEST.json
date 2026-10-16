@@ -1,0 +1,4854 @@
+{
+  "activation_sha": "847dc1adb9e6549457b635fe69fd18c2f0415772",
+  "artifacts": [
+    {
+      "archive_bytes": 78271956,
+      "archive_sha256": "25f07dc38952d06c2c153de3acc102b9ca7e5facd4475aa7928dfd2399ed6f7f",
+      "artifact_id": 12017679100,
+      "files": [
+        {
+          "bytes": 120013,
+          "cells": [
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-1-1-bottom-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-1-1-bottom-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45108,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-1-1-bottom-auto-covered-reveal.png",
+              "sha256": "5be9d716894af966805b6421f7200fc11097f2ae56b73f2c5e121e715c4b9208",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-1-1-bottom-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-1-1-bottom-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45108,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-1-1-bottom-dodge-covered-reveal.png",
+              "sha256": "5be9d716894af966805b6421f7200fc11097f2ae56b73f2c5e121e715c4b9208",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-1-1-bottom-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12487,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "60fb36d8ac506c1b43d1e7727bc76568a713753b19710c4e36dc567c493d20e7",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12487,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "60fb36d8ac506c1b43d1e7727bc76568a713753b19710c4e36dc567c493d20e7",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12487,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "60fb36d8ac506c1b43d1e7727bc76568a713753b19710c4e36dc567c493d20e7",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12485,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-1-1-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "3dfddefb5279a14e40253fd7825ed40d53d0933d1a5dd4e4365685f97a1f7cfa",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-1-1-left-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-1-1-left-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45141,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-1-1-left-auto-covered-reveal.png",
+              "sha256": "8216d08c53ec595255a207410484f68f6c253e5e58e5f3e32a4826245043690d",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-1-1-left-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-1-1-left-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45141,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-1-1-left-dodge-covered-reveal.png",
+              "sha256": "8216d08c53ec595255a207410484f68f6c253e5e58e5f3e32a4826245043690d",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-1-1-left-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10497,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-0-auto-reveal.png",
+              "sha256": "0f0258eac9d5998203ad443c9d8d193506896f7b63fe43cb3dc71bcbb17dd863",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10497,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "0f0258eac9d5998203ad443c9d8d193506896f7b63fe43cb3dc71bcbb17dd863",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10497,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-3-auto-reveal.png",
+              "sha256": "0f0258eac9d5998203ad443c9d8d193506896f7b63fe43cb3dc71bcbb17dd863",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10711,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-1-1-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "ff696f04152375c4bf153f1573672f7c537e539f782f105594829ffe1ea26e26",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-1-1-right-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-1-1-right-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45519,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-1-1-right-auto-covered-reveal.png",
+              "sha256": "fd988acebb7718686d1416126974d93ae062154b53e97198e6069f61a10da78a",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-1-1-right-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-1-1-right-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45519,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-1-1-right-dodge-covered-reveal.png",
+              "sha256": "fd988acebb7718686d1416126974d93ae062154b53e97198e6069f61a10da78a",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-1-1-right-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10171,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-0-auto-reveal.png",
+              "sha256": "b0494dbfca378dc1377128a6f1959c8927ded81076b725bfc95cd8ec133fd2df",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10106,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "c3269f6f0254561b094a49cbabc308f202db2460125d5fc2ca9a49569351b19f",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10171,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-3-auto-reveal.png",
+              "sha256": "b0494dbfca378dc1377128a6f1959c8927ded81076b725bfc95cd8ec133fd2df",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10171,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-1-1-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "b0494dbfca378dc1377128a6f1959c8927ded81076b725bfc95cd8ec133fd2df",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-01.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ed1bf123c13502a2c1c6a44ec543fce0b2c7262fbda75f00c0c7e5a9f985a37d",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-bottom-auto-covered-conceal.png",
+          "output": "evidence/native/taskbar-exact/exact-01.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-02.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 45141,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-left-dodge-covered-reveal.png",
+          "output": "evidence/native/taskbar-exact/exact-03.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "8216d08c53ec595255a207410484f68f6c253e5e58e5f3e32a4826245043690d",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-04.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-05.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 140539,
+          "cells": [
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-1-1-top-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-1-1-top-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 46517,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-1-1-top-auto-covered-reveal.png",
+              "sha256": "219bb97b7e3b4e196bab0d900903ae2c13e22a42e2d086b9cf3f66318db33d18",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-1-1-top-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-1-1-top-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 47172,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-1-1-top-dodge-covered-reveal.png",
+              "sha256": "7dad8d016f434c2b56e375673b0319a1833cc4469c3c82e9f0887b60145ff94f",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-1-1-top-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12992,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-0-auto-reveal.png",
+              "sha256": "f3b80d9a75d3ba9b9ac3ef966d60e2be67bb205eedc5ba1bec21b20aa4b8d7db",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12992,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "f3b80d9a75d3ba9b9ac3ef966d60e2be67bb205eedc5ba1bec21b20aa4b8d7db",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12897,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-3-auto-reveal.png",
+              "sha256": "36a73c27e52280871828ed8125130fab2a3ec640aafd793c91f3405f03ec58b3",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12897,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-1-1-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "36a73c27e52280871828ed8125130fab2a3ec640aafd793c91f3405f03ec58b3",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-1-1_5-bottom-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-1-1_5-bottom-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64621,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-1-1_5-bottom-auto-covered-reveal.png",
+              "sha256": "38b3816243e36ea726fedb0838010d2a74c2902718b7cbba746cdb10f57d5fa4",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-1-1_5-bottom-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-1-1_5-bottom-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64641,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-1-1_5-bottom-dodge-covered-reveal.png",
+              "sha256": "67400c2d3a51f04060f3b38f701397dded53bd14c0f75673baac9b888215f077",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-1-1_5-bottom-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 18996,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "5d36a52f566b7f8295b957e53314e63b00909998443fee6f9e17c71593c3500a",
+              "width": 1280
+            },
+            {
+              "bytes": 5403,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "f9d827ff8688c9e0e5d93678407db5209a467b6ff1f67397290956f1170b9f56",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19271,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "5691a6c6b45e0304525f873edad47fefde252711ece84c254c013aa7e75572b4",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 18994,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "c7661ba1d04f73a3ab633ec39ab26359c30669da4dab88f94eb5b4dfc0de1754",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19216,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-1-1_5-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "13e769d629634d56e269ad9a21dac69eac5ba07e77de16dd794e17791e5182d3",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-1-1_5-left-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-1-1_5-left-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64559,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-1-1_5-left-auto-covered-reveal.png",
+              "sha256": "50ea1c81df1f7a418b95965b6916569f05f06f51ffafd2e8dee85b46203c31e9",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-1-1_5-left-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-1-1_5-left-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64675,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-1-1_5-left-dodge-covered-reveal.png",
+              "sha256": "197de9791670a2d70a7a4994c52d6c9464962b3d61e404e9d8458fd65a0c18c6",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-1-1_5-left-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16048,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-0-auto-reveal.png",
+              "sha256": "44c02b99c1ffe4315fbd02f31f9f09bfc5f32df4c2a0860c3787ece0bcfa010b",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16048,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "44c02b99c1ffe4315fbd02f31f9f09bfc5f32df4c2a0860c3787ece0bcfa010b",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16100,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-3-auto-reveal.png",
+              "sha256": "323c71ca3a79114ad804d5c013f5e653e2d4e6ebc48f7efd08aa6f0e0c051609",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16100,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-1-1_5-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "323c71ca3a79114ad804d5c013f5e653e2d4e6ebc48f7efd08aa6f0e0c051609",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-02.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6cb65709f87e8a2b3961ca4f6634f287b9b9f2276e9dba11b992f2eb262bda9e",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-06.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-07.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-08.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 165779,
+          "cells": [
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-1-1_5-right-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-1-1_5-right-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64633,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-1-1_5-right-auto-covered-reveal.png",
+              "sha256": "82940193660fea8849ed65664752dd35b812d5459243570ec03b2d581388cf50",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-1-1_5-right-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-1-1_5-right-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64717,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-1-1_5-right-dodge-covered-reveal.png",
+              "sha256": "099b8d9b8b50525c0c9147b299bd48f8548a55786734a65dbc25f39b2e0cb9cc",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-1-1_5-right-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15441,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-0-auto-reveal.png",
+              "sha256": "0998133ec47e6ab0ae7c81ead54b34a4e4ae4d8fd5bf129b72fe85b1d1197a8a",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15415,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "f793340a2a35c4e1b486c9ae56b23ef72977be9e2c33ad2a8f633b46a4ca0c56",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15441,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-3-auto-reveal.png",
+              "sha256": "0998133ec47e6ab0ae7c81ead54b34a4e4ae4d8fd5bf129b72fe85b1d1197a8a",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15415,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-1-1_5-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "f793340a2a35c4e1b486c9ae56b23ef72977be9e2c33ad2a8f633b46a4ca0c56",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-1-1_5-top-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-1-1_5-top-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 66216,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-1-1_5-top-auto-covered-reveal.png",
+              "sha256": "d870f7d78a1afee7ae50d81b281d6f8767e42256f54ea83f64be084e48484215",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-1-1_5-top-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-1-1_5-top-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 66698,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-1-1_5-top-dodge-covered-reveal.png",
+              "sha256": "1e885baf5785afad20320be60978df57031de9aa3fd98c519a80c330cc81100c",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-1-1_5-top-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19477,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-0-auto-reveal.png",
+              "sha256": "c1c2b23c21c9b64f2f1c7917f64aafc8eaad8460ec804481ae928d1afd3bae31",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19555,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "6f0bf593755576e4c7ca355005bc7123b3348275b90ca848637ef4bb2d465250",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19489,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-3-auto-reveal.png",
+              "sha256": "50852a4c0c530c13b04c479ca5628b59febf8db36666ff1793be143275f3ec57",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19555,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-1-1_5-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "6f0bf593755576e4c7ca355005bc7123b3348275b90ca848637ef4bb2d465250",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-1-2-bottom-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-1-2-bottom-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 81608,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-1-2-bottom-auto-covered-reveal.png",
+              "sha256": "6de5603da55ad663ae3a226f17da2968c7c39e8f494210bcffe28f92ce4d0604",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-1-2-bottom-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-1-2-bottom-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 81967,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-1-2-bottom-dodge-covered-reveal.png",
+              "sha256": "6ad83b27ebdc85fb877caac5ea007f6baddbbba294041a1a8887f8b2739add64",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-1-2-bottom-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25875,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "31b3953cd16be60c8e19c1326114d8a50f4ea46530c28fb54bd0f98f6b03c11a",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25850,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "245ccb1af2f36c28ba46c00f7f34cdc4c1e385ca75a6e2faa42de951953ecd39",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25875,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "31b3953cd16be60c8e19c1326114d8a50f4ea46530c28fb54bd0f98f6b03c11a",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25875,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-1-2-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "31b3953cd16be60c8e19c1326114d8a50f4ea46530c28fb54bd0f98f6b03c11a",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-03.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "3b4c0925e9195a1528c38111c271cc1a863c3fa61142f521b5f1f3f446c2f2e8",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-09.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 5397,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-right-fullscreen-0-auto-conceal.png",
+          "output": "evidence/native/taskbar-exact/exact-10.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-11.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 19555,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-1_5-top-fullscreen-1-dodge-reveal.png",
+          "output": "evidence/native/taskbar-exact/exact-12.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6f0bf593755576e4c7ca355005bc7123b3348275b90ca848637ef4bb2d465250",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-2-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-13.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 179086,
+          "cells": [
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-1-2-left-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-1-2-left-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79203,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-1-2-left-auto-covered-reveal.png",
+              "sha256": "1b34feebeb66379f66d8fafddca4fca59adf48d40940f4e0a79943dfede5ab3c",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-1-2-left-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-1-2-left-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79566,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-1-2-left-dodge-covered-reveal.png",
+              "sha256": "25d3e7b4b15b4026c871362256646430facda21c87914a2693c6c8c7cddcc91a",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-1-2-left-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17894,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-0-auto-reveal.png",
+              "sha256": "710c9a95a58c61428a99b8ba74c2442e39745dc82f94777e5e983fbd4edad51c",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17894,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "710c9a95a58c61428a99b8ba74c2442e39745dc82f94777e5e983fbd4edad51c",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17894,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-3-auto-reveal.png",
+              "sha256": "710c9a95a58c61428a99b8ba74c2442e39745dc82f94777e5e983fbd4edad51c",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17973,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-1-2-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "4f0266c5c2dffb3f22e4e78698faaa15f0433b2a995dc09e774e23424efb74e6",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-1-2-right-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-1-2-right-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79146,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-1-2-right-auto-covered-reveal.png",
+              "sha256": "2551116d9dd4ec01511d528a848b40b8bb963112565403747a6e5c61709713e1",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-1-2-right-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-1-2-right-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79178,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-1-2-right-dodge-covered-reveal.png",
+              "sha256": "b553a2f2d3377614118630928af81cd6d155d8e2e24c4fe7f43afb885093e494",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-1-2-right-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17291,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-0-auto-reveal.png",
+              "sha256": "751ea807494931036790642b22789c25297fbe84752bb25e4c51f586be498ecd",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17384,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "ed5c12f66af4f2ba5fa330999be5425ed71a3aee8f3f3782cf310faac6781c00",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17291,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-3-auto-reveal.png",
+              "sha256": "751ea807494931036790642b22789c25297fbe84752bb25e4c51f586be498ecd",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17384,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-1-2-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "ed5c12f66af4f2ba5fa330999be5425ed71a3aee8f3f3782cf310faac6781c00",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-1-2-top-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-1-2-top-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 83939,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-1-2-top-auto-covered-reveal.png",
+              "sha256": "c3b2bdc04e64d5aa81c2cab38db992dce18060fcf766461eaf14f8e150b35e02",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-1-2-top-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-1-2-top-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 83317,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-1-2-top-dodge-covered-reveal.png",
+              "sha256": "fd9676e2f1fae04e5b34cc9d7c01748f7fb50832687c3083a279464e40b39533",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-1-2-top-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 26126,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-0-auto-reveal.png",
+              "sha256": "9a31743c1b2edb574644fc4174a239dd155e4cf020598197c53982d23fbd4ab0",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 26126,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "9a31743c1b2edb574644fc4174a239dd155e4cf020598197c53982d23fbd4ab0",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25935,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-3-auto-reveal.png",
+              "sha256": "fe1887cecfdbc8b8b2a6f051887dfc0c04e64ff8844340f616933da8adf2043a",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 26126,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-1-2-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "9a31743c1b2edb574644fc4174a239dd155e4cf020598197c53982d23fbd4ab0",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-04.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "4fc7bf27ee069265ef499cb755bb615bda7eb21b91c35fd052655be1567e23eb",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-2-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-14.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-2-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-15.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-1-2-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-16.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 120831,
+          "cells": [
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-2-1-bottom-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-2-1-bottom-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45051,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-2-1-bottom-auto-covered-reveal.png",
+              "sha256": "249098890e337924fb27c2fc9b1437468717b7fa6eab85c112c39969363bacfa",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-2-1-bottom-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-2-1-bottom-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45390,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-2-1-bottom-dodge-covered-reveal.png",
+              "sha256": "577d905b6b80602ee06a9469d41b94edc9fccaf63770226326dec338f63db85e",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-2-1-bottom-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 11431,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "7e7bb8e339cc99ce6b65333d275d41f7b6dfcf2feb26008b5e19b7379e418a27",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12294,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "137a9578a8cbb88e64ad4a7295a0779664b2af67a0d380442f69ac2a9d3a47ea",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12835,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "4d5d9973bbb382e4a1675699724658ffda49787eb1024fc5650e371ca00d3d67",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12405,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-2-1-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "85e97700b71ccc664ced09f6145c7c12aaefc60d3aeb1ab11e50105bcbd8287f",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-2-1-left-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-2-1-left-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45423,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-2-1-left-auto-covered-reveal.png",
+              "sha256": "2dc7f871a49ac9c3db49c1db6781ae23fc6c2e15eff0ea0a7c3c9ade1f53e1e6",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-2-1-left-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-2-1-left-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45423,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-2-1-left-dodge-covered-reveal.png",
+              "sha256": "2dc7f871a49ac9c3db49c1db6781ae23fc6c2e15eff0ea0a7c3c9ade1f53e1e6",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-2-1-left-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10795,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-0-auto-reveal.png",
+              "sha256": "6f3c427c02c8760d92f035ee0fed204fd097664348439263b39820e7cba49a9b",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10795,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "6f3c427c02c8760d92f035ee0fed204fd097664348439263b39820e7cba49a9b",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10720,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-3-auto-reveal.png",
+              "sha256": "2d58e0d89553cdee7c9dd387297516262716bf9cad474f5993f545188368b062",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10795,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-2-1-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "6f3c427c02c8760d92f035ee0fed204fd097664348439263b39820e7cba49a9b",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-2-1-right-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-2-1-right-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45509,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-2-1-right-auto-covered-reveal.png",
+              "sha256": "00867b7232f5aad7bd4c8d7f570a77e78eff2da0fc121ced6cabf741475ee9ef",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-2-1-right-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-2-1-right-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 45509,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-2-1-right-dodge-covered-reveal.png",
+              "sha256": "00867b7232f5aad7bd4c8d7f570a77e78eff2da0fc121ced6cabf741475ee9ef",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-2-1-right-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10331,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-0-auto-reveal.png",
+              "sha256": "573ed277af73b00fe97ab94dc3b72c098fd4c2fddfabb6f0562849041feb05d4",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10504,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "a2d6ce84d3805f932b253c6792231819fbdee0e15ca5edc0ad2e90526f84ca18",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10379,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-3-auto-reveal.png",
+              "sha256": "247869605decf837f13ff0aba743aaed56663915a83d79544234b1772fedcdec",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 10379,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-2-1-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "247869605decf837f13ff0aba743aaed56663915a83d79544234b1772fedcdec",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-05.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "2789bbb5582f1ea20c3c2b71e93bf33fd8c743be0b036ee9294be24c7500548e",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-17.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-18.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-19.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 141818,
+          "cells": [
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-2-1-top-auto-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-2-1-top-auto-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 46362,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-2-1-top-auto-covered-reveal.png",
+              "sha256": "51a6163e5833026cb2a93fa4a8f5151c6488a0f571b5b7f98b3f2bdab52296f4",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-2-1-top-dodge-covered-conceal.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-2-1-top-dodge-covered-rest.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 46651,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-2-1-top-dodge-covered-reveal.png",
+              "sha256": "4054d036628fab9b8241989ddb5ed35c7c88c2ac130dca17654d8281e9363c5f",
+              "width": 1280
+            },
+            {
+              "bytes": 44464,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-2-1-top-frame-exposed.png",
+              "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-0-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-0-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12721,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-0-auto-reveal.png",
+              "sha256": "6db6795db3d22e8d7b342e3d45b6dfae5c817eef39e462ef1c0f1beb1fa27c70",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-1-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12698,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "644833d72bbd3bd56bb76ec61d90c08d6aefe538889d30d15b6273eebf303b80",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-2-always-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-3-auto-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-3-auto-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12641,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-3-auto-reveal.png",
+              "sha256": "b4724bc6c13459eaf07698f868ff0e621b30f60c50351eabec72f7b358c4a1ca",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 4904,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-4-dodge-rest.png",
+              "sha256": "e04b2f85c452b58c1099b84e8fe0ff12bc0945a1ee9441750691932721ec4aa5",
+              "width": 1280
+            },
+            {
+              "bytes": 12801,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-2-1-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "aabcbd365afd4e639fc310467d1fa7226f2c8b2fa1aff82931061617e426e56a",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-2-1_5-bottom-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-2-1_5-bottom-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 65033,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-2-1_5-bottom-auto-covered-reveal.png",
+              "sha256": "41724f3dfc041fe2e73b2b6209aa55244cfd61982794010127b0a96e96a4568e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-2-1_5-bottom-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-2-1_5-bottom-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 65039,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-2-1_5-bottom-dodge-covered-reveal.png",
+              "sha256": "3adb550894e49fa670548f466d9ea4dfb2bdb0f908ca044247e863467b3c76e1",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-2-1_5-bottom-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19500,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "a5752b63fe026ec1d8b9b9aface07dc38eb89aea52843696fb566ebccab7a1a0",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19314,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "69de41fe8047a4c526918b921004a85d825bbe7001b407e8bb8da229e600ae25",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19086,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "1b56b8ed0445d69693deac7aa9f0e53dce012a7164b02c7fe5ba9f242f6af24c",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19308,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-2-1_5-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "4179f2834e6193b5351df79c265b1acc8e9bd4f36846d846ad5753f240e53f3a",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-2-1_5-left-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-2-1_5-left-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64350,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-2-1_5-left-auto-covered-reveal.png",
+              "sha256": "895706e0714607e4dbafe59e01bf7acdbd51a5d7880035ef2bc4e6cdaa70b262",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-2-1_5-left-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-2-1_5-left-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64669,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-2-1_5-left-dodge-covered-reveal.png",
+              "sha256": "413ad723cec446826c0dfab32398a6ea60f74e54690f85df5221a212f9e988e7",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-2-1_5-left-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16054,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-0-auto-reveal.png",
+              "sha256": "5ba5bb6d7de1abe279d83631602b87ec87d22a5b7c994d4663a427f769a8500d",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16104,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "aacfdeb12959644cd4a222d44ce2bf24e30bdb4191973c75361b1242b5bc7ec0",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16054,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-3-auto-reveal.png",
+              "sha256": "5ba5bb6d7de1abe279d83631602b87ec87d22a5b7c994d4663a427f769a8500d",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 16054,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-2-1_5-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "5ba5bb6d7de1abe279d83631602b87ec87d22a5b7c994d4663a427f769a8500d",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-06.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "75095c084b3d141c526dfc1e16377e4ad6b3dac9f21d010d599d959425800ab6",
+          "width": 1280
+        },
+        {
+          "bytes": 46362,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1-top-auto-covered-reveal.png",
+          "output": "evidence/native/taskbar-exact/exact-20.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "51a6163e5833026cb2a93fa4a8f5151c6488a0f571b5b7f98b3f2bdab52296f4",
+          "width": 1280
+        },
+        {
+          "bytes": 44464,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-21.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "6e08a2ba6dfa1929eca798ed295bf5e34cdd8de55b9a97607ad77cf557c85146",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1_5-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-22.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1_5-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-23.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 168573,
+          "cells": [
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-2-1_5-right-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-2-1_5-right-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64780,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-2-1_5-right-auto-covered-reveal.png",
+              "sha256": "7e65d11334fe199a72053c69b861fb3ac17f94f35a80722e15722bf396ab1444",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-2-1_5-right-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-2-1_5-right-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 64836,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-2-1_5-right-dodge-covered-reveal.png",
+              "sha256": "803ff9e7dd1ce5498876151204e9474a45f282d7fde3524f386914f8681a5418",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-2-1_5-right-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15388,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-0-auto-reveal.png",
+              "sha256": "7766287f9297cbf8afcd1183032d14b618e75154eb0840ba9f4f7ea77d7faa77",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15534,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "0740c672957a21d8fa6bc5ce40626745bc08c9b2f75da3276c1f78f8a41ae982",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15388,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-3-auto-reveal.png",
+              "sha256": "7766287f9297cbf8afcd1183032d14b618e75154eb0840ba9f4f7ea77d7faa77",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 15108,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-2-1_5-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "d33c5ce832a4a5aea5338e884afe5e55b4e5bb85e745e10f4abefe00a7e09cff",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-2-1_5-top-auto-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-2-1_5-top-auto-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 66832,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-2-1_5-top-auto-covered-reveal.png",
+              "sha256": "380259b028b0fca6be1b760e01a707c452df580fb0c1a6760b28bb1337d059ed",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-2-1_5-top-dodge-covered-conceal.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-2-1_5-top-dodge-covered-rest.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 66584,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-2-1_5-top-dodge-covered-reveal.png",
+              "sha256": "f7dfe3230370af64aace37f9e8492df7a6c857ac1bf9767980508ea761655f6c",
+              "width": 1280
+            },
+            {
+              "bytes": 61764,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-2-1_5-top-frame-exposed.png",
+              "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-0-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-0-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19864,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-0-auto-reveal.png",
+              "sha256": "7c3a3a7b5236b592a1bc3512836bfeb9eaf912935ca6437b6e2fe440d565b280",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-1-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19934,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "3a1813dafeb9cb418d0e28694988d825db0eabdbcff55b61eeb5613b3e7388d3",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-2-always-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-3-auto-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-3-auto-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19813,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-3-auto-reveal.png",
+              "sha256": "364334a2ab110a0ff1a1057405873720e157c56b8e0fa1080e05694baf382904",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 5397,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-4-dodge-rest.png",
+              "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+              "width": 1280
+            },
+            {
+              "bytes": 19934,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-2-1_5-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "3a1813dafeb9cb418d0e28694988d825db0eabdbcff55b61eeb5613b3e7388d3",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-2-2-bottom-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-2-2-bottom-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 81352,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-2-2-bottom-auto-covered-reveal.png",
+              "sha256": "a94eef0f0f5ec247879827b7846faf2849e272b9fcd28ee4db35379ee94ad969",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-2-2-bottom-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-2-2-bottom-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 82031,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-2-2-bottom-dodge-covered-reveal.png",
+              "sha256": "2c91e5fee2ddca515804637d4bf89b9f9d9bc5a1e6307ef6fa8f5b929de37ef1",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-2-2-bottom-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25198,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-0-auto-reveal.png",
+              "sha256": "ee3638e043567e0927a0ce37e7ee2b1d1d869cac469ad35e9bf172ceab1c7918",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25641,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-1-dodge-reveal.png",
+              "sha256": "7abf2424a8cd690e62428bb299bc380b5cf59e9dd1276d70c304668c5ad0437d",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25198,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-3-auto-reveal.png",
+              "sha256": "ee3638e043567e0927a0ce37e7ee2b1d1d869cac469ad35e9bf172ceab1c7918",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 26004,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-2-2-bottom-fullscreen-4-dodge-reveal.png",
+              "sha256": "ef3f397c8455e71b61c646fbf08bf67f561da7a8ab0e0c2bdd41fc176a07877d",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-07.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "63048b7d0815ec27d657727de3893a9d2be112378c61ba63de5555a1617b313c",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1_5-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-24.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 5397,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1_5-right-fullscreen-4-dodge-conceal.png",
+          "output": "evidence/native/taskbar-exact/exact-25.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "e093fe32af89a424aa6ab4953c404a9eebf6749ab2d8d1c21469ba3c4ed6c720",
+          "width": 1280
+        },
+        {
+          "bytes": 61764,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-1_5-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-26.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "ace62340f7d93be3edfe216f3c25aa60ece0cf997dd49d44b7d7498c83bd633e",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-bottom-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-27.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 5699,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-bottom-fullscreen-2-always-rest.png",
+          "output": "evidence/native/taskbar-exact/exact-28.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+          "width": 1280
+        },
+        {
+          "bytes": 173794,
+          "cells": [
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 1,
+              "member": "taskbar/Virtual-2-2-left-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 2,
+              "member": "taskbar/Virtual-2-2-left-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79402,
+              "height": 720,
+              "index": 3,
+              "member": "taskbar/Virtual-2-2-left-auto-covered-reveal.png",
+              "sha256": "6db4fc8b87fa35beed89bc8429c43b5222721d5962ed578d97e0100ea7a32d90",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 4,
+              "member": "taskbar/Virtual-2-2-left-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 5,
+              "member": "taskbar/Virtual-2-2-left-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79402,
+              "height": 720,
+              "index": 6,
+              "member": "taskbar/Virtual-2-2-left-dodge-covered-reveal.png",
+              "sha256": "6db4fc8b87fa35beed89bc8429c43b5222721d5962ed578d97e0100ea7a32d90",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 7,
+              "member": "taskbar/Virtual-2-2-left-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 8,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 9,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17679,
+              "height": 720,
+              "index": 10,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-0-auto-reveal.png",
+              "sha256": "8bd73bdfac93fdc3d5f1b3553f859be997afbe168df18630eef0669f450b6925",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 11,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 12,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17679,
+              "height": 720,
+              "index": 13,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-1-dodge-reveal.png",
+              "sha256": "8bd73bdfac93fdc3d5f1b3553f859be997afbe168df18630eef0669f450b6925",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 14,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 15,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 16,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17679,
+              "height": 720,
+              "index": 17,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-3-auto-reveal.png",
+              "sha256": "8bd73bdfac93fdc3d5f1b3553f859be997afbe168df18630eef0669f450b6925",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 18,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 19,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 18129,
+              "height": 720,
+              "index": 20,
+              "member": "taskbar/Virtual-2-2-left-fullscreen-4-dodge-reveal.png",
+              "sha256": "140e65ef25abb4f64115dcf98141120ede4276c16fd21e577f687b5de220757d",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 21,
+              "member": "taskbar/Virtual-2-2-right-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 22,
+              "member": "taskbar/Virtual-2-2-right-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 78763,
+              "height": 720,
+              "index": 23,
+              "member": "taskbar/Virtual-2-2-right-auto-covered-reveal.png",
+              "sha256": "500f6111a64e5cf23a4f88fe5f8da4f47a5f3f62d046a6aa1b1f5afe31be38d5",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 24,
+              "member": "taskbar/Virtual-2-2-right-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 25,
+              "member": "taskbar/Virtual-2-2-right-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 79001,
+              "height": 720,
+              "index": 26,
+              "member": "taskbar/Virtual-2-2-right-dodge-covered-reveal.png",
+              "sha256": "550771b13c9b4913a39595cc69ce281fced76e91624a650f5c22d1840872fe78",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 27,
+              "member": "taskbar/Virtual-2-2-right-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5789,
+              "height": 720,
+              "index": 28,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-0-auto-conceal.png",
+              "sha256": "103937d54061cf6b324a3fcfb4fdc33f7e8312858738b4caa670c0e504dfae5a",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 29,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17423,
+              "height": 720,
+              "index": 30,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-0-auto-reveal.png",
+              "sha256": "7d89c117bdb92af693501cc6d9b59e03f9d3864b50cfcfedb1fb40dcca615bf8",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 31,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 32,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17088,
+              "height": 720,
+              "index": 33,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-1-dodge-reveal.png",
+              "sha256": "ec092c8e6b8c83a6b7e2faf82d7f49114b7a44c67d2690d15adb0a5aacfbbc28",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 34,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 35,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 36,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17088,
+              "height": 720,
+              "index": 37,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-3-auto-reveal.png",
+              "sha256": "ec092c8e6b8c83a6b7e2faf82d7f49114b7a44c67d2690d15adb0a5aacfbbc28",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 38,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 39,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 17088,
+              "height": 720,
+              "index": 40,
+              "member": "taskbar/Virtual-2-2-right-fullscreen-4-dodge-reveal.png",
+              "sha256": "ec092c8e6b8c83a6b7e2faf82d7f49114b7a44c67d2690d15adb0a5aacfbbc28",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 41,
+              "member": "taskbar/Virtual-2-2-top-auto-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 42,
+              "member": "taskbar/Virtual-2-2-top-auto-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 82622,
+              "height": 720,
+              "index": 43,
+              "member": "taskbar/Virtual-2-2-top-auto-covered-reveal.png",
+              "sha256": "3f34a31be17cc134ad9999b04b9b9072ae3e273a5d93f921e26e73ec08fef345",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 44,
+              "member": "taskbar/Virtual-2-2-top-dodge-covered-conceal.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 45,
+              "member": "taskbar/Virtual-2-2-top-dodge-covered-rest.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 83618,
+              "height": 720,
+              "index": 46,
+              "member": "taskbar/Virtual-2-2-top-dodge-covered-reveal.png",
+              "sha256": "7b5a99ab526bc6a6c2cf6cb99fa43646cc41e91d77f052bccf4eb3316c85b6ad",
+              "width": 1280
+            },
+            {
+              "bytes": 76491,
+              "height": 720,
+              "index": 47,
+              "member": "taskbar/Virtual-2-2-top-frame-exposed.png",
+              "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 48,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-0-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 49,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-0-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25520,
+              "height": 720,
+              "index": 50,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-0-auto-reveal.png",
+              "sha256": "f13003c03ad383a75c2f578d750c0bceb0a8080ab75cae5057fe1411518fe1cc",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 51,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-1-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 52,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-1-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25827,
+              "height": 720,
+              "index": 53,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-1-dodge-reveal.png",
+              "sha256": "c68d50c018c11251be7c73571e64c43077ae2dc71c6b209b854b59723edb1660",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 54,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-2-always-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 55,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-3-auto-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 56,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-3-auto-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25827,
+              "height": 720,
+              "index": 57,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-3-auto-reveal.png",
+              "sha256": "c68d50c018c11251be7c73571e64c43077ae2dc71c6b209b854b59723edb1660",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 58,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-4-dodge-conceal.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 5699,
+              "height": 720,
+              "index": 59,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-4-dodge-rest.png",
+              "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+              "width": 1280
+            },
+            {
+              "bytes": 25784,
+              "height": 720,
+              "index": 60,
+              "member": "taskbar/Virtual-2-2-top-fullscreen-4-dodge-reveal.png",
+              "sha256": "1a0f642dc8e067beaee8e14322d31d2598336ba1b54399fe91a401bc4a9b39ab",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 3060,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/taskbar-contact/taskbar-contact-08.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "10b2141b26d3ba4a32a942896b99d1da978e90a1fb82031376ebfbaa86c0e15b",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-left-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-29.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 5699,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-left-fullscreen-3-auto-rest.png",
+          "output": "evidence/native/taskbar-exact/exact-30.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "2b95070ad4082f8d7a0708286502172f4e24403fbf34fadbaaa5f698be69dba5",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-right-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-31.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 76491,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "taskbar/Virtual-2-2-top-frame-exposed.png",
+          "output": "evidence/native/taskbar-exact/exact-32.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "38c46b1b843a5148df1e26e7be931f9333cfe472887e4ac14570755167e75996",
+          "width": 1280
+        },
+        {
+          "bytes": 161897,
+          "cells": [
+            {
+              "bytes": 1089143,
+              "height": 720,
+              "index": 1,
+              "member": "native-live/editor-saved.png",
+              "sha256": "14b91b08e29b7b1380dbe3f98e6d4677697161d011434b7aff0810fa1d962fca",
+              "width": 2560
+            },
+            {
+              "bytes": 1092059,
+              "height": 720,
+              "index": 2,
+              "member": "native-live/files-opened-zip.png",
+              "sha256": "eb40ef9f9d7b28b1afcda7a15ec1ed56c5d141f47a75a462821e86ff0e836e12",
+              "width": 2560
+            },
+            {
+              "bytes": 1571247,
+              "height": 720,
+              "index": 3,
+              "member": "native-live/celluloid-playing.png",
+              "sha256": "0837024f2b1c4361a13d752dafc1ce99197fa666653490ee97918d0cf34a0310",
+              "width": 2560
+            },
+            {
+              "bytes": 442034,
+              "height": 720,
+              "index": 4,
+              "member": "native-live/celluloid-reference.png",
+              "sha256": "5ecd95a928fab19e54dc1a2dff8f7460605ac2e8f9a43cef40137deaf4ec77ac",
+              "width": 1280
+            },
+            {
+              "bytes": 1083533,
+              "height": 720,
+              "index": 5,
+              "member": "native-installed/editor-saved.png",
+              "sha256": "41c9064fb6f64460990410ba7139a689f4fc00fa8e8ebee08a900bc481383926",
+              "width": 2560
+            },
+            {
+              "bytes": 1088705,
+              "height": 720,
+              "index": 6,
+              "member": "native-installed/files-opened-zip.png",
+              "sha256": "434960bb3dff1bcc0be7bc4fb4d4c188f1ceab07d90dd0b0470905b59b7bcd47",
+              "width": 2560
+            },
+            {
+              "bytes": 1564727,
+              "height": 720,
+              "index": 7,
+              "member": "native-installed/celluloid-playing.png",
+              "sha256": "038f35b6689acf348184eaae11ea822e5b3823a04792f1dec0ea720eb75f5b34",
+              "width": 2560
+            },
+            {
+              "bytes": 442034,
+              "height": 720,
+              "index": 8,
+              "member": "native-installed/celluloid-reference.png",
+              "sha256": "5ecd95a928fab19e54dc1a2dff8f7460605ac2e8f9a43cef40137deaf4ec77ac",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 408,
+          "kind": "png-contact-sheet",
+          "output": "evidence/native/app-media/contact.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "98d17e1c13460984d59a71f5ef8f4f3add1ad7daa7d13faef9302d68de1f0f6f",
+          "width": 1280
+        },
+        {
+          "bytes": 1089143,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-live/editor-saved.png",
+          "output": "evidence/native/app-media/exact/01-editor-saved.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "14b91b08e29b7b1380dbe3f98e6d4677697161d011434b7aff0810fa1d962fca",
+          "width": 2560
+        },
+        {
+          "bytes": 1092059,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-live/files-opened-zip.png",
+          "output": "evidence/native/app-media/exact/02-files-opened-zip.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "eb40ef9f9d7b28b1afcda7a15ec1ed56c5d141f47a75a462821e86ff0e836e12",
+          "width": 2560
+        },
+        {
+          "bytes": 1571247,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-live/celluloid-playing.png",
+          "output": "evidence/native/app-media/exact/03-celluloid-playing.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "0837024f2b1c4361a13d752dafc1ce99197fa666653490ee97918d0cf34a0310",
+          "width": 2560
+        },
+        {
+          "bytes": 442034,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-live/celluloid-reference.png",
+          "output": "evidence/native/app-media/exact/04-celluloid-reference.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "5ecd95a928fab19e54dc1a2dff8f7460605ac2e8f9a43cef40137deaf4ec77ac",
+          "width": 1280
+        },
+        {
+          "bytes": 1083533,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-installed/editor-saved.png",
+          "output": "evidence/native/app-media/exact/05-editor-saved.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "41c9064fb6f64460990410ba7139a689f4fc00fa8e8ebee08a900bc481383926",
+          "width": 2560
+        },
+        {
+          "bytes": 1088705,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-installed/files-opened-zip.png",
+          "output": "evidence/native/app-media/exact/06-files-opened-zip.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "434960bb3dff1bcc0be7bc4fb4d4c188f1ceab07d90dd0b0470905b59b7bcd47",
+          "width": 2560
+        },
+        {
+          "bytes": 1564727,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-installed/celluloid-playing.png",
+          "output": "evidence/native/app-media/exact/07-celluloid-playing.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "038f35b6689acf348184eaae11ea822e5b3823a04792f1dec0ea720eb75f5b34",
+          "width": 2560
+        },
+        {
+          "bytes": 442034,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "native-installed/celluloid-reference.png",
+          "output": "evidence/native/app-media/exact/08-celluloid-reference.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "5ecd95a928fab19e54dc1a2dff8f7460605ac2e8f9a43cef40137deaf4ec77ac",
+          "width": 1280
+        },
+        {
+          "audio_class": "native-virtual-output-boot",
+          "bytes": 2143688,
+          "channels": 2,
+          "kind": "native-system-audio",
+          "member": "virtual-audio/native-audio-boot.wav",
+          "output": "evidence/native/audio/native-audio-boot.wav",
+          "privacy_class": "validated-native-system-audio",
+          "rate": 48000,
+          "sample_width": 2,
+          "sha256": "8bffa0ed0718867ffc16aa2cef67ac19fcfdd9109143aa1295468205513429b5"
+        },
+        {
+          "audio_class": "native-virtual-output-install",
+          "bytes": 2320260,
+          "channels": 2,
+          "kind": "native-system-audio",
+          "member": "virtual-audio/native-audio-install.wav",
+          "output": "evidence/native/audio/native-audio-install.wav",
+          "privacy_class": "validated-native-system-audio",
+          "rate": 48000,
+          "sample_width": 2,
+          "sha256": "f852361b2e880ef686964a850a6ea9b700bb86bc46d34fce1d04367291a1e5d1"
+        }
+      ],
+      "head_branch": "codex/qualification-dispatch-20261010",
+      "head_sha": "225ecfd9f2cc01b889a34ae3af707b918fcd4a2a",
+      "name": "native-candidate-qualification",
+      "run_attempt": 1,
+      "run_id": 38830684742,
+      "workflow_path": ".github/workflows/native-candidate-20261008.yml"
+    },
+    {
+      "archive_bytes": 1001362,
+      "archive_sha256": "b3f56c254637aaf86ab3de685d55c7fc03803ad09eec31b0d31a17bf7ae68101",
+      "artifact_id": 12017450791,
+      "files": [
+        {
+          "bytes": 90552,
+          "cells": [
+            {
+              "bytes": 107561,
+              "height": 720,
+              "index": 1,
+              "member": "installer/baseline.png",
+              "sha256": "e38559258d06b12c38a38681c1c126f93accb4cbabcae289ca6b026cc1a0a3b5",
+              "width": 1280
+            },
+            {
+              "bytes": 106352,
+              "height": 720,
+              "index": 2,
+              "member": "installer/vt-0.png",
+              "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+              "width": 1280
+            },
+            {
+              "bytes": 106352,
+              "height": 720,
+              "index": 3,
+              "member": "installer/vt-1.png",
+              "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+              "width": 1280
+            },
+            {
+              "bytes": 106352,
+              "height": 720,
+              "index": 4,
+              "member": "installer/vt-2.png",
+              "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+              "width": 1280
+            },
+            {
+              "bytes": 99127,
+              "height": 720,
+              "index": 5,
+              "member": "installer/output-0.png",
+              "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+              "width": 1280
+            },
+            {
+              "bytes": 106290,
+              "height": 720,
+              "index": 6,
+              "member": "installer/output-1.png",
+              "sha256": "3321725d8cd9c744dcd149bc1dc1cd6d101147a28904b5eb566907cc2aaf7d18",
+              "width": 1280
+            },
+            {
+              "bytes": 99127,
+              "height": 720,
+              "index": 7,
+              "member": "installer/output-2.png",
+              "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+              "width": 1280
+            },
+            {
+              "bytes": 99127,
+              "height": 720,
+              "index": 8,
+              "member": "installer/output-0-relocated.png",
+              "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+              "width": 1280
+            },
+            {
+              "bytes": 99127,
+              "height": 720,
+              "index": 9,
+              "member": "installer/output-2-relocated.png",
+              "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+              "width": 1280
+            },
+            {
+              "bytes": 8829,
+              "height": 720,
+              "index": 10,
+              "member": "host/installer-vt-away-0.png",
+              "sha256": "093c8572c162af18b9609a914673fe3e53fe728d6660eefd938915261a1bdb8c",
+              "width": 1280
+            },
+            {
+              "bytes": 8829,
+              "height": 720,
+              "index": 11,
+              "member": "host/installer-vt-away-1.png",
+              "sha256": "093c8572c162af18b9609a914673fe3e53fe728d6660eefd938915261a1bdb8c",
+              "width": 1280
+            },
+            {
+              "bytes": 8813,
+              "height": 720,
+              "index": 12,
+              "member": "host/installer-vt-away-2.png",
+              "sha256": "615115cd286b2a3480b32d467e4e2021ba39ad7c4aaea010f4a30193fe8d246b",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 612,
+          "kind": "png-contact-sheet",
+          "output": "evidence/installer-idle/contact.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "8f2bd9a837c5f099903ba999806779bacba571f3601f7c4c6bd87a9fb67631e4",
+          "width": 1280
+        },
+        {
+          "bytes": 107561,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/baseline.png",
+          "output": "evidence/installer-idle/exact/01-baseline.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "e38559258d06b12c38a38681c1c126f93accb4cbabcae289ca6b026cc1a0a3b5",
+          "width": 1280
+        },
+        {
+          "bytes": 106352,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/vt-0.png",
+          "output": "evidence/installer-idle/exact/02-vt-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+          "width": 1280
+        },
+        {
+          "bytes": 106352,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/vt-1.png",
+          "output": "evidence/installer-idle/exact/03-vt-1.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+          "width": 1280
+        },
+        {
+          "bytes": 106352,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/vt-2.png",
+          "output": "evidence/installer-idle/exact/04-vt-2.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "63a518e04c84f72a1692777d6dc5762a95aa523fbe193fe62c5e18e322ee5667",
+          "width": 1280
+        },
+        {
+          "bytes": 99127,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-0.png",
+          "output": "evidence/installer-idle/exact/05-output-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+          "width": 1280
+        },
+        {
+          "bytes": 106290,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-1.png",
+          "output": "evidence/installer-idle/exact/06-output-1.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "3321725d8cd9c744dcd149bc1dc1cd6d101147a28904b5eb566907cc2aaf7d18",
+          "width": 1280
+        },
+        {
+          "bytes": 99127,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-2.png",
+          "output": "evidence/installer-idle/exact/07-output-2.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+          "width": 1280
+        },
+        {
+          "bytes": 99127,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-0-relocated.png",
+          "output": "evidence/installer-idle/exact/08-output-0-relocated.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+          "width": 1280
+        },
+        {
+          "bytes": 99127,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-2-relocated.png",
+          "output": "evidence/installer-idle/exact/09-output-2-relocated.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "1a83b2c8e3d204c126e620a292bb8804523beb14db83acb48fed8b8b6fa5361d",
+          "width": 1280
+        },
+        {
+          "bytes": 8829,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installer-vt-away-0.png",
+          "output": "evidence/installer-idle/exact/10-installer-vt-away-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "093c8572c162af18b9609a914673fe3e53fe728d6660eefd938915261a1bdb8c",
+          "width": 1280
+        },
+        {
+          "bytes": 8829,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installer-vt-away-1.png",
+          "output": "evidence/installer-idle/exact/11-installer-vt-away-1.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "093c8572c162af18b9609a914673fe3e53fe728d6660eefd938915261a1bdb8c",
+          "width": 1280
+        },
+        {
+          "bytes": 8813,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installer-vt-away-2.png",
+          "output": "evidence/installer-idle/exact/12-installer-vt-away-2.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "615115cd286b2a3480b32d467e4e2021ba39ad7c4aaea010f4a30193fe8d246b",
+          "width": 1280
+        }
+      ],
+      "head_branch": "codex/qualification-dispatch-20261010",
+      "head_sha": "145f5bb76a1e282758ba62b36703523420754608",
+      "name": "candidate-installer-restoration",
+      "run_attempt": 1,
+      "run_id": 38830679610,
+      "workflow_path": ".github/workflows/installer-candidate-20261009.yml"
+    },
+    {
+      "archive_bytes": 433233,
+      "archive_sha256": "1841dc56fe6f1e6a86fa56f6780cf08335c06cf2cc42ff8c5701b76dedf859c3",
+      "artifact_id": 12018832093,
+      "files": [
+        {
+          "bytes": 45591,
+          "cells": [
+            {
+              "bytes": 94909,
+              "height": 720,
+              "index": 1,
+              "member": "installer/baseline.png",
+              "sha256": "d16a516f2132d0c2b22a2426a9e32845dfa5b25a89a0bf741d59a5768eab763d",
+              "width": 1280
+            },
+            {
+              "bytes": 93562,
+              "height": 720,
+              "index": 2,
+              "member": "installer/vt-0.png",
+              "sha256": "7dbc15af0244968886bdba10ac90a6dec497d472750e9ce9ad039a81b070bca7",
+              "width": 1280
+            },
+            {
+              "bytes": 86376,
+              "height": 720,
+              "index": 3,
+              "member": "installer/output-0-relocated.png",
+              "sha256": "a2e6aaf80b031d7b686490954ca5c2f1c1c1fd34db91b44b9fd347baccc644e2",
+              "width": 1280
+            },
+            {
+              "bytes": 86376,
+              "height": 720,
+              "index": 4,
+              "member": "installer/output-0.png",
+              "sha256": "a2e6aaf80b031d7b686490954ca5c2f1c1c1fd34db91b44b9fd347baccc644e2",
+              "width": 1280
+            },
+            {
+              "bytes": 8803,
+              "height": 720,
+              "index": 5,
+              "member": "host/installer-vt-away-0.png",
+              "sha256": "bdfdb62f8b60ef54702cf9bb50245d8ff83293099884a4d576d19d5d28590141",
+              "width": 1280
+            },
+            {
+              "bytes": 5297,
+              "height": 720,
+              "index": 6,
+              "member": "host/installed-getty-password.png",
+              "sha256": "826bb762040f945d041b5eb82d17811336bad98493f19b56da278c1bd2036f80",
+              "width": 1280
+            },
+            {
+              "bytes": 9191,
+              "height": 720,
+              "index": 7,
+              "member": "host/installed-sudo-password.png",
+              "sha256": "f0cc53467effc5a468f6f649389b7bbc071c9cdf80248abe5da598ebba5cb5ed",
+              "width": 1280
+            }
+          ],
+          "columns": 4,
+          "height": 408,
+          "kind": "png-contact-sheet",
+          "output": "evidence/installer-active/contact.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "2f0a810d7dba829af60fe684f87767a1af7e40dd17a05b489ce0d02759a2b375",
+          "width": 1280
+        },
+        {
+          "bytes": 94909,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/baseline.png",
+          "output": "evidence/installer-active/exact/01-baseline.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "d16a516f2132d0c2b22a2426a9e32845dfa5b25a89a0bf741d59a5768eab763d",
+          "width": 1280
+        },
+        {
+          "bytes": 93562,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/vt-0.png",
+          "output": "evidence/installer-active/exact/02-vt-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "7dbc15af0244968886bdba10ac90a6dec497d472750e9ce9ad039a81b070bca7",
+          "width": 1280
+        },
+        {
+          "bytes": 86376,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-0-relocated.png",
+          "output": "evidence/installer-active/exact/03-output-0-relocated.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "a2e6aaf80b031d7b686490954ca5c2f1c1c1fd34db91b44b9fd347baccc644e2",
+          "width": 1280
+        },
+        {
+          "bytes": 86376,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "installer/output-0.png",
+          "output": "evidence/installer-active/exact/04-output-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "a2e6aaf80b031d7b686490954ca5c2f1c1c1fd34db91b44b9fd347baccc644e2",
+          "width": 1280
+        },
+        {
+          "bytes": 8803,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installer-vt-away-0.png",
+          "output": "evidence/installer-active/exact/05-installer-vt-away-0.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "bdfdb62f8b60ef54702cf9bb50245d8ff83293099884a4d576d19d5d28590141",
+          "width": 1280
+        },
+        {
+          "bytes": 5297,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installed-getty-password.png",
+          "output": "evidence/installer-active/exact/06-installed-getty-password.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "826bb762040f945d041b5eb82d17811336bad98493f19b56da278c1bd2036f80",
+          "width": 1280
+        },
+        {
+          "bytes": 9191,
+          "height": 720,
+          "kind": "png-exact-frame",
+          "member": "host/installed-sudo-password.png",
+          "output": "evidence/installer-active/exact/07-installed-sudo-password.png",
+          "privacy_class": "screened-vm-ui",
+          "sha256": "f0cc53467effc5a468f6f649389b7bbc071c9cdf80248abe5da598ebba5cb5ed",
+          "width": 1280
+        }
+      ],
+      "head_branch": "codex/qualification-dispatch-20261010",
+      "head_sha": "54e22f81a7db439c143273d4ede6647dd93b21d5",
+      "name": "candidate-installer-active-restoration",
+      "run_attempt": 1,
+      "run_id": 38834124836,
+      "workflow_path": ".github/workflows/installer-active-candidate-20261009.yml"
+    }
+  ],
+  "export_run_attempt": 1,
+  "export_run_id": 38859485701,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "review_only": true,
+  "reviewed_parent_sha": "9775c2d1fed70caa345c04f708cad4555e4dc160",
+  "schema": "arctic-screened-evidence-review-export-v1",
+  "source_branch": "codex/final-evidence-review-export-20261016",
+  "target_branch": "codex/final-evidence-review-artifacts-20261016"
+}
