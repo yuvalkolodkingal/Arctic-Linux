@@ -1,0 +1,208 @@
+name: Inspect final paired performance failure summary
+
+on:
+  push:
+    branches: [codex/inspect-final-paired-performance-20261016]
+    paths: [.github/workflows/inspect-final-paired-performance-20261016.yml]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Read exact screened fixed-vocabulary failure summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B - <<'PY'
+          import hashlib, json, os, re, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+
+          def require(condition):
+              if not condition:
+                  raise ValueError('safe reader rejected artifact')
+
+          def strict_json(content):
+              def pairs(entries):
+                  result = {}
+                  for key, value in entries:
+                      require(type(key) is str and key not in result)
+                      result[key] = value
+                  return result
+              def invalid(_value):
+                  raise ValueError('safe reader rejected artifact')
+              require(type(content) is bytes and len(content) <= 4096)
+              return json.loads(content.decode('utf-8', errors='strict'),
+                  object_pairs_hook=pairs, parse_constant=invalid)
+
+          def closed(value, allowed):
+              require(type(value) is str and value in allowed)
+
+          def validate_summary(value):
+              fields = {'schema', 'status', 'release_acceptance', 'performance_acceptance',
+                  'original_evidence_uploaded', 'screening_failure', 'private_owner_verified',
+                  'observed_context', 'runner_phase', 'read_status', 'markers', 'smoke_exit',
+                  'console_restore_error', 'guest_failure', 'guest_envelope'}
+              require(type(value) is dict and set(value) == fields)
+              require(value['schema'] == 'arctic-paired-failure-phase-v1'
+                  and value['status'] == 'unqualified_fixed_observations_only'
+                  and value['release_acceptance'] is False
+                  and value['performance_acceptance'] is False
+                  and value['original_evidence_uploaded'] is False
+                  and type(value['private_owner_verified']) is bool)
+              closed(value['screening_failure'], {'sensitive_text', 'terminal_escape',
+                  'member_count', 'member_type', 'member_size', 'ownership', 'deadline',
+                  'unclassified', 'not_observed'})
+              closed(value['observed_context'], {'none', 'baseline_1', 'candidate_1',
+                  'candidate_2', 'baseline_2', 'baseline_3', 'candidate_3'})
+              closed(value['runner_phase'], {'unavailable', 'prepare_immutable_vm_tools',
+                  'offline_install_baseline', 'offline_install_candidate', 'blocked',
+                  'command_interrupted', 'command_timeout', 'prepared_image_cleanup_failed'})
+              reads = {'status', 'owner', 'baseline_install', 'candidate_install',
+                  'context', 'harness', 'serial'}
+              require(type(value['read_status']) is dict and set(value['read_status']) == reads)
+              for item in value['read_status'].values():
+                  closed(item, {'unavailable', 'readable', 'absent', 'unsafe_or_oversized'})
+              marker_names = {'baseline_clean_poweroff', 'candidate_clean_poweroff',
+                  'qemu_start', 'qemu_exit_before_qmp', 'qmp_not_connected', 'default_entry',
+                  'passphrase_prompt', 'missing_passphrase_prompt', 'graphical_login',
+                  'missing_graphical_login', 'reported_collection',
+                  'reported_incomplete_collection', 'console_restored', 'collector_begin',
+                  'collector_end'}
+              require(type(value['markers']) is dict and set(value['markers']) == marker_names
+                  and all(type(item) is bool for item in value['markers'].values()))
+              closed(value['smoke_exit'], {'unavailable', 'absent', 'ambiguous', 'zero', 'nonzero'})
+              closed(value['console_restore_error'], {'unavailable', 'none',
+                  'no_unique_desktop_session', 'invalid_desktop_vt', 'inactive_desktop_vt', 'multiple'})
+              guest = value['guest_failure']
+              require(type(guest) is dict and set(guest) == {'status', 'code',
+                  'exception_class', 'last_observer_phase'})
+              closed(guest['status'], {'unavailable', 'unknown', 'ambiguous', 'source_mismatch',
+                  'invalid_uart', 'source_known_shape'})
+              require(type(guest['code']) is str and re.fullmatch(r'(?:none|(?:guest|causal)_[1-9][0-9]{0,3})', guest['code']))
+              closed(guest['exception_class'], {'none', 'RuntimeError', 'InterruptedError'})
+              phases = {'unavailable', 'measurement_conditions', 'rpm_inventory',
+                  'external_execution', 'app_roles', 'measured_payload',
+                  'pristine_idle_measurement_scope', 'pristine_idle_samples', 'role_workload',
+                  'role_measurement_order', 'keep_awake_restored', 'done'}
+              closed(guest['last_observer_phase'], phases)
+              envelope = value['guest_envelope']
+              require(type(envelope) is dict and set(envelope) == {'reason', 'counts',
+                  'collector_order', 'frame_status', 'control_status', 'last_observer_phase',
+                  'exception_shape', 'colored_traceback'})
+              reasons = {'not_observed', 'observer_context_mismatch', 'frozen_observer_mismatch',
+                  'source_root_unavailable', 'source_directory_owner', 'source_blob_mismatch',
+                  'source_parse_failure', 'source_inventory_mismatch', 'observer_source_mismatch',
+                  'uart_utf8', 'uart_termination', 'observer_record_oversized',
+                  'observer_record_invalid', 'marker_multiplicity', 'traceback_multiplicity',
+                  'observer_phase_duplicate', 'smoke_not_nonzero', 'marker_order',
+                  'smoke_exit_range', 'traceback_missing', 'traceback_order', 'frame_unrecognized',
+                  'frame_chain_invalid', 'observer_record_count', 'source_candidate_count',
+                  'source_known_shape'}
+              closed(envelope['reason'], reasons)
+              count_names = {'collector_begin', 'collector_end', 'smoke_exit', 'tracebacks',
+                  'supported_exceptions', 'unsupported_exception_like_lines',
+                  'admitted_observer_records', 'frames', 'source_candidates'}
+              require(type(envelope['counts']) is dict and set(envelope['counts']) == count_names)
+              for item in envelope['counts'].values():
+                  closed(item, {'unavailable', 'zero', 'one', 'multiple'})
+              closed(envelope['collector_order'], {'unavailable', 'ordered', 'invalid'})
+              closed(envelope['frame_status'], {'unavailable', 'recognized', 'unrecognized',
+                  'control', 'invalid_chain'})
+              closed(envelope['control_status'], {'unavailable', 'none', 'present'})
+              closed(envelope['last_observer_phase'], phases)
+              shape = envelope['exception_shape']
+              require(type(shape) is dict and set(shape) == {'reason', 'count',
+                  'exception_class', 'format'})
+              closed(shape['reason'], {'not_observed', 'traceback_not_unique',
+                  'observer_not_unique', 'exception_control', 'exception_missing',
+                  'exception_multiplicity', 'unsupported_class', 'class_token_observed'})
+              closed(shape['count'], {'unavailable', 'zero', 'one', 'multiple'})
+              closed(shape['exception_class'], {'none', 'RuntimeError', 'ValueError',
+                  'InterruptedError', 'TypeError', 'NameError', 'UnboundLocalError',
+                  'AttributeError', 'KeyError', 'IndexError', 'OSError', 'FileNotFoundError',
+                  'PermissionError', 'ProcessLookupError', 'TimeoutError', 'ConnectionError',
+                  'BrokenPipeError', 'ImportError', 'ModuleNotFoundError', 'AssertionError',
+                  'MemoryError', 'OverflowError', 'ZeroDivisionError', 'StopIteration',
+                  'KeyboardInterrupt', 'SystemExit'})
+              closed(shape['format'], {'none', 'plain', 'python314_default'})
+              colored = envelope['colored_traceback']
+              require(type(colored) is dict and set(colored) == {'reason', 'code',
+                  'exception_class', 'frames', 'candidates', 'format'})
+              closed(colored['reason'], {'not_observed', 'traceback_not_unique',
+                  'observer_not_unique', 'exception_not_supported', 'frame_source_unknown',
+                  'frame_unrecognized', 'frame_context_unknown', 'frame_chain_invalid',
+                  'source_candidate_count', 'source_projection'})
+              require(type(colored['code']) is str and re.fullmatch(r'(?:none|(?:guest|causal)_[1-9][0-9]{0,3})', colored['code']))
+              closed(colored['exception_class'], {'none', 'RuntimeError', 'InterruptedError'})
+              closed(colored['frames'], {'unavailable', 'zero', 'one', 'multiple'})
+              closed(colored['candidates'], {'unavailable', 'zero', 'one', 'multiple'})
+              closed(colored['format'], {'none', 'python314_default'})
+              return value
+
+          try:
+              require(os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
+                  and os.environ.get('GITHUB_REF') ==
+                      'refs/heads/codex/inspect-final-paired-performance-20261016'
+                  and os.environ.get('GITHUB_WORKFLOW') ==
+                      'Inspect final paired performance failure summary'
+                  and os.environ.get('GITHUB_EVENT_NAME') == 'push'
+                  and os.environ.get('GITHUB_RUN_ATTEMPT') == '1')
+              artifact_id = 12019123301
+              expected_bytes = 1259
+              expected_digest = '9ead6c0405107ff2c6ad2b97504899cb2be5d93652762e3de41ac6d6ffdf4576'
+              endpoint = f'repos/yuvalkolodkingal/Arctic-Linux/actions/artifacts/{artifact_id}'
+              metadata_raw = subprocess.run(['gh', 'api', endpoint], stdout=subprocess.PIPE,
+                  stderr=subprocess.PIPE, check=False, timeout=60)
+              require(metadata_raw.returncode == 0 and len(metadata_raw.stdout) <= 32768)
+              metadata = json.loads(metadata_raw.stdout)
+              require(metadata.get('name') == 'external-paired-performance'
+                  and metadata.get('expired') is False
+                  and metadata.get('size_in_bytes') == expected_bytes
+                  and metadata.get('digest') == 'sha256:' + expected_digest
+                  and metadata.get('workflow_run', {}).get('id') == 38830688885
+                  and metadata.get('workflow_run', {}).get('head_sha') ==
+                      'cd8e50e3bfc849c07dfafb76cc41f5efed4f7d52')
+              with tempfile.TemporaryDirectory(prefix='arctic-final-paired-reader-') as folder:
+                  archive_path = Path(folder) / 'artifact.zip'
+                  with archive_path.open('xb') as output:
+                      download = subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output,
+                          stderr=subprocess.PIPE, check=False, timeout=60)
+                  require(download.returncode == 0
+                      and archive_path.stat().st_size == expected_bytes
+                      and hashlib.sha256(archive_path.read_bytes()).hexdigest() == expected_digest)
+                  with zipfile.ZipFile(archive_path) as archive:
+                      items = archive.infolist()
+                      require(len(items) == 2
+                          and {item.filename for item in items} == {
+                              'unqualified-failure-phase.json', 'upload-screening.json'}
+                          and len({item.filename for item in items}) == 2
+                          and sum(item.file_size for item in items) <= 8192)
+                      for item in items:
+                          require(not item.is_dir() and not Path(item.filename).is_absolute()
+                              and '..' not in Path(item.filename).parts
+                              and stat.S_IFMT(item.external_attr >> 16) in (0, stat.S_IFREG)
+                              and 0 < item.file_size <= 4096)
+                      raw = archive.read('unqualified-failure-phase.json')
+                      summary = validate_summary(strict_json(raw))
+                      screening = strict_json(archive.read('upload-screening.json'))
+                      require(type(screening) is dict and set(screening) == {'scope', 'files'}
+                          and screening['scope'] ==
+                              'Owned synthetic QEMU VM only; no host desktop, VM disks or credentials'
+                          and type(screening['files']) is dict
+                          and set(screening['files']) == {'unqualified-failure-phase.json'})
+                      receipt = screening['files']['unqualified-failure-phase.json']
+                      digest = hashlib.sha256(raw).hexdigest()
+                      require(receipt == {'original_sha256': digest, 'uploaded_sha256': digest,
+                          'bytes': len(raw), 'redactions': 0})
+              print('ARCTIC-PAIRED-SAFE-SUMMARY=' + json.dumps(summary,
+                  sort_keys=True, separators=(',', ':')))
+          except BaseException:
+              print('ARCTIC-PAIRED-SAFE-READER=rejected')
+              raise SystemExit(1)
+          PY
