@@ -68,6 +68,45 @@ jobs:
       - name: Safe reader rejected at live context
         if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context' }}
         run: exit 1
+      - name: Safe reader rejected at live context shape
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-shape' }}
+        run: exit 1
+      - name: Safe reader rejected at live context profile
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-profile' }}
+        run: exit 1
+      - name: Safe reader rejected at live context phase
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-phase' }}
+        run: exit 1
+      - name: Safe reader rejected at live context installation
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-installation' }}
+        run: exit 1
+      - name: Safe reader rejected at live context source-sha
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-source-sha' }}
+        run: exit 1
+      - name: Safe reader rejected at live context iso-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-iso-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context iso-bytes
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-iso-bytes' }}
+        run: exit 1
+      - name: Safe reader rejected at live context fixture-manifest-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-fixture-manifest-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context checker-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-checker-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context contract-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-contract-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context accuracy-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-accuracy-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context pins-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-pins-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context integration-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-integration-sha256' }}
+        run: exit 1
       - name: Safe reader rejected at live contract
         if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-contract' }}
         run: exit 1

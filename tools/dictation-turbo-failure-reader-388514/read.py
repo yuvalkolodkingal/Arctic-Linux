@@ -64,7 +64,10 @@ FAILURE_SUBSTAGES = {6: set(range(601, 613)), 7: {701, 702, 703, 704}}
 REJECTION_STAGES = {'manifest', 'run', 'artifact-metadata', 'archive', 'fixtures',
                     'execution', 'installations', 'report-inventory', 'live-report',
                     'live-receipt', 'live-hash', 'live-json', 'live-context',
-                    'live-contract', 'live-status-binding',
+                    'live-contract', 'live-status-binding', 'live-context-shape',
+                    'live-context-profile', 'live-context-phase',
+                    'live-context-installation',
+                    *{'live-context-' + name.replace('_', '-') for name in CONTEXT_PINS},
                     'failed-report', 'indicator', 'recovery', 'projection'}
 REJECTION_STAGE = 'manifest'
 
@@ -230,10 +233,21 @@ def safe_member(item, maximum):
             and 0 < item.file_size <= maximum and 0 <= item.compress_size <= 1_000_000)
 
 
-def validate_context(value, profile, phase, installation_id):
-    require(type(value) is dict and value.get('hardware_profile') == profile
-            and value.get('phase') == phase and value.get('installation_id') == installation_id)
+def validate_context(value, profile, phase, installation_id, checkpoint_prefix=None):
+    def boundary(name):
+        if checkpoint_prefix is not None:
+            checkpoint(checkpoint_prefix + '-context-' + name)
+
+    boundary('shape')
+    require(type(value) is dict)
+    boundary('profile')
+    require(value.get('hardware_profile') == profile)
+    boundary('phase')
+    require(value.get('phase') == phase)
+    boundary('installation')
+    require(value.get('installation_id') == installation_id)
     for key, expected in CONTEXT_PINS.items():
+        boundary(key.replace('_', '-'))
         require(value.get(key) == expected)
 
 
@@ -424,7 +438,8 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         checkpoint('live-json')
         live = strict_json(live_raw, 2_000_000)
         checkpoint('live-context')
-        validate_context(live.get('context'), profile, 'live', state['installations']['online'])
+        validate_context(live.get('context'), profile, 'live', state['installations']['online'],
+                         checkpoint_prefix='live')
         checkpoint('live-contract')
         contract.validate(live, live['context'], require_passed=False,
                           fixture_manifest=fixtures)
