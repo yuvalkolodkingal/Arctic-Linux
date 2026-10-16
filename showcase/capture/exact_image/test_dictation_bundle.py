@@ -50,7 +50,6 @@ class DictationEvidenceFixture:
 
         report = {
             "boot_id": boot,
-            "context": {"installation_id": installation},
             "gates": [
                 {"id": "recording-status-published", "status": "passed",
                  "observations": {"sha256": c.hashed("a" * 32)}},
@@ -60,7 +59,16 @@ class DictationEvidenceFixture:
             ],
         }
         for name in db.REPORTS:
-            (evidence / name).write_text(json.dumps(report) + "\n")
+            current = copy.deepcopy(report)
+            current["context"] = {
+                "phase": "live" if name.endswith("-live.json") else name[:-5],
+                "installation_id": installation,
+                "source_sha": c.IMAGE["source_sha"],
+                "iso_sha256": c.IMAGE["sha256"],
+                "iso_bytes": c.IMAGE["bytes"],
+                "contract_sha256": db.QUALIFICATION_CONTRACT_SHA256,
+            }
+            (evidence / name).write_text(json.dumps(current) + "\n")
         state = {
             "schema": "arctic-voxtype-execution-v3", "hardware_profile": "turbo-q5-v3",
             "status": "exact_image_dictation_online_offline_local_sessions_passed",
@@ -89,6 +97,22 @@ class DictationEvidenceFixture:
 
 
 class DictationEvidenceTests(unittest.TestCase, DictationEvidenceFixture):
+    def assert_coherent_context_change_rejected(self, changes):
+        with tempfile.TemporaryDirectory() as temp:
+            evidence, pin = self.build(Path(temp))
+            for name in db.REPORTS:
+                path = evidence / name
+                report = json.loads(path.read_text())
+                report["context"].update(changes)
+                path.write_text(json.dumps(report) + "\n")
+                os.chmod(path, 0o600)
+            qualification = types.SimpleNamespace(validate_execution=mock.Mock())
+            with mock.patch.object(db, "_load_qualification_contract",
+                                   return_value=qualification), \
+                    self.assertRaisesRegex(c.Invalid, "report provenance differs"):
+                db.validate_evidence(pin, evidence, HERE.parents[2])
+            qualification.validate_execution.assert_called_once()
+
     def test_metadata_requires_successful_first_attempt_exact_artifact(self):
         with tempfile.TemporaryDirectory() as temp:
             _evidence, pin = self.build(Path(temp))
@@ -132,6 +156,16 @@ class DictationEvidenceTests(unittest.TestCase, DictationEvidenceFixture):
                 else:
                     db.extract_archive(current, archive, output)
                     self.assertEqual({path.name for path in output.iterdir()}, db.EVIDENCE_MEMBERS)
+
+    def test_six_coherent_reports_for_an_unrelated_iso_are_rejected(self):
+        self.assert_coherent_context_change_rejected({
+            "iso_sha256": "9" * 64,
+            "iso_bytes": c.IMAGE["bytes"] - 4096,
+            "source_sha": "8" * 40,
+        })
+
+    def test_six_coherent_reports_with_an_alternate_contract_are_rejected(self):
+        self.assert_coherent_context_change_rejected({"contract_sha256": "7" * 64})
 
     def test_evidence_and_bundle_bind_three_frames_without_acceptance(self):
         with tempfile.TemporaryDirectory() as temp:

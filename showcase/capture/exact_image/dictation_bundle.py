@@ -292,6 +292,17 @@ def validate_evidence(pin, evidence: Path, repository: Path):
     reports = {name[:-5]: _read_json(evidence / name) for name in REPORTS}
     qualification = _load_qualification_contract(repository)
     qualification.validate_execution(state, reports, fixture_manifest=fixtures)
+    expected_context = {
+        "iso_sha256": pin["image"]["sha256"],
+        "iso_bytes": pin["image"]["bytes"],
+        "source_sha": pin["image"]["source_sha"],
+        "contract_sha256": QUALIFICATION_CONTRACT_SHA256,
+    }
+    c.require(all(type(report.get("context")) is dict
+                  and all(report["context"].get(key) == expected
+                          for key, expected in expected_context.items())
+                  for report in reports.values()),
+              "dictation qualification report provenance differs")
     c.require(state.get("schema") == "arctic-voxtype-execution-v3"
               and state.get("status") == "exact_image_dictation_online_offline_local_sessions_passed"
               and state.get("release_acceptance") is False
