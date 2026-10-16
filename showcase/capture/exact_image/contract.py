@@ -14,16 +14,16 @@ class Invalid(RuntimeError):
 
 
 IMAGE = {
-    "name": "Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso",
-    "bytes": 1_936_271_360,
-    "sha256": "c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7",
-    "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228",
-    "run_id": 38_823_208_615,
-    "artifact_id": 12_016_177_474,
-    "archive_bytes": 1_936_459_062,
-    "archive_sha256": "5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23",
+    "name": "Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso",
+    "bytes": 1_936_308_224,
+    "sha256": "8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a",
+    "source_sha": "4f2595c3ecf11ab3332a615df162518d3f677f59",
+    "run_id": 38_866_458_401,
+    "artifact_id": 12_034_440_723,
+    "archive_bytes": 1_936_495_926,
+    "archive_sha256": "fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330",
+    "producer_receipt_sha256": "7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca",
 }
 REVIEWED_EXECUTION = {
     "repository": "yuvalkolodkingal/Arctic-Linux",

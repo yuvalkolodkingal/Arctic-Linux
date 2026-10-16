@@ -1,31 +1,61 @@
 {
   "branch": "codex/showcase-exact-capture-20261014",
   "controller": {
-    "accelerator": "kvm",
-    "account": {
-      "autologin": true,
-      "disposable": true,
-      "hostname": "arctic-showcase",
-      "uid": 1000,
-      "username": "arcticshowcase"
-    },
-    "display": "none",
-    "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
-    "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
+    "schema": "arctic-showcase-unattended-controller-v1",
     "mode": "fixed-qmp-and-owned-virtio-serial",
-    "network_control": "none; QEMU user networking has no host forwarding",
+    "display": "none",
+    "accelerator": "kvm",
     "output": {
-      "count": 1,
+      "width": 1280,
       "height": 800,
       "scale": 1,
-      "width": 1280
+      "count": 1
     },
-    "release_acceptance": false,
-    "schema": "arctic-showcase-unattended-controller-v1"
+    "account": {
+      "username": "arcticshowcase",
+      "uid": 1000,
+      "hostname": "arctic-showcase",
+      "prompt": {
+        "rendered": "~>",
+        "ocr_suffixes": [
+          "~>",
+          "~ >"
+        ]
+      },
+      "autologin": true,
+      "disposable": true
+    },
+    "network_control": "none; QEMU user networking has no host forwarding",
+    "input_authority": "host QMP only; guest diagnostics cannot select or authorize input or capture",
+    "guest_transport": "owned org.arctic.showcase.capture virtio-serial channel only",
+    "release_acceptance": false
   },
-  "execution_files": {},
-  "image": null,
-  "ready": false,
+  "execution_files": {
+    ".github/workflows/showcase-exact-capture-20261014.yml": "2d1130b4ff6df1a72d5bba406f8a8257f8dbe36ac5a191539b41f7cc28010045",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "showcase/capture/exact_image/automation.py": "f86a4fbd55d46db6cbd0ce783a69a23131500d8787db1bd8fd9a8abe441b9c47",
+    "showcase/capture/exact_image/bundle.py": "3ccdcd284aa19aabfb3f6ae02c0e186f6fe30dc826b8ac2b2b51dcb144d9d063",
+    "showcase/capture/exact_image/capture_probe.py": "35f25b5299e18c106078bc2b3e2dcd27327ddc5a78ce62b174796da20c2678be",
+    "showcase/capture/exact_image/capture_vm.py": "b07c1650f25bf8187454d9f12fa6408bcd69f8016552e102912d4b7f2b9e6a4a",
+    "showcase/capture/exact_image/contract.py": "652a71ff06e6747935a3292f90bdd687c20963056bd83d3bf3f560477ad9c256",
+    "showcase/capture/exact_image/guest.py": "80edf1a7b4a3bdbea84ff6133c834c131bbb7483a2d4f0376f701e05471b95b6",
+    "showcase/capture/exact_image/host.py": "5a75811a337881702098d8d32cc8b5c89403d229e75a442bb8cd63c9d29113cd",
+    "showcase/capture/exact_image/unattended.py": "9d60d957ebbf02bce807da73b993d7f57e0de2f08cc6bc19bfd19ded7b1bd965",
+    "showcase/capture/exact_image/validate_bundle.py": "5c596d6d19d1b6e36f71f941ccbb6ed611e7a4a90ac50b5b14dbf486d353db38"
+  },
+  "image": {
+    "name": "Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso",
+    "bytes": 1936308224,
+    "sha256": "8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a",
+    "source_sha": "4f2595c3ecf11ab3332a615df162518d3f677f59",
+    "run_id": 38866458401,
+    "artifact_id": 12034440723,
+    "archive_bytes": 1936495926,
+    "archive_sha256": "fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca"
+  },
+  "ready": true,
   "release_acceptance": false,
   "schema": "arctic-showcase-unattended-execution-v1"
 }

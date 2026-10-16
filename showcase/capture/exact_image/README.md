@@ -11,24 +11,24 @@ outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
 The preparation is bound to the reviewed candidate from producer run
-`38823208615`, attempt 1, source
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228`: ISO
-`Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso`, size `1936271360`,
+`38866458401`, attempt 1, source
+`4f2595c3ecf11ab3332a615df162518d3f677f59`: ISO
+`Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso`, size `1936308224`,
 SHA-256
-`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
-The retained artifact is `12016177474`, archive size `1936459062`, archive
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`.
+The retained artifact is `12034440723`, archive size `1936495926`, archive
 SHA-256
-`5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23`,
+`fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330`.
+`7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca`.
 The execution manifest is ready for a later marker-only activation and remains
 `release_acceptance:false`.
 
-The producer ran from the reviewed marker-only source
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228` by `workflow_dispatch` and passed
-UEFI Try, BIOS Install and UEFI Safe startup. This preparation preserves the
-existing showcase activation marker byte-for-byte, so its push does not
-activate the workflow. A later marker-only child commit is still required.
+The producer ran from the reviewed product source
+`4f2595c3ecf11ab3332a615df162518d3f677f59` by `workflow_dispatch` and passed
+UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
+absent from this preparation. A later marker-only child commit is still
+required.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
