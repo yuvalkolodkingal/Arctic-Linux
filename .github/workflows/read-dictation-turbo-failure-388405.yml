@@ -1,0 +1,29 @@
+name: Read safe Turbo diagnostics for dictation run 38840514336
+
+on:
+  push:
+    branches: [codex/read-dictation-turbo-388405-20261016]
+    paths: [.github/dictation-turbo-failure-reader-388405.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-diagnostics:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-dictation-turbo-388405-20261016' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate the closed-vocabulary reader
+        run: python3 -B -m unittest tools/dictation-turbo-failure-reader/test_read.py
+      - name: Read only validated staged diagnostics
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/dictation-turbo-failure-reader/read.py
+          --manifest tools/dictation-turbo-failure-reader/execution-manifest.json
