@@ -45,6 +45,28 @@ private_runtime() {
     fi
     printf '%s\n' "$runtime"
 }
+restart_started_service() {
+    runtime=$(private_runtime 2>/dev/null) || return 1
+    session_marker=$runtime/voxtype-session-started-v1
+    if [ -e "$session_marker" ] || [ -L "$session_marker" ]; then
+        [ ! -L "$session_marker" ] && [ -d "$session_marker" ] \
+            && [ "$(stat -c %u:%a "$session_marker" 2>/dev/null || true)" = "$(id -u):700" ] \
+            || return 1
+        # try-restart deliberately preserves lazy startup and a manual stop,
+        # but it is a no-op after an audio-device failure has left the official
+        # daemon failed. Recover only that explicit failed state; the valid
+        # per-login activation marker prevents a stale unit failure from
+        # turning a settings change into the first activation of the session.
+        if systemctl --user is-failed --quiet voxtype.service; then
+            systemctl --user reset-failed voxtype.service || :
+            systemctl --user restart voxtype.service
+        else
+            systemctl --user try-restart voxtype.service
+        fi
+    else
+        systemctl --user try-restart voxtype.service
+    fi
+}
 clear_runtime_error() {
     runtime=$(private_runtime 2>/dev/null) || return 0
     rm -f "$runtime/voxtype-error"
@@ -270,7 +292,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --retry; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user try-restart voxtype.service || :
+            restart_started_service || :
         fi
         status
         ;;
@@ -285,7 +307,7 @@ case ${1:-} in
             chmod 0600 "$temporary"; mv -f "$temporary" "$config"
             voxtype --config "$config" config get whisper.language --json >/dev/null
         fi
-        systemctl --user try-restart voxtype.service || :
+        restart_started_service || :
         clear_runtime_error
         status
         ;;
@@ -295,7 +317,7 @@ case ${1:-} in
         if pkexec /usr/libexec/arctic/arctic-voxtype-setup --backend "$2"; then
             clear_runtime_error
             systemctl --user daemon-reload || :
-            systemctl --user try-restart voxtype.service || :
+            restart_started_service || :
         fi
         status
         ;;

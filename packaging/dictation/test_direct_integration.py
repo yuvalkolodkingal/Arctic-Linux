@@ -11,6 +11,73 @@ D = ROOT / "packaging/dictation"
 
 
 class DirectUpstreamIntegration(unittest.TestCase):
+    def test_config_restart_recovers_failed_started_service_without_eager_start(self):
+        adapter = (D / "arctic-dictation").read_text()
+        start = adapter.index("restart_started_service() {")
+        end = adapter.index("\n}\n", start) + 3
+        helper = adapter[start:end]
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            runtime = root / "runtime"
+            runtime.mkdir(mode=0o700)
+            marker = runtime / "voxtype-session-started-v1"
+            marker.mkdir(mode=0o700)
+            calls = root / "calls"
+            reset = root / "reset"
+            active = root / "active"
+            systemctl = root / "systemctl"
+            systemctl.write_text(r'''#!/bin/sh
+printf '%s\n' "$*" >>"$CALLS"
+case "$*" in
+  '--user is-failed --quiet voxtype.service') [ "$SERVICE_STATE" = failed ] ;;
+  '--user reset-failed voxtype.service') : >"$RESET" ;;
+  '--user restart voxtype.service') [ -f "$RESET" ] || exit 1; : >"$ACTIVE" ;;
+  '--user try-restart voxtype.service') ;;
+  *) exit 2 ;;
+esac
+''')
+            systemctl.chmod(0o700)
+            env = dict(os.environ, PATH=str(root) + ":/usr/bin:/bin",
+                       CALLS=str(calls), RESET=str(reset), ACTIVE=str(active),
+                       RUNTIME=str(runtime), SERVICE_STATE="failed")
+            command = helper + '\nprivate_runtime() { printf "%s\\n" "$RUNTIME"; }\nrestart_started_service\n'
+
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user is-failed --quiet voxtype.service",
+                "--user reset-failed voxtype.service",
+                "--user restart voxtype.service",
+            ])
+            self.assertTrue(active.is_file())
+
+            calls.write_text("")
+            reset.unlink()
+            active.unlink()
+            env["SERVICE_STATE"] = "inactive"
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user is-failed --quiet voxtype.service",
+                "--user try-restart voxtype.service",
+            ])
+            self.assertFalse(reset.exists())
+            self.assertFalse(active.exists())
+
+            marker.rmdir()
+            calls.write_text("")
+            subprocess.run(["sh", "-c", command], env=env, check=True)
+            self.assertEqual(calls.read_text().splitlines(), [
+                "--user try-restart voxtype.service",
+            ])
+            self.assertFalse(active.exists())
+
+            marker.symlink_to(root, target_is_directory=True)
+            calls.write_text("")
+            rejected = subprocess.run(["sh", "-c", command], env=env)
+            self.assertNotEqual(rejected.returncode, 0)
+            self.assertEqual(calls.read_text(), "")
+
+        self.assertEqual(adapter.count("restart_started_service || :"), 3)
+
     def test_status_projects_official_upstream_microphone_disconnect_errors(self):
         adapter = (D / "arctic-dictation").read_text()
         self.assertIn("*'Audio stream error, capture is now dead:'*", adapter)
