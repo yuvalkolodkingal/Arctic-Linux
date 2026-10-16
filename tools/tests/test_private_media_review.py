@@ -126,20 +126,20 @@ class ManifestControls(unittest.TestCase):
         self.assertEqual(len(value["artifacts"]), 2)
         item, active = value["artifacts"]
         self.assertEqual((item["run_id"], item["run_attempt"], item["artifact_id"]),
-                         (38874179588, 1, 12033829931))
-        self.assertEqual(item["head_sha"], "81f1fb2357f31e66200ced556ea56a4c253ef40f")
+                         (38887504669, 1, 12040551529))
+        self.assertEqual(item["head_sha"], "dc6e20313a48b2b2240518f0731f21e06aa18161")
         self.assertEqual((item["workflow_id"], item["workflow_path"]),
                          (380362453, ".github/workflows/installer-candidate-20261009.yml"))
         self.assertEqual((item["archive_bytes"], item["archive_sha256"]),
-                         (1001204, "06e44634f252c77ea7ba9eb07caf8d0fb62fc8d57c27ee87eedf8f08aac130a2"))
+                         (998501, "d0ad8f3c13865227ea932add6659f56873773efa1e5dc58ea77c647cc9c00f5e"))
         self.assertEqual(len(item["archive_members"]), 29)
         self.assertEqual(len(item["exports"]), 12)
         self.assertEqual({entry["kind"] for entry in item["exports"]}, {"png"})
         self.assertEqual((active["run_id"], active["run_attempt"], active["artifact_id"]),
-                         (38874201005, 1, 12035641163))
-        self.assertEqual(active["head_sha"], "1326c72930e34cc011369d26ebe4ecb68148d834")
+                         (38887511889, 1, 12040099765))
+        self.assertEqual(active["head_sha"], "3b264391a2b57682863f876695633dffb5b6d587")
         self.assertEqual((active["archive_bytes"], active["archive_sha256"]),
-                         (433734, "1efe81599bb06b836f1e7565de2250c7f122f1811644405e29124a018a95757c"))
+                         (433134, "2aa001157b7d6180ec60e9b3b9f81fef88cba1eef6466263b6d4a30ad781aacf"))
         self.assertEqual((len(active["archive_members"]), len(active["exports"])), (27, 7))
         self.assertFalse((ROOT / exporter.MARKER).exists())
 

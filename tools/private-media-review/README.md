@@ -5,14 +5,18 @@ qualification artifacts into a GitHub **draft** release. Draft releases in this 
 are visible only to collaborators with repository write access. The helper never publishes the
 draft, updates a release gate, or marks human review complete.
 
-The initial manifest pins idle-installer run `38874179588`, attempt 1, and artifact
-`12033829931` (`candidate-installer-restoration`, 1,001,204 archive bytes, SHA-256
-`06e44634f252c77ea7ba9eb07caf8d0fb62fc8d57c27ee87eedf8f08aac130a2`), plus active-installer
-run `38874201005`, attempt 1, and artifact `12035641163`
-(`candidate-installer-active-restoration`, 433,734 archive bytes, SHA-256
-`1efe81599bb06b836f1e7565de2250c7f122f1811644405e29124a018a95757c`). It exports only the
-19 declared 1280×720 PNG captures and a generated `REVIEW-MANIFEST.json`. Logs, raw archives,
-audio, transcripts and VM images are never copied to the draft release.
+The exact-image manifest pins successful idle-installer run `38887504669`, attempt 1,
+head `dc6e20313a48b2b2240518f0731f21e06aa18161`, and artifact `12040551529`
+(`candidate-installer-restoration`, 998,501 archive bytes, SHA-256
+`d0ad8f3c13865227ea932add6659f56873773efa1e5dc58ea77c647cc9c00f5e`), plus successful
+active-installer run `38887511889`, attempt 1, head
+`3b264391a2b57682863f876695633dffb5b6d587`, and artifact `12040099765`
+(`candidate-installer-active-restoration`, 433,134 archive bytes, SHA-256
+`2aa001157b7d6180ec60e9b3b9f81fef88cba1eef6466263b6d4a30ad781aacf`). The producer upload
+logs confirm the declared complete schemas still contain exactly 29 and 27 files. The exporter
+selects only the fixed 12 idle and 7 active 1280×720 PNG allowlists plus a generated
+`REVIEW-MANIFEST.json`. Logs, raw archives, audio, transcripts and VM images are never copied to
+the draft release.
 
 Before export, the reader verifies the repository, completed successful run, attempt, head branch
 and SHA, workflow ID/name/path/event, artifact ID/name/size/digest, and producer screening scope.
