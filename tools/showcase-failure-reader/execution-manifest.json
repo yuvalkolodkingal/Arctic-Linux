@@ -1,19 +1,19 @@
 {
   "artifact": {
-    "bytes": 7435,
-    "id": 12021566420,
+    "bytes": 7444,
+    "id": 12027315800,
     "name": "exact-image-showcase-failure-projection",
-    "sha256": "9944a92810ed2972713ab05a0844b4450e10c8f4acabff598e2540f735d135e5"
+    "sha256": "47aa90f01a67bd59fd665b6434c68be56ef581adfdd4fe0371db3c0d210db231"
   },
-  "contract_sha256": "77bfce57bdce3b3e993694a9541dabc195464c25f7351410600d02a4f7dd97dc",
-  "reader_sha256": "fdb5d079f7b7231432ad246e145ecea785bb8e03e5038aa79b962182537edc24",
-  "reader_workflow_sha256": "d05d53df41e081441954ee4bae468802bb2b1c02a8a51d673a18f32ef1fbc954",
+  "contract_sha256": "332bda77c9441d1509b06b22e12acc144b2605fe4a8203b67b40292e13b8f257",
+  "reader_sha256": "9091edae566613f89137f59cda6bf70b77b7e2e6df7ee15b2e0fc604f39986c1",
+  "reader_workflow_sha256": "156cc55ee2ab2cc85eae8dabee7d60a5f6fa5e841fddb4ec5655b6dbf6a77a23",
   "ready": true,
   "repository": "yuvalkolodkingal/Arctic-Linux",
   "run_attempt": 1,
-  "run_id": 38839101249,
+  "run_id": 38851502372,
   "schema": "arctic-showcase-failure-reader-v1",
   "source_branch": "codex/showcase-exact-capture-20261014",
-  "source_sha": "c2a6944f544bc7b20fdb25a4e788938e3ca72714",
+  "source_sha": "5caf1b11e0b3dfb6818d50ac719fd79e8f3397bc",
   "source_workflow": ".github/workflows/showcase-exact-capture-20261014.yml"
 }
