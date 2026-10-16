@@ -10,24 +10,25 @@ The recording/text-insertion and GPU-failure/CPU-recovery dictation scenes are
 outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
-The last reviewed predecessor candidate came from producer run `38808271154`,
-attempt 1, source `10b94bf1f6aef4950889d4a498c9e1138cf7973d`: ISO
-`Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso`, size `1936328704`,
+The preparation is bound to the reviewed candidate from producer run
+`38823208615`, attempt 1, source
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228`: ISO
+`Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso`, size `1936271360`,
 SHA-256
-`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`.
-The retained artifact is `12011000602`, archive size `1936516406`, archive
+`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
+The retained artifact is `12016177474`, archive size `1936459062`, archive
 SHA-256
-`4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6`,
+`5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6`.
-That image predates the current product changes and is historical evidence,
-not an active capture target. The execution manifest therefore remains
-fail-closed with `ready:false`, `image:null`, no execution file hashes and
-`release_acceptance:false` until a new exact candidate exists and is reviewed.
+`82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330`.
+The execution manifest is ready for a later marker-only activation and remains
+`release_acceptance:false`.
 
-The historical producer ran by `workflow_dispatch` and passed UEFI Try, BIOS
-Install and UEFI Safe startup. Those results do not qualify the current source.
-The showcase activation marker is absent from this preparation.
+The producer ran from the reviewed marker-only source
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228` by `workflow_dispatch` and passed
+UEFI Try, BIOS Install and UEFI Safe startup. This preparation preserves the
+existing showcase activation marker byte-for-byte, so its push does not
+activate the workflow. A later marker-only child commit is still required.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
@@ -53,10 +54,22 @@ RGB QMP PNGs, pass the same automated privacy rules as final captures, and are
 deleted. Their byte, pixel-source, and OCR hashes are recorded in the controller
 trace. The full QEMU argv hash, exact ISO/disk/channel topology, fixed scene
 commands, QMP events, input events, and final pixels are bound into each receipt.
-After selecting the Install boot entry, the controller requires copy unique to
-the real installer Welcome page (`Welcome to Arctic Linux`, `Keyboard`, `Time
-zone`, and `Summary`) before switching to the private console. The boot menu's
-own `Install Arctic Linux` label cannot satisfy that gate.
+GRUB's reviewed menu lasts five seconds. QMP pixel decoding is much faster than
+OCR, so the controller recognizes the immutable 1920x1080 amber Try highlight
+and immediately sends a fixed Home key with QEMU's 100 ms key-up timer. This
+stops the countdown before OCR verifies the full menu. The first exact-candidate
+retry showed why the ordering matters: OCR proved the menu at six seconds, but
+the subsequent ten-second window never established an Install selection.
+The controller then sends Down and requires both the ordered, fixed menu copy
+and the amber Install-row highlight before it sends Enter. This prevents a
+missed firmware key from silently leaving the default Try entry selected. The
+earlier bounded failure projection proved that the menu and key sequence
+preceded a 600-second Welcome timeout; because it exported no pixels or guest
+mode, it did not establish which entry booted. After selection, the
+controller still requires copy unique to the real installer Welcome page
+(`Welcome to Arctic Linux`, `Keyboard`, `Time zone`, and `Summary`) before
+switching to the private console. Neither the selection proof nor the boot
+menu's own `Install Arctic Linux` label can satisfy that Welcome gate.
 
 The Welcome gate remains the authoritative, unchanged 600-second acceptance
 condition. If it times out, a diagnostic path runs only after that failure. It
@@ -79,44 +92,64 @@ the isolated VM. After the installer's normal cleanup unmounts its target, the
 reviewed live helper remounts only the unique Btrfs `Arctic root` partition below
 the exact serial disk, seals its `@` subvolume, and unmounts it before reset. On
 the installed boot, the root wrapper activates the unique Wayland VT before it
-drops permanently to UID 1000 for scene work. After observing the exact
-candidate's animated greeting, the host sends one Ctrl-L. Its 3D renderer
-deliberately leaves that single ordinary byte queued for Fish, where Ctrl-L can
-only clear the retained greeting and redraw the line editor; if the renderer
-has already returned, the same binding only clears and redraws. No command byte
-or command terminator is sent. The host then requires the fixed account's real
-`arcticshowcase@arctic-showcase ~>` Fish prompt on an exact 1280x800 frame before
-typing even its nonsecret proof command. The host accepts only a complete final
-OCR line for that account with the two spellings already admitted by the
-successful installer controller: `~>` or Tesseract's `~ >`. Account text and a
-suffix on separate rows, or the greeting's own `user@host` info row, cannot
-satisfy this precondition.
+drops permanently to UID 1000 for scene work. It opens the one already-proved
+root-owned virtio channel before that drop, passes only that held descriptor
+through `runuser`, and the non-root helper verifies that the inherited device
+identity still matches the fixed named character device before using it. The
+helper also revalidates the exact graphical environment selected by the root
+launcher instead of racing a second loginctl and `/proc` discovery. This keeps
+scene bootstrap independent of a second uaccess open or session discovery
+during the VT transition without broadening device access. After observing the exact
+candidate's animated greeting, the host sends one empty command terminator. Its
+3D renderer deliberately leaves that single ordinary byte queued for Fish,
+which completes the empty command and establishes its line editor while the
+rich greeting remains visible. After a fixed three-second handoff interval, the
+host types one fixed nonsecret proof and then sends a fresh 128-bit challenge
+over the held virtio-serial connection. The installed interactive Fish reads
+that challenge from the root-owned character device. It emits a response only
+after checking UID 1000, the exact account and hostname, interactive Fish state,
+the device type and root ownership. The response binds those fixed facts to the
+host nonce. The reviewed tooling archive is deliberately withheld until this
+exchange passes, so no guest helper can answer it.
 
-The proof then blocks on the root-owned virtio-serial character device while
-the host sends a fresh 128-bit challenge. The installed interactive Fish emits
-a response only after checking UID 1000, the exact account and hostname,
-interactive Fish state, the device type and root ownership. The response binds
-those facts to the nonce. The reviewed tooling archive is withheld until this
-exchange passes, so a guest helper cannot answer it. The same guarded branch
-defines only a bright `~>` prompt for the disposable session, clears and homes
-the VT, and prints `ARCTIC-SHOWCASE-SHELL-READY`. Two independent exact frames
-must contain that marker in OCR and one of the two measured suffix-only pixel
-signatures across sixteen fixed 640×8 bands: `(542, 364, 20, 8)` or the cursor
-state `(542, 364, 20, 24)`, followed by twelve zero bands. The counts are used
-only inside the decision and no pixels, OCR text or band values enter the
-receipt. The nonce response proves identity without relying on OCR for the
-account token. A missing marker, different occupancy, wrong nonce or different
-session identity fails closed before the sudo launcher.
+The same guarded Fish branch defines `fish_prompt` only in the disposable
+session. It renders only the fixed `~>` suffix in bright white, then clears and
+homes the VT before printing a bold marker. Fish itself invokes that prompt after
+the proof command returns. The host keeps full-frame OCR for privacy screening,
+then maps only nonblack glyph pixels
+in the marker and prompt rows within the fixed left 640×32 pixels to white. It
+reads each private row through an 8x nearest-neighbour enlargement and pinned
+single-line PSM 7. Both transformed crops are always deleted; the
+original 1280x800 frame remains the sole screen evidence and geometry gate.
+Pinned PSM 7 can return an empty string for the isolated two-glyph prompt, so
+the visual half requires the exact OCR marker together with one of the two
+measured nonblack occupancy vectors for `~>` with or without the Fish cursor:
+`542,364,20,8` or `542,364,20,24`, followed by twelve empty bands. This rejects
+the former account prompt, any extra account or row, altered glyph geometry and
+every non-1280x800 frame. The nonce-bound response proves the exact account,
+hostname, UID and Fish shell without relying on OCR for that identity. A
+missing marker, alternate occupancy, extra row, wrong nonce or different
+session identity fails closed. A second unchanged exact frame is required
+before the sudo launcher. Neither guest diagnostics, an echoed command, a
+settling delay nor marker pixels alone can authorize input.
 
-The installed session and visual prompt remain authoritative bounded gates.
+The installed session and visual prompt remain an authoritative bounded gate.
 The channel response has a 30-second limit and the visual gate has a 90-second
 limit. Its failure
 projection reduces private frames to closed enums for fetch still visible,
-the fixed proof marker, exact prompt on a nonfinal row, account-only or
-suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty, and
-other text, plus bounded integer timings. Only the challenge SHA-256 and a fixed
-identity enum enter the trace. Only after a timeout, the controller sends one
-interrupt and records
+exact prompt on a nonfinal row, the fixed proof marker, account-only or
+suffix-only OCR, login/password, blank output, geometry mismatch, OCR-empty,
+and other text, plus bounded integer timings. Each sample also retains four
+independent booleans for the exact fixed marker, the account pattern with only
+the acceptance-approved punctuation spacing, suffix and complete prompt, with
+only their boolean seen/final aggregates exported. It records only the challenge
+SHA-256 and a fixed closed identity enum for a successful transport proof. After
+full-frame geometry and privacy validation, it also exports bounded
+nonblack-pixel counts for
+sixteen fixed 640x8 bands at the top left. Those integers can locate the VT
+glyph rows but contain no pixels, text, crops, screens or identifiers. OCR
+strings remain private. Only after a timeout, the
+controller sends one interrupt and records
 whether the exact prompt becomes visible within 30 seconds. That post-failure
 probe cannot promote the attempt or authorize the proof or sudo commands. Its
 screens and OCR strings stay private and are deleted with the runtime.
@@ -148,6 +181,24 @@ bootstrap record to five minutes and applies reviewed per-stage deadlines after
 that; only the real installation stage retains its 90-minute allowance. An
 unexpected Python `Exception` is re-raised after a best-effort fixed failure
 record, so its message and guest content never cross the private channel.
+
+The installed scene helper has the same fail-closed transport behavior. If it
+fails before a readiness or capture request, it emits only the fixed prefix and
+one of `bootstrap`, `dictationsetup`, `winter` or `updates`; exception text,
+logs, transcript text and pixels never cross the channel. The host validates
+that enum and ends the attempt immediately. Before each readiness gate the
+helper also emits only a fixed scene-start prefix and the expected scene enum.
+The host requires the enum in order and binds a later silent timeout to that
+stage without accepting the scene or extending its deadline. It uses a
+36-minute transport bound
+for the online Dictation path so the unchanged 30-minute Dictation readiness
+gate and unchanged two-minute Settings readiness gate can finish their bounded
+subprocess calls and still deliver that fixed failure enum. Wallpaper retains
+its five-minute bound, What's New its three-minute bound, and each
+post-authorization diagnostic request its five-minute bound.
+These bounds do not replace or relax any readiness, nonce, screen, privacy or
+human-review gate; they only prevent a failed guest helper from inheriting the
+outer 120-minute channel timeout while QEMU keeps the character device open.
 
 The fresh disposable account's top-layer welcome is expected. After the
 Dictation page is open behind it, the host requires `Welcome to Arctic Linux`
@@ -203,7 +254,10 @@ the contract rejects extra keys, flexible strings and out-of-range values. The
 workflow first proves that all private runtime, image and capture paths were
 removed. If that cleanup cannot be proved, it uploads no failure artifact.
 The workflow installs Noble's exact `tesseract-ocr=5.3.4-1build5`; the binary,
-version, language data and both OCR invocations are pinned in the receipt contract.
+version, language data and all three OCR invocations are pinned in the receipt
+contract. Full-frame privacy and scene OCR stays on sparse-text PSM 11. Only the
+two private normalized shell rows use single-line PSM 7 before their separate
+privacy checks and guaranteed deletion.
 
 The host invocation is:
 

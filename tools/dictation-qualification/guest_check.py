@@ -24,7 +24,7 @@ import tempfile
 import tomllib
 import time
 
-from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
+from contract import (ASSETS, ERROR_LABELS, EXPECTED_KINDS, FAILURE_SUBSTAGES, GPU_FAILURE_STAGES, LEGACY_GPU_GATE, LIMITATIONS, MICROPHONE_FAILURE_STAGES, MODERN_GPU_GATE, PROFILE_ASSETS, PROFILES, SCHEMA, TRANSCRIPTION_FAILURE_STAGES, UPSTREAM, Invalid, context, gates, pinned, require, validate)
 
 HERE = Path(__file__).resolve().parent
 DATA = Path('/run/t')
@@ -91,7 +91,7 @@ class MicrophoneIsolationUnavailable(Invalid):
 class TranscriptionStageFailure(Invalid):
     """Transcript-free projection of one fixed transcription operation."""
 
-    def __init__(self, stage, label):
+    def __init__(self, stage, label, substage=None):
         require(type(stage) is str and stage in TRANSCRIPTION_FAILURE_STAGES,
                 'unknown-transcription-failure-stage')
         require(type(label) is str and label in ERROR_LABELS,
@@ -99,6 +99,10 @@ class TranscriptionStageFailure(Invalid):
         super().__init__()
         self.failure_stage = TRANSCRIPTION_FAILURE_STAGES[stage]
         self.error_label = label
+        require(substage is None or (type(substage) is int
+                and substage in FAILURE_SUBSTAGES.get(self.failure_stage, ())),
+                'unknown-transcription-failure-substage')
+        self.failure_substage = substage
 
 
 class MicrophoneStageFailure(Invalid):
@@ -117,7 +121,7 @@ class MicrophoneStageFailure(Invalid):
 class GpuStageFailure(Invalid):
     """Transcript-free projection of one fixed GPU recovery operation."""
 
-    def __init__(self, stage, label):
+    def __init__(self, stage, label, substage=None, returncode=None):
         require(type(stage) is str and stage in GPU_FAILURE_STAGES,
                 'unknown-gpu-failure-stage')
         require(type(label) is str and label in ERROR_LABELS,
@@ -125,6 +129,14 @@ class GpuStageFailure(Invalid):
         super().__init__()
         self.failure_stage = GPU_FAILURE_STAGES[stage]
         self.error_label = label
+        require(substage is None or (type(substage) is int
+                and substage in FAILURE_SUBSTAGES.get(self.failure_stage, ())),
+                'unknown-gpu-failure-substage')
+        require(returncode is None or (type(returncode) is int
+                and 1 <= returncode <= 255 and substage == 2022),
+                'unknown-gpu-failure-returncode')
+        self.failure_substage = substage
+        self.failure_returncode = returncode
 
 def mark_collector_setup(stage):
     """Record only one source-owned setup stage; never retain failure material."""
@@ -583,6 +595,11 @@ class Checker:
                                GpuStageFailure):
                 label = error.error_label
                 observations = {'failure_stage': error.failure_stage}
+                if type(error) in (TranscriptionStageFailure, GpuStageFailure):
+                    if error.failure_substage is not None:
+                        observations['failure_substage'] = error.failure_substage
+                if type(error) is GpuStageFailure and error.failure_returncode is not None:
+                    observations['failure_returncode'] = error.failure_returncode
             result['code'] = GATE_FAILURE_CODES[name].get(label, 'gate-' + name + '-unknown')
             result['observations'] = observations
             if type(error) is MicrophoneIsolationUnavailable:
@@ -590,6 +607,19 @@ class Checker:
                 result['status'] = 'unrun'
         self.report['gates'].append(result)
         return result['status'] == 'passed'
+
+    def dependent_unrun(self, name):
+        """Record a dependent gate only after a concrete checked failure."""
+        require(name in self.gates
+                and not any(gate.get('id') == name for gate in self.report['gates']),
+                'unknown-or-duplicate-dependent-gate')
+        require(any(gate.get('status') == 'failed' for gate in self.report['gates']),
+                'dependent-gate-without-concrete-failure')
+        self.report['gates'].append({
+            'id': name, 'status': 'unrun',
+            'evidence_kind': EXPECTED_KINDS[name],
+            'code': 'prerequisite-or-collector-failed', 'observations': {}})
+        return False
 
     def adapter(self, *args, check=True):
         result = self.cmd([str(ADAPTER), *args], check=check)
@@ -933,20 +963,26 @@ class Checker:
         return owned[0].get('is_focused') is True and owned[0].get('is_visible') is True
 
     def capture_link(self):
+        self._capture_engine = None
         engines = self.engines()
-        require(len(engines) == 1, 'recording-engine-not-unique')
+        if len(engines) != 1:
+            self._wait_last_graph = (False, False, False, False, False)
+            return False
         pid = engines[0][0]
         objects = json.loads(self.cmd(['/usr/bin/pw-dump']).stdout)
         owned, captures = authenticated_capture_nodes(objects, pid, self.account.pw_uid)
-        require(self.engines() == engines, 'recording-engine-changed')
+        unchanged = self.engines() == engines
         linked = any(row.get('type') == 'PipeWire:Interface:Link'
                      and row.get('info', {}).get('output-node-id') == self.source
                      and row.get('info', {}).get('input-node-id') in captures
                      for row in objects) if captures else False
         source = any(row.get('type') == 'PipeWire:Interface:Node'
                      and row.get('id') == self.source for row in objects)
-        self._wait_last_graph = (True, bool(owned), bool(captures), source, linked)
-        return linked
+        self._wait_last_graph = (unchanged, bool(owned), bool(captures), source, linked)
+        accepted = unchanged and linked
+        if accepted:
+            self._capture_engine = engines[0]
+        return accepted
 
     def play(self, sample):
         self.audio = self.root / 'fixture.wav'
@@ -985,7 +1021,11 @@ class Checker:
             selected = language
             changed = True
         if changed:
-            self.daemon_ready('daemon-restart', 30)
+            # Retain only the authenticated process tuple returned by the
+            # existing readiness boundary.  It lets a later failed start say
+            # whether systemd replaced the daemon without reading or exposing
+            # logs, command output, paths or transcript material.
+            self._ready_engine = self.daemon_ready('daemon-restart', 30)
             if backend is not None:
                 self.selected_backend = backend
             if selected is not None:
@@ -1082,8 +1122,7 @@ class Checker:
         before = time.monotonic_ns()
         self.transcription_stage('record-start', lambda: self.record('start'))
         self.transcription_stage(
-            'recording-state', lambda: self.observe(
-                'recording-state', lambda: self.state() == 'recording', 10))
+            'recording-state', self.checked_recording_state)
         self.transcription_stage(
             'capture-link', lambda: self.observe('capture-link', self.capture_link, 10))
         # The native state file can report recording before PipeWire has
@@ -1092,14 +1131,7 @@ class Checker:
         # then pin the exact official process and binary.  A persistent
         # missing, duplicate, changed or unlinked daemon still fails the
         # capture-link stage; a wrong binary still fails engine-profile.
-        def engine_profile():
-            _pid, _ticks, binary = self.engine()
-            cpu_key = 'avx2' if self.profile_id == 'turbo-q5-v3' else 'cpu'
-            require(binary == PAYLOAD / self.names[cpu_key]
-                    and sha(binary) == self.assets[cpu_key]['sha256'],
-                    'cpu-upstream-daemon-profile-pin')
-            return cpu_key
-        cpu_key = self.transcription_stage('engine-profile', engine_profile)
+        cpu_key = self.transcription_stage('engine-profile', self.checked_engine_profile)
         self.transcription_stage('fixture-play-start', lambda: self.play(sample))
         self.transcription_stage('fixture-playback', lambda: require(
             self.player.wait(timeout=sample['audio_seconds'] + 20) == 0,
@@ -1148,6 +1180,76 @@ class Checker:
             return item
         item = self.transcription_stage('sample-record', record_sample)
         return item
+
+    def checked_recording_state(self):
+        """Keep the ten-second gate and close only its failure diagnosis.
+
+        The official command returns after delivering SIGUSR1, before the
+        daemon publishes its native state.  On a timeout, classify fixed
+        service/process/state outcomes.  No command output, journal message,
+        path, PID or transcript enters the report.
+        """
+        try:
+            return self.observe(
+                'recording-state', lambda: self.state() == 'recording', 10)
+        except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                KeyError, TypeError) as error:
+            label = caught_error_label(error)
+            try:
+                active = self.cmd(
+                    ['systemctl', '--user', 'is-active', '--quiet',
+                     'voxtype.service'], check=False)
+                if active.returncode != 0:
+                    failed = self.cmd(
+                        ['systemctl', '--user', 'is-failed', '--quiet',
+                         'voxtype.service'], check=False)
+                    substage = 601 if failed.returncode == 0 else 602
+                else:
+                    engines = self.engines()
+                    if len(engines) == 0:
+                        substage = 603
+                    elif len(engines) != 1:
+                        substage = 604
+                    elif engines[0] != getattr(self, '_ready_engine', None):
+                        substage = 605
+                    else:
+                        state = self.state(allow_absent=True)
+                        if state == 'stopped':
+                            substage = 606
+                        elif state == 'idle':
+                            substage = (607 if (self.runtime / 'voxtype/start_requested').exists()
+                                        else 608)
+                        elif state == 'transcribing':
+                            substage = 609
+                        elif state == 'streaming':
+                            substage = 610
+                        elif state == 'recording':
+                            substage = 611
+                        else:
+                            substage = 612
+            except (Invalid, OSError, ValueError, subprocess.TimeoutExpired,
+                    KeyError, TypeError):
+                substage = 612
+            raise TranscriptionStageFailure(
+                'recording-state', label, substage) from None
+
+    def checked_engine_profile(self):
+        """Pin the exact process already authenticated by capture_link()."""
+        cpu_key = {'small-v2': 'cpu', 'turbo-q5-v3': 'avx2'}.get(self.profile_id)
+        if (cpu_key is None or type(self.names.get(cpu_key)) is not str
+                or type(self.assets.get(cpu_key)) is not dict):
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 701)
+        engine = getattr(self, '_capture_engine', None)
+        if (type(engine) is not tuple or len(engine) != 3
+                or type(engine[0]) is not int or type(engine[1]) is not int
+                or not isinstance(engine[2], Path)):
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 702)
+        _pid, _ticks, binary = engine
+        if binary != PAYLOAD / self.names[cpu_key]:
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 703)
+        if sha(binary) != self.assets[cpu_key]['sha256']:
+            raise TranscriptionStageFailure('engine-profile', 'invalid', 704)
+        return cpu_key
 
     def samples(self, language):
         def selected_rows():
@@ -1374,15 +1476,10 @@ class Checker:
     def gpu_failure(self):
         require(self.profile_id == 'turbo-q5-v3', 'gpu-gate-requires-modern-profile')
         self.gpu_stage('receiver-clear', self.empty)
-        # First prove the signed Vulkan payload and Arctic's real local model
-        # preflight on the VM's available Vulkan implementation.
-        self.gpu_stage('initial-vulkan-setup', lambda: run(
-            ['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-             str(SETUP), '--backend', 'vulkan'], 750))
-        # This path deliberately exercises setup without restarting the user
-        # service.  It still changed the authoritative backend, so invalidate
-        # the qualification cache before selecting CPU for the failure test.
-        self.selected_backend = None
+        # The frozen GitHub-hosted VM exposes a 2D virtio display without
+        # virgl, GPU passthrough or another accelerated Vulkan device. It can
+        # validate the signed Vulkan payload and the real unsupported-device
+        # failure/recovery path, but it cannot certify GPU acceleration.
         vulkan = PAYLOAD / ASSETS['vulkan']['name']
         def payload_integrity():
             owned_file(vulkan, ASSETS['vulkan']['bytes'])
@@ -1393,28 +1490,12 @@ class Checker:
 
         # Make the visible language selection deterministic for both recovery screens.
         self.gpu_stage('language-selection', lambda: self.select(language='he'))
-        def loader_fixture():
-            icd = self.root / 'bad-icd.json'
-            missing = self.root / 'libarctic-missing-vulkan-driver.so'
-            icd.write_text(json.dumps({'file_format_version': '1.0.0',
-                'ICD': {'library_path': str(missing), 'api_version': '1.3.0'}},
-                sort_keys=True) + '\n')
-            os.chmod(icd, 0o600)
-            os.chown(icd, self.account.pw_uid, self.account.pw_gid)
-            return icd
-        icd = self.gpu_stage('loader-fixture', loader_fixture)
-        # Exercise Arctic's guarded selection with a loader configuration that
-        # cannot open an ICD. Upstream Vulkan deliberately supports automatic
-        # CPU fallback, so running a recording under this fixture cannot prove
-        # an error and may insert CPU-produced text. Arctic instead must reject
-        # the switch, preserve CPU, and publish an actionable error before any
-        # recording can start on the requested backend.
-        def failed_vulkan_setup():
-            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                          'VK_DRIVER_FILES=' + str(icd), 'VK_LOADER_DEBUG=error',
-                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
-            require(failed.returncode != 0, 'gpu-failure-preflight-succeeded')
-        self.gpu_stage('failed-vulkan-setup', failed_vulkan_setup)
+        # Exercise Arctic's guarded selector against the VM's real unsupported
+        # Vulkan environment. Upstream may fall back internally, so a successful
+        # command would not certify GPU execution and must invalidate this frozen
+        # fixture instead of being counted as recovery evidence. Stop the resident
+        # CPU model to make resource pressure independent of the setup outcome.
+        self.gpu_stage('failed-vulkan-setup', self.vm_vulkan_failure)
         self.gpu_stage('cpu-preservation', lambda: require(
             (SYSTEM / 'backend').read_text().strip() == 'cpu'
             and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
@@ -1447,12 +1528,26 @@ class Checker:
         cpu_ready_capture_ack_sha256 = self.gpu_stage(
             'cpu-ready-screen', lambda: self.recovery_screen(
                 'cpu_ready', status, expected_language='he'))
-        return {'gpu_supported': True, 'explicit_cpu_selected': True,
+        return {'gpu_supported': False, 'explicit_cpu_selected': True,
                 'failed_attempt_inserted': False, 'count': 2,
                 'bytes': ASSETS['vulkan']['bytes'],
                 'sha256': ASSETS['vulkan']['sha256'],
                 'gpu_failure_capture_ack_sha256': gpu_failure_capture_ack_sha256,
                 'cpu_ready_capture_ack_sha256': cpu_ready_capture_ack_sha256}
+
+    def vm_vulkan_failure(self):
+        """Require the frozen non-GPU VM to reject real Vulkan selection."""
+        self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'])
+        try:
+            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
+            require(failed.returncode != 0, 'vm-vulkan-fixture-unexpectedly-supported')
+            return failed
+        finally:
+            # The setup failure preserves CPU and publishes an error. Restore
+            # the official daemon so Settings can display that checked state;
+            # the later explicit CPU selection clears the error and restarts it.
+            self.cmd(['systemctl', '--user', 'start', 'voxtype.service'], check=False)
 
     def recovery_screen(self, stage, status, expected_language):
         """Bind an exact host screenshot to the visible, transcript-free Settings state."""
@@ -1575,6 +1670,13 @@ class Checker:
             require(not any(fragment in material for fragment in fragments),
                     'transcript-found-in-public-surface')
         return {'count': len(self.phrases), 'matched': 0}
+
+    def privacy_gate(self):
+        name = 'transcript-log-notification-leak-scan'
+        if len(self.phrases) < 12 and any(
+                gate.get('status') == 'failed' for gate in self.report['gates']):
+            return self.dependent_unrun(name)
+        return self.gate(name, self.leakage)
 
     def pending(self):
         def settled():
@@ -1721,7 +1823,7 @@ class Checker:
         else:
             self.gate(LEGACY_GPU_GATE, self.legacy_gpu)
         self.gate('transcript-private-cleanup', self.cleanup_check)
-        self.gate('transcript-log-notification-leak-scan', self.leakage)
+        self.privacy_gate()
 
     def execute(self):
         phase = self.context['phase']

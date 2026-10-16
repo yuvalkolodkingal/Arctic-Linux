@@ -174,16 +174,19 @@ class InstalledIdentityChallengeControls(unittest.TestCase):
         self.assertTrue(all(record not in command for record in expected))
         self.assertTrue(all(('\\0' + format(ord(marker), '02o')) in command
                             for marker in D.IDENTITY_MARKERS))
+        self.assertTrue(all(('\\0' + format(ord(digit), '02o')) in command
+                            for digit in D.IDENTITY_LEGEND))
         result = subprocess.run(['/bin/sh', '-c', command], capture_output=True, check=True, timeout=5)
         self.assertEqual(result.stderr, b'')
         rendered = result.stdout.decode()
-        self.assertTrue(rendered.startswith('\x1b[2J\x1b[8;10H\x1b[1m'))
+        self.assertTrue(rendered.startswith('\x1b[2J\x1b[6;10H\x1b[1m' + D.IDENTITY_LEGEND))
         visible = re.sub(r'\x1b\[[0-9;]*[A-Za-z]', '', rendered)
         records = [line.replace(' ', '') for line in visible.splitlines() if line.strip()]
         token = D.installed_user_token(
             self.nonce, os.environ['USER'], os.getuid(),
             subprocess.check_output(['id', '-un'], text=True).strip())
-        self.assertEqual(records, [marker + token for marker in D.IDENTITY_MARKERS])
+        self.assertEqual(records, [D.IDENTITY_LEGEND,
+                                   *(marker + token for marker in D.IDENTITY_MARKERS)])
         self.assertNotIn(self.nonce, rendered)
 
     def test_both_fixed_fish_prompt_renders_require_a_fresh_exact_response(self):

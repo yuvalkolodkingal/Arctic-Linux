@@ -38,7 +38,9 @@ class CandidateMangoProfileControls(unittest.TestCase):
                     (b'\n# final-candidate-profile-f7a5fc-begin\n',
                      b'# final-candidate-profile-f7a5fc-end\n'),
                     (b'\n# final-candidate-profile-6c2bc9-begin\n',
-                     b'# final-candidate-profile-6c2bc9-end\n')):
+                     b'# final-candidate-profile-6c2bc9-end\n'),
+                    (b'\n# final-candidate-profile-84f131-begin\n',
+                     b'# final-candidate-profile-84f131-end\n')):
                 self.assertEqual(current.count(new_marker), 1)
                 before_new, addition_new = current.split(new_marker)
                 self.assertEqual(addition_new.count(new_ending), 1)

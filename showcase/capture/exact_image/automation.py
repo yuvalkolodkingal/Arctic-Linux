@@ -128,8 +128,32 @@ def _fixed_fish_prompt_present(text: str, account: str, suffixes) -> bool:
             or any(type(item) is not str or not item for item in suffixes)):
         return False
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
-    accepted = {account + " " + suffix for suffix in suffixes}
-    return bool(lines) and lines[-1] in accepted
+    if not lines:
+        return False
+
+    # Tesseract can insert horizontal space around punctuation in the enlarged
+    # Linux-VT glyphs.  Keep every alphanumeric account/host byte exact and
+    # admit spacing only around the fixed separators and inside an approved
+    # suffix.  The complete prompt must still be the final OCR line.
+    account_pattern = _fixed_account_pattern(account)
+    suffix_patterns = {
+        "".join(r"[ \t]*" + re.escape(character) + r"[ \t]*"
+                if character in "~>" else re.escape(character)
+                for character in suffix.replace(" ", ""))
+        for suffix in suffixes
+    }
+    pattern = (r"^[ \t]*" + account_pattern + r"[ \t]+(?:"
+               + "|".join(sorted(suffix_patterns)) + r")[ \t]*$")
+    return re.fullmatch(pattern, lines[-1]) is not None
+
+
+def _fixed_account_pattern(account: str) -> str:
+    """Return the acceptance regex for exact bytes and spaced punctuation."""
+    return "".join(
+        r"[ \t]*" + re.escape(character) + r"[ \t]*"
+        if character in "@-" else re.escape(character)
+        for character in account
+    )
 
 
 def _fixed_shell_marker_match(text: str):
@@ -141,6 +165,15 @@ def _fixed_shell_marker_match(text: str):
         r"[ \t]*-[ \t]*READY[ \t]*$", text)
 
 
+def _fixed_shell_proof_present(text: str, account: str, suffixes) -> bool:
+    """Require the fixed marker before the complete final Fish prompt."""
+    if type(account) is not str or not account:
+        return False
+    marker = _fixed_shell_marker_match(text)
+    return marker is not None and _fixed_fish_prompt_present(
+        text[marker.end():], account, suffixes)
+
+
 def _fixed_shell_transport_visual_present(text: str, image) -> bool:
     """Require the exact marker and measured suffix-only VT occupancy."""
     if _fixed_shell_marker_match(text) is None:
@@ -150,9 +183,32 @@ def _fixed_shell_transport_visual_present(text: str, image) -> bool:
     return _shell_nonbackground_occupancy(image) in SHELL_TRANSPORT_OCCUPANCY
 
 
+def _shell_ocr_row_focuses(image):
+    """Expose the two fixed VT proof rows as ephemeral single-line crops."""
+    c.require(image.mode == "RGB" and image.size == (1280, 800),
+              "controller shell OCR source geometry differs")
+    # The proof clears and homes the fixed VT. The bounded pixel diagnostic
+    # established two 16-pixel rows: marker y=0..15 and prompt y=16..31. Both
+    # necessarily fit within the fixed left 640 pixels.
+    crop = image.crop((0, 0, 640, 32))
+    pixels = list(crop.getdata())
+    foreground = [pixel != (0, 0, 0) for pixel in pixels]
+    c.require(any(foreground) and not all(foreground),
+              "controller shell OCR foreground differs")
+    normalized = Image.new("RGB", crop.size, "black")
+    normalized.putdata([(255, 255, 255) if present else (0, 0, 0)
+                        for present in foreground])
+    return tuple(
+        normalized.crop((0, row * 16, 640, (row + 1) * 16)).resize(
+            (5120, 128), Image.Resampling.NEAREST)
+        for row in (0, 1)
+    )
+
+
 SHELL_OCCUPANCY_WIDTH = 640
 SHELL_OCCUPANCY_BAND_HEIGHT = 8
 SHELL_OCCUPANCY_BANDS = 16
+SHELL_OCCUPANCY_MAX = SHELL_OCCUPANCY_WIDTH * SHELL_OCCUPANCY_BAND_HEIGHT
 SHELL_TRANSPORT_OCCUPANCY = (
     (542, 364, 20, 8) + (0,) * 12,
     (542, 364, 20, 24) + (0,) * 12,
@@ -171,6 +227,29 @@ def _shell_nonbackground_occupancy(image):
             for x in range(SHELL_OCCUPANCY_WIDTH))
         for band in range(SHELL_OCCUPANCY_BANDS)
     )
+
+
+def _boot_entry_selected(image, entry: str) -> bool:
+    """Recognize one immutable ISO GRUB highlight row, not OCR alone."""
+    if entry not in ("try", "install"):
+        return False
+    if image.size != (1920, 1080):
+        return False
+    # The reviewed GRUB theme draws one 418x40 amber selection pill.  Restrict
+    # the scan to the fixed menu rectangle so the amber logo mark cannot count.
+    rows = []
+    pixels = image.load()
+    for y in range(210, 350):
+        amber = sum(1 for x in range(700, 1220)
+                    if pixels[x, y][0] >= 220
+                    and 140 <= pixels[x, y][1] <= 220
+                    and pixels[x, y][2] <= 130)
+        if amber >= 300:
+            rows.append(y)
+    centers = {"try": (246, 263), "install": (290, 307)}
+    low, high = centers[entry]
+    return (30 <= len(rows) <= 50 and rows == list(range(rows[0], rows[-1] + 1))
+            and low <= (rows[0] + rows[-1]) / 2 <= high)
 
 
 LIVE_SURFACES = (
@@ -297,9 +376,27 @@ class LiveStartupDiagnostic:
 
 INSTALLED_SHELL_SURFACES = (
     "capture-error", "geometry-mismatch", "blank-output", "ocr-empty",
-    "fetch-greeting", "proof-marker", "prompt-exact", "prompt-not-final", "account-only",
-    "suffix-only", "login-or-password", "other-text",
+    "fetch-greeting", "prompt-exact", "prompt-not-final", "proof-marker",
+    "account-only", "suffix-only", "login-or-password", "other-text",
 )
+INSTALLED_SHELL_SIGNALS = ("marker", "account-pattern", "suffix", "exact")
+SHELL_PROMPT_ACCOUNT = "ARCTICSHOWCASE@ARCTIC-SHOWCASE"
+
+
+def _installed_shell_signals(text: str, account: str, suffixes) -> dict:
+    """Project fixed prompt strings to independent booleans, never OCR text."""
+    c.require(type(text) is str and type(account) is str and account
+              and type(suffixes) in (tuple, list) and suffixes,
+              "installed shell signal input differs")
+    lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
+    account_pattern = _fixed_account_pattern(account)
+    return {
+        "marker": _fixed_shell_marker_match(text) is not None,
+        "account-pattern": re.search(
+            r"(?<![A-Za-z0-9])" + account_pattern + r"(?![A-Za-z0-9])", text) is not None,
+        "suffix": any(line.endswith(tuple(suffixes)) for line in lines),
+        "exact": _fixed_fish_prompt_present(text, account, suffixes),
+    }
 
 
 def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> str:
@@ -308,18 +405,19 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
         return "geometry-mismatch"
     if _fixed_shell_transport_visual_present(text, image):
         return "proof-marker"
-    colors = image.resize((32, 20)).getcolors(maxcolors=640)
-    if colors is None or len(colors) < 16:
-        return "blank-output"
-    folded = text.casefold().strip()
-    if not folded:
-        return "ocr-empty"
+    # A cleared Linux text console is intentionally low-color.  Preserve only
+    # the reviewed fixed-string diagnostic enums before reducing every other
+    # sparse surface to the privacy-safe blank-output enum.  These observations
+    # do not alter the authoritative exact final-line gate in wait_screen().
     if _fixed_fish_prompt_present(text, account, suffixes):
         return "prompt-exact"
+    folded = text.casefold().strip()
     lines = [line.strip().rstrip("_| ") for line in text.splitlines() if line.strip()]
     accepted = {account + " " + suffix for suffix in suffixes}
     if any(line in accepted for line in lines):
         return "prompt-not-final"
+    if _fixed_shell_marker_match(text) is not None:
+        return "proof-marker"
     if "arctic linux" in folded and "fish 4.6" in folded:
         return "fetch-greeting"
     if account.casefold() in folded:
@@ -328,6 +426,11 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
         return "suffix-only"
     if "login:" in folded or "password:" in folded:
         return "login-or-password"
+    colors = image.resize((32, 20)).getcolors(maxcolors=640)
+    if colors is None or len(colors) < 16:
+        return "blank-output"
+    if not folded:
+        return "ocr-empty"
     return "other-text"
 
 
@@ -352,6 +455,10 @@ class InstalledStartupDiagnostic:
         self.samples = 0
         self.last = "capture-error"
         self.first = {item: None for item in INSTALLED_SHELL_SURFACES}
+        self.signal_samples = []
+        self.signal_seen = {item: False for item in INSTALLED_SHELL_SIGNALS}
+        self.signal_final = {item: False for item in INSTALLED_SHELL_SIGNALS}
+        self.occupancy_samples = []
         self.session_status = "not-proved"
         self.session_challenge_sha256 = None
         self.interrupt_status = "not-run"
@@ -389,13 +496,30 @@ class InstalledStartupDiagnostic:
         self.session_status = "proved"
         self.session_challenge_sha256 = hashlib.sha256(nonce.encode()).hexdigest()
 
-    def observe(self, surface):
+    def observe(self, surface, signals, occupancy):
         c.require(surface in INSTALLED_SHELL_SURFACES,
                   "installed startup surface differs")
-        self.samples = min(46, self.samples + 1)
+        c.require(type(signals) is dict and tuple(signals) == INSTALLED_SHELL_SIGNALS
+                  and all(type(value) is bool for value in signals.values())
+                  and len(self.signal_samples) < 46,
+                  "installed startup signals differ")
+        c.require(occupancy is None or (
+                      type(occupancy) is tuple
+                      and len(occupancy) == SHELL_OCCUPANCY_BANDS
+                      and all(type(value) is int and 0 <= value <= SHELL_OCCUPANCY_MAX
+                              for value in occupancy)),
+                  "installed startup occupancy differs")
+        self.samples += 1
         self.last = surface
         if self.first[surface] is None:
             self.first[surface] = self._seconds(self.gate_started, 90)
+        sample = dict(signals)
+        self.signal_samples.append(sample)
+        self.occupancy_samples.append(
+            None if occupancy is None else list(occupancy))
+        self.signal_final = sample
+        for name, present in sample.items():
+            self.signal_seen[name] = self.signal_seen[name] or present
 
     def gate_end(self, status):
         c.require(status in ("passed", "timed-out"),
@@ -430,6 +554,15 @@ class InstalledStartupDiagnostic:
                 "status": self.gate_status, "elapsed_seconds": self.gate_seconds,
                 "samples": self.samples, "last_observation": self.last,
                 "first_observation_seconds": dict(self.first),
+                "signal_samples": [dict(sample) for sample in self.signal_samples],
+                "signal_seen": dict(self.signal_seen),
+                "signal_final": dict(self.signal_final),
+                "nonbackground_occupancy": {
+                    "region": "left-640-top-128", "band_height": 8,
+                    "bands": 16, "maximum_per_band": 5120,
+                    "samples": [None if sample is None else list(sample)
+                                for sample in self.occupancy_samples],
+                },
             },
             "post_failure_interrupt": self.interrupt_status,
         }
@@ -461,10 +594,10 @@ class Controller:
         "chown -R 1000:1000 $d; cd $d; exec python3 unattended.py installed-root-launch --timeout 5400'"
     )
     PASSWORD = "ArcticShowcase-Disposable-2026-Only!!!"
-    # A fresh host nonce must be read by the authenticated installed Fish. The
-    # guarded branch proves the exact account, host, UID, shell and root-owned
-    # character device before it emits a response. The prompt itself contains
-    # only the suffix; identity comes from the nonce-bound response, not OCR.
+    # The installed Fish reads a fresh host nonce from the owned root device.
+    # Only the authenticated interactive account with the exact hostname emits
+    # the response. The same guarded branch defines this session's prompt and
+    # assembles the visible marker; echoed input contains neither nonce nor marker.
     SHELL_PROOF = (
         "read -l arctic_challenge </dev/virtio-ports/org.arctic.showcase.capture; "
         "if string match -qr '^ARCTIC-SHOWCASE-SHELL-CHALLENGE [0-9a-f]{32}$' "
@@ -491,16 +624,21 @@ class Controller:
         "$m $s $i >/dev/virtio-ports/org.arctic.showcase.capture"
     )
 
-    def __init__(self, qmp, runtime: Path, ocr, private_fragments, tooling_sha256: str):
+    def __init__(self, qmp, runtime: Path, ocr, shell_focus_ocr, private_fragments,
+                 tooling_sha256: str):
         c.require(tooling_sha256 and c.fullmatch(c.HEX64, tooling_sha256),
                   "unattended tooling identity missing")
+        c.require(callable(ocr) and callable(shell_focus_ocr),
+                  "unattended OCR implementation missing")
         self.qmp = qmp
         self.runtime = runtime
         self.ocr = ocr
+        self.shell_focus_ocr = shell_focus_ocr
         self.fragments = tuple(private_fragments)
         self.tooling_sha256 = tooling_sha256
         self.events = []
         self.counter = 0
+        self.boot_countdown_held = False
         self.live_startup = LiveStartupDiagnostic()
         self.installed_startup = InstalledStartupDiagnostic()
 
@@ -522,6 +660,18 @@ class Controller:
             up = [{"type": "key", "data": {"down": False,
                    "key": {"type": "qcode", "data": item}}} for item in reversed(chord)]
             self._input(down + up)
+            time.sleep(gap)
+        self.record(stage, "keys", {"names": list(names)})
+
+    def press_held(self, stage: str, *names: str, gap=.18):
+        """Use QEMU's bounded key-up timer for firmware, VT, and control chords."""
+        c.require(names and len(names) <= 8, "unattended held key sequence differs")
+        for name in names:
+            chord = name.split("-") if "-" in name else [name]
+            self.qmp.command("send-key", {
+                "keys": [{"type": "qcode", "data": item} for item in chord],
+                "hold-time": 100,
+            })
             time.sleep(gap)
         self.record(stage, "keys", {"names": list(names)})
 
@@ -551,20 +701,51 @@ class Controller:
         self.record(stage, "secret", {"source": "reviewed-disposable-controller-constant",
                     "characters": 38})
 
-    def _shot(self, label):
+    def _shot(self, label, before_ocr=None, *, shell_ocr_focus=False):
         self.counter += 1
         path = self.runtime / f"controller-{self.counter:03d}-{label}.png"
         c.require(not path.exists(), "controller screenshot path reused")
         self.qmp.screendump(path)
         info = host._regular_new(path, host.MAX_PNG_BYTES)
         image = controller_decode(path)
-        text = self.ocr(path)
+        if before_ocr is not None:
+            before_ocr(image)
+        full_text = self.ocr(path)
+        c.privacy_text(full_text, self.fragments)
+        if shell_ocr_focus:
+            # The fixed Linux VT draws the cleared marker and prompt in its
+            # first two 640x16-pixel rows. Normalize only those private
+            # row crops, enlarge each source pixel 8x, and read each as one
+            # pinned PSM-7 line. The original 1280x800 frame remains the sole
+            # screen evidence and acceptance geometry.
+            focuses = tuple(
+                self.runtime / (f"controller-{self.counter:03d}-{label}-"
+                                f"{name}-ocr.png")
+                for name in ("marker", "prompt")
+            )
+            c.require(all(not focus.exists() for focus in focuses),
+                      "controller OCR focus path reused")
+            try:
+                row_images = _shell_ocr_row_focuses(image)
+                row_texts = []
+                for row_image, focus in zip(row_images, focuses, strict=True):
+                    row_image.save(focus, format="PNG")
+                    host._regular_new(focus, host.MAX_PNG_BYTES)
+                    row_text = self.shell_focus_ocr(focus)
+                    c.privacy_text(row_text, self.fragments)
+                    row_texts.append(row_text)
+                text = "\n".join(row_texts)
+            finally:
+                for focus in focuses:
+                    focus.unlink(missing_ok=True)
+        else:
+            text = full_text
         c.privacy_text(text, self.fragments)
         return path, info, image, text
 
     def wait_screen(self, stage: str, expectation: str, phrases=(), *, seconds=300,
                     visible=False, retain=False, exact_output=False, ordered=False,
-                    prompt_contract=None, transport_prompt=False):
+                    prompt_contract=None, transport_prompt=False, before_ocr=None):
         startup_gate = expectation == "live-installer-visible"
         installed_gate = expectation == "installed-shell-ready"
         if startup_gate:
@@ -576,15 +757,28 @@ class Controller:
         while time.monotonic() < deadline:
             path = None
             try:
-                path, info, image, text = self._shot(expectation)
+                shell_ocr_focus = expectation in {
+                    "installed-shell-ready", "installed-shell",
+                    "installed-diagnostic-shell-ready",
+                }
+                path, info, image, text = self._shot(
+                    expectation, before_ocr=before_ocr,
+                    shell_ocr_focus=shell_ocr_focus)
                 colors = image.resize((32, 20)).getcolors(maxcolors=640)
                 nonblank = colors is not None and len(colors) >= 16
                 if startup_gate:
                     self.live_startup.observe(_live_surface_class(image, text))
                 if installed_gate:
                     account, suffixes = prompt_contract
+                    signals = _installed_shell_signals(text, account, suffixes)
+                    if (transport_prompt
+                            and _fixed_shell_transport_visual_present(text, image)):
+                        # Pinned PSM 7 does not reliably return a two-glyph
+                        # row. The two measured suffix/cursor states are exact.
+                        signals["suffix"] = True
                     self.installed_startup.observe(
-                        _installed_shell_surface_class(image, text, account, suffixes))
+                        _installed_shell_surface_class(image, text, account, suffixes),
+                        signals, _shell_nonbackground_occupancy(image))
                 prompt_ok = (prompt_contract is None
                              or (_fixed_shell_transport_visual_present(
                                     text, image)
@@ -593,9 +787,11 @@ class Controller:
                 phrase_ok = (not phrases or _phrases_present(
                     text, phrases, ordered=ordered))
                 if (expectation in {"installed-shell-ready", "installed-shell"}
-                        and prompt_contract is not None and transport_prompt):
-                    phrase_ok = _fixed_shell_transport_visual_present(
-                        text, image)
+                        and prompt_contract is not None):
+                    phrase_ok = (_fixed_shell_transport_visual_present(
+                                    text, image)
+                                 if transport_prompt else
+                                 _fixed_shell_proof_present(text, *prompt_contract))
                 if (phrase_ok
                         and prompt_ok
                         and (not exact_output or image.size == (1280, 800))
@@ -622,7 +818,9 @@ class Controller:
                 if startup_gate:
                     self.live_startup.observe("capture-error")
                 if installed_gate:
-                    self.installed_startup.observe("capture-error")
+                    self.installed_startup.observe(
+                        "capture-error",
+                        {item: False for item in INSTALLED_SHELL_SIGNALS}, None)
             finally:
                 if path is not None and path.exists():
                     path.unlink(missing_ok=True)
@@ -700,10 +898,61 @@ class Controller:
                          ("Hide", "Butterfly", "Gold", "packaged picture", "restore"),
                          seconds=60, exact_output=True)
 
+    def wait_install_boot_selection(self, seconds=10):
+        """Require the exact themed Install highlight before Enter is sent."""
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            path = None
+            try:
+                path, info, image, text = self._shot("install-boot-menu-selected")
+                # The selected row's black-on-amber label is deliberately not
+                # an OCR dependency: Tesseract 5.3.4 omits it on the exact
+                # frame.  The other ordered labels establish the fixed menu;
+                # the reviewed pixel band establishes the selected row.
+                phrases = ("Try Arctic Linux", "Safe graphics mode",
+                           "Check USB for errors", "Boot from first disk")
+                if (_phrases_present(text, phrases, ordered=True)
+                        and _boot_entry_selected(image, "install")):
+                    self.record("live-boot", "screen", {
+                        "bytes": info.st_size, "sha256": c.sha256(path),
+                        "ocr_sha256": hashlib.sha256(text.encode()).hexdigest(),
+                        "expectation": "install-boot-menu-selected",
+                        "width": image.width, "height": image.height,
+                    })
+                    path.unlink(missing_ok=True)
+                    path = None
+                    return
+            except (c.Invalid, OSError):
+                pass
+            finally:
+                if path is not None and path.exists():
+                    path.unlink(missing_ok=True)
+            time.sleep(.25)
+        raise c.Invalid("controller Install boot selection proof absent")
+
+    def hold_boot_countdown_before_ocr(self, image):
+        """Stop the five-second GRUB timer as soon as its exact pixels exist."""
+        if self.boot_countdown_held:
+            return
+        if _boot_entry_selected(image, "try"):
+            self.press_held("live-boot", "home")
+            self.boot_countdown_held = True
+
     def boot_live_and_start(self):
-        self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=300)
+        # Pixel decoding precedes OCR.  Stop GRUB's five-second countdown on
+        # the exact immutable Try highlight so OCR latency cannot consume the
+        # remaining menu window.  The full OCR menu gate still follows.
+        self.wait_screen("live-boot", "install-boot-menu", ("Arctic", "Install"),
+                         seconds=300, before_ocr=self.hold_boot_countdown_before_ocr)
+        c.require(self.boot_countdown_held, "controller boot countdown was not held")
         self.live_startup.boot_observed()
-        self.press("live-boot", "home", "down", "ret")
+        # Firmware/GRUB can miss zero-duration down/up batches.  The exact ISO
+        # has a five-second menu, so use QEMU's bounded hold timer, then prove
+        # the amber Install row before Enter.  A missed key can no longer boot
+        # the default Try entry and burn the full Welcome timeout.
+        self.press_held("live-boot", "down")
+        self.wait_install_boot_selection()
+        self.press_held("live-boot", "ret")
         self.live_startup.selection_sent()
         # "Install Arctic Linux" is also present in the boot menu.  Requiring
         # that text here let the just-selected GRUB frame satisfy this gate and
@@ -713,7 +962,7 @@ class Controller:
         self.wait_screen("live-boot", "live-installer-visible",
                          ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
                          seconds=600, visible=True, exact_output=True)
-        self.press("live-console", "ctrl-alt-f6")
+        self.press_held("live-console", "ctrl-alt-f6")
         self.wait_screen("live-console", "live-console-login", ("login",), seconds=60)
         self.type_text("live-console", "live-username", "liveuser")
         self.press("live-console", "ret")
@@ -727,7 +976,7 @@ class Controller:
         """Run a fixed console probe only after the Welcome gate has failed."""
         c.require(self.live_startup.gate_status == "timed-out",
                   "live startup probe preceded authoritative gate failure")
-        self.press("live-diagnostic", "ctrl-alt-f6")
+        self.press_held("live-diagnostic", "ctrl-alt-f6")
         try:
             self.wait_screen("live-diagnostic", "live-diagnostic-login", ("login",), seconds=45)
         except c.Invalid:
@@ -787,58 +1036,69 @@ class Controller:
         # Fish starts the packaged animated arctic-fetch before presenting its
         # prompt.  A command sent during that animation can be consumed as the
         # keypress that dismisses it.  First prove the exact installed greeting,
-        # then send one Ctrl-L.  The exact candidate's renderer deliberately
-        # leaves a single ordinary byte queued for Fish; Ctrl-L cannot submit a
-        # command and makes Fish clear the retained greeting before redrawing
-        # its prompt.  If the renderer has already returned, the same Fish
-        # binding only clears and redraws.  A later bounded exact-frame gate,
-        # rather than elapsed time, proves that its input loop and terminal
-        # restoration have completed.
+        # then hand one empty Return through the renderer to Fish.  After a
+        # fixed settling interval, issue the fixed nonsecret proof.  Its exact
+        # response and a final Fish prompt are the authoritative readiness gate
+        # before the controller can enter the sudo launcher or another secret.
         self.wait_screen("installed-console", "installed-fetch-greeting",
                          ("Arctic Linux", "fish 4.6"), seconds=90)
         self.installed_startup.fetch_observed()
-        self.press("installed-console", "ctrl-l")
+        # Dismiss arctic-fetch with one empty line.  The renderer deliberately
+        # leaves that single byte queued, so Fish completes an empty command and
+        # establishes its line editor while the rich greeting remains visible.
+        # Do not queue Ctrl-L across that external-process/termios handoff:
+        # three exact runs showed a stable low-color surface after clearing.
+        self.press_held("installed-console", "ret")
         self.installed_startup.dismissal_sent()
-        # The fetch renderer can remain visible after it has accepted the
-        # dismissal key.  Do not type even the nonsecret proof command until a
-        # later exact frame contains the fixed installed account's real Fish
-        # prompt.  This makes readiness a pixel observation instead of a fixed
-        # settling delay.
-        shell_prompt = (c.CONTROLLER["account"]["username"] + "@"
-                        + c.CONTROLLER["account"]["hostname"])
+        time.sleep(3)
+        # Three seconds is sixty times the renderer's 50 ms polling period and
+        # gives Fish time to complete the empty command after the renderer has
+        # exited.  The proof contains no secret and cannot mimic its fixed
+        # response. It defines only this Fish session's prompt function so the
+        # exact suffix remains bright white. The authenticated channel already
+        # proves the fixed account and hostname. It then clears and homes the
+        # VT before drawing a bold marker,
+        # matching the successful installed-image identity challenge. Fish
+        # itself calls that function after the command returns. This removes
+        # the retained rich greeting from the OCR surface without relying on a
+        # separate Fish Ctrl-L redraw. Sudo
+        # remains forbidden until the fresh response and the exact final
+        # prompt are visible together.
+        shell_prompt = SHELL_PROMPT_ACCOUNT
         prompt_contract = c.CONTROLLER["account"]["prompt"]
         installed_prompt = (shell_prompt, tuple(prompt_contract["ocr_suffixes"]))
-        self.wait_screen("installed-console", "installed-prompt-ready",
-                         (), seconds=90, exact_output=True,
-                         prompt_contract=installed_prompt)
-        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF)
+        # Match the exact-image installer qualification's proven Fish/VT input
+        # rate.  The generic 12 ms controller rate can outrun a busy installed
+        # console's line-editor redraw and corrupt this long readiness command.
+        self.type_text("installed-console", "installed-shell-proof", self.SHELL_PROOF,
+                       gap=.08)
         self.press("installed-console", "ret")
         nonce, response = session_exchange()
         self.accept_installed_shell_session(nonce, response)
-        # Require the nonce-authenticated session's marker and suffix twice on
-        # independent exact frames before entering the longer sudo launcher.
         try:
             self.wait_screen("installed-console", "installed-shell-ready",
-                             ("ARCTIC-SHOWCASE-SHELL-READY",),
+                             ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
                              seconds=90, exact_output=True, ordered=True,
                              prompt_contract=installed_prompt, transport_prompt=True)
         except InstalledShellReadyTimeout as error:
             try:
-                self.press("installed-diagnostic", "ctrl-c")
+                self.press_held("installed-diagnostic", "ctrl-c")
             except (c.Invalid, OSError):
                 self.installed_startup.interrupt("controller-unavailable")
                 raise error
             try:
                 self.wait_screen("installed-diagnostic", "installed-diagnostic-shell-ready",
                                  (), seconds=30, exact_output=True,
-                                 prompt_contract=installed_prompt,
-                                 transport_prompt=True)
+                                 prompt_contract=installed_prompt, transport_prompt=True)
                 self.installed_startup.interrupt("recovered-prompt")
             except (c.Invalid, OSError):
                 self.installed_startup.interrupt("sent-no-prompt")
             raise error
+        # Recheck an independent unchanged frame before entering the longer
+        # sudo launcher. Both gates require the fixed marker in order and the
+        # exact Fish suffix as the sole final OCR line.
         self.wait_screen("installed-console", "installed-shell",
-                         ("ARCTIC-SHOWCASE-SHELL-READY",),
+                         ("ARCTIC-SHOWCASE-SHELL-READY", shell_prompt),
                          seconds=90, exact_output=True, ordered=True,
                          prompt_contract=installed_prompt, transport_prompt=True)
         self.type_text("installed-scenes", "installed-scenes", self.INSTALLED_COMMAND)

@@ -52,6 +52,14 @@ class ExceptionShapeTest(unittest.TestCase):
         historical = historical.replace(b'not 942 <= frames[1][0] <= 1008',
                                         b'not 871 <= frames[1][0] <= 942')
         for current, previous in (
+                (b'c9f9e28142788da739fcb8c0ebfddf39823fd88b9b62d108582d9dfcef42a408', b'dc3e24713f2241fe2f794795de5cd75091af5ebbdc3cccc7efe3616ee738b6b1'),
+                (b'5aeca09dfde70e7ec4e69ff29c5d102f30dea23df427d08823f5e3221c73a1e7', b'31ca4168768680f3a267016bf3dd3e1c0ba6a449f40b0d50038d7c1b8f4d62e5'),
+                (b'3a1a7549cce04665e2f2300a684aa842f2b00fcd7208acaf556e5cca0c078f47', b'726b4f3788cfd4f1357a7fd26147d2f91b9c31c87bbc0c01d8803a89f50af82b'),
+                (b'f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208', b'df9f89b5dd5b6323df67d46f40ed8f8d7f8f68c602b9520224e4c283384266a1'),
+                (b'dc3e24713f2241fe2f794795de5cd75091af5ebbdc3cccc7efe3616ee738b6b1', b'06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5'),
+                (b'31ca4168768680f3a267016bf3dd3e1c0ba6a449f40b0d50038d7c1b8f4d62e5', b'd576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf'),
+                (b'726b4f3788cfd4f1357a7fd26147d2f91b9c31c87bbc0c01d8803a89f50af82b', b'7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e'),
+                (b'df9f89b5dd5b6323df67d46f40ed8f8d7f8f68c602b9520224e4c283384266a1', b'ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85'),
                 (b'd576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf', b'fa6efa7bd35c48aaf33809dec812265f018599faa1ab89f232dfc4f18f008fcf'),
                 (b'7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e', b'4f745f370419cc32ec5256006e86bf0fda4d81388aff49e0c4fb54b759a8c256'),
                 (b'ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85', b'c632962fc6eb2e3cea33e48b6f66cf4b3bc972eb70367c8094e5e0649243b3dc'),

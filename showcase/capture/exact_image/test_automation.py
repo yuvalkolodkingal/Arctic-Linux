@@ -4,12 +4,13 @@ import unittest
 import json
 import os
 import shlex
+import stat
 import subprocess
 import types
 from pathlib import Path
 from unittest import mock
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 import sys
 HERE = Path(__file__).parent
@@ -47,8 +48,8 @@ class UnattendedController(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.root = Path(self.temp.name)
         self.qmp = QMP()
-        self.controller = automation.Controller(self.qmp, self.root, lambda path: "clean",
-                                                (), "f" * 64)
+        self.controller = automation.Controller(
+            self.qmp, self.root, lambda path: "clean", lambda path: "clean", (), "f" * 64)
 
     def tearDown(self):
         self.temp.cleanup()
@@ -64,21 +65,68 @@ class UnattendedController(unittest.TestCase):
                                   "characters": 38})
         self.assertNotIn(automation.Controller.PASSWORD, repr(self.controller.events))
 
-    def test_control_l_redraw_has_no_return_or_text_byte(self):
-        self.controller.press("installed-console", "ctrl-l", gap=0)
+    def test_control_l_redraw_uses_bounded_hold_without_return_or_text_byte(self):
+        self.controller.press_held("installed-console", "ctrl-l", gap=0)
         self.assertEqual(len(self.qmp.commands), 1)
         name, arguments = self.qmp.commands[0]
-        self.assertEqual(name, "input-send-event")
-        events = arguments["events"]
-        self.assertEqual([event["data"]["key"]["data"] for event in events],
-                         ["ctrl", "l", "l", "ctrl"])
-        self.assertEqual([event["data"]["down"] for event in events],
-                         [True, True, False, False])
-        self.assertNotIn("ret", repr(events))
+        self.assertEqual(name, "send-key")
+        self.assertEqual(arguments, {
+            "keys": [
+                {"type": "qcode", "data": "ctrl"},
+                {"type": "qcode", "data": "l"},
+            ],
+            "hold-time": 100,
+        })
+        self.assertNotIn("ret", repr(arguments))
         self.assertEqual(self.controller.events, [{
             "index": 0, "stage": "installed-console", "kind": "keys",
             "detail": {"names": ["ctrl-l"]},
         }])
+
+    def test_held_key_uses_qemu_timer_and_records_only_reviewed_names(self):
+        self.controller.press_held("live-boot", "home", "down", gap=0)
+        self.assertEqual(self.qmp.commands, [
+            ("send-key", {"keys": [{"type": "qcode", "data": "home"}],
+                          "hold-time": 100}),
+            ("send-key", {"keys": [{"type": "qcode", "data": "down"}],
+                          "hold-time": 100}),
+        ])
+        self.assertEqual(self.controller.events, [{
+            "index": 0, "stage": "live-boot", "kind": "keys",
+            "detail": {"names": ["home", "down"]},
+        }])
+
+    def test_install_selection_requires_exact_firmware_geometry_and_amber_row(self):
+        def frame(top):
+            image = Image.new("RGB", (1920, 1080), "#101820")
+            for y in range(top, top + 40):
+                for x in range(750, 1168):
+                    image.putpixel((x, y), (250, 190, 84))
+            return image
+
+        self.assertTrue(automation._boot_entry_selected(frame(235), "try"))
+        self.assertFalse(automation._boot_entry_selected(frame(235), "install"))
+        self.assertTrue(automation._boot_entry_selected(frame(279), "install"))
+        self.assertFalse(automation._boot_entry_selected(frame(279), "try"))
+        self.assertFalse(automation._boot_entry_selected(
+            Image.new("RGB", (1280, 800), (250, 190, 84)), "install"))
+
+    def test_install_selection_records_only_fixed_menu_and_pixel_proof(self):
+        path = self.root / "selected.png"
+        image = Image.new("RGB", (1920, 1080), "#101820")
+        for y in range(279, 319):
+            for x in range(750, 1168):
+                image.putpixel((x, y), (250, 190, 84))
+        image.save(path)
+        text = ("Try Arctic Linux\nSafe graphics mode\nCheck USB for errors\n"
+                "Boot from first disk")
+        self.controller._shot = mock.Mock(return_value=(path, path.lstat(), image, text))
+        self.controller.wait_install_boot_selection(seconds=1)
+        self.assertFalse(path.exists())
+        self.assertEqual(self.controller.events[0]["detail"]["expectation"],
+                         "install-boot-menu-selected")
+        self.assertEqual((self.controller.events[0]["detail"]["width"],
+                          self.controller.events[0]["detail"]["height"]), (1920, 1080))
 
     def test_screen_gate_records_host_qmp_pixels_and_deletes_probe(self):
         self.controller.ocr = lambda path: "Arctic Linux is ready Remove the USB stick"
@@ -90,6 +138,197 @@ class UnattendedController(unittest.TestCase):
         event = self.controller.events[0]
         self.assertEqual(event["kind"], "screen")
         self.assertEqual(event["detail"]["expectation"], "installer-done")
+
+    def test_installed_shell_ocr_focus_is_fixed_private_and_does_not_replace_frame(self):
+        observations = []
+
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        source.putpixel((11, 12), (224, 224, 224))
+        source.putpixel((10, 28), (0, 32, 96))
+        source.putpixel((11, 28), (224, 224, 224))
+
+        def screendump(path):
+            source.save(path)
+
+        def full_ocr(path):
+            with Image.open(path) as image:
+                observations.append({
+                    "name": path.name,
+                    "size": image.size,
+                    "background": image.getpixel((0, 0)),
+                    "blue_glyph": image.getpixel((10, 12)),
+                    "white_glyph": image.getpixel((11, 12)),
+                })
+            return "clean"
+
+        def focus_ocr(path):
+            with Image.open(path) as image:
+                observations.append({
+                    "name": path.name,
+                    "size": image.size,
+                    "background": image.getpixel((0, 0)),
+                    "blue_glyph": image.getpixel((80, 96)),
+                    "white_glyph": image.getpixel((88, 96)),
+                })
+            if "-marker-ocr.png" in path.name:
+                return "ARCTIC - SHOWCASE - SHELL - READY\n"
+            self.assertIn("-prompt-ocr.png", path.name)
+            return "ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>\n"
+
+        self.qmp.screendump = screendump
+        self.controller.ocr = full_ocr
+        self.controller.shell_focus_ocr = focus_ocr
+        path, info, image, text = self.controller._shot(
+            "installed-shell-ready", shell_ocr_focus=True)
+        self.assertEqual(observations, [
+            {"name": "controller-001-installed-shell-ready.png", "size": (1280, 800),
+             "background": (0, 0, 0), "blue_glyph": (0, 32, 96),
+             "white_glyph": (224, 224, 224)},
+            {"name": "controller-001-installed-shell-ready-marker-ocr.png",
+             "size": (5120, 128),
+             "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
+             "white_glyph": (255, 255, 255)},
+            {"name": "controller-001-installed-shell-ready-prompt-ocr.png",
+             "size": (5120, 128),
+             "background": (0, 0, 0), "blue_glyph": (255, 255, 255),
+             "white_glyph": (255, 255, 255)},
+        ])
+        self.assertEqual((path.stat().st_size, info.st_size, image.size),
+                         (info.st_size, info.st_size, (1280, 800)))
+        self.assertEqual(image.getpixel((10, 12)), (0, 32, 96))
+        self.assertEqual(image.getpixel((11, 12)), (224, 224, 224))
+        self.assertEqual(text.splitlines()[-1], "ARCTICSHOWCASE@ARCTIC-SHOWCASE ~>")
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
+        path.unlink()
+
+    def test_installed_shell_ocr_focus_is_deleted_when_private_ocr_fails(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        calls = 0
+
+        def ocr(_path):
+            nonlocal calls
+            calls += 1
+            if calls == 2:
+                raise c.Invalid("private focus OCR failed")
+            return "clean"
+
+        self.controller.ocr = ocr
+        self.controller.shell_focus_ocr = ocr
+        with self.assertRaisesRegex(c.Invalid, "private focus OCR failed"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
+
+    def test_installed_shell_focus_output_is_privacy_checked_and_deleted(self):
+        private = "private-fragment-0123456789"
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        self.controller.fragments = (private,)
+        self.controller.ocr = lambda _path: "clean"
+        self.controller.shell_focus_ocr = mock.Mock(side_effect=("clean", private))
+
+        with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.assertEqual(self.controller.shell_focus_ocr.call_count, 2)
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
+
+    def test_full_frame_privacy_precedes_shell_focus_creation(self):
+        private = "private-fragment-0123456789"
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((10, 12), (0, 32, 96))
+        self.qmp.screendump = lambda path: source.save(path)
+        self.controller.fragments = (private,)
+        self.controller.ocr = lambda _path: private
+        self.controller.shell_focus_ocr = mock.Mock(return_value="clean")
+
+        with self.assertRaisesRegex(c.Invalid, "private transcript fragment in capture"):
+            self.controller._shot("installed-shell-ready", shell_ocr_focus=True)
+        self.controller.shell_focus_ocr.assert_not_called()
+        self.assertEqual(list(self.root.glob(
+            "controller-001-installed-shell-ready-*-ocr.png")), [])
+
+    def test_shell_ocr_row_focuses_use_exact_cell_bounds_and_whiten_glyphs(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((7, 0), (0, 1, 0))
+        source.putpixel((639, 15), (12, 34, 56))
+        source.putpixel((8, 16), (0, 1, 0))
+        source.putpixel((639, 31), (12, 34, 56))
+        source.putpixel((640, 15), (255, 255, 255))
+        source.putpixel((7, 32), (255, 255, 255))
+        unchanged = source.copy()
+        marker = Image.new("RGB", (640, 16), "black")
+        marker.putpixel((7, 0), (255, 255, 255))
+        marker.putpixel((639, 15), (255, 255, 255))
+        prompt = Image.new("RGB", (640, 16), "black")
+        prompt.putpixel((8, 0), (255, 255, 255))
+        prompt.putpixel((639, 15), (255, 255, 255))
+        expected = tuple(image.resize((5120, 128), Image.Resampling.NEAREST)
+                         for image in (marker, prompt))
+
+        focused = automation._shell_ocr_row_focuses(source)
+
+        self.assertEqual(source.size, (1280, 800))
+        self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
+        self.assertEqual(tuple(image.size for image in focused),
+                         ((5120, 128), (5120, 128)))
+        for actual, wanted in zip(focused, expected, strict=True):
+            self.assertIsNone(ImageChops.difference(actual, wanted).getbbox())
+
+    def test_shell_occupancy_counts_fixed_bands_without_retaining_pixels(self):
+        source = Image.new("RGB", (1280, 800), "black")
+        source.putpixel((0, 0), (1, 0, 0))
+        source.putpixel((639, 7), (0, 1, 0))
+        source.putpixel((0, 8), (0, 0, 1))
+        source.putpixel((639, 127), (1, 1, 1))
+        # These boundary-adjacent pixels are outside the fixed diagnostic region.
+        source.putpixel((640, 0), (255, 255, 255))
+        source.putpixel((0, 128), (255, 255, 255))
+        unchanged = source.copy()
+
+        counts = automation._shell_nonbackground_occupancy(source)
+
+        self.assertEqual(counts, (2, 1) + (0,) * 13 + (1,))
+        self.assertTrue(all(type(value) is int and 0 <= value <= 5120
+                            for value in counts))
+        self.assertIsNone(ImageChops.difference(source, unchanged).getbbox())
+        self.assertEqual(list(self.root.glob("*occupancy*")), [])
+
+    def test_boot_countdown_is_held_after_decode_and_before_ocr(self):
+        order = []
+        image = Image.new("RGB", (1920, 1080), "#101820")
+        for y in range(235, 275):
+            for x in range(750, 1168):
+                image.putpixel((x, y), (250, 190, 84))
+
+        def screendump(path):
+            image.save(path)
+
+        def ocr(_path):
+            order.append("ocr")
+            self.assertTrue(self.controller.boot_countdown_held)
+            return "Try Arctic Linux Install Arctic Linux"
+
+        self.qmp.screendump = screendump
+        self.controller.ocr = ocr
+        original = self.controller.press_held
+
+        def held(*args, **kwargs):
+            order.append("home")
+            return original(*args, **kwargs)
+
+        self.controller.press_held = held
+        self.controller.wait_screen(
+            "live-boot", "install-boot-menu", ("Arctic", "Install"), seconds=1,
+            before_ocr=self.controller.hold_boot_countdown_before_ocr)
+        self.assertEqual(order, ["home", "ocr"])
+        self.assertEqual([event["kind"] for event in self.controller.events],
+                         ["keys", "screen"])
 
     def test_screen_gate_fails_closed_on_missing_phrase_or_private_text(self):
         self.controller.ocr = lambda path: "wrong screen"
@@ -150,23 +389,45 @@ class UnattendedController(unittest.TestCase):
     def test_live_boot_proves_the_real_installer_before_switching_vt(self):
         operations = []
 
+        def boot_frame():
+            image = Image.new("RGB", (1920, 1080), "#101820")
+            for y in range(235, 275):
+                for x in range(750, 1168):
+                    image.putpixel((x, y), (250, 190, 84))
+            return image
+
         def wait(stage, expectation, phrases=(), **kwargs):
+            if expectation == "install-boot-menu":
+                kwargs["before_ocr"](boot_frame())
             operations.append(("screen", stage, expectation, phrases, kwargs))
             return None, ""
 
         def press(stage, *names, **_kwargs):
             operations.append(("keys", stage, names))
 
+        def selection(*_args, **_kwargs):
+            operations.append(("selection", "live-boot", "install-boot-menu-selected"))
+
         def text(stage, command_id, _value, **_kwargs):
             operations.append(("text", stage, command_id))
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press
+        self.controller.wait_install_boot_selection = selection
         self.controller.type_text = text
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_live_and_start()
 
-        installer = operations[2]
+        self.assertEqual(operations[0], ("keys", "live-boot", ("home",)))
+        self.assertEqual(operations[1][:4],
+                         ("screen", "live-boot", "install-boot-menu",
+                          ("Arctic", "Install")))
+        self.assertEqual(operations[2], ("keys", "live-boot", ("down",)))
+        self.assertEqual(operations[3],
+                         ("selection", "live-boot", "install-boot-menu-selected"))
+        self.assertEqual(operations[4], ("keys", "live-boot", ("ret",)))
+        installer = operations[5]
         self.assertEqual(installer[:4], (
             "screen", "live-boot", "live-installer-visible",
             ("Welcome to Arctic Linux", "Keyboard", "Time zone", "Summary"),
@@ -176,7 +437,7 @@ class UnattendedController(unittest.TestCase):
         })
         self.assertFalse(all(phrase.casefold() in "Try Arctic Linux Install Arctic Linux".casefold()
                              for phrase in installer[3]))
-        self.assertEqual(operations[3], ("keys", "live-console", ("ctrl-alt-f6",)))
+        self.assertEqual(operations[6], ("keys", "live-console", ("ctrl-alt-f6",)))
 
     def test_live_startup_surface_projection_uses_only_fixed_enums(self):
         image = Image.new("RGB", (1280, 800))
@@ -263,6 +524,8 @@ class UnattendedController(unittest.TestCase):
         cases = {
             account + " ~>": "prompt-exact",
             account + " ~>\ntrailing fetch row": "prompt-not-final",
+            "ARCTIC-SHOWCASE-SHELL-READY": "proof-marker",
+            "ARCTIC - SHOWCASE- SHELL -READY": "proof-marker",
             "Arctic Linux\nshell fish 4.6\n" + account: "fetch-greeting",
             account: "account-only",
             "~ >": "suffix-only",
@@ -278,8 +541,60 @@ class UnattendedController(unittest.TestCase):
             Image.new("RGB", (1280, 800), "black"), "private", account, suffixes),
             "blank-output")
         self.assertEqual(automation._installed_shell_surface_class(
+            Image.new("RGB", (1280, 800), "black"), account + " ~>", account, suffixes),
+            "prompt-exact")
+        low_color_cases = {
+            account + " ~>\ntrailing row": "prompt-not-final",
+            "ARCTIC - SHOWCASE- SHELL -READY": "proof-marker",
+            "Arctic Linux\nshell fish 4.6": "fetch-greeting",
+            account: "account-only",
+            "~ >": "suffix-only",
+            "Password:": "login-or-password",
+        }
+        for text, expected in low_color_cases.items():
+            with self.subTest(low_color=expected):
+                self.assertEqual(automation._installed_shell_surface_class(
+                    Image.new("RGB", (1280, 800), "black"), text, account, suffixes),
+                    expected)
+        self.assertEqual(automation._installed_shell_surface_class(
             Image.new("RGB", (1024, 768), "black"), "private", account, suffixes),
             "geometry-mismatch")
+
+    def test_installed_shell_signals_are_independent_fixed_booleans(self):
+        account = "arcticshowcase@arctic-showcase"
+        suffixes = ("~>", "~ >")
+        marker = "ARCTIC - SHOWCASE - SHELL - READY"
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\nunreadable ~>", account, suffixes), {
+                "marker": True, "account-pattern": False,
+                "suffix": True, "exact": False,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            account + " ~>", account, suffixes), {
+                "marker": False, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\n" + account + " ~>", account, suffixes), {
+                "marker": True, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            marker + "\narcticshowcase @ arctic - showcase\n~ >",
+            account, suffixes), {
+                "marker": True, "account-pattern": True,
+                "suffix": True, "exact": False,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            "arcticshowcase @ arctic - showcase ~ >", account, suffixes), {
+                "marker": False, "account-pattern": True,
+                "suffix": True, "exact": True,
+            })
+        self.assertEqual(automation._installed_shell_signals(
+            "arcticsh0wcase @ arctic - showcase ~ >", account, suffixes), {
+                "marker": False, "account-pattern": False,
+                "suffix": True, "exact": False,
+            })
 
     def test_installed_startup_diagnostic_is_bounded_and_rejects_private_content(self):
         diagnostic = automation.InstalledStartupDiagnostic()
@@ -290,14 +605,36 @@ class UnattendedController(unittest.TestCase):
         diagnostic.dismissal_sent()
         diagnostic.session_proved(SHELL_NONCE)
         diagnostic.gate_start()
-        diagnostic.observe("fetch-greeting")
-        diagnostic.observe("account-only")
+        diagnostic.observe("fetch-greeting", {
+            "marker": False, "account-pattern": False,
+            "suffix": False, "exact": False,
+        }, (0,) * 16)
+        diagnostic.observe("account-only", {
+            "marker": True, "account-pattern": True,
+            "suffix": False, "exact": False,
+        }, tuple(range(16)))
         diagnostic.gate_end("timed-out")
         diagnostic.interrupt("sent-no-prompt")
         value = diagnostic.projection()
         c.installed_startup_diagnostic(value)
         self.assertEqual(value["shell_ready_gate"]["timeout_seconds"], 90)
         self.assertLessEqual(value["shell_ready_gate"]["samples"], 46)
+        self.assertEqual(value["shell_ready_gate"]["signal_samples"], [
+            {"marker": False, "account-pattern": False,
+             "suffix": False, "exact": False},
+            {"marker": True, "account-pattern": True,
+             "suffix": False, "exact": False},
+        ])
+        self.assertEqual(value["shell_ready_gate"]["signal_seen"],
+                         {"marker": True, "account-pattern": True,
+                          "suffix": False, "exact": False})
+        self.assertEqual(value["shell_ready_gate"]["signal_final"],
+                         value["shell_ready_gate"]["signal_samples"][-1])
+        self.assertEqual(value["shell_ready_gate"]["nonbackground_occupancy"], {
+            "region": "left-640-top-128", "band_height": 8, "bands": 16,
+            "maximum_per_band": 5120,
+            "samples": [[0] * 16, list(range(16))],
+        })
         self.assertEqual(value["session_transport"], {
             "status": "proved", "transport": "owned-root-virtio-serial",
             "challenge_sha256": __import__("hashlib").sha256(
@@ -312,8 +649,51 @@ class UnattendedController(unittest.TestCase):
         forged["post_failure_interrupt"] = "guest-selected"
         with self.assertRaises(c.Invalid):
             c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["signal_samples"][0]["raw_ocr"] = "private"
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+        forged = copy.deepcopy(value)
+        forged["shell_ready_gate"]["signal_seen"]["suffix"] = True
+        with self.assertRaises(c.Invalid):
+            c.installed_startup_diagnostic(forged)
+        for mutate in (
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"].update(
+                {"raw_pixels": "private"}),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].__setitem__(0, 5121),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].__setitem__(0, True),
+            lambda item: item["shell_ready_gate"]["nonbackground_occupancy"][
+                "samples"][0].pop(),
+        ):
+            forged = copy.deepcopy(value)
+            mutate(forged)
+            with self.assertRaises(c.Invalid):
+                c.installed_startup_diagnostic(forged)
 
-    def test_installed_visual_timeout_interrupts_only_after_nonce_proof(self):
+    def test_installed_signal_samples_are_bounded_and_fit_failure_projection(self):
+        diagnostic = automation.InstalledStartupDiagnostic()
+        diagnostic.start()
+        diagnostic.login_observed()
+        diagnostic.authentication_sent()
+        diagnostic.fetch_observed()
+        diagnostic.dismissal_sent()
+        diagnostic.session_proved(SHELL_NONCE)
+        diagnostic.gate_start()
+        empty = {"marker": False, "account-pattern": False,
+                 "suffix": False, "exact": False}
+        for _ in range(46):
+            diagnostic.observe("ocr-empty", empty, (5120,) * 16)
+        with self.assertRaisesRegex(c.Invalid, "installed startup signals differ"):
+            diagnostic.observe("ocr-empty", empty, (5120,) * 16)
+        diagnostic.gate_end("timed-out")
+        diagnostic.interrupt("sent-no-prompt")
+        value = diagnostic.projection()
+        c.installed_startup_diagnostic(value)
+        self.assertLess(len(json.dumps(value).encode()), 32_768)
+
+    def test_installed_proof_timeout_interrupts_only_after_failure_and_never_types_secret(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -326,25 +706,31 @@ class UnattendedController(unittest.TestCase):
         def press(_stage, *names, **_kwargs):
             operations.append(("keys", names))
 
+        def press_held(_stage, *names, **_kwargs):
+            operations.append(("held-keys", names))
+
         def text(_stage, command_id, _value, **_kwargs):
             operations.append(("text", command_id))
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press_held
         self.controller.type_text = text
         self.controller.type_secret = mock.Mock()
         with mock.patch.object(automation.time, "sleep"), self.assertRaisesRegex(
                 automation.InstalledShellReadyTimeout, "installed-shell-ready absent"):
             self.controller.boot_installed_and_start(shell_session_exchange)
         timeout_at = operations.index((
-            "screen", "installed-shell-ready", ("ARCTIC-SHOWCASE-SHELL-READY",),
+            "screen", "installed-shell-ready",
+            ("ARCTIC-SHOWCASE-SHELL-READY", "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
             {"seconds": 90, "exact_output": True, "ordered": True,
-             "prompt_contract": ("arcticshowcase@arctic-showcase", ("~>", "~ >")),
+             "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE", ("~>", "~ >")),
              "transport_prompt": True},
         ))
-        self.assertEqual(operations[timeout_at + 1], ("keys", ("ctrl-c",)))
+        self.assertEqual(operations[timeout_at + 1], ("held-keys", ("ctrl-c",)))
         self.assertEqual(operations[timeout_at + 2][1], "installed-diagnostic-shell-ready")
-        self.assertLess(operations.index(("text", "installed-shell-proof")), timeout_at)
+        self.assertIn(("text", "installed-shell-proof"), operations)
+        self.controller.type_secret.assert_called_once_with("installed-console")
         self.assertEqual(self.controller.installed_startup.interrupt_status,
                          "recovered-prompt")
 
@@ -361,7 +747,11 @@ class UnattendedController(unittest.TestCase):
         self.assertIn("stat -Lc %u -- /dev/virtio-ports/"
                       "org.arctic.showcase.capture", prefix)
         self.assertIn("ARCTIC-SHOWCASE-INSTALLED-SHELL-V1", prefix)
-        self.assertNotIn("ARCTICSHOWCASE@ARCTIC-SHOWCASE", prefix)
+        self.assertNotIn("set -U", prefix)
+        self.assertNotIn("funcsave", prefix)
+        self.assertNotIn("functions --copy", prefix)
+        account = automation.SHELL_PROMPT_ACCOUNT
+        self.assertNotIn(account, prefix)
         prompt_definition = ("function fish_prompt; set_color brwhite; printf ' "
                              + c.CONTROLLER["account"]["prompt"]["rendered"]
                              + " '; set_color normal; end; ")
@@ -372,9 +762,13 @@ class UnattendedController(unittest.TestCase):
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, timeout=5, check=True,
         )
-        self.assertIn(b"ARCTIC-SHOWCASE-SHELL-READY", rendered.stdout)
+        self.assertEqual(rendered.stderr, b"")
+        self.assertEqual(
+            rendered.stdout,
+            b"\x1b[2J\x1b[H\x1b[1mARCTIC-SHOWCASE-SHELL-READY\x1b[0m\n",
+        )
 
-    def test_shell_proof_waits_for_fixed_fish_prompt_before_proof_and_sudo_launcher(self):
+    def test_shell_proof_and_final_prompt_gate_precede_sudo_launcher(self):
         self.controller.wait_screen = mock.Mock(return_value=(None, ""))
         self.controller.press = mock.Mock()
         self.controller.type_text = mock.Mock()
@@ -382,29 +776,31 @@ class UnattendedController(unittest.TestCase):
         with mock.patch.object(automation.time, "sleep"):
             self.controller.boot_installed_and_start(shell_session_exchange)
 
-        prompt_ready = [call for call in self.controller.wait_screen.call_args_list
-                        if call.args[1] == "installed-prompt-ready"]
         ready = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell-ready"]
         shell = [call for call in self.controller.wait_screen.call_args_list
                  if call.args[1] == "installed-shell"]
-        self.assertEqual((len(prompt_ready), len(ready), len(shell)), (1, 1, 1))
-        prompt = (c.CONTROLLER["account"]["username"] + "@"
-                  + c.CONTROLLER["account"]["hostname"])
-        self.assertEqual(prompt_ready[0].args[2], ())
-        self.assertEqual(prompt_ready[0].kwargs,
-                         {"seconds": 90, "exact_output": True,
-                          "prompt_contract": (prompt, ("~>", "~ >"))})
-        self.assertEqual(ready[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY",))
+        self.assertEqual((len(ready), len(shell)), (1, 1))
+        prompt = automation.SHELL_PROMPT_ACCOUNT
+        self.assertEqual(ready[0].args[2],
+                         ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
         self.assertEqual(ready[0].kwargs,
                          {"seconds": 90, "exact_output": True, "ordered": True,
                           "prompt_contract": (prompt, ("~>", "~ >")),
                           "transport_prompt": True})
-        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY",))
+        self.assertEqual(shell[0].args[2], ("ARCTIC-SHOWCASE-SHELL-READY", prompt))
         self.assertEqual(shell[0].kwargs,
                          {"seconds": 90, "exact_output": True, "ordered": True,
                           "prompt_contract": (prompt, ("~>", "~ >")),
                           "transport_prompt": True})
+        proof = [call for call in self.controller.type_text.call_args_list
+                 if call.args[1] == "installed-shell-proof"]
+        self.assertEqual(len(proof), 1)
+        self.assertEqual(proof[0].args[2], automation.Controller.SHELL_PROOF)
+        self.assertEqual(proof[0].kwargs, {"gap": .08})
+        self.assertFalse(all(phrase.casefold()
+                             in "ARCTIC-SHOWCASE-SHELL-READY".casefold()
+                             for phrase in shell[0].args[2]))
 
     def test_preproof_prompt_gate_rejects_realistic_full_fetch_greeting(self):
         account = "arcticshowcase@arctic-showcase"
@@ -444,23 +840,63 @@ uptime   2 mins
                     account, suffixes))
                 self.assertTrue(automation._fixed_fish_prompt_present(
                     account + " " + spelling + " _|\n", account, suffixes))
+        for observed in (
+            "arcticshowcase @ arctic-showcase ~>",
+            "arcticshowcase@arctic - showcase ~ >",
+            "arcticshowcase  @  arctic  -  showcase   ~  >",
+        ):
+            with self.subTest(observed=observed):
+                self.assertTrue(automation._fixed_fish_prompt_present(
+                    observed + "\n", account, suffixes))
+        for rejected in (
+            "arctic show case@arctic-showcase ~>",
+            "arcticshowcase@arct1c-showcase ~>",
+            "arcticshowcase@arctic-showcas3 ~>",
+            "other@arctic-showcase ~>",
+            "arcticshowcase@arctic-showcase $>",
+            "ARCTIC-SHOWCASE-PROBE-READY updates",
+            account + " ~>\nARCTIC-SHOWCASE-PROBE-READY updates",
+        ):
+            with self.subTest(rejected=rejected):
+                self.assertFalse(automation._fixed_fish_prompt_present(
+                    rejected + "\n", account, suffixes))
 
-    def test_ordered_screen_phrases_reject_old_prompt_before_marker(self):
+    def test_fixed_shell_proof_accepts_only_marker_before_real_account(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
-        prompt = "arcticshowcase@arctic-showcase"
+        prompt = automation.SHELL_PROMPT_ACCOUNT
+        suffixes = ("~>", "~ >")
         old_prompt_only = prompt + " ~> printf octal-marker\n" + marker
         returned_prompt = old_prompt_only + "\n" + prompt + " ~>"
-        self.assertFalse(automation._phrases_present(
-            old_prompt_only, (marker, prompt), ordered=True))
-        self.assertTrue(automation._phrases_present(
-            returned_prompt, (marker, prompt), ordered=True))
-        self.assertTrue(automation._phrases_present(
-            old_prompt_only, (marker, prompt), ordered=False))
+        spaced = "ARCTIC - SHOWCASE- SHELL -READY\n" + prompt + " ~>"
+        punctuation_spaced = ("ARCTIC - SHOWCASE- SHELL -READY\n"
+                              "ARCTICSHOWCASE @ ARCTIC - SHOWCASE ~ >")
+        self.assertFalse(automation._fixed_shell_proof_present(
+            old_prompt_only, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            returned_prompt, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            spaced, prompt, suffixes))
+        self.assertTrue(automation._fixed_shell_proof_present(
+            punctuation_spaced, prompt, suffixes))
+        for forged in (
+            "ARCTIC SHOWCASE SHELL READY\n" + prompt,
+            "ARCTIC-SHOWCASE-SHELL-READY extra\n" + prompt,
+            "ARCTIC-SHOWCASE-SHELL-WRONG\n" + prompt,
+            marker + "\nOTHER@ARCTIC-SHOWCASE ~>",
+            marker + "\narcticshowcase@arctic-showcase ~>",
+            marker + "\nArcticshowcase@Arctic-Showcase ~>",
+            marker + "\n" + prompt + " ~>\ntrailing guest signal",
+            marker + "\nARCTIC-SHOWCASE-PROBE-READY updates",
+        ):
+            with self.subTest(forged=forged):
+                self.assertFalse(automation._fixed_shell_proof_present(
+                    forged, prompt, suffixes))
 
     def test_transport_visual_proof_keeps_exact_marker_order_and_suffix(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
-        def frame(counts):
-            image = Image.new("RGB", (1280, 800), "black")
+
+        def frame(counts, *, size=(1280, 800)):
+            image = Image.new("RGB", size, "black")
             for band, count in enumerate(counts):
                 for offset in range(count):
                     image.putpixel((offset % 640, band * 8 + offset // 640),
@@ -474,19 +910,26 @@ uptime   2 mins
             self.assertEqual(automation._installed_shell_surface_class(
                 frame(counts), marker, "arcticshowcase@arctic-showcase",
                 ("~>", "~ >")), "proof-marker")
+
+        old_account_prompt = (542, 364, 663, 444) + (0,) * 12
+        old_account_cursor = (542, 364, 663, 460) + (0,) * 12
+        extra_account = (542, 364, 96, 72) + (0,) * 12
+        extra_row = (542, 364, 20, 8, 1) + (0,) * 11
         rejected = (
             ("ARCTIC-SHOWCASE-SHELL-WRONG", without_cursor),
             (marker, (542, 364, 19, 8) + (0,) * 12),
             (marker, (542, 364, 20, 9) + (0,) * 12),
-            (marker, (542, 364, 20, 8, 1) + (0,) * 11),
-            (marker, (542, 364, 663, 444) + (0,) * 12),
+            (marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>", old_account_prompt),
+            (marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~> _|", old_account_cursor),
+            (marker + "\nOTHER@ARCTIC-SHOWCASE ~>", extra_account),
+            (marker + "\n~>\nEXTRA", extra_row),
         )
         for text, counts in rejected:
             with self.subTest(text=text, counts=counts):
                 self.assertFalse(automation._fixed_shell_transport_visual_present(
                     text, frame(counts)))
         self.assertFalse(automation._fixed_shell_transport_visual_present(
-            marker, Image.new("RGB", (1024, 768), "black")))
+            marker, frame((), size=(1024, 768))))
 
     def test_installed_session_proof_is_exact_nonce_bound_identity(self):
         response = (c.SHELL_SESSION_PREFIX + SHELL_NONCE
@@ -523,6 +966,7 @@ uptime   2 mins
 
         self.controller.wait_screen = wait
         self.controller.press = mock.Mock()
+        self.controller.press_held = mock.Mock()
         self.controller.type_text = mock.Mock()
         self.controller.type_secret = mock.Mock()
         wrong = (SHELL_NONCE,
@@ -536,6 +980,30 @@ uptime   2 mins
         self.assertNotIn("installed-sudo-password", expectations)
         self.assertFalse(any(call.args[1] == "installed-scenes"
                              for call in self.controller.type_text.call_args_list))
+
+    def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
+        prompt = automation.SHELL_PROMPT_ACCOUNT
+        source = Image.new("RGB", (1280, 800), "black")
+        for band, count in enumerate(automation.SHELL_TRANSPORT_OCCUPANCY[0]):
+            for offset in range(count):
+                source.putpixel((offset % 640, band * 8 + offset // 640),
+                                (255, 255, 255))
+        self.qmp.screendump = lambda path: source.save(path)
+        self.controller.ocr = lambda _path: "clean"
+        self.controller.shell_focus_ocr = mock.Mock(side_effect=(
+            "ARCTIC - SHOWCASE - SHELL - READY", ""))
+        path, text = self.controller.wait_screen(
+            "installed-console", "installed-shell-ready",
+            ("ARCTIC-SHOWCASE-SHELL-READY", prompt), seconds=1,
+            exact_output=True, ordered=True,
+            prompt_contract=(prompt, ("~>", "~ >")), transport_prompt=True)
+        self.assertIsNone(path)
+        self.assertEqual(text.strip(), "ARCTIC - SHOWCASE - SHELL - READY")
+        self.assertTrue(self.controller.installed_startup.signal_final["marker"])
+        self.assertTrue(self.controller.installed_startup.signal_final["suffix"])
+        self.assertFalse(self.controller.installed_startup.signal_final["account-pattern"])
+        self.assertFalse(self.controller.installed_startup.signal_final["exact"])
+        self.assertEqual(list(self.root.glob("controller-*.png")), [])
 
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):
         marker = "ARCTIC-SHOWCASE-AUTH-READY"
@@ -559,7 +1027,7 @@ uptime   2 mins
         self.assertEqual(sudo[0].args[2], (marker, "password"))
         self.controller.type_secret.assert_called_with("installed-console")
 
-    def test_installed_shell_clears_fetch_without_submitting_before_prompt(self):
+    def test_installed_shell_completes_empty_handoff_before_nonsecret_proof(self):
         operations = []
 
         def wait(_stage, expectation, phrases=(), **kwargs):
@@ -569,6 +1037,9 @@ uptime   2 mins
         def press(_stage, *names, **_kwargs):
             operations.append(("keys", names))
 
+        def press_held(_stage, *names, **_kwargs):
+            operations.append(("held-keys", names))
+
         def text(_stage, command_id, _value, **_kwargs):
             operations.append(("text", command_id))
 
@@ -577,34 +1048,41 @@ uptime   2 mins
 
         self.controller.wait_screen = wait
         self.controller.press = press
+        self.controller.press_held = press_held
         self.controller.type_text = text
         self.controller.type_secret = secret
-        with mock.patch.object(automation.time, "sleep"):
+        with mock.patch.object(automation.time, "sleep",
+                               side_effect=lambda seconds: operations.append(
+                                   ("sleep", seconds))):
             self.controller.boot_installed_and_start(shell_session_exchange)
 
         greeting = ("screen", "installed-fetch-greeting", ("Arctic Linux", "fish 4.6"),
                     {"seconds": 90})
-        ready = ("screen", "installed-prompt-ready",
-                 (), {"seconds": 90, "exact_output": True,
-                      "prompt_contract": ("arcticshowcase@arctic-showcase",
-                                          ("~>", "~ >"))})
+        ready = ("screen", "installed-shell-ready",
+                 ("ARCTIC-SHOWCASE-SHELL-READY",
+                  "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
+                 {"seconds": 90, "exact_output": True, "ordered": True,
+                      "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE",
+                                          ("~>", "~ >")),
+                      "transport_prompt": True})
         proof = ("text", "installed-shell-proof")
         at = operations.index(greeting)
-        self.assertEqual(operations[at + 1], ("keys", ("ctrl-l",)))
-        self.assertEqual(operations[at + 2], ready)
+        self.assertEqual(operations[at + 1], ("held-keys", ("ret",)))
+        self.assertEqual(operations[at + 2], ("sleep", 3))
         self.assertEqual(operations[at + 3], proof)
-        self.assertNotIn(("keys", ("ret",)), operations[at + 1:at + 3])
+        self.assertEqual(operations[at + 4], ("keys", ("ret",)))
+        self.assertEqual(operations[at + 5], ready)
+        self.assertNotIn(("held-keys", ("ctrl-l",)), operations)
+        self.assertEqual(operations[at + 1:at + 5].count(("held-keys", ("ret",))), 1)
         self.assertLess(operations.index(("secret",)), at)
-        transport = {"seconds": 90, "exact_output": True, "ordered": True,
-                     "prompt_contract": ("arcticshowcase@arctic-showcase",
-                                         ("~>", "~ >")),
-                     "transport_prompt": True}
-        self.assertEqual(operations[at + 5],
-                         ("screen", "installed-shell-ready",
-                          ("ARCTIC-SHOWCASE-SHELL-READY",), transport))
         self.assertEqual(operations[at + 6],
                          ("screen", "installed-shell",
-                          ("ARCTIC-SHOWCASE-SHELL-READY",), transport))
+                          ("ARCTIC-SHOWCASE-SHELL-READY",
+                           "ARCTICSHOWCASE@ARCTIC-SHOWCASE"),
+                          {"seconds": 90, "exact_output": True, "ordered": True,
+                           "prompt_contract": ("ARCTICSHOWCASE@ARCTIC-SHOWCASE",
+                                               ("~>", "~ >")),
+                           "transport_prompt": True}))
         self.assertEqual(operations[at + 7], ("text", "installed-scenes"))
 
 
@@ -625,10 +1103,32 @@ class TraceContract(unittest.TestCase):
 
     def test_required_event_order_is_fail_closed(self):
         value = controller_trace()
-        value["events"][8], value["events"][11] = value["events"][11], value["events"][8]
+        selected = next(index for index, event in enumerate(value["events"])
+                        if event["kind"] == "screen"
+                        and event["detail"].get("expectation") == "install-boot-menu-selected")
+        welcome = next(index for index, event in enumerate(value["events"])
+                       if event["kind"] == "screen"
+                       and event["detail"].get("expectation") == "live-installer-visible")
+        value["events"][selected], value["events"][welcome] = (
+            value["events"][welcome], value["events"][selected])
         for index, event in enumerate(value["events"]):
             event["index"] = index
         with self.assertRaises(c.Invalid):
+            c.controller_trace(value)
+
+    def test_enter_before_install_selection_proof_is_rejected(self):
+        value = controller_trace()
+        selected = next(index for index, event in enumerate(value["events"])
+                        if event["kind"] == "screen"
+                        and event["detail"].get("expectation") == "install-boot-menu-selected")
+        enter = next(index for index, event in enumerate(value["events"])
+                     if event["stage"] == "live-boot" and event["kind"] == "keys"
+                     and event["detail"] == {"names": ["ret"]})
+        value["events"][selected], value["events"][enter] = (
+            value["events"][enter], value["events"][selected])
+        for index, event in enumerate(value["events"]):
+            event["index"] = index
+        with self.assertRaisesRegex(c.Invalid, "boot selection proof sequence"):
             c.controller_trace(value)
 
 
@@ -1092,7 +1592,160 @@ class GuestAutomation(unittest.TestCase):
             self.assertEqual(value["failure_code"], "private-channel-timeout")
             self.assertEqual(value["live_startup"]["release_acceptance"], False)
             self.assertEqual(value["installed_startup"]["release_acceptance"], False)
+            self.assertIsNone(value["guest_scene_stage"])
             self.assertNotIn("private capture channel timed out", path.read_text())
+
+    def test_scene_failure_is_fixed_bounded_and_interrupts_long_host_read(self):
+        class Lines:
+            def __init__(self, line):
+                self.line = line
+                self.timeouts = []
+
+            def read(self, timeout=None):
+                self.timeouts.append(timeout)
+                return self.line
+
+        self.assertEqual(capture_vm.SCENE_READY_TIMEOUTS,
+                         {"dictationsetup": 2160, "winter": 300, "updates": 180})
+        lines = Lines(c.SCENE_FAILURE_PREFIX + "dictationsetup")
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure") as raised:
+            capture_vm._scene_line(lines, capture_vm.SCENE_READY_TIMEOUTS["dictationsetup"])
+        self.assertEqual(raised.exception.stage, "dictationsetup")
+        self.assertEqual(lines.timeouts, [2160])
+        with self.assertRaisesRegex(c.Invalid, "projection differs"):
+            c.scene_failure_line(c.SCENE_FAILURE_PREFIX + "dictationsetup private detail")
+
+        class StageLines:
+            def __init__(self, second):
+                self.rows = iter([c.SCENE_STAGE_PREFIX + "dictationsetup", second])
+                self.timeouts = []
+
+            def read(self, timeout=None):
+                self.timeouts.append(timeout)
+                value = next(self.rows)
+                if isinstance(value, Exception):
+                    raise value
+                return value
+
+        clock = iter([10.0, 20.0])
+        staged = StageLines(c.SCENE_FAILURE_PREFIX + "dictationsetup")
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure"):
+            capture_vm._scene_ready(staged, "dictationsetup", 2160,
+                                    clock=lambda: next(clock))
+        self.assertEqual(staged.timeouts, [2160, 2150])
+
+        clock = iter([10.0, 20.0])
+        silent = StageLines(c.Invalid("private capture channel timed out"))
+        with self.assertRaisesRegex(capture_vm.GuestSceneFailure, "bounded failure") as timed_out:
+            capture_vm._scene_ready(silent, "dictationsetup", 2160,
+                                    clock=lambda: next(clock))
+        self.assertEqual(timed_out.exception.stage, "dictationsetup")
+        self.assertEqual(silent.timeouts, [2160, 2150])
+        self.assertEqual(c.scene_stage_line(c.SCENE_STAGE_PREFIX + "winter"), "winter")
+        with self.assertRaisesRegex(c.Invalid, "stage projection differs"):
+            c.scene_stage_line(c.SCENE_STAGE_PREFIX + "winter private detail")
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "failure.json"
+            capture_vm._write_failure_report(
+                path, "capture-scenes", [], raised.exception, None,
+                automation.LiveStartupDiagnostic().projection(),
+                automation.InstalledStartupDiagnostic().projection())
+            value = c.strict_json(path.read_bytes())
+            c.capture_failure(value)
+            self.assertEqual(value["failure_code"], "guest-scene-failed")
+            self.assertEqual(value["guest_scene_stage"], "dictationsetup")
+            self.assertNotIn("private detail", path.read_text())
+
+    def test_installed_scene_failure_reports_only_enumerated_stage(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name=c.CONTROLLER["account"]["username"],
+                                        pw_dir="/home/" + c.CONTROLLER["account"]["username"])
+
+        class Channel:
+            def __init__(self):
+                self.rows = []
+                self.closed = False
+
+            def write(self, line):
+                self.rows.append(line)
+
+            def close(self):
+                self.closed = True
+
+        channel = Channel()
+        waits = iter([c.Invalid("private transcript and exception text")])
+
+        def wait(*_args, **_kwargs):
+            value = next(waits)
+            if isinstance(value, Exception):
+                raise value
+            return value
+
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.pwd, "getpwuid", return_value=account), \
+             mock.patch.object(unattended, "Channel", return_value=channel), \
+             mock.patch.object(unattended, "_inherited_graphical_environment",
+                               return_value=(account, {"PATH": "/usr/bin:/bin"})), \
+             mock.patch.object(unattended, "_wait", side_effect=wait):
+            with self.assertRaisesRegex(c.Invalid, "private transcript"):
+                unattended.installed_scenes(3600, 73)
+        self.assertEqual(channel.rows, [c.SCENE_STAGE_PREFIX + "dictationsetup",
+                                        c.SCENE_FAILURE_PREFIX + "dictationsetup"])
+        self.assertTrue(channel.closed)
+
+    def test_inherited_channel_descriptor_must_be_the_exact_protected_device(self):
+        protected = types.SimpleNamespace(st_mode=stat.S_IFCHR | 0o660, st_uid=0,
+                                          st_dev=5, st_ino=9, st_rdev=7)
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.Path, "resolve", return_value=Path("/dev/fixed")), \
+             mock.patch.object(unattended.Path, "lstat", return_value=protected), \
+             mock.patch.object(unattended.os, "fstat", return_value=protected):
+            channel = unattended.Channel(600, require_nonroot=True, descriptor=73)
+        self.assertEqual(channel.fd, 73)
+
+        changed = types.SimpleNamespace(**{**protected.__dict__, "st_ino": 10})
+        with mock.patch.object(unattended.os, "geteuid", return_value=1000), \
+             mock.patch.object(unattended.Path, "resolve", return_value=Path("/dev/fixed")), \
+             mock.patch.object(unattended.Path, "lstat", return_value=protected), \
+             mock.patch.object(unattended.os, "fstat", return_value=changed), \
+             self.assertRaisesRegex(c.Invalid, "inherited private channel"):
+            unattended.Channel(600, require_nonroot=True, descriptor=73)
+
+    def test_unattended_runner_preserves_only_explicit_fixed_descriptors(self):
+        completed = types.SimpleNamespace(returncode=0, stdout=b"")
+        with mock.patch.object(unattended.subprocess, "run", return_value=completed) as invoke:
+            unattended._run(["/usr/bin/true"], pass_fds=(73,))
+        self.assertEqual(invoke.call_args.kwargs["pass_fds"], (73,))
+        for descriptors in ([73], (73, 73), (2,), (True,)):
+            with self.subTest(descriptors=descriptors), self.assertRaisesRegex(
+                    c.Invalid, "inherited descriptors"):
+                unattended._run(["/usr/bin/true"], pass_fds=descriptors)
+
+    def test_scene_helper_revalidates_the_root_selected_graphical_environment(self):
+        account = types.SimpleNamespace(pw_uid=1000, pw_name=c.CONTROLLER["account"]["username"],
+                                        pw_dir="/home/" + c.CONTROLLER["account"]["username"])
+        runtime = "/run/user/1000"
+        environment = {
+            "PATH": "/usr/bin:/bin", "HOME": account.pw_dir,
+            "USER": account.pw_name, "LOGNAME": account.pw_name, "LC_ALL": "C",
+            "XDG_RUNTIME_DIR": runtime, "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + runtime + "/bus",
+            "WAYLAND_DISPLAY": "wayland-1",
+        }
+        with mock.patch.object(unattended.pwd, "getpwnam", return_value=account), \
+             mock.patch.dict(unattended.os.environ, environment, clear=True):
+            actual_account, actual = unattended._inherited_graphical_environment(account.pw_name)
+        self.assertEqual(actual_account, account)
+        self.assertEqual(actual, environment)
+
+        for key, value in (("XDG_RUNTIME_DIR", "/run/user/9"),
+                           ("WAYLAND_DISPLAY", "../wayland-1"),
+                           ("USER", "other")):
+            changed = dict(environment, **{key: value})
+            with self.subTest(key=key), \
+                 mock.patch.object(unattended.pwd, "getpwnam", return_value=account), \
+                 mock.patch.dict(unattended.os.environ, changed, clear=True), \
+                 self.assertRaisesRegex(c.Invalid, "inherited graphical environment"):
+                unattended._inherited_graphical_environment(account.pw_name)
 
     def test_graphical_environment_accepts_unique_wayland_session_while_vt_is_inactive(self):
         account = types.SimpleNamespace(pw_uid=os.geteuid(), pw_name="liveuser",
@@ -1135,6 +1788,15 @@ class GuestAutomation(unittest.TestCase):
                        "WAYLAND_DISPLAY": "wayland-1"}
         calls = []
 
+        class Channel:
+            fd = 73
+            closed = False
+
+            def close(self):
+                self.closed = True
+
+        root_channel = Channel()
+
         def run(argv, **kwargs):
             calls.append((argv, kwargs))
             return types.SimpleNamespace(returncode=0, stdout=b"")
@@ -1142,6 +1804,7 @@ class GuestAutomation(unittest.TestCase):
         with mock.patch.object(unattended.os, "geteuid", return_value=0), \
              mock.patch.object(unattended, "_graphical_environment",
                                return_value=(account, 2, environment)), \
+             mock.patch.object(unattended, "Channel", return_value=root_channel), \
              mock.patch.object(unattended, "_run", side_effect=run):
             unattended.installed_root_launch(600)
         self.assertEqual(calls[0][0], ["/usr/bin/chvt", "2"])
@@ -1149,7 +1812,11 @@ class GuestAutomation(unittest.TestCase):
                          ["/usr/sbin/runuser", "-u", c.CONTROLLER["account"]["username"],
                           "--", "/usr/bin/env"])
         self.assertIn("installed-scenes", calls[1][0])
+        self.assertIn("--channel-fd", calls[1][0])
+        self.assertEqual(calls[1][0][calls[1][0].index("--channel-fd") + 1], "73")
+        self.assertEqual(calls[1][1]["pass_fds"], (73,))
         self.assertNotIn("/usr/bin/chvt", calls[1][0])
+        self.assertTrue(root_channel.closed)
 
     def test_completed_install_remounts_only_unique_fixed_disk_root_subvolume(self):
         with tempfile.TemporaryDirectory() as temp:

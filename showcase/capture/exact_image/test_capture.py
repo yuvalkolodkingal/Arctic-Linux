@@ -141,12 +141,18 @@ def vm_provenance():
 
 
 def controller_trace():
-    screen = lambda expectation: {"bytes": 1234, "sha256": "a" * 64,
-                                  "ocr_sha256": "b" * 64, "expectation": expectation,
-                                  "width": 1280, "height": 800}
+    def screen(expectation):
+        width, height = ((1920, 1080) if expectation == "install-boot-menu-selected"
+                         else (1280, 800))
+        return {"bytes": 1234, "sha256": "a" * 64,
+                "ocr_sha256": "b" * 64, "expectation": expectation,
+                "width": width, "height": height}
     rows = [
+        ("live-boot", "keys", {"names": ["home"]}),
         ("live-boot", "screen", screen("install-boot-menu")),
-        ("live-boot", "keys", {"names": ["home", "down", "ret"]}),
+        ("live-boot", "keys", {"names": ["down"]}),
+        ("live-boot", "screen", screen("install-boot-menu-selected")),
+        ("live-boot", "keys", {"names": ["ret"]}),
         ("live-boot", "screen", screen("live-installer-visible")),
         ("live-console", "keys", {"names": ["ctrl-alt-f6"]}),
         ("live-console", "screen", screen("live-console-login")),
@@ -171,10 +177,9 @@ def controller_trace():
                                            "characters": 38}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "screen", screen("installed-fetch-greeting")),
-        ("installed-console", "keys", {"names": ["ctrl-l"]}),
-        ("installed-console", "screen", screen("installed-prompt-ready")),
-        ("installed-console", "text", {"command": "installed-shell-proof", "characters": 911,
-                                         "sha256": "80fcbf991db3d05ca418f516ae1242b4514999adda05d9037c24cc48e14ee899"}),
+        ("installed-console", "keys", {"names": ["ret"]}),
+        ("installed-console", "text", {"command": "installed-shell-proof", "characters": 996,
+                                         "sha256": "ff17d3cc4effe8d74d6f059d5d017ae9443b0310763d3c329785d395f80e273c"}),
         ("installed-console", "keys", {"names": ["ret"]}),
         ("installed-console", "session", {
             "transport": "owned-root-virtio-serial", "challenge_sha256": "c" * 64,
@@ -313,13 +318,29 @@ class Protocol(unittest.TestCase):
         with self.assertRaises(c.Invalid):
             c.execution(claimed)
 
-    def test_fetch_redraw_is_one_control_l_before_the_prompt_gate(self):
+    def test_nonsecret_proof_precedes_the_prompt_gate(self):
         value = controller_trace()
-        redraw = next(event for event in value["events"]
-                      if event["kind"] == "keys"
-                      and event["detail"] == {"names": ["ctrl-l"]})
-        redraw["detail"] = {"names": ["ret"]}
-        with self.assertRaisesRegex(c.Invalid, "fetch redraw|key inventory"):
+        proof = next(event for event in value["events"]
+                     if event["kind"] == "text"
+                     and event["detail"].get("command") == "installed-shell-proof")
+        proof["detail"]["command"] = "installed-scenes"
+        with self.assertRaisesRegex(c.Invalid, "text record|fetch redraw|key inventory"):
+            c.controller_trace(value)
+
+    def test_second_exact_prompt_frame_precedes_sudo_launcher(self):
+        value = controller_trace()
+        events = value["events"]
+        shell = next(index for index, event in enumerate(events)
+                     if event["kind"] == "screen"
+                     and event["detail"].get("expectation") == "installed-shell")
+        launcher = next(index for index, event in enumerate(events)
+                        if event["kind"] == "text"
+                        and event["detail"].get("command") == "installed-scenes")
+        moved = events.pop(launcher)
+        events.insert(shell, moved)
+        for index, event in enumerate(events):
+            event["index"] = index
+        with self.assertRaisesRegex(c.Invalid, "fetch redraw sequence"):
             c.controller_trace(value)
 
     def test_root_owned_world_readable_marker_is_accepted_but_not_writable(self):

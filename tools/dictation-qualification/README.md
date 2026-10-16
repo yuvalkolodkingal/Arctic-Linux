@@ -100,13 +100,16 @@ The complete installed session requires:
   journal interval, notification history, setup status or state surfaces.
 - Offline transcription after outside HTTP reachability has been disproved.
 
-The modern lane injects a private Vulkan ICD that names an absent library. The
-failed attempt must insert no text. The checker then **explicitly** selects CPU,
-restarts the upstream user service and completes new English and Hebrew
+The modern lane uses the frozen GitHub-hosted VM's real unsupported Vulkan
+environment: its QEMU display is 2D virtio without virgl, GPU passthrough or
+another accelerated Vulkan device. The signed upstream Vulkan payload must be
+present, the guarded selection must fail, preserve CPU and insert no text, and
+Settings must show the actionable error. The checker then **explicitly** selects
+CPU, restarts the upstream user service and completes new English and Hebrew
 recordings. A GPU error never counts as automatic CPU fallback. This VM fixture
 does not certify physical GPU acceleration or a physical driver failure. The
-legacy lane separately proves that Vulkan selection is rejected and that an
-explicit CPU selection succeeds.
+legacy lane separately proves that Vulkan selection is rejected when the
+profile has no Vulkan payload and that an explicit CPU selection succeeds.
 
 The official Vulkan build may fall back at model start when no GPU is available;
 VoxType 1.1.1 has no configuration switch that requires GPU execution. That

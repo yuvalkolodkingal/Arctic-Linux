@@ -36,6 +36,22 @@ GO_PREFIX = "ARCTIC-SHOWCASE-CAPTURE-GO "
 QEMU = Path("/usr/bin/qemu-system-x86_64")
 MAX_LINE = 256_000
 TOOLING_FILES = ("capture_vm.py", "contract.py", "guest.py", "capture_probe.py", "unattended.py")
+# The Dictation transport ceiling includes the unchanged 1,800-second readiness
+# gate, Settings' unchanged 120-second readiness gate, their bounded subprocess
+# overruns, and enough time for the guest to deliver its fixed failure enum.  It
+# does not extend either readiness gate or any screen/acceptance predicate.
+SCENE_READY_TIMEOUTS = {"dictationsetup": 2_160, "winter": 300, "updates": 180}
+SCENE_REQUEST_TIMEOUT = 300
+
+
+class GuestSceneFailure(c.Invalid):
+    """One content-free failure stage received over the owned guest channel."""
+
+    def __init__(self, stage: str):
+        c.require(stage in c.SCENE_FAILURE_STAGES,
+                  "installed scene failure projection differs")
+        self.stage = stage
+        super().__init__("guest scene reported a bounded failure")
 
 
 def _tooling_payload():
@@ -216,6 +232,32 @@ def _installed_shell_exchange(lines, random=os.urandom):
     nonce = raw.hex()
     lines.write(c.SHELL_CHALLENGE_PREFIX + nonce)
     return nonce, lines.read(timeout=30)
+
+
+def _scene_line(lines: Lines, timeout: int) -> str:
+    """Read one scene line while recognizing only the fixed safe failure signal."""
+    line = lines.read(timeout=timeout)
+    if line.startswith(c.SCENE_FAILURE_PREFIX):
+        raise GuestSceneFailure(c.scene_failure_line(line))
+    return line
+
+
+def _scene_ready(lines: Lines, expected_scene: str, timeout: int,
+                 clock=time.monotonic) -> str:
+    """Bind a long silent readiness wait to one fixed guest scene stage."""
+    c.require(expected_scene in c.SCENES and type(timeout) is int and timeout > 1,
+              "installed scene readiness contract differs")
+    deadline = clock() + timeout
+    stage = c.scene_stage_line(_scene_line(lines, timeout))
+    c.require(stage == expected_scene, "installed scene stage order differs")
+    remaining = deadline - clock()
+    c.require(remaining > 0, "private capture channel timed out")
+    try:
+        return _scene_line(lines, max(1, int(remaining)))
+    except c.Invalid as error:
+        if str(error) == "private capture channel timed out":
+            raise GuestSceneFailure(stage) from error
+        raise
 
 
 class QMP:
@@ -459,6 +501,8 @@ def _failure_code(error, cleanup_failure) -> str:
         return "private-channel-timeout"
     if message == "guest installation reported a bounded failure":
         return "guest-install-failed"
+    if isinstance(error, GuestSceneFailure):
+        return "guest-scene-failed"
     if message.startswith("capture VM exited"):
         return "vm-exited"
     if isinstance(error, OSError):
@@ -468,9 +512,11 @@ def _failure_code(error, cleanup_failure) -> str:
 
 def _write_failure_report(path: Path, phase: str, progress: list, error, cleanup_failure,
                           live_startup, installed_startup):
+    failure_code = _failure_code(error, cleanup_failure)
     value = {"schema": "arctic-showcase-capture-failure-v1", "status": "failed",
              "release_acceptance": False, "image": dict(c.IMAGE), "host_phase": phase,
-             "failure_code": _failure_code(error, cleanup_failure),
+             "failure_code": failure_code,
+             "guest_scene_stage": (error.stage if failure_code == "guest-scene-failed" else None),
              "guest_progress": list(progress), "private_runtime_removed": True,
              "live_startup": live_startup,
              "installed_startup": installed_startup,
@@ -567,9 +613,12 @@ def host_mode(args) -> int:
         fragments = bundle.read_private_fragments(args.private_fragments)
         ocr_identity = bundle.approved_ocr_identity()
         ocr = lambda path: bundle.tesseract_ocr(path, args.ocr_timeout)
+        shell_focus_ocr = lambda path: bundle.tesseract_shell_focus_ocr(
+            path, args.ocr_timeout)
         c.require(args.unattended and args.display == "none" and args.accel == "kvm",
                   "exact capture requires the reviewed unattended KVM controller")
-        controller = automation.Controller(qmp, runtime, ocr, fragments, tooling_sha256)
+        controller = automation.Controller(qmp, runtime, ocr, shell_focus_ocr, fragments,
+                                           tooling_sha256)
         phase = "live-boot"
         try:
             controller.boot_live_and_start()
@@ -599,21 +648,22 @@ def host_mode(args) -> int:
             lambda: _installed_shell_exchange(lines))
         # /run is a different filesystem after the installed boot. Deliver the
         # same reviewed helper only after the authenticated shell proves its
-        # nonce-bound session. The installed probe came from and remains bound
-        # to the immutable live-install marker.
+        # nonce-bound session over the owned channel. The installed probe came
+        # from and remains bound to the immutable live-install marker.
         lines.write(TOOLING_PREFIX + tooling)
         phase = "capture-scenes"
         capture = host.Capture(runtime / "captures", execution, provenance, ocr_identity,
                                qmp.screendump, ocr, fragments)
         for expected_scene in c.SCENES:
-            ready = lines.read()
+            ready = _scene_ready(lines, expected_scene,
+                                 SCENE_READY_TIMEOUTS[expected_scene])
             c.require(ready == c.AUTOMATION_READY_PREFIX + expected_scene,
                       "installed unattended scene readiness missing")
             if expected_scene == "dictationsetup":
                 controller.dismiss_first_login()
             controller.authorize_scene(expected_scene)
             lines.write(c.AUTOMATION_GO_PREFIX + expected_scene)
-            request = lines.read()
+            request = _scene_line(lines, SCENE_REQUEST_TIMEOUT)
             # The request is synchronization only. Recheck the fixed surface
             # after every guest diagnostic has finished and immediately before
             # the host-owned QMP capture so diagnostics cannot choose pixels.

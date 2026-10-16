@@ -220,6 +220,8 @@ class CausalControls(unittest.TestCase):
             'f7a5fc37f530fed782d2597ac61e9b6dd50a2e6f6f3f07ef787dad6f588b2652':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
             '6c2bc9fe4191a55f3214b1206a1aa878c01987fa621cd877aa87f9964ca5d37f':
+                (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc'),
+            '84f13102da4271ab86dc652b2bf1835dc78ffb4a498f4fc7262567c4bc2ab266':
                 (0x43110,0x4361e,'3955d4a7db3fac1b5f0f17833562299ab299b2250eb2a4a66e7ac390f2dcb9bc')}
         self.assertEqual(C.MAPPING_PROFILES,R.comparison.MAPPING_PROFILES)
         admitted={profile['executable_sha256']:profile for profile in C.MAPPING_PROFILES}
@@ -240,7 +242,9 @@ class CausalControls(unittest.TestCase):
                 'f7a5fc37f530fed782d2597ac61e9b6dd50a2e6f6f3f07ef787dad6f588b2652':
                     '2437fc65e32bb8d27fd953478c3dee7c4495578a230789ec4b8d5442085921e5',
                 '6c2bc9fe4191a55f3214b1206a1aa878c01987fa621cd877aa87f9964ca5d37f':
-                    '415020b8bf8354fb031838cb30c842f4b49a788a4c840774cd82dc65e727b247'}
+                    '415020b8bf8354fb031838cb30c842f4b49a788a4c840774cd82dc65e727b247',
+                '84f13102da4271ab86dc652b2bf1835dc78ffb4a498f4fc7262567c4bc2ab266':
+                    'e315f9341cf7a6d100fd9cec02276578ce7ef27c3f5e18bd2aa724bd7ec229c3'}
             self.assertEqual(profile['native_audit_sha256'], audits.get(digest,
                 'dacb0de958e7ba90099a70b2e66f49756916ed3d42f4e70ac6280f7d4b6a571c'))
             bound=R.causal_bound(.09975,.1,profile_index=C.MAPPING_PROFILES.index(profile))

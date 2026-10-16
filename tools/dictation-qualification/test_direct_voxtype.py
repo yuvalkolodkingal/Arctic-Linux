@@ -503,11 +503,13 @@ on_transcription = false
                              and node.value.args[0].value == 'capture-link')
         self.assertIn('capture-link', stages)
         self.assertGreater(assigned_stages['engine-profile'], capture_index)
-        profile = next(node for node in method.body
-                       if isinstance(node, ast.FunctionDef) and node.name == 'engine_profile')
+        profile = next(node for node in checker.body
+                       if isinstance(node, ast.FunctionDef)
+                       and node.name == 'checked_engine_profile')
         profile_source = ast.get_source_segment(source, profile)
-        self.assertIn('self.engine()', profile_source)
-        self.assertIn("sha(binary) == self.assets[cpu_key]['sha256']", profile_source)
+        self.assertIn("getattr(self, '_capture_engine', None)", profile_source)
+        self.assertIn("sha(binary) != self.assets[cpu_key]['sha256']", profile_source)
+        self.assertNotIn('self.engine()', profile_source)
 
     def test_every_microphone_failure_stage_is_used_by_the_checked_path(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
@@ -639,8 +641,8 @@ on_transcription = false
                    and isinstance(call.args[0], ast.Constant)]
         self.assertIn('gpu-failure-actionable-error', targets)
         source = ast.get_source_segment((HERE / 'guest_check.py').read_text(), method)
-        self.assertIn("'VK_DRIVER_FILES=' + str(icd)", source)
-        self.assertIn("failed.returncode != 0", source)
+        self.assertIn("self.vm_vulkan_failure", source)
+        self.assertNotIn('VK_DRIVER_FILES', source)
         self.assertIn("(SYSTEM / 'backend').read_text().strip() == 'cpu'", source)
         self.assertIn("(SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan'", source)
         self.assertIn("status.get('backend') == 'cpu'", source)
