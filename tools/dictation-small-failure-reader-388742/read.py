@@ -337,11 +337,11 @@ def bounded_counter(observations, name, maximum):
     return present, value if present else 0
 
 
-def failed_gates(report):
-    """Project only contract-validated gate identities and numeric stage codes."""
+def nonpassed_gates(report):
+    """Project only contract-validated nonpassing gates and numeric stage codes."""
     result = []
     for gate in report['gates']:
-        if gate['status'] != 'failed':
+        if gate['status'] == 'passed':
             continue
         observed = gate['observations']
         stage = observed.get('failure_stage')
@@ -349,10 +349,11 @@ def failed_gates(report):
         require(stage is None or type(stage) is int and 0 < stage < 10_000)
         require(substage is None or (type(substage) is int and stage in FAILURE_SUBSTAGES
                 and substage in FAILURE_SUBSTAGES[stage]))
-        result.append({'gate': gate['id'], 'family': family(gate),
+        result.append({'gate': gate['id'], 'status': gate['status'],
+                       'family': family(gate),
                        'stage_present': stage is not None, 'stage': stage or 0,
                        'substage_present': substage is not None, 'substage': substage or 0})
-    require(0 < len(result) <= 4)
+    require(0 < len(result) <= 16)
     return result
 
 
@@ -373,7 +374,7 @@ def diagnostic(report, recovery):
     require(drained is None or type(drained) is bool)
     return {
         'report_status': report['status'],
-        'failed_gates': failed_gates(report),
+        'nonpassed_gates': nonpassed_gates(report),
         'english': english, 'hebrew': hebrew, 'gpu': gpu,
         'cleanup': {'status': cleanup_gate['status'], 'family': family(cleanup_gate),
                     'file_count_present': files_present, 'file_count': files,
