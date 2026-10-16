@@ -644,13 +644,21 @@ def _dictation_ready(environment):
     if result.returncode != 0:
         return None
     value = c.strict_json(result.stdout)
-    profile = value.get("profile")
+    if type(value) is not dict or set(value) != c.DICTATION_STATUS_FIELDS:
+        return None
+    profile = value["profile"]
     descriptor = c.DICTATION_PROFILES.get(profile)
-    if value.get("ok") is True and value.get("ready") is True \
-            and value.get("state") == "ready" and value.get("version") == "1.1.1" \
-            and descriptor is not None \
-            and all(value.get(key) == expected for key, expected in descriptor.items()) \
-            and value.get("compatibility_required") is False:
+    if type(value["ready"]) is bool and value["ready"] is True \
+            and value["state"] == "ready" and value["error"] == "" \
+            and value["version"] == "1.1.1" \
+            and type(value["upgrade_pending"]) is bool \
+            and value["upgrade_pending"] is False \
+            and value["language"] in ("auto", "he", "en") \
+            and value["backend"] == "cpu" and descriptor is not None \
+            and all(value[key] == expected and type(value[key]) is type(expected)
+                    for key, expected in descriptor.items()) \
+            and type(value["vulkan_download_bytes"]) is int \
+            and value["vulkan_download_bytes"] == 66_575_872:
         return True
     return None
 

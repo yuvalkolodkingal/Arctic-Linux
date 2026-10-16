@@ -3,6 +3,7 @@ import tempfile
 import unittest
 import json
 import os
+import re
 import shlex
 import signal
 import stat
@@ -1850,17 +1851,31 @@ class GuestAutomation(unittest.TestCase):
         self.assertIn(["/usr/bin/mount", "-o", "subvol=@,compress=zstd:1",
                        "/dev/vda3", str(target)], calls)
 
+    def test_dictation_readiness_schema_matches_shipped_status_adapter(self):
+        adapter = (HERE.parents[2] / "packaging/dictation/arctic-dictation").read_text()
+        line = next(row for row in adapter.splitlines() if row.startswith("    printf '{\"state\""))
+        self.assertEqual(set(re.findall(r'"([a-z_]+)":', line)), c.DICTATION_STATUS_FIELDS)
+        self.assertEqual(len(re.findall(r'"([a-z_]+)":', line)),
+                         len(c.DICTATION_STATUS_FIELDS))
+
     def test_dictation_readiness_is_exact_and_never_substituted(self):
-        good = {"ok": True, "ready": True, "state": "ready", "version": "1.1.1",
-                "profile": "small-v2", "model": "small", "cpu_variant": "baseline",
+        good = {"state": "ready", "ready": True, "error": "", "version": "1.1.1",
+                "upgrade_pending": False, "language": "auto", "backend": "cpu",
+                "profile": "small-v2", "model": "small",
                 "model_download_bytes": 487601967, "download_bytes": 506440871,
-                "compatibility_required": False}
+                "vulkan_download_bytes": 66575872}
         result = types.SimpleNamespace(returncode=0, stdout=json.dumps(good).encode())
         with mock.patch.object(unattended, "_dictation_status", return_value=result):
             self.assertTrue(unattended._dictation_ready({}))
-        for field, value in (("ready", False), ("state", "error"),
-                             ("download_bytes", 9), ("compatibility_required", True)):
+        for field, value in (("ready", False), ("state", "error"), ("error", "setup"),
+                             ("download_bytes", 9), ("upgrade_pending", True),
+                             ("backend", "vulkan"), ("vulkan_download_bytes", 9)):
             bad = dict(good, **{field: value})
+            result = types.SimpleNamespace(returncode=0, stdout=json.dumps(bad).encode())
+            with mock.patch.object(unattended, "_dictation_status", return_value=result):
+                self.assertIsNone(unattended._dictation_ready({}))
+        for bad in ({**good, "ok": True}, {key: value for key, value in good.items()
+                                           if key != "error"}):
             result = types.SimpleNamespace(returncode=0, stdout=json.dumps(bad).encode())
             with mock.patch.object(unattended, "_dictation_status", return_value=result):
                 self.assertIsNone(unattended._dictation_ready({}))
