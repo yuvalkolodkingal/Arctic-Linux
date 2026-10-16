@@ -5,17 +5,17 @@
     "name": "native-candidate-qualification",
     "sha256": "e24db7ee3b04d600973fd49efcf3921c4ebb8f43e083eb579f56b347a87b6154"
   },
-  "branch": "codex/read-native-failure-388875-v2-20261016",
+  "branch": "codex/read-native-failure-388875-v3-20261016",
   "qualification_manifest_sha256": "0c40bc909d3301c80e83ab109a1af32cd30fef0571c5be9c2786e4478b18e9a6",
-  "reader_sha256": "5d59e61ffbee7e8060d83cee3c05f3f9cc76904c84d2a0f378c437a6c61d0b63",
-  "reader_workflow": ".github/workflows/read-native-failure-388875-v2.yml",
-  "reader_workflow_sha256": "df4640556438fbffef272a20cd0f88023619c0525dc41742f8d4228a1db87d4a",
+  "reader_sha256": "c03184ca9d5b44b65d90670f94cfc46b245c03c729387c47b605a0159f86a99f",
+  "reader_workflow": ".github/workflows/read-native-failure-388875-v3.yml",
+  "reader_workflow_sha256": "50a1f363a880f0868cfb45d8384be04e349055c2becf6422358599b6ac41f87f",
   "ready": true,
   "repository": "yuvalkolodkingal/Arctic-Linux",
   "run_attempt": 1,
   "run_head": "02ea0f25863ef4918fadccd91684d016a910455a",
   "run_id": 38887521541,
-  "schema": "arctic-native-failure-reader-v2",
+  "schema": "arctic-native-failure-reader-v3",
   "validator_sha256": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
   "workflow": ".github/workflows/native-candidate-20261008.yml"
 }

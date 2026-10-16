@@ -20,9 +20,9 @@ ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
 REPO_API = 'repos/' + REPOSITORY
 WORKFLOW = '.github/workflows/native-candidate-20261008.yml'
-READER_WORKFLOW = Path('.github/workflows/read-native-failure-388875-v2.yml')
-BRANCH = 'codex/read-native-failure-388875-v2-20261016'
-ACTIVATION = Path('.github/native-failure-reader-388875-v2.activate')
+READER_WORKFLOW = Path('.github/workflows/read-native-failure-388875-v3.yml')
+BRANCH = 'codex/read-native-failure-388875-v3-20261016'
+ACTIVATION = Path('.github/native-failure-reader-388875-v3.activate')
 READER = Path('tools/native-failure-reader-388875/read.py')
 VALIDATOR = Path('tools/native-functional/screen-evidence.py')
 QUALIFICATION = Path('tools/native-failure-reader-388875/qualification-execution-manifest.json')
@@ -37,10 +37,10 @@ ARTIFACT_SHA256 = 'e24db7ee3b04d600973fd49efcf3921c4ebb8f43e083eb579f56b347a87b6
 REQUIRED_MEMBERS = {
     'screening': ('upload-screening.json', 1024 * 1024),
     'execution': ('execution.json', 1024 * 1024),
-    'stop': ('harness/native-stop-install.json', 4096),
     'harness': ('native-harness.log', 16 * 1024 * 1024),
 }
 OPTIONAL_MEMBERS = {
+    'stop': ('harness/native-stop-install.json', 4096),
     'qemu': ('harness/qemu-install.log', 1024 * 1024),
     'display': ('harness/taskbar-display-install.json', 64 * 1024),
     'stage_log': ('harness/test-install-stage.log', 4 * 1024 * 1024),
@@ -120,7 +120,7 @@ def read_json_file(path, maximum):
 
 def validate_manifest(value):
     require(type(value) is dict and set(value) == MANIFEST_FIELDS)
-    require(value['schema'] == 'arctic-native-failure-reader-v2'
+    require(value['schema'] == 'arctic-native-failure-reader-v3'
             and value['ready'] is True and value['repository'] == REPOSITORY
             and value['workflow'] == WORKFLOW
             and value['reader_workflow'] == READER_WORKFLOW.as_posix()
@@ -176,7 +176,7 @@ def activation_guard():
             and os.environ.get('GITHUB_EVENT_NAME') == 'push'
             and os.environ.get('GITHUB_REF') == 'refs/heads/' + BRANCH
             and os.environ.get('GITHUB_WORKFLOW') ==
-                'Read safe Native diagnostics v2 for run 38887521541'
+                'Read safe Native diagnostics v3 for run 38887521541'
             and os.environ.get('GITHUB_RUN_ATTEMPT') == '1')
     child = os.environ.get('GITHUB_SHA', '')
     require(digest(child, 40))
@@ -311,8 +311,9 @@ def validate_screening(raws):
         if role == 'screening':
             continue
         records[role] = screening_record(screening, MEMBERS[role][0], raws[role])
-    require(records['stop']['redactions'] == 0
-            and records['stop']['original_sha256'] == records['stop']['uploaded_sha256'])
+    if 'stop' in records:
+        require(records['stop']['redactions'] == 0
+                and records['stop']['original_sha256'] == records['stop']['uploaded_sha256'])
     return records
 
 
@@ -340,13 +341,24 @@ def validate_execution(raw, qualification, stop_raw, pins=None):
                           r'see native-harness\.log(?:; |$)', error) is not None)
     evidence = value.get('harness_evidence')
     require(type(evidence) is dict)
-    receipt = evidence.get('native-stop-install.json')
-    require(type(receipt) is dict and set(receipt) ==
-            {'bytes', 'sha256', 'private_original', 'release_acceptance'}
-            and receipt['bytes'] == len(stop_raw) and receipt['sha256'] == sha256(stop_raw)
-            and receipt['private_original'] is True
-            and receipt['release_acceptance'] is False)
-    return 91
+    key = 'native-stop-install.json'
+    if stop_raw is not None:
+        receipt = evidence.get(key)
+        require(type(receipt) is dict and set(receipt) ==
+                {'bytes', 'sha256', 'private_original', 'release_acceptance'}
+                and receipt['bytes'] == len(stop_raw) and receipt['sha256'] == sha256(stop_raw)
+                and receipt['private_original'] is True
+                and receipt['release_acceptance'] is False)
+        retention = 'retained'
+    elif key not in evidence:
+        retention = 'not-recorded'
+    else:
+        receipt = evidence[key]
+        require(type(receipt) is dict and receipt == {
+            'retained': False, 'reason': 'closed-record-rejected',
+            'release_acceptance': False})
+        retention = 'closed-record-rejected'
+    return 91, retention
 
 
 def validate_stop(raw):
@@ -370,6 +382,8 @@ def validate_stop(raw):
               'deadline-expired' if elapsed >= deadline else 'exit-marker-missing')
     require(value['reason'] == reason)
     return {
+        'present': True,
+        'retention': 'retained',
         'phase': 'install',
         'qemu_returncode_present': code is not None,
         'qemu_returncode': code if code is not None else 0,
@@ -643,8 +657,10 @@ def inspect_archive(path, manifest, qualification):
     records = validate_screening(raws)
     pins = load_source_provenance(qualification)
     require(digest(pins['taskbar_display_sha256']))
-    runner_code = validate_execution(raws['execution'], qualification, raws['stop'], pins)
-    stop = validate_stop(raws['stop'])
+    runner_code, stop_retention = validate_execution(
+        raws['execution'], qualification, raws.get('stop'), pins)
+    stop = (validate_stop(raws['stop']) if 'stop' in raws
+            else {'present': False, 'retention': stop_retention})
     validator = load_validator(manifest['validator_sha256'])
     harness = validate_harness(raws['harness'], validator)
     qemu = (validate_qemu(raws['qemu'], validator) if 'qemu' in raws

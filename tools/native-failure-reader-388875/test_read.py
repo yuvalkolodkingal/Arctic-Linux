@@ -153,6 +153,30 @@ class SafeNativeReaderTests(unittest.TestCase):
                 archive.writestr(duplicate, values[duplicate])
         return output.getvalue()
 
+    def without_stop(self, retention='not-recorded'):
+        values = self.raws()
+        values.pop('harness/native-stop-install.json')
+        screening = json.loads(values['upload-screening.json'])
+        screening['files'].pop('harness/native-stop-install.json')
+        values['upload-screening.json'] = json.dumps(screening, sort_keys=True).encode()
+        execution = json.loads(values['execution.json'])
+        if retention == 'not-recorded':
+            execution['harness_evidence'].pop('native-stop-install.json')
+        elif retention == 'closed-record-rejected':
+            execution['harness_evidence']['native-stop-install.json'] = {
+                'retained': False, 'reason': 'closed-record-rejected',
+                'release_acceptance': False}
+        else:
+            execution['harness_evidence']['native-stop-install.json'] = retention
+        values['execution.json'] = json.dumps(execution, sort_keys=True).encode()
+        record = screening = json.loads(values['upload-screening.json'])
+        digest = hashlib.sha256(values['execution.json']).hexdigest()
+        record['files']['execution.json'] = {
+            'original_sha256': digest, 'uploaded_sha256': digest,
+            'bytes': len(values['execution.json']), 'redactions': 0}
+        values['upload-screening.json'] = json.dumps(record, sort_keys=True).encode()
+        return values
+
     def inspect(self, values):
         with tempfile.TemporaryDirectory() as temp:
             path = Path(temp) / 'artifact.zip'
@@ -228,6 +252,43 @@ class SafeNativeReaderTests(unittest.TestCase):
         self.assertEqual(result['stage_logs'], {
             'stage_log': {'present': False}, 'current_stage_log': {'present': False}})
         self.assertEqual(result['host_frame'], {'present': False})
+
+    def test_stop_can_be_absent_only_with_closed_execution_retention(self):
+        for retention in ('not-recorded', 'closed-record-rejected'):
+            with self.subTest(retention=retention):
+                result = self.inspect(self.without_stop(retention))
+                self.assertEqual(result['stop'],
+                                 {'present': False, 'retention': retention})
+
+        invalid = (
+            None,
+            {'retained': True, 'reason': 'closed-record-rejected',
+             'release_acceptance': False},
+            {'retained': False, 'reason': 'private-reason',
+             'release_acceptance': False},
+            {'retained': False, 'reason': 'closed-record-rejected',
+             'release_acceptance': False, 'private': 'value'},
+            {'bytes': 1, 'sha256': '0' * 64, 'private_original': True,
+             'release_acceptance': False},
+        )
+        for retention in invalid:
+            with self.subTest(retention=retention), self.assertRaises(RuntimeError):
+                self.inspect(self.without_stop(retention))
+
+    def test_present_stop_still_requires_exact_retained_receipt(self):
+        values = self.raws()
+        execution = json.loads(values['execution.json'])
+        for receipt in (None,
+                        {'retained': False, 'reason': 'closed-record-rejected',
+                         'release_acceptance': False}):
+            changed = json.loads(json.dumps(execution))
+            if receipt is None:
+                changed['harness_evidence'].pop('native-stop-install.json')
+            else:
+                changed['harness_evidence']['native-stop-install.json'] = receipt
+            with self.subTest(receipt=receipt), self.assertRaises(RuntimeError):
+                reader.validate_execution(json.dumps(changed).encode(), self.qualification(),
+                                          values['harness/native-stop-install.json'])
 
     def test_archive_rejections_use_only_closed_role_and_reason(self):
         values = self.raws(); values.pop('native-harness.log')
