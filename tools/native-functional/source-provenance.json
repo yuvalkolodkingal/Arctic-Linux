@@ -1,14 +1,14 @@
 {
   "adapted_host_controls": {
-    "test_controls_state_trials.py": "07583990eea8d914a38af4b841e1aa364560ec5990a59a4a023503425626503f",
+    "test_controls_state_trials.py": "1a5aaa90de3b2e3aadb53064bf71643114828494db8cf3556895efc357a006ec",
     "test_native_bulk_transport.py": "6b1e75957ce32bd096e0175e1b887621c5b469dec035878e9255bb8c5b257f51",
     "test_native_capture_controls.py": "c707b72fa40d2916cc0d344624c1c7e353428a3809d1076729908f7f3c193f15",
-    "test_native_desktop_v6.py": "e31ea6319f78adc55c4cc9ef4a7ebcf24651a13d6f88a062955d959825834f88",
+    "test_native_desktop_v6.py": "b17be74c67a96293d1d2f1c04ef59c85faccc840fa15d188d044dbd163959dc3",
     "test_native_physical_v6.py": "c187b07cc1171a3d765338ea886a36bda8a9c2c818f071f82635e937d692d544",
-    "test_native_protocol_diagnostics.py": "2a10b41f7ee06f68a8eef5d7a8dd5fea0fb59002df389d8fb96f987a7bedaf6c",
+    "test_native_protocol_diagnostics.py": "5693239619cc2d9159a3da110d565f4ceaf7152e6e9f59a5488816afa14c3b05",
     "test_native_public_evidence.py": "a6f6da02341a008aa933971301b3580ed1dd46b38b39f574b1ff39ff88857660",
-    "test_native_smoke.py": "feaae23c44024ade388c994cfd722ab909b558e17712305adc8362e2dcea8b9b",
-    "test_native_v6.py": "73988f23721971507abbdee634c67c99b6cefe1ccd6340109688fe465a2a13d1",
+    "test_native_smoke.py": "e8c0534cc118d52bdac426ea9983bf80facaa28f4f4a37fa1c088ecfc74123ec",
+    "test_native_v6.py": "c3717676949291bc4085605ac403987d58e05656d6e9b25d8a6b0bda35826423",
     "test_renderer_trials.py": "f360cb8660e81d73f00e054efec7a8d0d815beb979e1a0fb38a0b85a43c92cb0",
     "test_security_journal_stream.py": "6f61e4e1e764a2693610f46467b202ebc50420694a579732a336962bfd5c6b2c",
     "test_taskbar_transport.py": "1be735b0d4163de5004755e2916389cde4946566537777367422e2bd7bff7555",
@@ -166,10 +166,10 @@
   "diagnostic_source_base_commit": "7d600b60d3f47db1da00d289a36fdb2bfaec0cf0",
   "each_selected_function_source_equal": false,
   "files": {
-    "guest-check-native-v6.py": "d3355dad0a70841b512baab8cac01bbd69b70ca326f5f72e05228a8ce3c3bb02",
+    "guest-check-native-v6.py": "c027490a689e338b17b99fffc7c6023c186ae82e3d07270734067d0862d27e7d",
     "native-launcher-v6.py": "e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c",
     "native-physical-controller.py": "37f3e0d75080bc2da8e90aee46204ac9028fb546ba15b510dca79316933b5024",
-    "native_smoke.py": "e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc"
+    "native_smoke.py": "a8e3733dfa28baa490754db3cf4a146a9f4a6c9e4d8f43f66bf8193bec34b200"
   },
   "installed_login_global_pointer": {
     "diagnosis": "the single unbound QEMU USB tablet consumes absolute coordinates in the guest global desktop space while the selected-head click scaled a head-local coordinate over 1280x720",
@@ -237,7 +237,7 @@
     "release_acceptance": false,
     "selected_input_error_fallback": false
   },
-  "native_source_sha256": "e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc",
+  "native_source_sha256": "a8e3733dfa28baa490754db3cf4a146a9f4a6c9e4d8f43f66bf8193bec34b200",
   "owned_protocol_diagnostics": {
     "primary_gate_unchanged": true,
     "raw_protocol_exported": false,
@@ -291,7 +291,7 @@
     "failure_artifact_sha256": "8b8c5477316f57626a99acd1eb9c38805b61a55c3ec8b5e22e48cca2ab730c02",
     "failure_diagnosis": "installed sole capture observed an entirely black owned fullscreen GL client while the same exact ISO live capture matched all 316224 checked pixels; the earlier clock sample preceded fullscreen and controls transitions, so it did not prove post-geometry playback readiness",
     "failure_run": 38672376980,
-    "first_failed_or_unmatched_oracle": "only an unmatched content result permits one 0.5 second same-player recapture; an oracle error, second unmatched result, identity/geometry change or total-deadline exhaustion is a hard gate failure",
+    "first_failed_or_unmatched_oracle": "only an unmatched content result permits one same-PID authenticated frame-step, 0.5 second presentation settle and strict recapture; an oracle error, invalid acknowledgement, pause/clock/identity/geometry change, second unmatched result or total-deadline exhaustion is a hard gate failure",
     "fixture_cadence": "20 frames at 10 fps alternating every RGB channel by +4; both phases remain inside unchanged oracle thresholds and every decoded frame differs from its predecessor",
     "host_attempt_receipt_schema_exact": true,
     "maximum_owned_player_attempts": 1,
@@ -310,7 +310,11 @@
     "retry_settle_seconds": 0.5,
     "total_capture_deadline_seconds": 9.5,
     "same_process_identity_focus_geometry_and_monitor_revalidated_before_retry": true,
-    "installed_smoke_and_taskbar_failure_was_cascading_after_visual_gate": true
+    "installed_smoke_and_taskbar_failure_was_cascading_after_visual_gate": true,
+    "retry_requires_paused_clock_one_frame_advance_seconds": [
+      0.05,
+      0.25
+    ]
   },
   "taskbar_context_media_protection": {
     "bounded_diagnosis": "retained context validates exactly, while ambient payload modes and a simultaneous desktop-user optical automount were not covered by the existing actual-CD test; the closed stage cannot distinguish those protected-file metadata paths",
@@ -349,7 +353,7 @@
     "validate_harness_serial"
   ],
   "validators_hash_method": "sha256 of UTF-8 AST source segments joined with LF in validator_functions order",
-  "validators_source_sha256": "eaa0bbb798b4fd0c664a7148d21fc090cd582f2b4e676d0a842b872a7c25d356",
+  "validators_source_sha256": "56f7cd74d75a5302114d13ad849b4626d86c94e621619be495c3b9b52ec5c4c3",
   "paused_visual_capture": {
     "failure_run": 38715355526,
     "failure_artifact_id": 11962563734,
@@ -510,5 +514,23 @@
       "src/celluloid-model.c": "9fdce9dbf8b8125c55b3817b4b58d46826757f1c30370e3b29c0fbfc6e30fb91",
       "src/celluloid-mpv.c": "b41406dac8d356f3a15cdce7374998156fdcfa8a48005299d854387c6dd110cc"
     }
+  },
+  "same_pid_repaint_retry": {
+    "failure_run": 38887521541,
+    "failure_artifact_id": 12039923342,
+    "safe_reader_run": 38892059492,
+    "diagnosis": "the unchanged Native observer passed the preceding exact candidate, but this run observed the strict palette as unmatched in both guest grim and the held QMP head while QEMU stderr was empty and the two-head display proof was valid; the passive retry scheduled no new GL damage",
+    "trigger": "only after capture attempt one returns the strict unmatched status",
+    "transport": "one fixed frame-step request (id 48) on the existing SO_PEERCRED-authenticated mpv IPC socket for the same paused product-wrapper Celluloid PID",
+    "acknowledgement": "exact data/error/request_id object with success, null data and request id 48",
+    "clock_gate": "pause must be true before and after; circular time-pos advancement must be between 0.05 and 0.25 seconds for the 10 fps two-second looping fixture",
+    "presentation_settle_seconds": 0.5,
+    "capture_attempt_limit": 2,
+    "capture_deadline_seconds": 9.5,
+    "same_pid_start_ticks_client_focus_fullscreen_geometry_crop_and_monitor_required": true,
+    "oracle_thresholds_unchanged": true,
+    "fresh_player_or_alternate_renderer": false,
+    "product_or_iso_change": false,
+    "release_acceptance": false
   }
 }

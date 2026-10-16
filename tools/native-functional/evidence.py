@@ -13,9 +13,9 @@ import wave
 import zlib
 
 HERE = Path(__file__).resolve().parent
-NATIVE_SOURCE_SHA = 'e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc'
+NATIVE_SOURCE_SHA = 'a8e3733dfa28baa490754db3cf4a146a9f4a6c9e4d8f43f66bf8193bec34b200'
 LAUNCHER_SHA = 'e948f2ff9c7273f20b0d42e67cc891e3a3f6e0954dfc1ac3afca2aa7c3d7df4c'
-CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'd3355dad0a70841b512baab8cac01bbd69b70ca326f5f72e05228a8ce3c3bb02')}
+CHECKERS = {'native-functional': ('guest-check-native-v6.py', 'c027490a689e338b17b99fffc7c6023c186ae82e3d07270734067d0862d27e7d')}
 MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 16 * 1024 * 1024
 GATES = {'fresh-defaults-and-isolation', 'archive-content-roundtrips', 'actual-role-file-manager-terminal-editor', 'open-codec-content-and-player-state', 'portal-and-accessibility-reachability', 'owned-process-cleanup-config-preservation', 'selinux-and-new-avcs', 'open-codec-lossless-command-decode'}
@@ -398,10 +398,29 @@ def check_fullscreen(target,report,uid):
         check_product_renderer(row['product_renderer'],row['player'])
         rows=row['capture_attempts']
         capture_keys={'attempt','screenshot_sha256','actual_rgb_sha256','oracle',
-                      'playback_time_seconds','owned_identity_geometry_unchanged'}
+                      'playback_time_seconds','owned_identity_geometry_unchanged','repaint_before_capture'}
+        def valid_repaint(value,number):
+            if number==1:return value is None
+            if type(value) is not dict or set(value)!={'control','before_seconds','after_seconds','advance_seconds',
+                    'pause_before','pause_after','settle_seconds','release_acceptance'}:return False
+            control=value['control'];ack=control.get('acknowledgement') if type(control) is dict else None
+            if not (type(control) is dict
+                    and set(control)=={'transport','command','request_id','acknowledgement'}
+                    and control['transport']=='owned mpv IPC SO_PEERCRED'
+                    and control['command']==['frame-step'] and control['request_id']==48
+                    and ack=={'data':None,'error':'success','request_id':48}
+                    and value['pause_before'] is True and value['pause_after'] is True
+                    and value['settle_seconds']==.5 and value['release_acceptance'] is False
+                    and all(type(value[key]) in (int,float) and not isinstance(value[key],bool)
+                            and math.isfinite(value[key]) for key in ('before_seconds','after_seconds','advance_seconds'))
+                    and 0<=value['before_seconds']<=2 and 0<=value['after_seconds']<=2
+                    and .05<=value['advance_seconds']<=.25):return False
+            delta=value['after_seconds']-value['before_seconds']
+            if delta<0:delta+=2
+            return math.isclose(delta,value['advance_seconds'],rel_tol=0,abs_tol=1e-9)
         R.require(type(rows) is list and 1<=len(rows)<=2
                   and all(type(item) is dict and set(item)==capture_keys
-                          and item['attempt']==number
+                          and item['attempt']==number and valid_repaint(item['repaint_before_capture'],number)
                           and type(item['screenshot_sha256']) is str
                           and re.fullmatch(r'[0-9a-f]{64}',item['screenshot_sha256']) is not None
                           and type(item['actual_rgb_sha256']) is str

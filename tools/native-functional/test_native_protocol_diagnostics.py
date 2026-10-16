@@ -372,7 +372,7 @@ class DrainAndExportControls(unittest.TestCase):
                 if argv[0]=='ffmpeg':Path(argv[-1]).write_bytes(b'\0'*(160*120*3))
                 return (0,'{"success":true}','')
             smoke.cmd=Mock(side_effect=command)
-            time_values=iter((0,.2,.8,.8,.8,.8,.8));pause_values=iter((False,True))
+            time_values=iter((0,.2,.8,.8,.8,.8,.8,.9,.9));pause_values=iter((False,True,True,True))
             path_values=iter((str(moving),str(fixture),str(fixture)))
             def prop(path,key,pid,uid):
                 if key=='pause':return next(pause_values)
@@ -395,13 +395,18 @@ class DrainAndExportControls(unittest.TestCase):
                 same_process_renderer_required=True,release_acceptance=False)
             with socket.socket(socket.AF_UNIX) as endpoint:
                 endpoint.bind(str(smoke.root/'celluloid-ipc.sock'))
+                repaint_receipt=dict(transport='owned mpv IPC SO_PEERCRED',command=['frame-step'],request_id=48,
+                    acknowledgement=dict(data=None,error='success',request_id=48))
                 with patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'celluloid_replace_fixture',return_value=transition) as replace,patch.object(N.time,'sleep') as sleep:
+                     patch.object(N,'mpv_pause_reference') as pause, \
+                     patch.object(N,'mpv_repaint_reference',return_value=repaint_receipt) as repaint, \
+                     patch.object(N,'celluloid_replace_fixture',return_value=transition) as replace,patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media(reuse)
             self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5),unittest.mock.call(.5)])
             replace.assert_called_once_with(smoke.prefix,smoke.root/'celluloid-ipc.sock',proofs[0]['pid'],smoke.uid,moving,fixture)
             pause.assert_called_once_with(smoke.root/'celluloid-ipc.sock',proofs[0]['pid'],smoke.uid)
+            repaint.assert_called_once_with(smoke.root/'celluloid-ipc.sock',proofs[0]['pid'],smoke.uid)
             self.assertEqual([c[:3] for c in commands if c[0]=='grim'],[['grim','-o','fixture']]*2)
             self.assertEqual(smoke.player_fullscreen.call_args_list[0].args,(proofs[0],True,smoke.root/'celluloid-ipc.sock'))
             self.assertEqual(smoke.player_fullscreen.call_args_list[-1].args,(proofs[0],False,smoke.root/'celluloid-ipc.sock'))

@@ -332,7 +332,8 @@ class NewControls(unittest.TestCase):
         # Actual visual_media method + real FFmpeg fixture/PNG/crop. GUI/window
         # authority and mpv responses are explicit host-only fixtures.
         for case in ('positive','corrupt-first-capture','unmatched-both','oracle-failed',
-                     'retry-deadline','retry-geometry-change'):
+                     'retry-deadline','retry-geometry-change','retry-pause-changed',
+                     'retry-clock-short','retry-clock-large'):
           with self.subTest(case=case),tempfile.TemporaryDirectory() as t:
             root=Path(t);smoke=N.Smoke.__new__(N.Smoke);smoke.root=root;smoke.uid=os.getuid();smoke.user=pwd.getpwuid(os.getuid())
             smoke.prefix=[];smoke.original_prefix=[];smoke.steps=[];smoke.owned=[];smoke.gui_v6=True;smoke.stage='live'
@@ -383,7 +384,10 @@ class NewControls(unittest.TestCase):
                     shutil.copyfile(good_capture if good else bad_capture,argv[-1]);return (0,'','')
                 return original(argv,**kwargs)
             smoke.cmd=Mock(side_effect=cmd)
-            time_values=iter((0,.2,.8,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(root/'visual-reference.mkv'),str(root/'visual-reference.mkv')))
+            repaint_after={'retry-clock-short':.81,'retry-clock-large':1.2}.get(case,.9)
+            time_values=iter((0,.2,.8,.8,.8,.8,.8,repaint_after,repaint_after))
+            pause_values=iter((False,True,True,False if case=='retry-pause-changed' else True))
+            path_values=iter((str(root/'open-codec-fixture.mkv'),str(root/'visual-reference.mkv'),str(root/'visual-reference.mkv')))
             def prop(path,key,*args):
                 if key=='pause':return next(pause_values)
                 if key=='path':return next(path_values)
@@ -411,8 +415,12 @@ class NewControls(unittest.TestCase):
                     ipc=str(root/'celluloid-ipc.sock'),moving_fixture=str(root/'open-codec-fixture.mkv'),
                     moving_screenshot_sha256='9'*64,product_renderer=smoke.product_renderer_contract.return_value,
                     same_process_renderer_required=True,release_acceptance=False)
+                repaint_receipt=dict(transport='owned mpv IPC SO_PEERCRED',command=['frame-step'],request_id=48,
+                    acknowledgement=dict(data=None,error='success',request_id=48))
                 with oracle_control,patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'celluloid_replace_fixture',return_value=transition) as replace,patch.object(N,'time',tested_time):
+                     patch.object(N,'mpv_pause_reference') as pause, \
+                     patch.object(N,'mpv_repaint_reference',return_value=repaint_receipt) as repaint, \
+                     patch.object(N,'celluloid_replace_fixture',return_value=transition) as replace,patch.object(N,'time',tested_time):
                     if case in ('positive','corrupt-first-capture'):
                         value=smoke.visual_media(reuse);self.assertEqual(value['oracle']['status'],'matched')
                     elif case=='retry-deadline':
@@ -420,6 +428,12 @@ class NewControls(unittest.TestCase):
                             smoke.visual_media(reuse)
                     elif case=='retry-geometry-change':
                         with self.assertRaisesRegex(RuntimeError,'owned player client is clipped/too small/unbounded'):
+                            smoke.visual_media(reuse)
+                    elif case=='retry-pause-changed':
+                        with self.assertRaisesRegex(RuntimeError,'visual repaint retry postcondition differs'):
+                            smoke.visual_media(reuse)
+                    elif case in ('retry-clock-short','retry-clock-large'):
+                        with self.assertRaisesRegex(RuntimeError,'visual repaint retry clock advance differs from one frame'):
                             smoke.visual_media(reuse)
                     else:
                         with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
@@ -431,11 +445,12 @@ class NewControls(unittest.TestCase):
             expected_captures=2 if case in ('corrupt-first-capture','unmatched-both') else 1
             self.assertEqual(len(grim_calls),expected_captures)
             delays=[call.args[0] for call in sleep.call_args_list]
-            retried=case in ('corrupt-first-capture','unmatched-both','retry-geometry-change')
+            retried=case in ('corrupt-first-capture','unmatched-both','retry-geometry-change',
+                             'retry-pause-changed','retry-clock-short','retry-clock-large')
             self.assertEqual(delays.count(.5),1+retried)
             self.assertTrue(all(delay==.5 or 0<delay<=.05 for delay in delays),delays)
             receipt=json.loads((root/'visual-oracle.json').read_text())
-            if case in ('retry-deadline','retry-geometry-change'):
+            if case in ('retry-deadline','retry-geometry-change','retry-pause-changed','retry-clock-short','retry-clock-large'):
                 self.assertEqual(receipt['schema'],'arctic-native-visual-attempts-v1')
                 self.assertEqual((receipt['capture_attempt_limit'],receipt['capture_deadline_seconds']),(2,9.5))
                 self.assertEqual(len(receipt['capture_attempts']),1)
@@ -460,6 +475,16 @@ class NewControls(unittest.TestCase):
                 maximum_settled_drift_seconds=.05,minimum_advance_seconds=.5,
                 anchor='after fullscreen and controls transitions'))
             pause.assert_called_once_with(root/'celluloid-ipc.sock',proof['pid'],smoke.uid)
+            retried_capture=case in ('corrupt-first-capture','unmatched-both')
+            if retried_capture:
+                repaint.assert_called_once_with(root/'celluloid-ipc.sock',proof['pid'],smoke.uid)
+                self.assertIsNone(row['capture_attempts'][0]['repaint_before_capture'])
+                self.assertEqual(row['capture_attempts'][1]['repaint_before_capture'],dict(
+                    control=repaint_receipt,before_seconds=.8,after_seconds=.9,
+                    advance_seconds=.09999999999999998,pause_before=True,pause_after=True,
+                    settle_seconds=.5,release_acceptance=False))
+            else:
+                repaint.assert_not_called();self.assertIsNone(row['capture_attempts'][0]['repaint_before_capture'])
             self.assertFalse(row['restart_eligible']);self.assertFalse(row['owned_player_cleanup_completed'])
             self.assertEqual(Path(row['screenshot']['path']).name,'celluloid-reference.png')
             self.assertFalse((root/'celluloid-reference-player-2.png').exists())

@@ -2118,14 +2118,36 @@ class Smoke:
         attempts=[]; after=None; monitors_after=None; size=None; screenshot=None
         oracle=dict(status='unmatched',reason='No capture attempted')
         for attempt in range(1,attempt_limit+1):
+            repaint=None
             if attempt>1:
                 remaining=capture_deadline-time.monotonic()
                 require(remaining>.5,'visual capture retry deadline exhausted')
+                repaint_before=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+                repaint_paused_before=mpv_property(ipc,'pause',player['pid'],self.uid)
+                require(type(repaint_before) in (int,float) and not isinstance(repaint_before,bool)
+                        and math.isfinite(repaint_before) and 0<=repaint_before<=2
+                        and repaint_paused_before is True,
+                        'visual repaint retry precondition differs')
+                repaint_control=mpv_repaint_reference(ipc,player['pid'],self.uid)
                 time.sleep(retry_settle_seconds)
+                repaint_after=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+                repaint_paused_after=mpv_property(ipc,'pause',player['pid'],self.uid)
+                require(type(repaint_after) in (int,float) and not isinstance(repaint_after,bool)
+                        and math.isfinite(repaint_after) and 0<=repaint_after<=2
+                        and repaint_paused_after is True,
+                        'visual repaint retry postcondition differs')
+                repaint_advance=repaint_after-repaint_before
+                if repaint_advance<0: repaint_advance+=2
+                require(.05<=repaint_advance<=.25,
+                        'visual repaint retry clock advance differs from one frame')
+                repaint=dict(control=repaint_control,before_seconds=repaint_before,
+                             after_seconds=repaint_after,advance_seconds=repaint_advance,
+                             pause_before=True,pause_after=True,settle_seconds=retry_settle_seconds,
+                             release_acceptance=False)
                 client_now=self.alive(player)
                 monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
                 monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
-                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','is_fullscreen','monitor'))
                         and geometry_now==geometry and crop_now==crop
                         and all(monitor_now.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
                         'owned player identity/geometry/focus or monitor changed before recapture')
@@ -2161,7 +2183,7 @@ class Smoke:
                     'capture-attempt playback clock is invalid')
             attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
                 actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
-                owned_identity_geometry_unchanged=True))
+                owned_identity_geometry_unchanged=True,repaint_before_capture=repaint))
             # Preserve bounded, content-free attempt evidence even when a later
             # deadline check fails before the final full oracle is assembled.
             (self.root/'visual-oracle.json').write_text(json.dumps(dict(
@@ -2775,6 +2797,45 @@ def mpv_pause_reference(path, expected_pid, expected_uid):
         raise RuntimeError('reference pause IPC acknowledgement timed out')
 
 
+def mpv_repaint_reference(path, expected_pid, expected_uid):
+    """Request one bounded post-failure repaint from the same paused player."""
+    require(type(expected_pid) is int and expected_pid>1 and type(expected_uid) is int and expected_uid>0,
+            'reference repaint IPC identity is invalid')
+    info=Path(path).lstat()
+    require(stat.S_ISSOCK(info.st_mode) and info.st_uid==expected_uid,
+            'reference repaint IPC path owner/type differs')
+    request=dict(command=['frame-step'],request_id=48)
+    with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
+        peer.settimeout(2)
+        peer.connect(str(path))
+        pid,uid,_=struct.unpack('3i',peer.getsockopt(socket.SOL_SOCKET,socket.SO_PEERCRED,12))
+        require((pid,uid)==(expected_pid,expected_uid), 'reference repaint IPC peer differs')
+        peer.sendall(json.dumps(request,separators=(',',':')).encode()+b'\n')
+        data=b''; deadline=time.monotonic()+3
+        while time.monotonic()<deadline:
+            chunk=peer.recv(4096)
+            require(chunk, 'reference repaint IPC disconnected before acknowledgement')
+            data+=chunk
+            require(len(data)<=4096, 'reference repaint IPC reply exceeded bound')
+            while b'\n' in data:
+                line,data=data.split(b'\n',1)
+                def pairs(items):
+                    value={}
+                    for key,item in items:
+                        require(key not in value, 'reference repaint IPC duplicate field')
+                        value[key]=item
+                    return value
+                message=json.loads(line,object_pairs_hook=pairs)
+                require(type(message) is dict, 'reference repaint IPC reply is not an object')
+                if message.get('request_id')==48:
+                    require(set(message)=={'request_id','error','data'}
+                            and type(message['request_id']) is int and message.get('error')=='success'
+                            and message.get('data') is None, 'reference repaint IPC command failed')
+                    return dict(transport='owned mpv IPC SO_PEERCRED',command=request['command'],
+                                request_id=48,acknowledgement=message)
+        raise RuntimeError('reference repaint IPC acknowledgement timed out')
+
+
 def mpv_property(path, key, expected_pid, expected_uid):
     with socket.socket(socket.AF_UNIX,socket.SOCK_STREAM) as peer:
         peer.settimeout(2)
@@ -3012,7 +3073,7 @@ def main():
     import traceback
     import zlib
     stage = sys.argv[1] if len(sys.argv) == 2 else 'invalid'
-    native_source_sha = 'e3f0272e1df7761176356072b6100ef160fdfd404578a66af87080820d8ef1bc'
+    native_source_sha = 'a8e3733dfa28baa490754db3cf4a146a9f4a6c9e4d8f43f66bf8193bec34b200'
     original_roots = set(Path('/tmp').glob('arctic-native-smoke-*'))
     report, error, export_complete = None, None, False
     roots = []

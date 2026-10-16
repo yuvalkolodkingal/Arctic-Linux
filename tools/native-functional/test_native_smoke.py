@@ -230,6 +230,51 @@ class Controls(unittest.TestCase):
         self.assertEqual(observed,[dict(command=['set_property','pause',True],request_id=44),
                                    dict(command=['frame-step'],request_id=45)])
 
+    def repaint_control(self,reply,expected_pid=None):
+        path=self.root/('repaint-'+str(len(list(self.root.iterdir())))+'.sock');observed=[]
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(path));server.listen(1)
+            def accept():
+                peer,_=server.accept()
+                with peer:
+                    observed.append(peer.recv(4096))
+                    if reply:
+                        try:peer.sendall(reply)
+                        except (BrokenPipeError,ConnectionResetError):pass
+            thread=threading.Thread(target=accept);thread.start();error=None;receipt=None
+            try:
+                receipt=s.mpv_repaint_reference(path,expected_pid or os.getpid(),os.getuid())
+            except Exception as caught:error=caught
+            thread.join(3);self.assertFalse(thread.is_alive())
+        return error,receipt,observed
+
+    def test_repaint_frame_step_uses_exact_owned_ipc_and_receipt(self):
+        reply=b'{"data":null,"error":"success","request_id":48}\n'
+        error,receipt,observed=self.repaint_control(reply)
+        self.assertIsNone(error)
+        self.assertEqual([json.loads(row) for row in observed],
+                         [dict(command=['frame-step'],request_id=48)])
+        self.assertEqual(receipt,dict(transport='owned mpv IPC SO_PEERCRED',command=['frame-step'],
+            request_id=48,acknowledgement=dict(data=None,error='success',request_id=48)))
+
+    def test_repaint_rejects_foreign_peer_and_nonexact_acknowledgements(self):
+        replies=(b'{"request_id":48,"error":"failure","data":null}\n',
+                 b'{"request_id":48,"error":"success","data":false}\n',
+                 b'{"request_id":48,"request_id":48,"error":"success","data":null}\n',
+                 b'{"request_id":48,"error":"success","data":null,"extra":true}\n',
+                 b'[]\n',b'x'*4097,b'')
+        for reply in replies:
+            with self.subTest(reply=reply[:40]):
+                error,receipt,observed=self.repaint_control(reply)
+                self.assertIsNotNone(error);self.assertIsNone(receipt);self.assertEqual(len(observed),1)
+        error,receipt,observed=self.repaint_control(b'',expected_pid=os.getpid()+100000)
+        self.assertIsNotNone(error);self.assertIsNone(receipt);self.assertEqual(observed,[b''])
+        regular=self.root/'repaint-regular';regular.write_bytes(b'fixed')
+        with patch.object(s.socket,'socket') as connector:
+            with self.assertRaisesRegex(RuntimeError,'owner/type'):
+                s.mpv_repaint_reference(regular,os.getpid(),os.getuid())
+            connector.assert_not_called()
+
     def test_static_fixture_uses_exact_owned_celluloid_mpris_service(self):
         path=self.root/'celluloid-ipc.sock';source=self.root/'open-codec-fixture.mkv'
         target=self.root/'visual-reference.mkv';source.write_bytes(b'moving');target.write_bytes(b'static')

@@ -34,8 +34,80 @@ PRE_PULSE_NATIVE_SHA = '76227a4dcdc87faffdb3c2cbe8201994a7d1e7629a44faa91bc8916c
 PRE_SAME_PLAYER_RECAPTURE_NATIVE_SHA = '5486b25570254c7e469794dea1498b4e9a8c060a542a88634fd5693e3530aea4'
 
 
+
+def restore_same_pid_repaint_retry(source):
+    """Reverse only the post-unmatched same-player frame-step retry."""
+    current="""        for attempt in range(1,attempt_limit+1):
+            repaint=None
+            if attempt>1:
+                remaining=capture_deadline-time.monotonic()
+                require(remaining>.5,'visual capture retry deadline exhausted')
+                repaint_before=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+                repaint_paused_before=mpv_property(ipc,'pause',player['pid'],self.uid)
+                require(type(repaint_before) in (int,float) and not isinstance(repaint_before,bool)
+                        and math.isfinite(repaint_before) and 0<=repaint_before<=2
+                        and repaint_paused_before is True,
+                        'visual repaint retry precondition differs')
+                repaint_control=mpv_repaint_reference(ipc,player['pid'],self.uid)
+                time.sleep(retry_settle_seconds)
+                repaint_after=mpv_property(ipc,'time-pos',player['pid'],self.uid)
+                repaint_paused_after=mpv_property(ipc,'pause',player['pid'],self.uid)
+                require(type(repaint_after) in (int,float) and not isinstance(repaint_after,bool)
+                        and math.isfinite(repaint_after) and 0<=repaint_after<=2
+                        and repaint_paused_after is True,
+                        'visual repaint retry postcondition differs')
+                repaint_advance=repaint_after-repaint_before
+                if repaint_advance<0: repaint_advance+=2
+                require(.05<=repaint_advance<=.25,
+                        'visual repaint retry clock advance differs from one frame')
+                repaint=dict(control=repaint_control,before_seconds=repaint_before,
+                             after_seconds=repaint_after,advance_seconds=repaint_advance,
+                             pause_before=True,pause_after=True,settle_seconds=retry_settle_seconds,
+                             release_acceptance=False)
+                client_now=self.alive(player)
+                monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+                monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
+                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','is_fullscreen','monitor'))
+                        and geometry_now==geometry and crop_now==crop
+                        and all(monitor_now.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                        'owned player identity/geometry/focus or monitor changed before recapture')
+            remaining=capture_deadline-time.monotonic()
+"""
+    previous="""        for attempt in range(1,attempt_limit+1):
+            if attempt>1:
+                remaining=capture_deadline-time.monotonic()
+                require(remaining>.5,'visual capture retry deadline exhausted')
+                time.sleep(retry_settle_seconds)
+                client_now=self.alive(player)
+                monitors_now=json.loads(self.cmd(['mmsg','get','all-monitors'])[1])
+                monitor_now,geometry_now,crop_now=visual_capture_geometry(client_now,monitors_now)
+                require(all(client_now.get(key)==client.get(key) for key in ('id','pid','is_visible','is_focused','monitor'))
+                        and geometry_now==geometry and crop_now==crop
+                        and all(monitor_now.get(key)==monitor.get(key) for key in ('name','x','y','width','height','scale','is_hdr')),
+                        'owned player identity/geometry/focus or monitor changed before recapture')
+            remaining=capture_deadline-time.monotonic()
+"""
+    if source.count(current)!=1:raise AssertionError('Same-PID repaint retry inverse block differs')
+    source=source.replace(current,previous,1)
+    current="""            attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
+                actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
+                owned_identity_geometry_unchanged=True,repaint_before_capture=repaint))
+"""
+    previous="""            attempts.append(dict(attempt=attempt,screenshot_sha256=screenshot['sha256'],
+                actual_rgb_sha256=digest(rgb),oracle=oracle,playback_time_seconds=attempt_time,
+                owned_identity_geometry_unchanged=True))
+"""
+    if source.count(current)!=1:raise AssertionError('Same-PID repaint receipt inverse differs')
+    source=source.replace(current,previous,1)
+    start='def mpv_repaint_reference(path, expected_pid, expected_uid):\n'
+    end='def mpv_property(path, key, expected_pid, expected_uid):\n'
+    if source.count(start)!=1 or source.count(end)!=1:raise AssertionError('Same-PID repaint helper inverse differs')
+    a=source.index(start);z=source.index(end,a);source=source[:a]+source[z:]
+    return source
+
 def restore_same_player_recapture(source, verify=False):
     """Reverse only the bounded same-player capture retry."""
+    source=restore_same_pid_repaint_retry(source)
     replacements=(
         ('interval in its final capture geometry before the bounded capture.',
          'interval in its final capture geometry before the sole screenshot.'),
@@ -1054,7 +1126,7 @@ class ControlsStateTrials(unittest.TestCase):
                 raise AssertionError('Unexpected fixture command')
             smoke.cmd=Mock(side_effect=command)
             media={'path':str(fixture),'pause':False,'video-params':dict(w=160,h=120),'current-vo':'libmpv'}
-            time_values=iter((0,.2,.8,.8,.8,.8,.8));pause_values=iter((False,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(fixture),str(fixture)))
+            time_values=iter((0,.2,.8,.8,.8,.8,.8,.9,.9));pause_values=iter((False,True,True,True));path_values=iter((str(root/'open-codec-fixture.mkv'),str(fixture),str(fixture)))
             def prop(path,key,pid,uid):
                 if key=='pause':return next(pause_values)
                 if key=='path':return next(path_values)
@@ -1065,12 +1137,17 @@ class ControlsStateTrials(unittest.TestCase):
             try:
                 transition=dict(schema='arctic-native-fixture-transition-v2',transport='owned Celluloid MPRIS D-Bus with mpv IPC SO_PEERCRED binding',source=str(root/'open-codec-fixture.mkv'),target=str(fixture),target_uri=fixture.as_uri(),bus_name='org.mpris.MediaPlayer2.io.github.celluloid_player.Celluloid.instance-7',owner_pid=players[0]['pid'],ipc_peer_pid=players[0]['pid'],ipc_peer_uid=smoke.uid,object_path='/org/mpris/MediaPlayer2',interface='org.mpris.MediaPlayer2.Player',method='OpenUri',reply_signature='()',same_process_renderer_required=True,release_acceptance=False)
                 reuse=dict(schema='arctic-native-player-fixture-continuity-v1',player=players[0],ipc=str(root/'celluloid-ipc.sock'),moving_fixture=str(root/'open-codec-fixture.mkv'),moving_screenshot_sha256='9'*64,product_renderer=smoke.product_renderer_contract.return_value,same_process_renderer_required=True,release_acceptance=False)
+                repaint_receipt=dict(transport='owned mpv IPC SO_PEERCRED',command=['frame-step'],request_id=48,
+                    acknowledgement=dict(data=None,error='success',request_id=48))
                 with patch.object(N,'mpv_property',side_effect=prop), \
-                     patch.object(N,'mpv_pause_reference') as pause,patch.object(N,'celluloid_replace_fixture',return_value=transition),patch.object(N.time,'sleep') as sleep:
+                     patch.object(N,'mpv_pause_reference') as pause, \
+                     patch.object(N,'mpv_repaint_reference',return_value=repaint_receipt) as repaint, \
+                     patch.object(N,'celluloid_replace_fixture',return_value=transition),patch.object(N.time,'sleep') as sleep:
                     with self.assertRaisesRegex(RuntimeError,'actual static visual fixture content unmatched'):
                         smoke.visual_media(reuse)
                 self.assertEqual(sleep.call_args_list,[unittest.mock.call(.5),unittest.mock.call(.5)])
                 pause.assert_called_once_with(root/'celluloid-ipc.sock',smoke.owned[0]['pid'],smoke.uid)
+                repaint.assert_called_once_with(root/'celluloid-ipc.sock',smoke.owned[0]['pid'],smoke.uid)
                 smoke.controlled_controls_trials.assert_not_called()
                 smoke.controlled_renderer_trials.assert_not_called()
                 actual=json.loads((root/'visual-oracle.json').read_bytes())

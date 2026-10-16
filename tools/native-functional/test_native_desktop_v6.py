@@ -61,7 +61,8 @@ def fullscreen_fixture(value,visual,moving_shot):
  visual.update(player=p,player_attempt=1,player_attempt_limit=1,accepted_player_attempt=1,capture_attempt_limit=2,
   capture_deadline_seconds=9.5,fixture_sha256='2'*64,input_rgb_sha256='3'*64,expected_rgb_sha256='4'*64)
  matched=dict(status='matched');capture=dict(attempt=1,screenshot_sha256=visual['screenshot']['sha256'],
-  actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
+  actual_rgb_sha256='5'*64,oracle=matched,playback_time_seconds=.5,owned_identity_geometry_unchanged=True,
+  repaint_before_capture=None)
  transition=fixture_transition(root)
  accepted=dict(player_attempt=1,player=p,player_state={},fixture_sha256=visual['fixture_sha256'],
   input_rgb_sha256=visual['input_rgb_sha256'],expected_rgb_sha256=visual['expected_rgb_sha256'],actual_rgb_sha256='5'*64,
@@ -256,9 +257,13 @@ class FullscreenControls(unittest.TestCase):
    hashes=dict(fixture_sha256='4'*64,input_rgb_sha256='5'*64,expected_rgb_sha256='6'*64)
    first_capture=dict(attempt=1,screenshot_sha256='7'*64,actual_rgb_sha256='9'*64,
       oracle=dict(status='unmatched',reason='fixture repaint pending'),playback_time_seconds=.5,
-      owned_identity_geometry_unchanged=True)
+      owned_identity_geometry_unchanged=True,repaint_before_capture=None)
+   repaint=dict(control=dict(transport='owned mpv IPC SO_PEERCRED',command=['frame-step'],request_id=48,
+      acknowledgement=dict(data=None,error='success',request_id=48)),before_seconds=.5,after_seconds=.6,
+      advance_seconds=.1,pause_before=True,pause_after=True,settle_seconds=.5,release_acceptance=False)
    capture=dict(attempt=2,screenshot_sha256=shots[1]['sha256'],actual_rgb_sha256='8'*64,
-      oracle=copy.deepcopy(matched),playback_time_seconds=.5,owned_identity_geometry_unchanged=True)
+      oracle=copy.deepcopy(matched),playback_time_seconds=.6,owned_identity_geometry_unchanged=True,
+      repaint_before_capture=repaint)
    transition=fixture_transition(root)
    accepted=dict(player_attempt=1,player=players[0],player_state={},**hashes,actual_rgb_sha256='8'*64,
       playback_clock={},capture_attempts=[first_capture,capture],capture_attempt_limit=2,capture_deadline_seconds=9.5,
@@ -290,6 +295,11 @@ class FullscreenControls(unittest.TestCase):
    rejected(lambda v:v['player_attempts'][0]['oracle'].update(status='unmatched'))
    rejected(lambda v:v['player_attempts'][0].update(actual_rgb_sha256='9'*64))
    rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0].update(private_value='forbidden'))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][0].update(repaint_before_capture={}))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][1].update(repaint_before_capture=None))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][1]['repaint_before_capture']['control']['acknowledgement'].update(extra=True))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][1]['repaint_before_capture'].update(advance_seconds=.01))
+   rejected(lambda v:v['player_attempts'][0]['capture_attempts'][1]['repaint_before_capture'].update(pause_after=False))
    rejected(lambda v:v['product_renderer'].update(realized_renderer='vulkan'))
    moving_path=d/'moving-player-proof.json';original_moving=moving_path.read_text()
    changed=json.loads(original_moving);changed['static_oracle_reuse']['player']['pid']=71
