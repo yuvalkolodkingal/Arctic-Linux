@@ -113,14 +113,18 @@ then maps only nonblack glyph pixels
 in the marker and prompt rows within the fixed left 640×32 pixels to white. It
 reads each private row through an 8x nearest-neighbour enlargement and pinned
 single-line PSM 7. Both transformed crops are always deleted; the
-original 1280x800 frame remains the sole screen evidence and geometry gate. The
-visual half requires `ARCTIC-SHOWCASE-SHELL-READY` followed only by the fixed
-Fish `~>` suffix on an exact 1280x800 frame. The nonce-bound response proves the
-exact account, hostname, UID and shell without relying on OCR for that identity.
-A missing marker, alternate suffix, reversed order, extra
-line, wrong nonce or different session identity fails closed. A second unchanged
-exact frame is required before the sudo launcher. Neither guest diagnostics,
-an echoed command, a settling delay nor marker pixels alone can authorize input.
+original 1280x800 frame remains the sole screen evidence and geometry gate.
+Pinned PSM 7 can return an empty string for the isolated two-glyph prompt, so
+the visual half requires the exact OCR marker together with one of the two
+measured nonblack occupancy vectors for `~>` with or without the Fish cursor:
+`542,364,20,8` or `542,364,20,24`, followed by twelve empty bands. This rejects
+the former account prompt, any extra account or row, altered glyph geometry and
+every non-1280x800 frame. The nonce-bound response proves the exact account,
+hostname, UID and Fish shell without relying on OCR for that identity. A
+missing marker, alternate occupancy, extra row, wrong nonce or different
+session identity fails closed. A second unchanged exact frame is required
+before the sudo launcher. Neither guest diagnostics, an echoed command, a
+settling delay nor marker pixels alone can authorize input.
 
 The installed session and visual prompt remain an authoritative bounded gate.
 The channel response has a 30-second limit and the visual gate has a 90-second

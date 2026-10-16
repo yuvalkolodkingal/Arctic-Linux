@@ -755,10 +755,6 @@ class UnattendedController(unittest.TestCase):
                              + c.CONTROLLER["account"]["prompt"]["rendered"]
                              + " '; set_color normal; end; ")
         self.assertEqual(prefix.count(prompt_definition), 1)
-        self.assertTrue(automation._fixed_shell_transport_visual_present(
-            "ARCTIC-SHOWCASE-SHELL-READY\n"
-            + c.CONTROLLER["account"]["prompt"]["rendered"],
-            tuple(c.CONTROLLER["account"]["prompt"]["ocr_suffixes"])))
         self.assertTrue(rendered_command.endswith("; end"))
         rendered = subprocess.run(
             ["/bin/sh", "-c", "printf " + rendered_command.removesuffix("; end")],
@@ -897,23 +893,42 @@ uptime   2 mins
 
     def test_transport_visual_proof_keeps_exact_marker_order_and_suffix(self):
         marker = "ARCTIC-SHOWCASE-SHELL-READY"
-        suffixes = ("~>", "~ >")
-        for valid in (marker + "\n~>",
-                      "ARCTIC - SHOWCASE - SHELL - READY\n~ > _|"):
+
+        def frame(counts, *, size=(1280, 800)):
+            image = Image.new("RGB", size, "black")
+            for band, count in enumerate(counts):
+                for offset in range(count):
+                    image.putpixel((offset % 640, band * 8 + offset // 640),
+                                   (255, 255, 255))
+            return image
+
+        without_cursor, with_cursor = automation.SHELL_TRANSPORT_OCCUPANCY
+        for counts in (without_cursor, with_cursor):
             self.assertTrue(automation._fixed_shell_transport_visual_present(
-                valid, suffixes))
-        for forged in (
-            "~>\n" + marker,
-            marker,
-            marker + "\n$>",
-            marker + "\n~>\ntrailing",
-            "ARCTIC-SHOWCASE-SHELL-WRONG\n~>",
-            marker + "\naccount\n~>",
-            marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>",
-        ):
-            with self.subTest(forged=forged):
+                marker, frame(counts)))
+            self.assertEqual(automation._installed_shell_surface_class(
+                frame(counts), marker, "arcticshowcase@arctic-showcase",
+                ("~>", "~ >")), "proof-marker")
+
+        old_account_prompt = (542, 364, 663, 444) + (0,) * 12
+        old_account_cursor = (542, 364, 663, 460) + (0,) * 12
+        extra_account = (542, 364, 96, 72) + (0,) * 12
+        extra_row = (542, 364, 20, 8, 1) + (0,) * 11
+        rejected = (
+            ("ARCTIC-SHOWCASE-SHELL-WRONG", without_cursor),
+            (marker, (542, 364, 19, 8) + (0,) * 12),
+            (marker, (542, 364, 20, 9) + (0,) * 12),
+            (marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~>", old_account_prompt),
+            (marker + "\nARCTICSHOWCASE@ARCTIC-SHOWCASE ~> _|", old_account_cursor),
+            (marker + "\nOTHER@ARCTIC-SHOWCASE ~>", extra_account),
+            (marker + "\n~>\nEXTRA", extra_row),
+        )
+        for text, counts in rejected:
+            with self.subTest(text=text, counts=counts):
                 self.assertFalse(automation._fixed_shell_transport_visual_present(
-                    forged, suffixes))
+                    text, frame(counts)))
+        self.assertFalse(automation._fixed_shell_transport_visual_present(
+            marker, frame((), size=(1024, 768))))
 
     def test_installed_session_proof_is_exact_nonce_bound_identity(self):
         response = (c.SHELL_SESSION_PREFIX + SHELL_NONCE
@@ -968,18 +983,25 @@ uptime   2 mins
     def test_installed_shell_gate_uses_focused_ocr_and_fixed_marker_spacing(self):
         prompt = automation.SHELL_PROMPT_ACCOUNT
         source = Image.new("RGB", (1280, 800), "black")
-        source.putpixel((10, 12), (255, 255, 255))
+        for band, count in enumerate(automation.SHELL_TRANSPORT_OCCUPANCY[0]):
+            for offset in range(count):
+                source.putpixel((offset % 640, band * 8 + offset // 640),
+                                (255, 255, 255))
         self.qmp.screendump = lambda path: source.save(path)
         self.controller.ocr = lambda _path: "clean"
         self.controller.shell_focus_ocr = mock.Mock(side_effect=(
-            "ARCTIC - SHOWCASE - SHELL - READY", "~ >"))
+            "ARCTIC - SHOWCASE - SHELL - READY", ""))
         path, text = self.controller.wait_screen(
             "installed-console", "installed-shell-ready",
             ("ARCTIC-SHOWCASE-SHELL-READY", prompt), seconds=1,
             exact_output=True, ordered=True,
             prompt_contract=(prompt, ("~>", "~ >")), transport_prompt=True)
         self.assertIsNone(path)
-        self.assertEqual(text.splitlines()[-1], "~ >")
+        self.assertEqual(text.strip(), "ARCTIC - SHOWCASE - SHELL - READY")
+        self.assertTrue(self.controller.installed_startup.signal_final["marker"])
+        self.assertTrue(self.controller.installed_startup.signal_final["suffix"])
+        self.assertFalse(self.controller.installed_startup.signal_final["account-pattern"])
+        self.assertFalse(self.controller.installed_startup.signal_final["exact"])
         self.assertEqual(list(self.root.glob("controller-*.png")), [])
 
     def test_installed_sudo_proof_is_executed_not_typed_and_invalidates_cache(self):

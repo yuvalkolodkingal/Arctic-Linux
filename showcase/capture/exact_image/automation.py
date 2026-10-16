@@ -174,16 +174,13 @@ def _fixed_shell_proof_present(text: str, account: str, suffixes) -> bool:
         text[marker.end():], account, suffixes)
 
 
-def _fixed_shell_transport_visual_present(text: str, suffixes) -> bool:
-    """Require the fixed marker followed only by the final Fish suffix row."""
-    if type(text) is not str or type(suffixes) not in (tuple, list) or not suffixes:
+def _fixed_shell_transport_visual_present(text: str, image) -> bool:
+    """Require the exact marker and measured suffix-only VT occupancy."""
+    if _fixed_shell_marker_match(text) is None:
         return False
-    marker = _fixed_shell_marker_match(text)
-    if marker is None:
+    if image.mode != "RGB" or image.size != (1280, 800):
         return False
-    lines = [line.strip().rstrip("_| ")
-             for line in text[marker.end():].splitlines() if line.strip()]
-    return len(lines) == 1 and lines[0] in suffixes
+    return _shell_nonbackground_occupancy(image) in SHELL_TRANSPORT_OCCUPANCY
 
 
 def _shell_ocr_row_focuses(image):
@@ -212,6 +209,10 @@ SHELL_OCCUPANCY_WIDTH = 640
 SHELL_OCCUPANCY_BAND_HEIGHT = 8
 SHELL_OCCUPANCY_BANDS = 16
 SHELL_OCCUPANCY_MAX = SHELL_OCCUPANCY_WIDTH * SHELL_OCCUPANCY_BAND_HEIGHT
+SHELL_TRANSPORT_OCCUPANCY = (
+    (542, 364, 20, 8) + (0,) * 12,
+    (542, 364, 20, 24) + (0,) * 12,
+)
 
 
 def _shell_nonbackground_occupancy(image):
@@ -402,6 +403,8 @@ def _installed_shell_surface_class(image, text: str, account: str, suffixes) -> 
     """Reduce a private installed-console frame to one reviewed public enum."""
     if image.size != (1280, 800):
         return "geometry-mismatch"
+    if _fixed_shell_transport_visual_present(text, image):
+        return "proof-marker"
     # A cleared Linux text console is intentionally low-color.  Preserve only
     # the reviewed fixed-string diagnostic enums before reducing every other
     # sparse surface to the privacy-safe blank-output enum.  These observations
@@ -768,12 +771,17 @@ class Controller:
                 if installed_gate:
                     account, suffixes = prompt_contract
                     signals = _installed_shell_signals(text, account, suffixes)
+                    if (transport_prompt
+                            and _fixed_shell_transport_visual_present(text, image)):
+                        # Pinned PSM 7 does not reliably return a two-glyph
+                        # row. The two measured suffix/cursor states are exact.
+                        signals["suffix"] = True
                     self.installed_startup.observe(
                         _installed_shell_surface_class(image, text, account, suffixes),
                         signals, _shell_nonbackground_occupancy(image))
                 prompt_ok = (prompt_contract is None
                              or (_fixed_shell_transport_visual_present(
-                                    text, prompt_contract[1])
+                                    text, image)
                                  if transport_prompt else
                                  _fixed_fish_prompt_present(text, *prompt_contract)))
                 phrase_ok = (not phrases or _phrases_present(
@@ -781,7 +789,7 @@ class Controller:
                 if (expectation in {"installed-shell-ready", "installed-shell"}
                         and prompt_contract is not None):
                     phrase_ok = (_fixed_shell_transport_visual_present(
-                                    text, prompt_contract[1])
+                                    text, image)
                                  if transport_prompt else
                                  _fixed_shell_proof_present(text, *prompt_contract))
                 if (phrase_ok
