@@ -27,9 +27,9 @@
     "shell/BatteryService.qml": "e33a7dd29ef10cf5671b6984aaa1a690a994baa460ffdcacf0f49adfabffea35"
   },
   "observer": {
-    "source_sha256": "d576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf",
-    "frozen_sha256": "7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e",
-    "comparator_sha256": "ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85"
+    "source_sha256": "5aeca09dfde70e7ec4e69ff29c5d102f30dea23df427d08823f5e3221c73a1e7",
+    "frozen_sha256": "3a1a7549cce04665e2f2300a684aa842f2b00fcd7208acaf556e5cca0c078f47",
+    "comparator_sha256": "f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208"
   },
   "execution_files": {
     ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
@@ -37,8 +37,8 @@
     "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
     "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
-    "tools/performance/causal.py": "06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5",
-    "tools/performance/compare.py": "ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85",
+    "tools/performance/causal.py": "c9f9e28142788da739fcb8c0ebfddf39823fd88b9b62d108582d9dfcef42a408",
+    "tools/performance/compare.py": "f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208",
     "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
     "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
     "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
@@ -47,7 +47,7 @@
     "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
     "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
     "tools/performance/qualification.py": "5b06a456c3a1a0b1c0e69b9ee21eb48c0f98d94bb4c43ad56d097d9df5776578",
-    "tools/performance/run-paired.py": "fcdb9e4d3dac7264aa63a6a8abb675e69913dbcccfb894c18d5974dc48ce9579",
+    "tools/performance/run-paired.py": "d4052d5eceb1601cb3c924ac9af76e3c3072744a3e9040e0abc27408373f6d9f",
     "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
   }
 }

@@ -281,10 +281,10 @@ def failure_phase_summary(work, screen_failure):
             last_observer_phase='unavailable')
         envelope = result['guest_envelope']  # envelope-only
         pins = dict(guest='62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415',
-            causal='06cd33d2916902d90c86833d6640bcca80a1032a03f4e8b695afc7019f3769a5')
-        observer = dict(source_sha256='d576e1445d0be30cea3487b0c8f814f8c7aea545aba20d09ec4d0a45a4f599cf',
-            frozen_sha256='7ef62e323a49526357ec733a8dc4c0b3c3823a28f8b12193e064dc3bdc2d3d4e',
-            comparator_sha256='ff63119180eaf55ed3bd4c682e058dc4bb34371d083af19d1ccc584aeb3cad85')
+            causal='c9f9e28142788da739fcb8c0ebfddf39823fd88b9b62d108582d9dfcef42a408')
+        observer = dict(source_sha256='5aeca09dfde70e7ec4e69ff29c5d102f30dea23df427d08823f5e3221c73a1e7',
+            frozen_sha256='3a1a7549cce04665e2f2300a684aa842f2b00fcd7208acaf556e5cca0c078f47',
+            comparator_sha256='f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208')
         if result['smoke_exit'] != 'nonzero':
             envelope['reason'] = 'smoke_not_nonzero'  # envelope-only
             return unknown
