@@ -17,22 +17,22 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = "yuvalkolodkingal/Arctic-Linux"
 REPO_API = "repos/" + REPOSITORY
-RUN_ID = 38_839_101_249
+RUN_ID = 38_855_679_061
 RUN_ATTEMPT = 1
-SOURCE_SHA = "c2a6944f544bc7b20fdb25a4e788938e3ca72714"
+SOURCE_SHA = "5b7f8a2dc624449b78a03b2db0e3b2ada76de94d"
 SOURCE_BRANCH = "codex/showcase-exact-capture-20261014"
 SOURCE_WORKFLOW = ".github/workflows/showcase-exact-capture-20261014.yml"
-BRANCH = "codex/read-showcase-failure-388391-20261016"
-WORKFLOW_NAME = "Read bounded showcase failure for run 38839101249"
-ACTIVATION = Path(".github/showcase-failure-reader-388391.activate")
+BRANCH = "codex/read-showcase-failure-388556-20261016"
+WORKFLOW_NAME = "Read bounded showcase failure for run 38855679061"
+ACTIVATION = Path(".github/showcase-failure-reader-388556.activate")
 READER = Path("tools/showcase-failure-reader/read.py")
 CONTRACT = Path("showcase/capture/exact_image/contract.py")
-READER_WORKFLOW = Path(".github/workflows/read-showcase-failure-388391.yml")
+READER_WORKFLOW = Path(".github/workflows/read-showcase-failure-388556.yml")
 ARTIFACT = {
-    "id": 12_021_566_420,
+    "id": 12_029_040_661,
     "name": "exact-image-showcase-failure-projection",
-    "bytes": 7_435,
-    "sha256": "9944a92810ed2972713ab05a0844b4450e10c8f4acabff598e2540f735d135e5",
+    "bytes": 7_444,
+    "sha256": "70f0d7861544d779821ef17be97e56bbc81351e422566ca2f46526ec9ab993b3",
 }
 MEMBER = "failure-projection.json"
 MANIFEST_FIELDS = {
