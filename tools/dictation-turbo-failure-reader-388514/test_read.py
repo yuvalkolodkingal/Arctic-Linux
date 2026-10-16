@@ -169,8 +169,19 @@ class SafeReaderTests(unittest.TestCase):
         manifest = reader.read_json_file(HERE / 'execution-manifest.json', 32768)
         reader.validate_manifest(manifest)
         frozen = json.loads((HERE / 'qualification-execution-manifest.json').read_text())
-        self.assertEqual(reader.CONTEXT_PINS['checker_sha256'],
-                         frozen['execution_files']['tools/dictation-qualification/guest_check.py'])
+        self.assertEqual(reader.IMAGE, frozen['image'])
+        self.assertEqual(reader.FIXTURE_SHA256, frozen['fixture_manifest_sha256'])
+        self.assertEqual(reader.CONTEXT_PINS['source_sha'], frozen['image']['source_sha'])
+        self.assertEqual(reader.CONTEXT_PINS['iso_sha256'], frozen['image']['sha256'])
+        self.assertEqual(reader.CONTEXT_PINS['iso_bytes'], frozen['image']['bytes'])
+        self.assertEqual(reader.CONTEXT_PINS['fixture_manifest_sha256'],
+                         frozen['fixture_manifest_sha256'])
+        for field, path in {
+                'checker_sha256': 'tools/dictation-qualification/guest_check.py',
+                'contract_sha256': 'tools/dictation-qualification/contract.py',
+                'accuracy_sha256': 'tools/dictation-accuracy/accuracy.py',
+                'pins_sha256': 'tools/dictation-accuracy/pins.json'}.items():
+            self.assertEqual(reader.CONTEXT_PINS[field], frozen['execution_files'][path])
 
 
 if __name__ == '__main__':

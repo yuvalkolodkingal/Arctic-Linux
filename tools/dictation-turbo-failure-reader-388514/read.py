@@ -26,26 +26,22 @@ READER = Path('tools/dictation-turbo-failure-reader-388514/read.py')
 CONTRACT = Path('tools/dictation-turbo-failure-reader-388514/contract.py')
 QUALIFICATION_MANIFEST = Path('tools/dictation-turbo-failure-reader-388514/qualification-execution-manifest.json')
 PROFILES = ('turbo-q5-v3',)
-FIXTURE_SHA256 = 'd97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd'
-IMAGE = {
-    'archive_bytes': 1936459062,
-    'archive_sha256': '5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23',
-    'artifact_id': 12016177474,
-    'bytes': 1936271360,
-    'name': 'Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso',
-    'producer_mode': 'frozen-external-paired-v1',
-    'producer_receipt_sha256': '82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330',
-    'run_id': 38823208615,
-    'sha256': 'c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7',
-    'source_sha': 'cfc39dad61125e4fa8fb7906ac14f4c360b58228',
-}
+# This byte-for-byte copy is itself SHA-256 pinned by execution-manifest.json.
+# Derive every runner-owned context pin from the exact ade7adef manifest rather
+# than from files on this later diagnostic branch.
+FROZEN_QUALIFICATION = json.loads((ROOT / QUALIFICATION_MANIFEST).read_bytes())
+FROZEN_EXECUTION_FILES = FROZEN_QUALIFICATION['execution_files']
+FIXTURE_SHA256 = FROZEN_QUALIFICATION['fixture_manifest_sha256']
+IMAGE = FROZEN_QUALIFICATION['image']
 CONTEXT_PINS = {
     'source_sha': IMAGE['source_sha'], 'iso_sha256': IMAGE['sha256'],
     'iso_bytes': IMAGE['bytes'], 'fixture_manifest_sha256': FIXTURE_SHA256,
-    'checker_sha256': '65cb34988d298a8a556fac205653bc60735775b389e944a6104747f2570884f8',
-    'contract_sha256': '1ec1a6015406807aa3f075949880973733d47e097d590a8d34e950000b08cf59',
-    'accuracy_sha256': '8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a',
-    'pins_sha256': '446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d',
+    'checker_sha256': FROZEN_EXECUTION_FILES['tools/dictation-qualification/guest_check.py'],
+    'contract_sha256': FROZEN_EXECUTION_FILES['tools/dictation-qualification/contract.py'],
+    'accuracy_sha256': FROZEN_EXECUTION_FILES['tools/dictation-accuracy/accuracy.py'],
+    'pins_sha256': FROZEN_EXECUTION_FILES['tools/dictation-accuracy/pins.json'],
+    # runner.integration_sha() intentionally hashes product files from the
+    # frozen image source cfc39dad, rather than observer files from ade7adef.
     'integration_sha256': '151ba0bb0265542d1b031bc94572ce671d06c1dbc177796a00f6e6d62ec8e7f7',
 }
 MANIFEST_FIELDS = {'schema', 'ready', 'repository', 'workflow', 'run_id', 'run_attempt',
