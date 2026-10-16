@@ -49,6 +49,19 @@ PAYLOAD = Path('/opt/arctic/voxtype/1.1.1')
 MODELS = Path('/opt/arctic/voxtype/models')
 SYSTEM = Path('/var/lib/arctic/dictation')
 VULKAN_CACHE = Path('/var/cache/arctic/voxtype/voxtype-1.1.1-linux-x86_64-vulkan')
+VULKAN_RELEASE_NAME = 'voxtype-1.1.1-linux-x86_64-vulkan'
+VULKAN_RELEASE_URL = ('https://github.com/peteonrails/voxtype/releases/download/v1.1.1/'
+                      + VULKAN_RELEASE_NAME)
+VULKAN_CACHE_SIG = VULKAN_CACHE.with_name(VULKAN_CACHE.name + '.asc')
+SUMS_CACHE = VULKAN_CACHE.parent / 'SHA256SUMS.txt'
+SUMS_CACHE_SIG = VULKAN_CACHE.parent / 'SHA256SUMS.txt.asc'
+VULKAN_SIG_BYTES = 228
+VULKAN_SIG_SHA256 = 'aaf15615b5f7f5d18e5df132fd6a1ade754991162108b1a3990b303dd1a9109b'
+SUMS_BYTES = 2931
+SUMS_SHA256 = 'a93de5d79f6180626181aaf2315cc8415b084914b9f69a71e71bfb56bae1a32e'
+SUMS_SIG_BYTES = 228
+SUMS_SIG_SHA256 = '2bce1ff42615d322b1e686f05373c99889d506e230d5f5512aeb22d728510af8'
+RELEASE_FINGERPRINT = '9CCF7915B750CAE8B095ED1AA3FC9F33FD209279'
 COLLECTOR_SETUP_STAGES = ('resource-limits', 'arguments', 'environment', 'context',
                           'source-integrity', 'integration', 'profile', 'hardware',
                           'report', 'desktop', 'workspace', 'journal', 'audit', 'execution')
@@ -881,6 +894,105 @@ class Checker:
         require(result.returncode != 0 and result.stdout == b'000', 'outside-network-response')
         return {'returncode': result.returncode}
 
+    @staticmethod
+    def exact_root_file(path, size, digest):
+        try:
+            info = Path(path).lstat()
+            return (stat.S_ISREG(info.st_mode) and info.st_uid == 0
+                    and not info.st_mode & 0o022 and info.st_size == size
+                    and sha(path) == digest)
+        except OSError:
+            return False
+
+    def prefetch_vulkan_cache(self):
+        """Download and authenticate optional bytes without executing VoxType."""
+        cache = VULKAN_CACHE.parent
+        info = cache.lstat()
+        require(stat.S_ISDIR(info.st_mode) and info.st_uid == 0
+                and not info.st_mode & 0o022, 'vulkan-cache-directory-unsafe')
+        require(self.exact_root_file(PROVENANCE_SUMS, SUMS_BYTES, SUMS_SHA256)
+                and self.exact_root_file(PROVENANCE_SUMS_SIG, SUMS_SIG_BYTES,
+                                         SUMS_SIG_SHA256),
+                'vulkan-packaged-provenance-invalid')
+        try:
+            sums = PROVENANCE_SUMS.read_text(encoding='ascii').splitlines()
+        except (OSError, UnicodeError):
+            raise Invalid('vulkan-packaged-provenance-invalid') from None
+        require(sums.count(ASSETS['vulkan']['sha256'] + '  ' + VULKAN_RELEASE_NAME) == 1,
+                'vulkan-packaged-provenance-invalid')
+
+        temporary = Path(tempfile.mkdtemp(prefix='.qualification-vulkan-', dir=cache))
+        try:
+            keyring = temporary / 'release-key.gpg'
+            shown = run(['gpg', '--batch', '--show-keys', '--with-colons', str(KEY)])
+            try:
+                fingerprints = [row.split(':')[9] for row in
+                                shown.stdout.decode('ascii').splitlines()
+                                if row.startswith('fpr:') and len(row.split(':')) > 9]
+            except UnicodeError:
+                raise Invalid('vulkan-release-key-invalid') from None
+            require(fingerprints and fingerprints[0] == RELEASE_FINGERPRINT,
+                    'vulkan-release-key-invalid')
+            run(['gpg', '--batch', '--yes', '--dearmor', '--output', str(keyring),
+                 str(KEY)])
+
+            binary = temporary / VULKAN_RELEASE_NAME
+            signature = temporary / (VULKAN_RELEASE_NAME + '.asc')
+            if (self.exact_root_file(VULKAN_CACHE, ASSETS['vulkan']['bytes'],
+                                     ASSETS['vulkan']['sha256'])
+                    and self.exact_root_file(VULKAN_CACHE_SIG, VULKAN_SIG_BYTES,
+                                             VULKAN_SIG_SHA256)):
+                shutil.copyfile(VULKAN_CACHE, binary)
+                shutil.copyfile(VULKAN_CACHE_SIG, signature)
+            else:
+                for url, target in ((VULKAN_RELEASE_URL, binary),
+                                    (VULKAN_RELEASE_URL + '.asc', signature)):
+                    run(['curl', '--noproxy', '*', '--fail', '--location',
+                         '--silent', '--show-error',
+                         '--retry', '3', '--retry-delay', '2', '--connect-timeout', '20',
+                         '--speed-limit', '1024', '--speed-time', '60',
+                         '--output', str(target), url], 750)
+            require(binary.stat().st_size == ASSETS['vulkan']['bytes']
+                    and sha(binary) == ASSETS['vulkan']['sha256']
+                    and signature.stat().st_size == VULKAN_SIG_BYTES
+                    and sha(signature) == VULKAN_SIG_SHA256,
+                    'vulkan-prefetch-integrity')
+
+            def signed(sig, payload):
+                result = run(['gpgv', '--status-fd', '1', '--keyring', str(keyring),
+                              str(sig), str(payload)])
+                try:
+                    valid = [line.split()[2] for line in result.stdout.decode('ascii').splitlines()
+                             if line.startswith('[GNUPG:] VALIDSIG ') and len(line.split()) > 2]
+                except UnicodeError:
+                    raise Invalid('vulkan-prefetch-signature') from None
+                require(valid == [RELEASE_FINGERPRINT], 'vulkan-prefetch-signature')
+
+            signed(PROVENANCE_SUMS_SIG, PROVENANCE_SUMS)
+            signed(signature, binary)
+            for source, target, size, digest in (
+                    (PROVENANCE_SUMS, SUMS_CACHE, SUMS_BYTES, SUMS_SHA256),
+                    (PROVENANCE_SUMS_SIG, SUMS_CACHE_SIG,
+                     SUMS_SIG_BYTES, SUMS_SIG_SHA256),
+                    (binary, VULKAN_CACHE, ASSETS['vulkan']['bytes'],
+                     ASSETS['vulkan']['sha256']),
+                    (signature, VULKAN_CACHE_SIG, VULKAN_SIG_BYTES,
+                     VULKAN_SIG_SHA256)):
+                staged = temporary / (target.name + '.publish')
+                shutil.copyfile(source, staged)
+                os.chmod(staged, 0o644)
+                require(staged.stat().st_size == size and sha(staged) == digest,
+                        'vulkan-prefetch-publish-integrity')
+                os.replace(staged, target)
+            require(all(self.exact_root_file(path, size, digest) for path, size, digest in (
+                (SUMS_CACHE, SUMS_BYTES, SUMS_SHA256),
+                (SUMS_CACHE_SIG, SUMS_SIG_BYTES, SUMS_SIG_SHA256),
+                (VULKAN_CACHE, ASSETS['vulkan']['bytes'], ASSETS['vulkan']['sha256']),
+                (VULKAN_CACHE_SIG, VULKAN_SIG_BYTES, VULKAN_SIG_SHA256),
+            )), 'vulkan-prefetch-publish-integrity')
+        finally:
+            shutil.rmtree(temporary)
+
     def prepare_vulkan_offline_boundary(self):
         """Fetch and verify optional Vulkan, then remove outside reachability.
 
@@ -894,26 +1006,9 @@ class Checker:
                 'vulkan-boundary-scope')
         network_off = None
         try:
-            # Preserve the lazy-login contract: setup may run the signed
-            # command-line Vulkan probe, but no resident user daemon starts.
-            self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'], check=False)
-            failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                          str(SETUP), '--backend', 'vulkan'], 750, check=False)
-            require(failed.returncode != 0,
-                    'vm-vulkan-fixture-unexpectedly-supported')
-            require((SYSTEM / 'backend').read_text().strip() == 'cpu'
-                    and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
-                    'vulkan-boundary-cpu-not-preserved')
-            self.checked_vulkan_payload()
-            # Use the product's supported selector to clear the checked
-            # failure while keeping the daemon stopped for readiness testing.
-            run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
-                 str(SETUP), '--backend', 'cpu'], 750)
-            require((SYSTEM / 'backend').read_text().strip() == 'cpu'
-                    and not (SYSTEM / 'setup.error').exists(),
-                    'vulkan-boundary-cpu-not-restored')
-            require(not self.engines() and not self.state_path.exists(),
-                    'vulkan-boundary-resident-session')
+            # The connected portion only downloads and authenticates bytes.
+            # It never invokes VoxType, setup, recording or transcription.
+            self.prefetch_vulkan_cache()
         finally:
             # Even a failed preparation must not leave an externally reachable
             # VM available to later collector cleanup or diagnostics.
@@ -921,6 +1016,26 @@ class Checker:
                               20, check=False)
         require(network_off.returncode == 0, 'vulkan-boundary-network-disable')
         isolated = self.offline()
+        # Only after the HTTP 000 proof may official setup run its local
+        # Vulkan probe (including its silence.wav transcription) from cache.
+        self.cmd(['systemctl', '--user', 'stop', 'voxtype.service'], check=False)
+        failed = run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+                      str(SETUP), '--backend', 'vulkan'], 750, check=False)
+        require(failed.returncode != 0,
+                'vm-vulkan-fixture-unexpectedly-supported')
+        require((SYSTEM / 'backend').read_text().strip() == 'cpu'
+                and (SYSTEM / 'setup.error').read_text().strip() == 'backend-vulkan',
+                'vulkan-boundary-cpu-not-preserved')
+        self.checked_vulkan_payload()
+        # Use the product's supported selector to clear the checked failure
+        # while keeping the daemon stopped for readiness testing.
+        run(['/usr/bin/env', 'PKEXEC_UID=' + str(self.account.pw_uid),
+             str(SETUP), '--backend', 'cpu'], 750)
+        require((SYSTEM / 'backend').read_text().strip() == 'cpu'
+                and not (SYSTEM / 'setup.error').exists(),
+                'vulkan-boundary-cpu-not-restored')
+        require(not self.engines() and not self.state_path.exists(),
+                'vulkan-boundary-resident-session')
         return {'gpu_supported': False, 'explicit_cpu_selected': True,
                 'bytes': ASSETS['vulkan']['bytes'],
                 'sha256': ASSETS['vulkan']['sha256'],

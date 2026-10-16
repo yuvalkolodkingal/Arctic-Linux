@@ -42,6 +42,7 @@ class DirectVoxtypeControls(unittest.TestCase):
         checker.context = {'phase': 'online-installed'}
         checker.engines = Mock(return_value=[])
         checker.record = Mock()
+        checker.prefetch_vulkan_cache = Mock()
         checker.checked_vulkan_payload = Mock(return_value=True)
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=b'', stderr=b'', returncode=0))
@@ -73,9 +74,17 @@ class DirectVoxtypeControls(unittest.TestCase):
             'gpu_supported': False, 'explicit_cpu_selected': True,
             'bytes': guest.ASSETS['vulkan']['bytes'],
             'sha256': guest.ASSETS['vulkan']['sha256'], 'returncode': 7})
-        self.assertEqual(calls[-2], ('/usr/bin/nmcli', 'networking', 'off'))
-        self.assertEqual(calls[-1][0], 'curl')
+        network = calls.index(('/usr/bin/nmcli', 'networking', 'off'))
+        probe = next(index for index, argv in enumerate(calls) if argv[:2] == ('curl', '--noproxy'))
+        vulkan = next(index for index, argv in enumerate(calls)
+                       if argv[-2:] == ('--backend', 'vulkan'))
+        cpu = next(index for index, argv in enumerate(calls)
+                    if argv[-2:] == ('--backend', 'cpu'))
+        self.assertLess(network, probe)
+        self.assertLess(probe, vulkan)
+        self.assertLess(vulkan, cpu)
         checker.record.assert_not_called()
+        checker.prefetch_vulkan_cache.assert_called_once_with()
         checker.checked_vulkan_payload.assert_called_once_with()
 
     def test_failed_connected_preparation_still_disables_network(self):
@@ -87,19 +96,83 @@ class DirectVoxtypeControls(unittest.TestCase):
         checker.cmd = Mock(return_value=SimpleNamespace(
             stdout=b'', stderr=b'', returncode=0))
         calls = []
+        checker.prefetch_vulkan_cache = Mock(side_effect=guest.Invalid('bad-prefetch'))
+        def command(argv, timeout=20, check=True, **_kwargs):
+            calls.append(tuple(argv))
+            return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+        with patch.object(guest, 'run', side_effect=command), \
+                self.assertRaisesRegex(guest.Invalid, '^bad-prefetch$'):
+            checker.prepare_vulkan_offline_boundary()
+        self.assertIn(('/usr/bin/nmcli', 'networking', 'off'), calls)
+        self.assertFalse(any(argv[-2:] in (('--backend', 'vulkan'), ('--backend', 'cpu'))
+                             for argv in calls))
+
+    def test_connected_prefetch_authenticates_cache_without_executing_setup(self):
+        checker = self.checker()
+        data, signature = b'signed-vulkan-fixture', b'vulkan-signature'
+        sums_signature = b'sums-signature'
+        digest = hashlib.sha256(data).hexdigest()
+        sums = (digest + '  ' + guest.VULKAN_RELEASE_NAME + '\n').encode()
+        calls = []
         with tempfile.TemporaryDirectory() as temp:
-            system = Path(temp)
-            (system / 'backend').write_text('cpu\n')
-            (system / 'setup.error').write_text('backend-vulkan\n')
+            root = Path(temp)
+            cache = root / 'cache'; cache.mkdir()
+            key = root / 'key.asc'; key.write_bytes(b'fixture-key')
+            provenance = root / 'SHA256SUMS.txt'; provenance.write_bytes(sums)
+            provenance_sig = root / 'SHA256SUMS.txt.asc'; provenance_sig.write_bytes(sums_signature)
+            vulkan = cache / guest.VULKAN_RELEASE_NAME
+            vulkan_sig = cache / (guest.VULKAN_RELEASE_NAME + '.asc')
+            sums_cache = cache / 'SHA256SUMS.txt'
+            sums_cache_sig = cache / 'SHA256SUMS.txt.asc'
             def command(argv, timeout=20, check=True, **_kwargs):
                 calls.append(tuple(argv))
-                return SimpleNamespace(stdout=b'', stderr=b'',
-                                       returncode=(1 if argv[-1:] == ['vulkan'] else 0))
-            checker.checked_vulkan_payload = Mock(side_effect=guest.Invalid('bad-payload'))
-            with patch.object(guest, 'SYSTEM', system), patch.object(guest, 'run', side_effect=command), \
-                    self.assertRaisesRegex(guest.Invalid, '^bad-payload$'):
-                checker.prepare_vulkan_offline_boundary()
-        self.assertIn(('/usr/bin/nmcli', 'networking', 'off'), calls)
+                if argv[:4] == ['gpg', '--batch', '--show-keys', '--with-colons']:
+                    fields = ['fpr'] + [''] * 8 + [guest.RELEASE_FINGERPRINT, '']
+                    return SimpleNamespace(stdout=(':'.join(fields) + '\n').encode(),
+                                           stderr=b'', returncode=0)
+                if argv[:4] == ['gpg', '--batch', '--yes', '--dearmor']:
+                    Path(argv[argv.index('--output') + 1]).write_bytes(b'keyring')
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[0] == 'curl':
+                    target = Path(argv[argv.index('--output') + 1])
+                    target.write_bytes(signature if argv[-1].endswith('.asc') else data)
+                    return SimpleNamespace(stdout=b'', stderr=b'', returncode=0)
+                if argv[0] == 'gpgv':
+                    return SimpleNamespace(
+                        stdout=('[GNUPG:] VALIDSIG ' + guest.RELEASE_FINGERPRINT +
+                                ' 0 0 0 0 0 0 0 0 0\n').encode(),
+                        stderr=b'', returncode=0)
+                raise AssertionError(argv)
+            original_lstat = Path.lstat
+            def root_owned(path):
+                info = original_lstat(path)
+                return SimpleNamespace(st_mode=info.st_mode, st_uid=0,
+                                       st_size=info.st_size)
+            with patch.object(guest, 'KEY', key), \
+                    patch.object(guest, 'PROVENANCE_SUMS', provenance), \
+                    patch.object(guest, 'PROVENANCE_SUMS_SIG', provenance_sig), \
+                    patch.object(guest, 'VULKAN_CACHE', vulkan), \
+                    patch.object(guest, 'VULKAN_CACHE_SIG', vulkan_sig), \
+                    patch.object(guest, 'SUMS_CACHE', sums_cache), \
+                    patch.object(guest, 'SUMS_CACHE_SIG', sums_cache_sig), \
+                    patch.object(guest, 'VULKAN_SIG_BYTES', len(signature)), \
+                    patch.object(guest, 'VULKAN_SIG_SHA256', hashlib.sha256(signature).hexdigest()), \
+                    patch.object(guest, 'SUMS_BYTES', len(sums)), \
+                    patch.object(guest, 'SUMS_SHA256', hashlib.sha256(sums).hexdigest()), \
+                    patch.object(guest, 'SUMS_SIG_BYTES', len(sums_signature)), \
+                    patch.object(guest, 'SUMS_SIG_SHA256', hashlib.sha256(sums_signature).hexdigest()), \
+                    patch.dict(guest.ASSETS, {'vulkan': {'name': 'voxtype-vulkan',
+                               'bytes': len(data), 'sha256': digest}}), \
+                    patch.object(Path, 'lstat', root_owned), \
+                    patch.object(guest, 'run', side_effect=command):
+                checker.prefetch_vulkan_cache()
+            self.assertEqual(vulkan.read_bytes(), data)
+            self.assertEqual(vulkan_sig.read_bytes(), signature)
+            self.assertEqual(sums_cache.read_bytes(), sums)
+            self.assertEqual(sums_cache_sig.read_bytes(), sums_signature)
+        self.assertEqual(sum(argv[0] == 'curl' for argv in calls), 2)
+        self.assertEqual(sum(argv[0] == 'gpgv' for argv in calls), 2)
+        self.assertFalse(any(str(guest.SETUP) in argv for argv in calls))
 
     def test_execute_places_isolation_before_ready_and_session(self):
         source = (HERE / 'guest_check.py').read_text()
@@ -114,6 +187,13 @@ class DirectVoxtypeControls(unittest.TestCase):
         session = body.index('self.session')
         self.assertLess(boundary, readiness)
         self.assertLess(readiness, session)
+
+        prefetch = next(node for node in checker.body
+                        if isinstance(node, ast.FunctionDef)
+                        and node.name == 'prefetch_vulkan_cache')
+        prefetch_body = ast.get_source_segment(source, prefetch)
+        for forbidden in ('SETUP', 'VOXTYPE', 'record', 'transcribe'):
+            self.assertNotIn(forbidden, prefetch_body)
 
     def test_adapter_is_never_used_for_recording_in_session_methods(self):
         tree = ast.parse((HERE / 'guest_check.py').read_text())
