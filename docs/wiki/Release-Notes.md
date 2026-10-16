@@ -2,82 +2,53 @@
 
 ## Arctic Linux 1.2.1 — prepared release
 
-The v1.2.1 desktop, installer and setup changes are integrated in the retained candidate. These
-release notes are prepared while the candidate still completes aggregate qualification. Until the
-public release exists, [v1.2.0](#arctic-linux-120) remains the latest downloadable image.
+The v1.2.1 source includes direct official VoxType 1.1.1 integration, the 28-photo wallpaper
+collection, the first-login reliability fix, per-update What's New card, removable packaged
+wallpapers, lightweight default apps, and the taskbar and installer fixes. The replacement ISO is
+still being qualified and has not been published. Until a public v1.2.1 release exists,
+[v1.2.0](#arctic-linux-120) remains the latest downloadable image.
 
-Keep the signed **stable arctic** channel selected; **the testing channel is not required**.
-Existing systems receive v1.2.1 through stable after the final package set is published, while
-existing app and wallpaper choices are preserved. When it appears, use `arctic-update now`, then
-`arctic-update apply` (save your work; this asks before restarting).
+Keep the signed **stable arctic** channel selected; the testing channel is not required. Existing
+systems preserve their app and wallpaper choices. Final stable v1.2.1 package publication and its
+signed update/reboot test are still pending.
+
+The current artifact-only candidate was built from
+`4f2595c3ecf11ab3332a615df162518d3f677f59` in
+[run 38866458401](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38866458401).
+`Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso` is **1,936,308,224 bytes** with SHA-256
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`. It is below the strict
+2,000,000,000-byte ceiling but above the preferred 1.6 GB target. Its UEFI Try, BIOS Install and UEFI Safe startup checks
+passed.
+
+Those are producer results only. The previous ISO was disqualified after a first-login race was
+found, and its exact-image results do not qualify this replacement. Installation and installed
+boot, networking, apps/media, SELinux, Nix, taskbar and installer behavior, the complete VoxType
+matrix, stable update/reboot, paired performance and media review are pending on this exact image.
+A successful source test or artifact build is not aggregate release qualification.
 
 The prepared package set includes:
 
-- New-install defaults: GNOME Web (Epiphany), Foot, GTK3 PCManFM with XArchiver, FeatherPad,
-  Celluloid, Fish/Bash and Nano. Larger catalog apps remain optional.
-- Twenty-eight photo wallpapers, including the original *Ember Clouds, City Silhouette* master;
-  fresh defaults use *City Afterglow*. Rotation can combine the Arctic collection and a personal
-  folder with **Both**. Per-account hide/restore tombstones keep packaged photos out of the picker
-  and rotation without deleting RPM-owned files; the active wallpaper is protected.
-- A separate **Remove apps** menu, local Nix profile management, optional gaming setup and
-  explicitly selected Tor/Tailscale/VPN support.
-- Taskbar edges, auto-hide and dodge modes with frame-aware placement, distinct full-battery
-  status, the lock-screen clock, and installer restoration after a console/output change.
-- Direct official VoxType 1.1.1 dictation for Hebrew and English: signature-checked online setup,
-  a nonfatal offline setup queue, explicit recording/cancel, visible readiness and explicit CPU
-  selection after a GPU failure. VoxType records, transcribes and inserts; Arctic handles verified
-  setup, the Mango shortcut and status presentation. See [Local dictation](Local-Dictation) for
-  measured limitations.
-- A **What's New** card keyed by a unique packaged update ID, shown once per account after every
-  Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
-  reopens the current notes.
+- Direct signed upstream VoxType 1.1.1. Online installation verifies and prepares the CPU binary
+  and selected multilingual model; offline installation queues a clear retry that never blocks
+  the OS install. Recording, cancellation, transcription and insertion are VoxType commands.
+  Hebrew/English current-image accuracy, GPU failure and CPU recovery, microphone failure and
+  transcript-leakage results remain pending.
+- Twenty-eight photo wallpapers, including the original *Ember Clouds, City Silhouette* master.
+  Fresh accounts use *City Afterglow*. Existing choices are preserved. Packaged photos can be
+  hidden per account and restored, while personal pictures can be deleted normally.
+- A first-login welcome card whose marker survives a shell-startup race and is consumed only
+  after the persistent card opens.
+- A **What's New** card shown once per account for each distinct Arctic package update, with the
+  current notes available again from **Settings → Updates → Release notes**.
+- GNOME Web, Foot, GTK3 PCManFM, XArchiver, Celluloid, FeatherPad, Nano and Fish/Bash as the
+  lightweight intended defaults, plus a separate **Remove apps** menu.
+- Taskbar frame/edge, auto-hide/dodge, exclusive-zone and duplicate-bar fixes; the full-battery
+  icon; lock-screen clock; wallpaper settings; update detection; and single-window installer
+  restoration with page, keyboard and engine state retained.
 
-The **replacement ISO remains unpublished while its final dictation, stable-update and media
-evidence is bound**. The core image, installer and performance lanes below have passed. The
-prepared repository note is
-[`docs/releases/v1.2.1.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
-Its current record distinguishes completed evidence from remaining publication work:
-
-| Release field | Status |
-|---|---|
-| ISO byte size and SHA-256 | **1,936,271,360 bytes; `c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`** |
-| Build and core qualification run links | **Recorded below; final aggregate binding pending** |
-| Startup, installed size, RAM and app-launch measurements | **Passed paired run 38841063654; representative medians below** |
-| Torrent checksum and verified release web seed | **Pending publication verification** |
-
-Source checks or a successful artifact build alone do not establish release readiness.
-
-The current retained artifact-only candidate was built from
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228` in
-[run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615).
-It is **1,936,271,360 bytes** with SHA-256
-`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`, below the strict
-2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its UEFI Try, BIOS Install and
-UEFI Safe startup targets passed. That startup matrix and the artifact build do not prove the full
-installation by themselves. UEFI/BIOS reliability passed in
-[run 38830676716](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38830676716);
-live boot plus an encrypted offline installation and installed boot passed in
-[run 38830684742](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38830684742);
-and the active installer's single-window restoration and continuation passed in
-[run 38834124836](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38834124836).
-The taskbar edge/scale/output/fullscreen contracts passed the exact-image reader in
-[run 38839175195](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38839175195).
-
-The frozen paired gate passed three interleaved installed KVM boots per image in
-[run 38841063654](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38841063654).
-Candidate medians were 26.012 seconds for systemd boot (+1.26%), 4,473,966,592 bytes for the
-installed root allocation (-26.21%), 984,248,320 bytes normalized process PSS (-2.19%), and
-978,673,664 bytes pristine process PSS (+0.74%). First map medians were 0.064 seconds for Foot,
-0.478 seconds for PCManFM and 2.894 seconds for Epiphany, compared by role with Kitty, Nautilus and
-Zen respectively. The widest map interval was 0.600 ms, within the unchanged precision limit.
-These are three-boot VM observations with different applications and package inventories, no
-confidence interval and no physical-hardware claim. Passing the regression gate does not prove a
-general optimization.
-
-The final direct VoxType matrix, exact stable-update/reboot binding and replacement media review
-remain pending before publication. See the
-[prepared release record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
-for run links and the remaining evidence boundaries.
+The complete pending matrix and candidate identity are in the
+[prepared v1.2.1 record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
+Torrent and web-seed claims remain pending publication and download verification.
 
 ## Arctic Linux 1.2.0
 

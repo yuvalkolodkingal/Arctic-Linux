@@ -141,6 +141,9 @@ and the [official VoxType documentation](https://voxtype.io/docs/).
 
 ## What has been measured
 
+These are historical direct-VoxType measurements from an earlier image. They inform expected CPU
+behavior, but they do not qualify the current replacement candidate.
+
 [Exact-image run 38699057684](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38699057684)
 tested official VoxType 1.1.1 on both CPU profiles. It used the first five public
 FLEURS rows for each language, with explicit language selection and no retries.
@@ -158,23 +161,10 @@ virtual-source public read-speech results from a small fixed sample. They do not
 establish general accuracy, Whisper parity, mixed-language behavior, physical-
 microphone performance, GPU acceleration or speed on your hardware.
 
-The CPU transcription and insertion accuracy sublane is complete. The run created both
-target disks but stopped during the online-installed microphone fixture, before
-an offline-installed recovery report was emitted. The broader v1.2.1 dictation
-record still requires online and offline setup recovery, CPU recovery after a
-controlled Vulkan failure, missing models, physical microphone failure,
-cancellation, locking and transcript-leakage checks:
-
-| Exact-image field | Result |
-|---|---|
-| Small v2 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
-| Turbo Q5 v3 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
-| Small direct-integration online/offline setup, EN/HE insertion and privacy | **Small job passed within red run 38840514336; its separate Turbo job failed** |
-| Final combined Small/Turbo direct-integration matrix | **Pending evidence binding** |
-| Controlled Vulkan failure and explicit CPU recovery | **QEMU fail-closed rejection observed; recovery contract pending final combined rerun** |
-| Physical microphone failure and cancellation | **Pending final qualification** |
-| Log, notification and status privacy audit | **Small lane passed; final combined matrix pending** |
-
+The current replacement image must repeat the complete matrix. Its online/offline setup,
+English/Hebrew insertion, cancellation, missing-model and microphone errors, unsupported Vulkan
+failure, explicit CPU recovery, locking and transcript-leakage checks are all **pending exact-image
+qualification**. The earlier runs above cannot be rebound to the replacement artifact.
 The QEMU guest has no physical GPU. It proves that an unsupported or fallback Vulkan path is
 rejected rather than reported as accelerated, but it does not test physical GPU acceleration.
 Hardware-specific Vulkan performance and compatibility therefore remain untested for this release.

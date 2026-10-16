@@ -56,8 +56,10 @@ A fresh installation with the current packages starts in **Polar night** with *C
 An existing account keeps its own wallpaper choice. The first time you log in, a
 **Welcome to Arctic Linux** card shows the keys that get you everywhere, a **Connect** button
 when you aren't online yet, **Get apps**, and **Light** or **Dark**. `Enter` or **Get started**
-closes it; it doesn't come back by itself (the [command menu](Command-Menu)'s **Learn ›
-Welcome**, or `arctic-welcome --again`, shows it again). From here:
+closes it. After you close it, it doesn't come back by itself. If the desktop shell has not shown
+it yet because it is still starting, Arctic keeps the first-login marker and retries the normal
+welcome path instead of losing the card. The [command menu](Command-Menu)'s **Learn › Welcome**,
+or `arctic-welcome --again`, shows it again after you close it. From here:
 
 | Press | To |
 |---|---|

@@ -284,16 +284,15 @@ The public **v1.2.0** image remains an immutable older, two-part download. The n
 still under qualification and has no final download, checksum or release claim. Do not replace
 its documentation with guessed future asset links.
 
-The retained v1.2.1 artifact-only candidate was built from
-`cfc39dad61125e4fa8fb7906ac14f4c360b58228` in
-[run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615).
-Its exact size is **1,936,271,360 bytes** and its SHA-256 is
-`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
-The frozen paired observer passed the six-boot regression and precision gate in
-[run 38841063654](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38841063654).
-The [prepared v1.2.1 record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
-lists the measured medians, confounders and remaining publication gates. These identifiers bind
-the evidence to one image; they are not public download links.
+The current v1.2.1 artifact-only candidate was built from
+`4f2595c3ecf11ab3332a615df162518d3f677f59` in [run 38866458401](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38866458401).
+Its exact size is **1,936,308,224 bytes** and its SHA-256 is
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`. The producer passed the strict
+size check plus UEFI Try, BIOS Install and UEFI Safe startup. Every other exact-image lane is pending;
+the prior image and its qualification runs were disqualified after the first-login fix and cannot
+be rebound to this artifact. The [prepared v1.2.1 record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
+tracks the remaining work. These identifiers are artifact evidence, not a public download link or
+a release-readiness claim.
 
 ### Publishing the wiki
 

@@ -12,12 +12,14 @@ Turbo Q5 v3 at 6.80% and 21.0%, respectively. Both are small virtual-source publ
 fixtures; neither claims general parity, physical-microphone coverage or real-time CPU performance.
 
 The old custom-controller screenshots and their River audio are superseded. Five explicit
-capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
-packaged-wallpaper hide and restore, and one for the per-update What's New summary. The retained
-artifact-only candidate from [run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615)
-is 1,936,271,360 bytes with SHA-256
-`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`, but no capture is admitted
-until its exact-image receipt and pixels pass the automated contract and human review. A new River
+capture contracts require evidence from the exact qualified ISO: three for direct VoxType, one for
+packaged-wallpaper hide and restore, and one for the per-update What's New summary. The new
+artifact-only candidate from [run 38866458401](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38866458401)
+is 1,936,308,224 bytes with SHA-256
+`8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a`. Its producer startup checks
+passed, while exact-image capture
+and qualification remain pending; no pixels from the disqualified predecessor are admitted.
+A new River
 master has deterministic local alignment and still needs human listening. The locked narration is 9,093 characters, above
 the connected generator's 5,000-character request limit. The failed full-script attempt has no
 renderable audio. Two exact source segments of 4,451 and 4,642 characters are pinned at a paragraph
