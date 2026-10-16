@@ -234,10 +234,12 @@ class QualifiedPublicationControls(unittest.TestCase):
                 'archive_bytes': 100, 'archive_sha256': 'b' * 64}
         return {'uefi': base, 'bios': base | {'artifact_id': 61, 'archive_sha256': 'c' * 64}}
 
-    def test_publication_manifest_requires_reliability_before_activation(self):
+    def test_publication_manifest_binds_reliability_but_stays_disabled_before_activation(self):
         value = json.loads((ROOT / 'tools/qualified-release/manifest.json').read_text())
-        self.assertIn('reliability', value)
-        self.assertIsNone(value['reliability'])
+        self.assertFalse(value['ready'])
+        self.assertEqual(set(value['reliability']), {'uefi', 'bios'})
+        required = {'run_id', 'source_sha', 'artifact_id', 'archive_bytes', 'archive_sha256'}
+        self.assertTrue(all(required <= set(pin) for pin in value['reliability'].values()))
         self.assertIn(contract.WORKFLOW, prepare.FILES)
         self.assertIn('tools/reliability/exact-artifact.py', prepare.FILES)
 

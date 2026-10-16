@@ -4,7 +4,18 @@
   "publication_approved": true,
   "tag": "v1.2.1",
   "main_sha": null,
-  "image": null,
+  "image": {
+    "run_id": 38823208615,
+    "artifact_id": 12016177474,
+    "archive_bytes": 1936459062,
+    "archive_sha256": "5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23",
+    "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228",
+    "name": "Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso",
+    "bytes": 1936271360,
+    "sha256": "c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7",
+    "producer_mode": "frozen-external-paired-v1",
+    "producer_receipt_sha256": "82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330"
+  },
   "performance": {
     "run_id": 38841063654,
     "source_sha": "8dde4600e295964c0ddfa0fdb76af2676efc7116",
@@ -16,16 +27,76 @@
     "execution_json_sha256": "c3ee4b2ed75f3bde10969ad24f94f6584e1fa0e897767fc55cc1be9c9b15104d",
     "performance_mode": "frozen-external-paired-v1"
   },
-  "reliability": null,
-  "native": null,
+  "reliability": {
+    "uefi": {
+      "run_id": 38830676716,
+      "source_sha": "ec522d4d686cc6d2e32d0f4f85a6affaa9f22b99",
+      "artifact_id": 12018501343,
+      "archive_bytes": 1319,
+      "archive_sha256": "5838fdb368e74e3a04a81d567e461c34a222ae3fb3ef9163ea514612f41669c1"
+    },
+    "bios": {
+      "run_id": 38830676716,
+      "source_sha": "ec522d4d686cc6d2e32d0f4f85a6affaa9f22b99",
+      "artifact_id": 12018822594,
+      "archive_bytes": 1319,
+      "archive_sha256": "5091693771efcd5ae180e24c2dd494184a2e5d8fc0521655a51f0cc968838fc5"
+    }
+  },
+  "native": {
+    "run_id": 38830684742,
+    "source_sha": "225ecfd9f2cc01b889a34ae3af707b918fcd4a2a",
+    "artifact_id": 12017679100,
+    "archive_bytes": 78271956,
+    "archive_sha256": "25f07dc38952d06c2c153de3acc102b9ca7e5facd4475aa7928dfd2399ed6f7f"
+  },
   "taskbar_media_review": null,
   "dictation": null,
   "dictation_media_review": null,
-  "installer": null,
+  "installer": {
+    "run_id": 38830679610,
+    "source_sha": "145f5bb76a1e282758ba62b36703523420754608",
+    "artifact_id": 12017450791,
+    "archive_bytes": 1001362,
+    "archive_sha256": "b3f56c254637aaf86ab3de685d55c7fc03803ad09eec31b0d31a17bf7ae68101"
+  },
   "installer_media_review": null,
-  "installer_active": null,
+  "installer_active": {
+    "run_id": 38834124836,
+    "source_sha": "54e22f81a7db439c143273d4ede6647dd93b21d5",
+    "artifact_id": 12018832093,
+    "archive_bytes": 433233,
+    "archive_sha256": "1841dc56fe6f1e6a86fa56f6780cf08335c06cf2cc42ff8c5701b76dedf859c3"
+  },
   "installer_active_media_review": null,
   "update": null,
   "media_review": null,
-  "execution_files": {}
+  "execution_files": {
+    ".github/workflows/paired-candidate-20261009.yml": "542c7292e837cb6c78c6d658173ad5f3ab53064b761b7caab5a13050ceddc67d",
+    ".github/workflows/publish-qualified-20261008.yml": "6b37e65c482dacdd82946ab566c7231856f2ddaacccf137beb3409d9a491e981",
+    ".github/workflows/release-reliability-candidate.yml": "fe2976577a154d72ec9a004abe1f946ef412d28edb240088ed1efa1991f9b7f5",
+    "tools/dictation-qualification/contract.py": "a526e8405a2f12aee4ce05d62a4e8599627650fd50d47a6515b62120491975c3",
+    "tools/installer-qualification/active-contract.py": "461a2db35e964d24ade505706f1324c235efe7919c274e8604224a7c8145bacd",
+    "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
+    "tools/native-functional/apps.py": "94e8806225c09772edc4e7836973d2e73cf9121206e69b082e1a0d7d35703a0f",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/native-functional/screen-evidence.py": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
+    "tools/performance/causal.py": "c9f9e28142788da739fcb8c0ebfddf39823fd88b9b62d108582d9dfcef42a408",
+    "tools/performance/compare.py": "f756e9fbeb9fa610faeb89e550aa025fb3e052c5e0dafa54a90026c600e42208",
+    "tools/performance/compose-paired-probe.py": "eb71dad9156c8ffa1fb53bb9bc4195a2fd606dc557ae12ddca68f483f273a602",
+    "tools/performance/compose-plan.py": "cf8985210ff8ea646fc7ae7d2c61da20eb70bc94ec55f5bfe1fbae34e48bc1b6",
+    "tools/performance/contract.py": "f2ccc34ff188610079e96e28221092180f059fe7ba4672079ae47b42b8614551",
+    "tools/performance/fixtures/v1.2-offline.toml": "e6b9aa317521bdaaaf343629bc5de8b914b0a5f58387a0c9fe31754f17c0d20d",
+    "tools/performance/guest.py": "62d8a1815075ee51865bf0254b6a56624ae2116c30c88942fa6030978b705415",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/performance/producer-receipt.py": "1b40b2df3c67579cbabdc6a1a2b189cc0de096e3ed90418393c45671e16758de",
+    "tools/performance/qualification.py": "5b06a456c3a1a0b1c0e69b9ee21eb48c0f98d94bb4c43ad56d097d9df5776578",
+    "tools/performance/run-paired.py": "d4052d5eceb1601cb3c924ac9af76e3c3072744a3e9040e0abc27408373f6d9f",
+    "tools/qualified-release/prepare.py": "ecddd5b7537800f1c41925370b8d988d66a8d959617e0b6e43cd9b75e910ecdf",
+    "tools/qualified-release/torrent.py": "c56a62b90d50ddee474b9c645adad02738e4ff5155ab2d4a40b78f860c316762",
+    "tools/reliability/exact-artifact.py": "f4b9b03dbed5c716c15eb32cf964e1fde5691cdd6bb59774dbfeb02f7f968526",
+    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
+  }
 }
