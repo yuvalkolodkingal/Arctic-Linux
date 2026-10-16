@@ -1,0 +1,39 @@
+{
+  "execution_files": {
+    ".github/workflows/dictation-candidate-20261009.yml": "a2e4b9e7d95e0084b6983d02aded9e9a52a9302a1f1be84e185e70fa07143de3",
+    "tools/dictation-accuracy/accuracy.py": "8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a",
+    "tools/dictation-accuracy/pins.json": "446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d",
+    "tools/dictation-qualification/contract.py": "5a86ba1643d5bf90374750d394acfa92a83a1ea7cd2cee0a04e28b40883f1884",
+    "tools/dictation-qualification/guest_check.py": "bf2e597001664f0d0ad34bb5000b0c2697e214d44b66f997f31017098c7449d2",
+    "tools/dictation-qualification/runner.py": "d902696adc618a9f8ad2077f0d9d9f53a9e2570e6e36ddc5cc0045d6ebc58a9d",
+    "tools/lib/container.sh": "603487240996b0b5bc089061fbf84a57c4c801b9d5f8141c867ea60ff6547b42",
+    "tools/lib/vmtest.py": "b047177b602bad79ffb2ff2bee19b322e3ce4053e10e2c083dd7fab24fe36cb0",
+    "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97",
+    "tools/performance/prepare-vm-tools.sh": "d39fef2e91aafba19d74853e23caf0ee6c47f867156258f7a74dd064c551e750",
+    "tools/test-install.sh": "d57842aa1a4f116dc2640a98b73faadc957fac0eca09917f08c3f334dada87b0"
+  },
+  "fixture_decoder": {
+    "libsndfile": "1.2.2",
+    "pyarrow": "20.0.0",
+    "soundfile": "0.13.1"
+  },
+  "fixture_manifest_sha256": "d97f1daced07fd25e5ddeba3bbb8df7f5af1cccfa216dc0f31acd3ddb2abd2fd",
+  "hardware_profiles": [
+    "small-v2",
+    "turbo-q5-v3"
+  ],
+  "image": {
+    "run_id": 38866458401,
+    "artifact_id": 12034440723,
+    "archive_bytes": 1936495926,
+    "archive_sha256": "fcb8d4ba2ef8b8efdfec5ae79cee0a89efbb61bfe4c82bb9c03cc01c8d2f3eff",
+    "name": "Arctic-Linux-1.2-candidate-38866458401-1-x86_64.iso",
+    "bytes": 1936308224,
+    "sha256": "8738351dd0e6d21a26a191ec1875d8bd9979a28c68763a0e5142056ed0ed983a",
+    "producer_receipt_sha256": "7ef515a65565b91ea2405782dbb5c8e5742bca5a1a7f46bb8684e4bad0397fca",
+    "source_sha": "4f2595c3ecf11ab3332a615df162518d3f677f59",
+    "producer_mode": "frozen-external-paired-v1"
+  },
+  "ready": true,
+  "release_acceptance": false
+}

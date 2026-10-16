@@ -1,0 +1,130 @@
+name: Read safe Turbo diagnostics for dictation run 38874250158
+
+on:
+  push:
+    branches: [codex/read-dictation-turbo-388742-20261016]
+    paths: [.github/dictation-turbo-failure-reader-388742.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-diagnostics:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-dictation-turbo-388742-20261016' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate the closed-vocabulary reader
+        run: python3 -B -m unittest tools/dictation-turbo-failure-reader-388742/test_read.py
+      - name: Read only validated staged diagnostics
+        id: diagnostic
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/dictation-turbo-failure-reader-388742/read.py
+          --manifest tools/dictation-turbo-failure-reader-388742/execution-manifest.json
+      - name: Safe reader rejected at manifest
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'manifest' }}
+        run: exit 1
+      - name: Safe reader rejected at run
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'run' }}
+        run: exit 1
+      - name: Safe reader rejected at artifact-metadata
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'artifact-metadata' }}
+        run: exit 1
+      - name: Safe reader rejected at archive
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'archive' }}
+        run: exit 1
+      - name: Safe reader rejected at fixtures
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'fixtures' }}
+        run: exit 1
+      - name: Safe reader rejected at execution
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'execution' }}
+        run: exit 1
+      - name: Safe reader rejected at installations
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'installations' }}
+        run: exit 1
+      - name: Safe reader rejected at report-inventory
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'report-inventory' }}
+        run: exit 1
+      - name: Safe reader rejected at live-report
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-report' }}
+        run: exit 1
+      - name: Safe reader rejected at live receipt
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-receipt' }}
+        run: exit 1
+      - name: Safe reader rejected at live hash
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-hash' }}
+        run: exit 1
+      - name: Safe reader rejected at live JSON
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-json' }}
+        run: exit 1
+      - name: Safe reader rejected at live context
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context' }}
+        run: exit 1
+      - name: Safe reader rejected at live context shape
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-shape' }}
+        run: exit 1
+      - name: Safe reader rejected at live context profile
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-profile' }}
+        run: exit 1
+      - name: Safe reader rejected at live context phase
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-phase' }}
+        run: exit 1
+      - name: Safe reader rejected at live context installation
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-installation' }}
+        run: exit 1
+      - name: Safe reader rejected at live context source-sha
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-source-sha' }}
+        run: exit 1
+      - name: Safe reader rejected at live context iso-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-iso-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context iso-bytes
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-iso-bytes' }}
+        run: exit 1
+      - name: Safe reader rejected at live context fixture-manifest-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-fixture-manifest-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context checker-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-checker-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context contract-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-contract-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context accuracy-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-accuracy-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context pins-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-pins-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live context integration-sha256
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context-integration-sha256' }}
+        run: exit 1
+      - name: Safe reader rejected at live contract
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-contract' }}
+        run: exit 1
+      - name: Safe reader rejected at live status binding
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-status-binding' }}
+        run: exit 1
+      - name: Safe reader rejected at failed-report
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'failed-report' }}
+        run: exit 1
+      - name: Safe reader rejected at indicator
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'indicator' }}
+        run: exit 1
+      - name: Safe reader rejected at recovery
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'recovery' }}
+        run: exit 1
+      - name: Safe reader rejected at projection
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'projection' }}
+        run: exit 1
+      - name: Safe reader rejected without a closed stage
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == '' }}
+        run: exit 1
