@@ -49,16 +49,16 @@ class ManifestControls(unittest.TestCase):
         shipped = S.read_json((HERE / 'execution-manifest.json').read_text())
         self.assertEqual(S.validate_manifest(shipped), shipped['image'])
         self.assertEqual(shipped['image'], {
-            'archive_bytes': 1936459062,
-            'archive_sha256': '5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23',
-            'artifact_id': 12016177474,
-            'bytes': 1936271360,
-            'name': 'Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso',
+            'archive_bytes': 1936348470,
+            'archive_sha256': '9058c32e1e20bd41c56f5d7c0daed486e597aa807ef2b9ead84ecf24e42f0d40',
+            'artifact_id': 12040040274,
+            'bytes': 1936160768,
+            'name': 'Arctic-Linux-1.2-candidate-38879661832-1-x86_64.iso',
             'producer_mode': F.EXTERNAL_MODE,
-            'producer_receipt_sha256': '82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330',
-            'run_id': 38823208615,
-            'sha256': 'c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7',
-            'source_sha': 'cfc39dad61125e4fa8fb7906ac14f4c360b58228',
+            'producer_receipt_sha256': 'd33994200004c2b4f4e1e042fe9acd0e430aeae9d058c268e51c36922d782f84',
+            'run_id': 38879661832,
+            'sha256': 'cf0505f366c964a13a4134a74327df58839050751f2a227da81a8e055523adcb',
+            'source_sha': 'f369b978aeb05a3310c512660811084fd5bc97d1',
         })
         self.assertIs(shipped['ready'], True)
         self.assertIs(shipped['release_acceptance'], False)
@@ -68,7 +68,7 @@ class ManifestControls(unittest.TestCase):
         # historical marker must remain byte-for-byte unchanged; only a later
         # marker commit on the canonical execution branch may activate it.
         self.assertEqual((ROOT / S.MARKER).read_bytes(),
-                         b'cdedd480eafbe9108393c294c98cf70f76414863\n')
+                         b'7af088a2ba9ca76a2906ff59495a5faffb0518ca\n')
         self.assertEqual(shipped['execution_files'],
                          {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in S.EXECUTION_FILES})
         for name, pin in shipped['source_files'].items():

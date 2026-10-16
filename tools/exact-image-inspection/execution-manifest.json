@@ -5,16 +5,16 @@
     "tools/native-functional/fetch-image.py": "5a45175dfe055400a9871a78ca4e3fdd6eb973d567cec80c229dd93c03111c97"
   },
   "image": {
-    "archive_bytes": 1936459062,
-    "archive_sha256": "5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23",
-    "artifact_id": 12016177474,
-    "bytes": 1936271360,
-    "name": "Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso",
+    "archive_bytes": 1936348470,
+    "archive_sha256": "9058c32e1e20bd41c56f5d7c0daed486e597aa807ef2b9ead84ecf24e42f0d40",
+    "artifact_id": 12040040274,
+    "bytes": 1936160768,
+    "name": "Arctic-Linux-1.2-candidate-38879661832-1-x86_64.iso",
     "producer_mode": "frozen-external-paired-v1",
-    "producer_receipt_sha256": "82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330",
-    "run_id": 38823208615,
-    "sha256": "c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7",
-    "source_sha": "cfc39dad61125e4fa8fb7906ac14f4c360b58228"
+    "producer_receipt_sha256": "d33994200004c2b4f4e1e042fe9acd0e430aeae9d058c268e51c36922d782f84",
+    "run_id": 38879661832,
+    "sha256": "cf0505f366c964a13a4134a74327df58839050751f2a227da81a8e055523adcb",
+    "source_sha": "f369b978aeb05a3310c512660811084fd5bc97d1"
   },
   "observer_profile_admitted": false,
   "performance_acceptance": false,
