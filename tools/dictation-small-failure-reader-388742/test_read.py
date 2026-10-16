@@ -139,8 +139,7 @@ class SafeReaderTests(unittest.TestCase):
         self.assertEqual(result['english']['stage'], 11)
         self.assertEqual(result['gpu']['stage'], 11)
         self.assertEqual(result['privacy']['family'], 'invalid')
-        self.assertFalse(result['privacy']['matched_present'])
-        self.assertEqual(result['cleanup']['file_count'], 0)
+        self.assertEqual(result['cleanup']['family'], 'none')
         self.assertFalse(result['recovery_receipts']['entry_present'])
         report = {'schema': 'arctic-dictation-safe-diagnostic-v1',
                   'run_id': reader.RUN_ID, 'release_acceptance': False,

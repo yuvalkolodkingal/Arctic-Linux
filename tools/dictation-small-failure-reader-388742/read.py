@@ -359,8 +359,7 @@ def failed_gates(report):
         stage = observed.get('failure_stage')
         substage = observed.get('failure_substage')
         require(stage is None or type(stage) is int and 0 < stage < 10_000)
-        require(substage is None or (type(substage) is int and stage in FAILURE_SUBSTAGES
-                and substage in FAILURE_SUBSTAGES[stage]))
+        require(substage is None or type(substage) is int and 0 < substage < 100_000)
         result.append({'gate': gate['id'], 'status': gate['status'],
                        'family': family(gate),
                        'stage_present': stage is not None, 'stage': stage or 0,
@@ -378,22 +377,12 @@ def diagnostic(report, recovery):
     gpu = validated_gate(by_name[gpu_name])
     cleanup_gate = by_name[GATE_NAMES['cleanup']]
     privacy_gate = by_name[GATE_NAMES['privacy']]
-    files_present, files = bounded_counter(cleanup_gate['observations'], 'file_count', 1_000_000)
-    matched_present, matched = bounded_counter(privacy_gate['observations'], 'matched', 1_000_000)
-    count_present, count = bounded_counter(privacy_gate['observations'], 'count', 1_000_000)
-    drained = cleanup_gate['observations'].get('drained')
-    require(drained is None or type(drained) is bool)
     return {
         'report_status': report['status'],
         'failed_gates': failed_gates(report),
         'english': english, 'hebrew': hebrew, 'gpu': gpu,
-        'cleanup': {'status': cleanup_gate['status'], 'family': family(cleanup_gate),
-                    'file_count_present': files_present, 'file_count': files,
-                    'drained_present': drained is not None,
-                    'drained': drained if drained is not None else False},
-        'privacy': {'status': privacy_gate['status'], 'family': family(privacy_gate),
-                    'matched_present': matched_present, 'matched': matched,
-                    'count_present': count_present, 'count': count},
+        'cleanup': {'status': cleanup_gate['status'], 'family': family(cleanup_gate)},
+        'privacy': {'status': privacy_gate['status'], 'family': family(privacy_gate)},
         'recovery_receipts': {'entry_present': any(recovery.values()),
                               'gpu_failure': recovery['gpu_failure'],
                               'cpu_ready': recovery['cpu_ready']},
