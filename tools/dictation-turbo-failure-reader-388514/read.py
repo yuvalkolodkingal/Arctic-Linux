@@ -63,6 +63,8 @@ SAFE_FAMILIES = ERROR_FAMILIES | {'none', 'prerequisite', 'isolation'}
 FAILURE_SUBSTAGES = {6: set(range(601, 613)), 7: {701, 702, 703, 704}}
 REJECTION_STAGES = {'manifest', 'run', 'artifact-metadata', 'archive', 'fixtures',
                     'execution', 'installations', 'report-inventory', 'live-report',
+                    'live-receipt', 'live-hash', 'live-json', 'live-context',
+                    'live-contract', 'live-status-binding',
                     'failed-report', 'indicator', 'recovery', 'projection'}
 REJECTION_STAGE = 'manifest'
 
@@ -409,18 +411,24 @@ def inspect_artifact(profile, pin, artifact, archive_raw, contract):
         checkpoint('live-report')
         reports = {}
         receipt = state['reports']['online-installed-live']
+        checkpoint('live-receipt')
         require(type(receipt) is dict and set(receipt) == {'path', 'sha256', 'phase',
                 'installation_id', 'boot_id', 'status'}
                 and receipt['path'] == 'online-installed-live.json'
                 and receipt['phase'] == 'live' and receipt['status'] == 'passed'
                 and receipt['installation_id'] == state['installations']['online']
                 and uuid(receipt['boot_id']) and digest(receipt['sha256']))
+        checkpoint('live-hash')
         live_raw = archive.read('online-installed-live.json')
         require(sha256(live_raw) == receipt['sha256'])
+        checkpoint('live-json')
         live = strict_json(live_raw, 2_000_000)
+        checkpoint('live-context')
         validate_context(live.get('context'), profile, 'live', state['installations']['online'])
+        checkpoint('live-contract')
         contract.validate(live, live['context'], require_passed=False,
                           fixture_manifest=fixtures)
+        checkpoint('live-status-binding')
         require(live['status'] == 'passed' and live['boot_id'] == receipt['boot_id'])
         reports['online-installed-live'] = live
         checkpoint('failed-report')

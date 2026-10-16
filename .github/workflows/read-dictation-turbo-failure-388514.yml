@@ -56,6 +56,24 @@ jobs:
       - name: Safe reader rejected at live-report
         if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-report' }}
         run: exit 1
+      - name: Safe reader rejected at live receipt
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-receipt' }}
+        run: exit 1
+      - name: Safe reader rejected at live hash
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-hash' }}
+        run: exit 1
+      - name: Safe reader rejected at live JSON
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-json' }}
+        run: exit 1
+      - name: Safe reader rejected at live context
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-context' }}
+        run: exit 1
+      - name: Safe reader rejected at live contract
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-contract' }}
+        run: exit 1
+      - name: Safe reader rejected at live status binding
+        if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'live-status-binding' }}
+        run: exit 1
       - name: Safe reader rejected at failed-report
         if: ${{ steps.diagnostic.outcome == 'failure' && steps.diagnostic.outputs.rejection == 'failed-report' }}
         run: exit 1
