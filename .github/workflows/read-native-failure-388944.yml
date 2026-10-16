@@ -1,0 +1,34 @@
+name: Read safe Native diagnostics for run 38894423903
+
+on:
+  push:
+    branches: [codex/read-native-failure-388944-20261016]
+    paths: [.github/native-failure-reader-388944.activate]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  read-safe-diagnostics:
+    if: ${{ github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.ref == 'refs/heads/codex/read-native-failure-388944-20261016' && github.run_attempt == 1 }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Validate the closed-vocabulary reader
+        run: python3 -B -m unittest tools/native-failure-reader-388944/test_read.py
+      - name: Read only fixed typed Native diagnostics
+        id: reader
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -B tools/native-failure-reader-388944/read.py
+          --manifest tools/native-failure-reader-388944/execution-manifest.json
+      - name: Fail closed if the reader rejected evidence
+        if: ${{ steps.reader.outcome != 'success' }}
+        run: exit 1

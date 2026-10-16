@@ -1,0 +1,21 @@
+{
+  "artifact": {
+    "bytes": 47945673,
+    "id": 12044990488,
+    "name": "native-candidate-qualification",
+    "sha256": "3d9cf44af41bf01b3b5e836548bccff0bb8ea2cc7824f6b1412371f456d1a40c"
+  },
+  "branch": "codex/read-native-failure-388944-20261016",
+  "qualification_manifest_sha256": "ed8a10e0ca0a7ba287ef0798447dd8c5453b3b5c6d2edaf0664deccf5d38c54c",
+  "reader_sha256": "4e8fa2d421705ae05664b8c2095187973d1b12596d46ba67b6551f2956a09883",
+  "reader_workflow": ".github/workflows/read-native-failure-388944.yml",
+  "reader_workflow_sha256": "0ab4c91b82f0341fe1f42907d16ce62dc0c1724ecb146911519eb424d6669ce7",
+  "ready": true,
+  "repository": "yuvalkolodkingal/Arctic-Linux",
+  "run_attempt": 1,
+  "run_head": "cc1b00d297817399b60beb37aba2c275d9456144",
+  "run_id": 38894423903,
+  "schema": "arctic-native-failure-reader-v1",
+  "validator_sha256": "ec2a716ab87fdb105e143680f82d30884288293ba078161ecb3b11965a915ba1",
+  "workflow": ".github/workflows/native-candidate-20261008.yml"
+}
