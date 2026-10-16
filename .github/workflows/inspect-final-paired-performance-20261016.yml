@@ -3,7 +3,7 @@ name: Inspect final paired performance failure summary
 on:
   push:
     branches: [codex/inspect-final-paired-performance-20261016]
-    paths: [.github/workflows/inspect-final-paired-performance-20261016.yml]
+    paths: [.github/inspect-final-paired-performance-20261016]
 
 permissions:
   contents: read
@@ -15,6 +15,45 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Verify reviewed marker-only activation
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          def require(condition):
+              if not condition:
+                  raise ValueError('reader activation differs')
+          require(os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
+              and os.environ.get('GITHUB_REF') ==
+                  'refs/heads/codex/inspect-final-paired-performance-20261016'
+              and os.environ.get('GITHUB_WORKFLOW') ==
+                  'Inspect final paired performance failure summary'
+              and os.environ.get('GITHUB_EVENT_NAME') == 'push'
+              and os.environ.get('GITHUB_RUN_ATTEMPT') == '1')
+          head = os.environ.get('GITHUB_SHA', '')
+          require(re.fullmatch('[0-9a-f]{40}', head)
+              and subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == head
+              and not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip())
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
+          marker_name = '.github/inspect-final-paired-performance-20261016'
+          marker = Path(marker_name)
+          require(marker.is_file() and not marker.is_symlink())
+          parent = marker.read_text(encoding='ascii').strip()
+          require(re.fullmatch('[0-9a-f]{40}', parent)
+              and marker.read_bytes() == (parent + '\n').encode('ascii')
+              and event.get('before') == parent and event.get('after') == head
+              and subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', head],
+                  text=True).split() == [head, parent]
+              and subprocess.check_output(['git', 'diff', '--no-renames', '--name-only',
+                  parent, head], text=True).splitlines() == [marker_name])
+          workflow = '.github/workflows/inspect-final-paired-performance-20261016.yml'
+          require(Path(workflow).read_bytes() == subprocess.check_output(
+              ['git', 'show', parent + ':' + workflow]))
+          PY
       - name: Read exact screened fixed-vocabulary failure summary
         env:
           GH_TOKEN: ${{ github.token }}
