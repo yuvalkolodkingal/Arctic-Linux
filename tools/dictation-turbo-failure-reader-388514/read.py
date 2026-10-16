@@ -42,7 +42,7 @@ IMAGE = {
 CONTEXT_PINS = {
     'source_sha': IMAGE['source_sha'], 'iso_sha256': IMAGE['sha256'],
     'iso_bytes': IMAGE['bytes'], 'fixture_manifest_sha256': FIXTURE_SHA256,
-    'checker_sha256': 'e5c4c0b481e24f52461cf2076d7fa6ca79ce3c732f594d16e0e80c4a12234573',
+    'checker_sha256': '65cb34988d298a8a556fac205653bc60735775b389e944a6104747f2570884f8',
     'contract_sha256': '1ec1a6015406807aa3f075949880973733d47e097d590a8d34e950000b08cf59',
     'accuracy_sha256': '8ad22b8c8c96a379b6dc460ae0503e5459968e9608d337b0cc639b31c129a68a',
     'pins_sha256': '446c24b770e046cb845f117d2bbb2dbcebd9fb6876d08c05ebdf278e067aa01d',

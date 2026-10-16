@@ -168,6 +168,9 @@ class SafeReaderTests(unittest.TestCase):
     def test_manifest_pins_local_reader_contract_and_exact_turbo_artifact(self):
         manifest = reader.read_json_file(HERE / 'execution-manifest.json', 32768)
         reader.validate_manifest(manifest)
+        frozen = json.loads((HERE / 'qualification-execution-manifest.json').read_text())
+        self.assertEqual(reader.CONTEXT_PINS['checker_sha256'],
+                         frozen['execution_files']['tools/dictation-qualification/guest_check.py'])
 
 
 if __name__ == '__main__':
