@@ -37,13 +37,20 @@ shell_card() {   # shell_card <ipc function>
 if ! arctic-is-live; then
   first="${XDG_STATE_HOME:-$HOME/.local/state}/arctic/first-login"
   (( again )) || [[ -e "$first" ]] || exit 0
-  rm -f "$first"
-  shell_card firstLogin && exit 0
+  if shell_card firstLogin; then
+    rm -f "$first"
+    exit 0
+  fi
   (( again )) || sleep 2   # let mako and the bar come up first
   notify-send -a "Arctic Linux" -u normal -i "$logo" "Welcome to Arctic Linux" \
     "Super + Space: apps, settings and files
 Super + Alt + Space: every system action
 Super + /: all the shortcuts" 2>/dev/null
+  # A default-shell IPC race must not consume the one-shot marker.  A later
+  # invocation in the same graphical session, or the next login, can still
+  # present the persistent card.  The explicit fallback desktop has no card,
+  # so its notification completes first-login normally.
+  [[ "${ARCTIC_SHELL:-quickshell}" == waybar ]] && rm -f "$first"
   exit 0
 fi
 
