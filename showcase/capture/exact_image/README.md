@@ -11,23 +11,24 @@ outside this unattended lane. They remain pending exact-image captures with
 their own complete receipts and human pixel review before the source can render.
 
 The preparation is bound to the reviewed candidate from producer run
-`38808271154`, attempt 1, source
-`10b94bf1f6aef4950889d4a498c9e1138cf7973d`: ISO
-`Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso`, size `1936328704`,
+`38823208615`, attempt 1, source
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228`: ISO
+`Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso`, size `1936271360`,
 SHA-256
-`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`.
-The retained artifact is `12011000602`, archive size `1936516406`, archive
+`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
+The retained artifact is `12016177474`, archive size `1936459062`, archive
 SHA-256
-`4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6`,
+`5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23`,
 producer mode `frozen-external-paired-v1`, and producer receipt SHA-256
-`85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6`.
+`82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330`.
 The execution manifest is ready for a later marker-only activation and remains
 `release_acceptance:false`.
 
 The producer ran from the reviewed marker-only source
-`10b94bf1f6aef4950889d4a498c9e1138cf7973d` by `workflow_dispatch` and passed
-UEFI Try, BIOS Install and UEFI Safe startup. The showcase activation marker is
-absent from this preparation.
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228` by `workflow_dispatch` and passed
+UEFI Try, BIOS Install and UEFI Safe startup. This preparation preserves the
+existing showcase activation marker byte-for-byte, so its push does not
+activate the workflow. A later marker-only child commit is still required.
 
 When activated, the workflow downloads the newly bound artifact with the
 existing strict `fetch-image.py` verifier. It checks the producer workflow,
