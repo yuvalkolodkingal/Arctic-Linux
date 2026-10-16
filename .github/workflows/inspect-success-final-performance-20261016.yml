@@ -1,0 +1,62 @@
+name: Inspect successful final paired performance
+
+on:
+  push:
+    branches: [codex/inspect-success-final-performance-20261016]
+    paths: [.github/inspect-success-final-performance-20261016]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    if: github.repository == 'yuvalkolodkingal/Arctic-Linux' && github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify reviewed marker-only activation
+        run: |
+          python3 -B - <<'PY'
+          import json, os, re, subprocess
+          from pathlib import Path
+          def require(condition):
+              if not condition:
+                  raise ValueError('success reader activation differs')
+          branch = 'codex/inspect-success-final-performance-20261016'
+          workflow = '.github/workflows/inspect-success-final-performance-20261016.yml'
+          helper = 'tools/performance/inspect-success-final-performance.py'
+          marker_name = '.github/inspect-success-final-performance-20261016'
+          require(os.environ.get('GITHUB_REPOSITORY') == 'yuvalkolodkingal/Arctic-Linux'
+              and os.environ.get('GITHUB_REF') == 'refs/heads/' + branch
+              and os.environ.get('GITHUB_WORKFLOW') == 'Inspect successful final paired performance'
+              and os.environ.get('GITHUB_EVENT_NAME') == 'push'
+              and os.environ.get('GITHUB_RUN_ATTEMPT') == '1')
+          head = os.environ.get('GITHUB_SHA', '')
+          require(re.fullmatch('[0-9a-f]{40}', head)
+              and subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip() == head
+              and not subprocess.check_output(['git', 'status', '--porcelain'], text=True).strip())
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_bytes())
+          marker = Path(marker_name)
+          require(marker.is_file() and not marker.is_symlink())
+          parent = marker.read_text(encoding='ascii').strip()
+          require(re.fullmatch('[0-9a-f]{40}', parent)
+              and marker.read_bytes() == (parent + '\n').encode('ascii')
+              and event.get('before') == parent and event.get('after') == head
+              and subprocess.check_output(['git', 'rev-list', '--parents', '-n', '1', head],
+                  text=True).split() == [head, parent]
+              and subprocess.check_output(['git', 'diff', '--no-renames', '--name-only',
+                  parent, head], text=True).splitlines() == [marker_name])
+          for name in (workflow, helper):
+              require(Path(name).is_file() and not Path(name).is_symlink()
+                  and Path(name).read_bytes() == subprocess.check_output(
+                      ['git', 'show', parent + ':' + name]))
+          PY
+      - name: Replay contract and emit bounded performance fields
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B tools/performance/inspect-success-final-performance.py
