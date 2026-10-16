@@ -337,6 +337,18 @@ def bounded_counter(observations, name, maximum):
     return present, value if present else 0
 
 
+def validated_gate(gate):
+    """Project a gate only after the exact source contract validated its report."""
+    observed = gate['observations']
+    stage = observed.get('failure_stage')
+    substage = observed.get('failure_substage')
+    require(stage is None or type(stage) is int and 0 < stage < 10_000)
+    require(substage is None or type(substage) is int and 0 < substage < 100_000)
+    return {'status': gate['status'], 'family': family(gate),
+            'stage_present': stage is not None, 'stage': stage or 0,
+            'substage_present': substage is not None, 'substage': substage or 0}
+
+
 def failed_gates(report):
     """Project only contract-validated failed gates and numeric stage codes."""
     result = []
@@ -353,23 +365,22 @@ def failed_gates(report):
                        'family': family(gate),
                        'stage_present': stage is not None, 'stage': stage or 0,
                        'substage_present': substage is not None, 'substage': substage or 0})
-    require(len(result) <= 4)
+    require(len(result) <= 64)
     return result
 
 
 def diagnostic(report, recovery):
     by_name = {gate['id']: gate for gate in report['gates']}
-    english = staged_gate(by_name[GATE_NAMES['english']], set(range(1, 20)))
-    hebrew = staged_gate(by_name[GATE_NAMES['hebrew']], set(range(1, 20)))
+    english = validated_gate(by_name[GATE_NAMES['english']])
+    hebrew = validated_gate(by_name[GATE_NAMES['hebrew']])
     gpu_name = (GATE_NAMES['gpu'] if report['context']['hardware_profile'] == 'turbo-q5-v3'
                 else GATE_NAMES['legacy_gpu'])
-    gpu_allowed = set(range(1, 20)) | (set(range(201, 215)) if gpu_name == GATE_NAMES['gpu'] else set())
-    gpu = staged_gate(by_name[gpu_name], gpu_allowed)
+    gpu = validated_gate(by_name[gpu_name])
     cleanup_gate = by_name[GATE_NAMES['cleanup']]
     privacy_gate = by_name[GATE_NAMES['privacy']]
-    files_present, files = bounded_counter(cleanup_gate['observations'], 'file_count', 64)
-    matched_present, matched = bounded_counter(privacy_gate['observations'], 'matched', 64)
-    count_present, count = bounded_counter(privacy_gate['observations'], 'count', 64)
+    files_present, files = bounded_counter(cleanup_gate['observations'], 'file_count', 1_000_000)
+    matched_present, matched = bounded_counter(privacy_gate['observations'], 'matched', 1_000_000)
+    count_present, count = bounded_counter(privacy_gate['observations'], 'count', 1_000_000)
     drained = cleanup_gate['observations'].get('drained')
     require(drained is None or type(drained) is bool)
     return {
