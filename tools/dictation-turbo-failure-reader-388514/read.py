@@ -487,6 +487,10 @@ def main():
         emit(inspect(manifest), os.sys.stdout)
     except RuntimeError:
         require(REJECTION_STAGE in REJECTION_STAGES)
+        output = os.environ.get('GITHUB_OUTPUT')
+        require(type(output) is str and output and '\n' not in output)
+        with open(output, 'a', encoding='utf-8') as stream:
+            stream.write('rejection=' + REJECTION_STAGE + '\n')
         print('ARCTIC-DICTATION-SAFE-READER-REJECTION=' + REJECTION_STAGE)
         raise
 
