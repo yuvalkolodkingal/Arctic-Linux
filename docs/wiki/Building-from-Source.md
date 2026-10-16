@@ -284,6 +284,17 @@ The public **v1.2.0** image remains an immutable older, two-part download. The n
 still under qualification and has no final download, checksum or release claim. Do not replace
 its documentation with guessed future asset links.
 
+The retained v1.2.1 artifact-only candidate was built from
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228` in
+[run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615).
+Its exact size is **1,936,271,360 bytes** and its SHA-256 is
+`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`.
+The frozen paired observer passed the six-boot regression and precision gate in
+[run 38841063654](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38841063654).
+The [prepared v1.2.1 record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
+lists the measured medians, confounders and remaining publication gates. These identifiers bind
+the evidence to one image; they are not public download links.
+
 ### Publishing the wiki
 
 The wiki is written in `docs/wiki/` (one Markdown file per page, `_Sidebar.md`, `_Footer.md` and

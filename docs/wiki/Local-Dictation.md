@@ -109,9 +109,9 @@ The service can use only local Unix sockets for Wayland and PipeWire. Internet
 sockets remain blocked even if the user configuration or post-processing
 command is changed.
 
-The final release qualification still audits the exact image's journal and
-notifications. A source configuration is not proof that every runtime path is
-free of transcript excerpts.
+The final release qualification still binds the exact image's journal and
+notification audit for both model profiles. A source configuration is not proof
+that every runtime path is free of transcript excerpts.
 
 ## Commands and files
 
@@ -158,7 +158,7 @@ virtual-source public read-speech results from a small fixed sample. They do not
 establish general accuracy, Whisper parity, mixed-language behavior, physical-
 microphone performance, GPU acceleration or speed on your hardware.
 
-The CPU transcription and insertion sublane is complete. The run created both
+The CPU transcription and insertion accuracy sublane is complete. The run created both
 target disks but stopped during the online-installed microphone fixture, before
 an offline-installed recovery report was emitted. The broader v1.2.1 dictation
 record still requires online and offline setup recovery, CPU recovery after a
@@ -169,10 +169,15 @@ cancellation, locking and transcript-leakage checks:
 |---|---|
 | Small v2 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
 | Turbo Q5 v3 CPU transcription and insertion | **Passed run 38699057684; measurements above** |
-| Online setup and offline first-boot recovery | **Pending final qualification** |
-| Controlled Vulkan failure and explicit CPU recovery | **Pending final qualification** |
+| Small direct-integration online/offline setup, EN/HE insertion and privacy | **Small job passed within red run 38840514336; its separate Turbo job failed** |
+| Final combined Small/Turbo direct-integration matrix | **Pending evidence binding** |
+| Controlled Vulkan failure and explicit CPU recovery | **QEMU fail-closed rejection observed; recovery contract pending final combined rerun** |
 | Physical microphone failure and cancellation | **Pending final qualification** |
-| Log, notification and status privacy audit | **Pending final qualification** |
+| Log, notification and status privacy audit | **Small lane passed; final combined matrix pending** |
+
+The QEMU guest has no physical GPU. It proves that an unsupported or fallback Vulkan path is
+rejected rather than reported as accelerated, but it does not test physical GPU acceleration.
+Hardware-specific Vulkan performance and compatibility therefore remain untested for this release.
 
 An older candidate VM run measured online/offline paths through the retired
 Arctic runtime controller. Its service, installer, cancellation, GPU recovery

@@ -32,28 +32,50 @@ The prepared package set includes:
   Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
   reopens the current notes.
 
-The **replacement ISO remains unqualified and unpublished**. The prepared repository note is
+The **replacement ISO remains unpublished while its final dictation, stable-update and media
+evidence is bound**. The core image, installer and performance lanes below have passed. The
+prepared repository note is
 [`docs/releases/v1.2.1.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md).
-Its final record intentionally leaves these values pending:
+Its current record distinguishes completed evidence from remaining publication work:
 
 | Release field | Status |
 |---|---|
-| ISO byte size and SHA-256 | **Pending final qualified image** |
-| Build and qualification run links | **Pending aggregate qualification** |
-| Startup, installed size, RAM and app-launch measurements | **Pending final measurement** |
+| ISO byte size and SHA-256 | **1,936,271,360 bytes; `c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`** |
+| Build and core qualification run links | **Recorded below; final aggregate binding pending** |
+| Startup, installed size, RAM and app-launch measurements | **Passed paired run 38841063654; representative medians below** |
 | Torrent checksum and verified release web seed | **Pending publication verification** |
 
 Source checks or a successful artifact build alone do not establish release readiness.
 
 The current retained artifact-only candidate was built from
-`10b94bf1f6aef4950889d4a498c9e1138cf7973d` in
-[run 38808271154](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38808271154).
-It is **1,936,328,704 bytes** with SHA-256
-`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`, below the strict
+`cfc39dad61125e4fa8fb7906ac14f4c360b58228` in
+[run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615).
+It is **1,936,271,360 bytes** with SHA-256
+`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`, below the strict
 2,000,000,000-byte ceiling and above the preferred 1.6 GB target. Its UEFI Try, BIOS Install and
 UEFI Safe startup targets passed. That startup matrix and the artifact build do not prove the full
-installation, native, installer, dictation, reliability, performance or final signed-update record,
-which must all be bound before this can become the public v1.2.1 image. See the
+installation by themselves. UEFI/BIOS reliability passed in
+[run 38830676716](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38830676716);
+live boot plus an encrypted offline installation and installed boot passed in
+[run 38830684742](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38830684742);
+and the active installer's single-window restoration and continuation passed in
+[run 38834124836](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38834124836).
+The taskbar edge/scale/output/fullscreen contracts passed the exact-image reader in
+[run 38839175195](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38839175195).
+
+The frozen paired gate passed three interleaved installed KVM boots per image in
+[run 38841063654](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38841063654).
+Candidate medians were 26.012 seconds for systemd boot (+1.26%), 4,473,966,592 bytes for the
+installed root allocation (-26.21%), 984,248,320 bytes normalized process PSS (-2.19%), and
+978,673,664 bytes pristine process PSS (+0.74%). First map medians were 0.064 seconds for Foot,
+0.478 seconds for PCManFM and 2.894 seconds for Epiphany, compared by role with Kitty, Nautilus and
+Zen respectively. The widest map interval was 0.600 ms, within the unchanged precision limit.
+These are three-boot VM observations with different applications and package inventories, no
+confidence interval and no physical-hardware claim. Passing the regression gate does not prove a
+general optimization.
+
+The final direct VoxType matrix, exact stable-update/reboot binding and replacement media review
+remain pending before publication. See the
 [prepared release record](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.1.md)
 for run links and the remaining evidence boundaries.
 

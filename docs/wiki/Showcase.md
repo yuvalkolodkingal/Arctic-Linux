@@ -14,9 +14,9 @@ fixtures; neither claims general parity, physical-microphone coverage or real-ti
 The old custom-controller screenshots and their River audio are superseded. Five explicit
 capture contracts now require evidence from the qualified ISO: three for direct VoxType, one for
 packaged-wallpaper hide and restore, and one for the per-update What's New summary. The retained
-artifact-only candidate from [run 38808271154](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38808271154)
-is 1,936,328,704 bytes with SHA-256
-`304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23`, but no capture is admitted
+artifact-only candidate from [run 38823208615](https://github.com/yuvalkolodkingal/Arctic-Linux/actions/runs/38823208615)
+is 1,936,271,360 bytes with SHA-256
+`c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7`, but no capture is admitted
 until its exact-image receipt and pixels pass the automated contract and human review. A new River
 master has deterministic local alignment and still needs human listening. The locked narration is 9,093 characters, above
 the connected generator's 5,000-character request limit. The failed full-script attempt has no
