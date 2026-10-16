@@ -1,0 +1,69 @@
+name: Export pinned screened evidence for human review
+
+on:
+  push:
+    branches: [codex/final-evidence-review-export-20261016]
+    paths: [.github/final-evidence-review-export-20261016.activate]
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: final-evidence-review-export-20261016
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'yuvalkolodkingal/Arctic-Linux' &&
+      github.event_name == 'push' && github.run_attempt == 1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_BRANCH: codex/final-evidence-review-artifacts-20261016
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: Install the bounded contact-sheet decoder
+        run: sudo apt-get update && sudo apt-get install -y python3-pil
+      - name: Verify pins and extract only the reviewed allowlist
+        run: >-
+          python3 -B tools/evidence-review-export/export.py export
+          --manifest tools/evidence-review-export/manifest.json
+          --out "$RUNNER_TEMP/arctic-evidence-review"
+      - name: Create the new ephemeral review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$TARGET_BRANCH" = codex/final-evidence-review-artifacts-20261016
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH" >/dev/null 2>&1; then
+            echo "Review branch already exists; refusing to replace it" >&2
+            exit 1
+          fi
+          review="$RUNNER_TEMP/arctic-evidence-review"
+          git -C "$review" init -q -b review
+          git -C "$review" config user.name 'Arctic evidence review exporter'
+          git -C "$review" config user.email 'actions@users.noreply.github.com'
+          git -C "$review" add --all
+          git -C "$review" commit -qm "Ephemeral screened qualification evidence"
+          pushed=$(git -C "$review" rev-parse HEAD)
+          git -C "$review" remote add origin "https://github.com/$GITHUB_REPOSITORY.git"
+          askpass="$RUNNER_TEMP/arctic-evidence-review-askpass"
+          cat > "$askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 700 "$askpass"
+          GIT_ASKPASS="$askpass" GIT_TERMINAL_PROMPT=0 \
+            git -C "$review" push origin "HEAD:refs/heads/$TARGET_BRANCH"
+          : > "$askpass"
+          remote=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/$TARGET_BRANCH" --jq .object.sha)
+          test "$remote" = "$pushed"
