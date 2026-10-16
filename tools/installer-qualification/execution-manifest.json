@@ -5,7 +5,7 @@
     "shell/dev/wlr-screencopy-unstable-v1.xml": "a273cbbbbc4860738eaf6aa7d9845fea5df9cd85204bfa8014937c716441cdba",
     "tools/installer-qualification/contract.py": "d560927066830df09df7b6fff4d3a84f0e8197fdeb1c4f7faecdb7e3bbbc1628",
     "tools/installer-qualification/controller.py": "1336faf7de7f120b840244e894f8f52f3dcfb4370272b5cdf4eea7a3f678cbf5",
-    "tools/installer-qualification/driver.py": "f2594e9ac6b18dd2f16e8cd4757e80c0b76c2ebf7e8f61b56a437ecdaeb86389",
+    "tools/installer-qualification/driver.py": "9fc101ec68679d69c54a36f78366758491d7c34240a4ae0e2c6ea45fe67041e2",
     "tools/installer-qualification/evidence.py": "de5e491879b457414965cc9ad81051d622a50d3c9306cebd77ae11107642564d",
     "tools/installer-qualification/guest.py": "18e1ddd54a39195a2a78dfb45d5308207932e3d3b3f071809fd42e85d34fd93c",
     "tools/installer-qualification/run-live.sh": "7e2eb556ce49ecda84d464a814179ffccf96d715202607ca441c74ae27950ec9",

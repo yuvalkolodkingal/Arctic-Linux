@@ -21,11 +21,23 @@ class PhysicalRowControls(unittest.TestCase):
         path = root / 'console.png'
         image = Image.new(mode, size, 'black')
         draw = ImageDraw.Draw(image)
+        glyphs = {}
+        for digit in D.IDENTITY_LEGEND:
+            glyph = Image.new('RGB', (8, 16), 'black')
+            pixels = glyph.load(); value = int(digit)
+            pixels[value % 8, value // 8] = (255, 255, 255)
+            pixels[7, 15] = (255, 255, 255)
+            glyphs[digit] = glyph
+            image.paste(glyph, (D.IDENTITY_LEGEND_BOX[0] + value * 8,
+                                D.IDENTITY_LEGEND_BOX[1]))
+        token = D.installed_user_token(self.nonce)
         for index, box in enumerate(D.IDENTITY_RECORD_BOXES):
             # Each physical row has a distinct marker cell and byte-identical
             # response cells after translation into the fixed row canvas.
             draw.rectangle((72, box[1] + 5, 79, box[1] + 14), fill=(index + 30, 50, 70))
-            draw.rectangle((80, box[1] + 5, 230, box[1] + 14), fill=(30, 50, 70))
+            origin = D.IDENTITY_RESPONSE_CELL_ORIGINS[index]
+            for column, digit in enumerate(token):
+                image.paste(glyphs[digit], (origin[0] + column * 8, origin[1]))
         # The next console prompt begins in the cell immediately below row3.
         draw.rectangle((64, 194, 240, 207), fill='white')
         image.save(path)
@@ -50,8 +62,9 @@ class PhysicalRowControls(unittest.TestCase):
                 return types.SimpleNamespace(stdout=(expected[index] + '\n').encode())
             with patch.object(D.subprocess, 'run', side_effect=ocr), \
                     patch.object(Image.Image, 'resize', side_effect=AssertionError('response pixels cannot be scaled')):
-                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
             self.assertEqual(len(calls), 3); self.assertTrue(physical); self.assertTrue(identical)
+            self.assertEqual(decoded, expected[0][1:])
             self.assertTrue(D._identity_ocr_observation(stdout, expected, True)[0])
             self.assertEqual(path.read_bytes(), original)
             self.assertEqual({p.name for p in Path(directory).iterdir()}, {'console.png'})
@@ -62,10 +75,11 @@ class PhysicalRowControls(unittest.TestCase):
             path, _ = self.fixture(Path(directory))
             outputs = [types.SimpleNamespace(stdout=expected[i].encode()) for i in (1, 0, 2)]
             with patch.object(D.subprocess, 'run', side_effect=outputs):
-                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
             self.assertTrue(D._identity_ocr_observation(stdout, expected, True)[0])
             self.assertFalse(physical)
             self.assertTrue(identical)
+            self.assertEqual(decoded, expected[0][1:])
 
     def test_empty_multiple_or_wrong_width_rows_withhold_physical_proof(self):
         expected = D.installed_user_records(self.nonce)
@@ -74,9 +88,10 @@ class PhysicalRowControls(unittest.TestCase):
                 path, _ = self.fixture(Path(directory))
                 outputs = [types.SimpleNamespace(stdout=x) for x in (changed, expected[1].encode(), expected[2].encode())]
                 with patch.object(D.subprocess, 'run', side_effect=outputs):
-                    _, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                    _, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
                 self.assertFalse(physical)
                 self.assertTrue(identical)
+                self.assertEqual(decoded, expected[0][1:])
 
     def test_one_exact_row_and_identical_response_pixels_survive_correlated_ocr_error(self):
         expected = D.installed_user_records(self.nonce)
@@ -86,14 +101,14 @@ class PhysicalRowControls(unittest.TestCase):
             path, _ = self.fixture(Path(directory))
             with patch.object(D.subprocess, 'run', side_effect=[
                     types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
-                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
         self.assertTrue(physical); self.assertTrue(identical)
         accepted, observation = D._identity_ocr_observation(
             stdout, expected, True, physical and identical)
         self.assertTrue(accepted)
         self.assertEqual(observation[2], 'one')
 
-    def test_zero_exact_rows_never_pass_from_identical_pixels(self):
+    def test_zero_exact_ocr_rows_pass_only_from_exact_legend_decoded_pixels(self):
         expected = D.installed_user_records(self.nonce)
         position = 7
         replacement = '8' if expected[0][position] != '8' else '9'
@@ -103,12 +118,59 @@ class PhysicalRowControls(unittest.TestCase):
             path, _ = self.fixture(Path(directory))
             with patch.object(D.subprocess, 'run', side_effect=[
                     types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
-                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
         self.assertTrue(physical); self.assertTrue(identical)
         accepted, observation = D._identity_ocr_observation(
-            stdout, expected, True, physical and identical)
+            stdout, expected, True, physical and identical, decoded)
+        self.assertTrue(accepted)
+        self.assertEqual(observation[2], 'zero')
+
+    def test_zero_exact_ocr_rows_reject_a_wrong_pixel_decoded_identity(self):
+        expected = D.installed_user_records(self.nonce)
+        position = 7
+        wrong_digit = '8' if expected[0][position] != '8' else '9'
+        outputs = [record[:position] + wrong_digit + record[position + 1:]
+                   for record in expected]
+        token_column = position - 1
+        with tempfile.TemporaryDirectory() as directory:
+            path, image = self.fixture(Path(directory))
+            source = image.crop((D.IDENTITY_LEGEND_BOX[0] + int(wrong_digit) * 8,
+                                 D.IDENTITY_LEGEND_BOX[1],
+                                 D.IDENTITY_LEGEND_BOX[0] + (int(wrong_digit) + 1) * 8,
+                                 D.IDENTITY_LEGEND_BOX[3]))
+            for origin in D.IDENTITY_RESPONSE_CELL_ORIGINS:
+                image.paste(source, (origin[0] + token_column * 8, origin[1]))
+            image.save(path)
+            with patch.object(D.subprocess, 'run', side_effect=[
+                    types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                stdout, physical, identical, decoded = D.installed_identity_ocr(
+                    path, D.time.monotonic() + 30)
+        self.assertTrue(physical); self.assertTrue(identical)
+        self.assertNotEqual(decoded, expected[0][1:])
+        accepted, observation = D._identity_ocr_observation(
+            stdout, expected, True, physical and identical, decoded)
         self.assertFalse(accepted)
         self.assertEqual(observation[2], 'zero')
+
+    def test_duplicate_or_changed_legend_cells_never_decode_identity(self):
+        expected = D.installed_user_records(self.nonce)
+        position = 7
+        replacement = '8' if expected[0][position] != '8' else '9'
+        outputs = [record[:position] + replacement + record[position + 1:]
+                   for record in expected]
+        with tempfile.TemporaryDirectory() as directory:
+            path, image = self.fixture(Path(directory))
+            duplicate = image.crop((D.IDENTITY_LEGEND_BOX[0], D.IDENTITY_LEGEND_BOX[1],
+                                    D.IDENTITY_LEGEND_BOX[0] + 8, D.IDENTITY_LEGEND_BOX[3]))
+            image.paste(duplicate, (D.IDENTITY_LEGEND_BOX[0] + 8, D.IDENTITY_LEGEND_BOX[1]))
+            image.save(path)
+            with patch.object(D.subprocess, 'run', side_effect=[
+                    types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
+                stdout, physical, identical, decoded = D.installed_identity_ocr(
+                    path, D.time.monotonic() + 30)
+        self.assertTrue(physical); self.assertTrue(identical); self.assertIsNone(decoded)
+        self.assertFalse(D._identity_ocr_observation(
+            stdout, expected, True, physical and identical, decoded)[0])
 
     def test_changed_response_pixels_disable_one_exact_row_fallback(self):
         expected = D.installed_user_records(self.nonce)
@@ -119,7 +181,7 @@ class PhysicalRowControls(unittest.TestCase):
             image.putpixel((100, D.IDENTITY_RECORD_BOXES[1][1] + 8), (255, 0, 0)); image.save(path)
             with patch.object(D.subprocess, 'run', side_effect=[
                     types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
-                stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
         self.assertTrue(physical); self.assertFalse(identical)
         self.assertFalse(D._identity_ocr_observation(
             stdout, expected, True, physical and identical)[0])
@@ -133,7 +195,7 @@ class PhysicalRowControls(unittest.TestCase):
                 path, _ = self.fixture(Path(directory))
                 with patch.object(D.subprocess, 'run', side_effect=[
                         types.SimpleNamespace(stdout=(value + '\n').encode()) for value in outputs]):
-                    stdout, physical, identical = D.installed_identity_ocr(path, D.time.monotonic() + 30)
+                    stdout, physical, identical, decoded = D.installed_identity_ocr(path, D.time.monotonic() + 30)
             self.assertFalse(physical); self.assertTrue(identical)
             accepted, _ = D._identity_ocr_observation(
                 stdout, expected, True, physical and identical)
