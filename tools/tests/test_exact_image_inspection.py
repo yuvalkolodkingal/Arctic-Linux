@@ -45,26 +45,30 @@ def git(root, *args):
 
 
 class ManifestControls(unittest.TestCase):
-    def test_shipped_lane_prepares_exact_unqualified_image_without_activation(self):
+    def test_shipped_lane_prepares_exact_unqualified_image_without_new_activation(self):
         shipped = S.read_json((HERE / 'execution-manifest.json').read_text())
         self.assertEqual(S.validate_manifest(shipped), shipped['image'])
         self.assertEqual(shipped['image'], {
-            'archive_bytes': 1936516406,
-            'archive_sha256': '4abe1d00b7b48ff1b16609e8e24e3adb440409cd0186dee2482fff1dbb566db6',
-            'artifact_id': 12011000602,
-            'bytes': 1936328704,
-            'name': 'Arctic-Linux-1.2-candidate-38808271154-1-x86_64.iso',
+            'archive_bytes': 1936459062,
+            'archive_sha256': '5f77dbf607abdada5ed140ae8635314554d5d2f03f88f1f5831e3d53bc18cf23',
+            'artifact_id': 12016177474,
+            'bytes': 1936271360,
+            'name': 'Arctic-Linux-1.2-candidate-38823208615-1-x86_64.iso',
             'producer_mode': F.EXTERNAL_MODE,
-            'producer_receipt_sha256': '85fe05d5394253cfb96e8c5fc38054171218a9e93c17c318670040d76be5c6c6',
-            'run_id': 38808271154,
-            'sha256': '304ae134793773f7a4d58ebe4dc4a5428a49754f474749d0d0a025032da70b23',
-            'source_sha': '10b94bf1f6aef4950889d4a498c9e1138cf7973d',
+            'producer_receipt_sha256': '82d102432819e8cc2f9d27b020f54a21021a176daa930e675c75229273ab7330',
+            'run_id': 38823208615,
+            'sha256': 'c13c4589d7b522fec7dbd5eeafec00cf9088d8788cdfb6771a7382285846d7c7',
+            'source_sha': 'cfc39dad61125e4fa8fb7906ac14f4c360b58228',
         })
         self.assertIs(shipped['ready'], True)
         self.assertIs(shipped['release_acceptance'], False)
         self.assertIs(shipped['performance_acceptance'], False)
         self.assertIs(shipped['observer_profile_admitted'], False)
-        self.assertFalse((ROOT / S.MARKER).exists())
+        # This preparation descends from a completed prior inspection. Its
+        # historical marker must remain byte-for-byte unchanged; only a later
+        # marker commit on the canonical execution branch may activate it.
+        self.assertEqual((ROOT / S.MARKER).read_bytes(),
+                         b'cdedd480eafbe9108393c294c98cf70f76414863\n')
         self.assertEqual(shipped['execution_files'],
                          {name: hashlib.sha256((ROOT / name).read_bytes()).hexdigest() for name in S.EXECUTION_FILES})
         for name, pin in shipped['source_files'].items():
