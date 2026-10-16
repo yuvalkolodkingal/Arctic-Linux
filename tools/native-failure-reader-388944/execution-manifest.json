@@ -6,8 +6,13 @@
     "sha256": "3d9cf44af41bf01b3b5e836548bccff0bb8ea2cc7824f6b1412371f456d1a40c"
   },
   "branch": "codex/read-native-failure-388944-20261016",
+  "job_id": 116951373862,
+  "producer_actions": {
+    "actions/checkout": "11d5960a326750d5838078e36cf38b85af677262",
+    "actions/upload-artifact": "ea165f8d65b6e75b540449e92b4886f43607fa02"
+  },
   "qualification_manifest_sha256": "ed8a10e0ca0a7ba287ef0798447dd8c5453b3b5c6d2edaf0664deccf5d38c54c",
-  "reader_sha256": "4e8fa2d421705ae05664b8c2095187973d1b12596d46ba67b6551f2956a09883",
+  "reader_sha256": "c5713bf289c412c6522f2531a9dcb2b5a2e8a8451f03750daee248e4ceabe11b",
   "reader_workflow": ".github/workflows/read-native-failure-388944.yml",
   "reader_workflow_sha256": "0ab4c91b82f0341fe1f42907d16ce62dc0c1724ecb146911519eb424d6669ce7",
   "ready": true,

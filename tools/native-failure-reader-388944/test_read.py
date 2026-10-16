@@ -6,6 +6,7 @@ import io
 import json
 from pathlib import Path
 import stat
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -292,6 +293,90 @@ class SafeNativeReaderTests(unittest.TestCase):
         self.assertIn('actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5', workflow)
         self.assertNotIn('actions/checkout@v', workflow)
         self.assertIn(reader.ACTIVATION.as_posix(), workflow)
+
+    def test_exact_producer_action_resolution_is_required(self):
+        checkout = reader.ACTION_RESOLUTIONS['actions/checkout']
+        upload = reader.ACTION_RESOLUTIONS['actions/upload-artifact']
+        raw = (('2026-10-16T11:32:18.1598921Z Download action repository '
+                "'actions/checkout@v4' (SHA:" + checkout + ')\n'
+                '2026-10-16T11:32:18.5163282Z Download action repository '
+                "'actions/upload-artifact@v4' (SHA:" + upload + ')\n'
+                'private unrelated log text that is never projected\n').encode())
+        self.assertTrue(reader.validate_action_resolution(raw))
+        mutations = (
+            raw.replace(checkout.encode(), b'0' * 40),
+            raw.replace(b'actions/checkout@v4', b'actions/checkout@v5'),
+            raw + raw.splitlines(keepends=True)[0],
+            raw.replace(b'actions/upload-artifact@v4', b'private/action@v4'),
+            raw.replace(b'Download action repository ', b'Download action repository private '),
+        )
+        for changed in mutations:
+            with self.subTest(changed=changed[:80]), self.assertRaises(RuntimeError):
+                reader.validate_action_resolution(changed)
+
+    def test_bounded_job_log_capture_stops_oversize_and_stderr(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / 'ok.log'
+            size = reader.bounded_command_to_file(
+                [sys.executable, '-c', "import sys;sys.stdout.buffer.write(b'x'*1024)"],
+                target, 2048, 10)
+            self.assertEqual(size, 1024)
+            self.assertEqual(target.stat().st_size, 1024)
+            with self.assertRaises(RuntimeError):
+                reader.bounded_command_to_file(
+                    [sys.executable, '-c', "import sys;sys.stdout.buffer.write(b'x'*4096)"],
+                    root / 'oversize.log', 2048, 10)
+            with self.assertRaises(RuntimeError):
+                reader.bounded_command_to_file(
+                    [sys.executable, '-c', "import sys;sys.stderr.buffer.write(b'x'*70000);sys.stdout.write('x')"],
+                    root / 'stderr.log', 2048, 10)
+
+    def test_action_commits_must_resolve_to_the_pinned_objects(self):
+        def exact(endpoint):
+            return {'sha': endpoint.rsplit('/', 1)[1]}
+        with mock.patch.object(reader, 'api_endpoint', side_effect=exact):
+            self.assertTrue(reader.validate_action_commits())
+        with mock.patch.object(reader, 'api_endpoint', return_value={'sha': '0' * 40}), \
+                self.assertRaises(RuntimeError):
+            reader.validate_action_commits()
+
+    def test_run_requires_both_checkout_steps_and_exact_job_identity(self):
+        run = {'id': reader.RUN_ID, 'run_attempt': reader.RUN_ATTEMPT,
+               'head_sha': reader.RUN_HEAD,
+               'head_branch': 'codex/qualification-dispatch-20261010',
+               'path': reader.WORKFLOW, 'event': 'push', 'status': 'completed',
+               'conclusion': 'failure',
+               'repository': {'full_name': reader.REPOSITORY}}
+        names = [
+            ('Set up job', 'success'),
+            ('Run actions/checkout@v4', 'success'),
+            ('Verify reviewed single-file activation and pinned source', 'success'),
+            ('Run actions/checkout@v4', 'success'),
+            ('Fetch and verify retained ISO archive and actual image bytes', 'success'),
+            ('Native live and encrypted offline installed acceptance', 'failure'),
+            ('Screen bounded diagnostic files before upload', 'success'),
+            ('Run actions/upload-artifact@v4', 'success'),
+            ('Post Run actions/checkout@v4', 'success'),
+            ('Post Run actions/checkout@v4', 'success'),
+        ]
+        job = {'id': reader.JOB_ID, 'run_id': reader.RUN_ID,
+               'run_attempt': reader.RUN_ATTEMPT, 'head_sha': reader.RUN_HEAD,
+               'name': 'native', 'status': 'completed', 'conclusion': 'failure',
+               'steps': [{'name': name, 'conclusion': conclusion}
+                         for name, conclusion in names]}
+        jobs = {'total_count': 1, 'jobs': [job]}
+        reader.validate_run(run, jobs)
+        for mutation in ('job', 'checkout', 'upload'):
+            changed = json.loads(json.dumps(jobs))
+            if mutation == 'job':
+                changed['jobs'][0]['id'] += 1
+            elif mutation == 'checkout':
+                changed['jobs'][0]['steps'][3]['name'] = 'Run actions/checkout@v5'
+            else:
+                changed['jobs'][0]['steps'][7]['name'] = 'Run actions/upload-artifact@v5'
+            with self.subTest(mutation=mutation), self.assertRaises(RuntimeError):
+                reader.validate_run(run, changed)
 
 
 if __name__ == '__main__':

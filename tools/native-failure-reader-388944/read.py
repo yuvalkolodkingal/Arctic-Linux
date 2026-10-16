@@ -9,9 +9,11 @@ import json
 import os
 from pathlib import Path
 import re
+import selectors
 import stat
 import subprocess
 import tempfile
+import time
 import zipfile
 import zlib
 
@@ -19,6 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 REPOSITORY = 'yuvalkolodkingal/Arctic-Linux'
 REPO_API = 'repos/' + REPOSITORY
 WORKFLOW = '.github/workflows/native-candidate-20261008.yml'
+PRODUCER_WORKFLOW = Path(WORKFLOW)
 READER_WORKFLOW = Path('.github/workflows/read-native-failure-388944.yml')
 BRANCH = 'codex/read-native-failure-388944-20261016'
 ACTIVATION = Path('.github/native-failure-reader-388944.activate')
@@ -29,6 +32,12 @@ SOURCE_PROVENANCE = Path('tools/native-functional/source-provenance.json')
 RUN_ID = 38894423903
 RUN_ATTEMPT = 1
 RUN_HEAD = 'cc1b00d297817399b60beb37aba2c275d9456144'
+JOB_ID = 116951373862
+ACTION_RESOLUTIONS = {
+    'actions/checkout': '11d5960a326750d5838078e36cf38b85af677262',
+    'actions/upload-artifact': 'ea165f8d65b6e75b540449e92b4886f43607fa02',
+}
+JOB_LOG_MAX = 32 * 1024 * 1024
 ARTIFACT_ID = 12044990488
 ARTIFACT_NAME = 'native-candidate-qualification'
 ARTIFACT_BYTES = 47945673
@@ -47,10 +56,10 @@ MEMBERS = REQUIRED_MEMBERS | OPTIONAL_MEMBERS
 MANIFEST_FIELDS = {'schema', 'ready', 'repository', 'workflow', 'reader_workflow', 'branch',
                    'run_id', 'run_attempt', 'run_head', 'artifact', 'reader_sha256',
                    'validator_sha256', 'qualification_manifest_sha256',
-                   'reader_workflow_sha256'}
+                   'reader_workflow_sha256', 'job_id', 'producer_actions'}
 ARTIFACT_FIELDS = {'id', 'name', 'bytes', 'sha256'}
 REJECTION_STAGES = {'activation', 'manifest', 'run', 'jobs', 'artifact-metadata',
-                    'download', 'archive', 'screening', 'execution',
+                    'producer-actions', 'download', 'archive', 'screening', 'execution',
                     'harness', 'native-stages', 'taskbar-prefix', 'serial-boot',
                     'projection'}
 REJECTION_STAGE = 'manifest'
@@ -121,7 +130,9 @@ def validate_manifest(value):
             and value['workflow'] == WORKFLOW
             and value['reader_workflow'] == READER_WORKFLOW.as_posix()
             and value['branch'] == BRANCH and value['run_id'] == RUN_ID
-            and value['run_attempt'] == RUN_ATTEMPT and value['run_head'] == RUN_HEAD)
+            and value['run_attempt'] == RUN_ATTEMPT and value['run_head'] == RUN_HEAD
+            and value['job_id'] == JOB_ID
+            and value['producer_actions'] == ACTION_RESOLUTIONS)
     artifact = value['artifact']
     require(type(artifact) is dict and set(artifact) == ARTIFACT_FIELDS
             and artifact == {'id': ARTIFACT_ID, 'name': ARTIFACT_NAME,
@@ -141,6 +152,14 @@ def validate_manifest(value):
                 'f369b978aeb05a3310c512660811084fd5bc97d1'
             and qualification.get('execution_files', {}).get(VALIDATOR.as_posix()) ==
                 value['validator_sha256'])
+    execution_files = qualification.get('execution_files', {})
+    producer = ROOT / PRODUCER_WORKFLOW
+    require(digest(execution_files.get(PRODUCER_WORKFLOW.as_posix()))
+            and producer.is_file() and not producer.is_symlink()
+            and sha256(producer.read_bytes()) == execution_files[PRODUCER_WORKFLOW.as_posix()])
+    producer_text = producer.read_text(encoding='utf-8')
+    require(producer_text.count('uses: actions/checkout@v4') == 2
+            and producer_text.count('uses: actions/upload-artifact@v4') == 1)
     load_source_provenance(qualification)
     return value, qualification
 
@@ -193,11 +212,17 @@ def activation_guard():
                 text=True, timeout=30).strip())
 
 
-def api(path):
-    result = subprocess.run(['gh', 'api', REPO_API + path], stdout=subprocess.PIPE,
+def api_endpoint(endpoint):
+    require(type(endpoint) is str and re.fullmatch(r'[A-Za-z0-9_./?=&-]{1,256}', endpoint))
+    result = subprocess.run(['gh', 'api', endpoint], stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, timeout=60, check=False)
     require(result.returncode == 0 and 0 < len(result.stdout) <= 20 * 1024 * 1024)
     return strict_json(result.stdout, 20 * 1024 * 1024)
+
+
+def api(path):
+    require(type(path) is str and path.startswith('/'))
+    return api_endpoint(REPO_API + path)
 
 
 def validate_run(run, jobs):
@@ -212,15 +237,105 @@ def validate_run(run, jobs):
     require(type(jobs) is dict and jobs.get('total_count') == 1
             and type(jobs.get('jobs')) is list and len(jobs['jobs']) == 1)
     job = jobs['jobs'][0]
-    require(job.get('name') == 'native' and job.get('status') == 'completed'
+    require(job.get('id') == JOB_ID and job.get('run_id') == RUN_ID
+            and job.get('run_attempt') == RUN_ATTEMPT
+            and job.get('head_sha') == RUN_HEAD
+            and job.get('name') == 'native' and job.get('status') == 'completed'
             and job.get('conclusion') == 'failure')
-    steps = {step.get('name'): step.get('conclusion') for step in job.get('steps', [])
-             if type(step) is dict and type(step.get('name')) is str}
-    require(steps.get('Verify reviewed single-file activation and pinned source') == 'success'
-            and steps.get('Fetch and verify retained ISO archive and actual image bytes') == 'success'
-            and steps.get('Native live and encrypted offline installed acceptance') == 'failure'
-            and steps.get('Screen bounded diagnostic files before upload') == 'success'
-            and steps.get('Run actions/upload-artifact@v4') == 'success')
+    steps = [(step.get('name'), step.get('conclusion')) for step in job.get('steps', [])
+             if type(step) is dict and type(step.get('name')) is str]
+    require(steps.count(('Run actions/checkout@v4', 'success')) == 2
+            and steps.count(('Post Run actions/checkout@v4', 'success')) == 2
+            and steps.count(('Run actions/upload-artifact@v4', 'success')) == 1
+            and ('Verify reviewed single-file activation and pinned source', 'success') in steps
+            and ('Fetch and verify retained ISO archive and actual image bytes', 'success') in steps
+            and ('Native live and encrypted offline installed acceptance', 'failure') in steps
+            and ('Screen bounded diagnostic files before upload', 'success') in steps)
+
+
+def bounded_command_to_file(argv, target, maximum, timeout_seconds=180):
+    """Capture a fixed command without allowing stdout or stderr to grow unbounded."""
+    require(type(argv) is list and argv and all(type(item) is str for item in argv)
+            and not target.exists() and 0 < maximum <= JOB_LOG_MAX
+            and type(timeout_seconds) is int and 1 <= timeout_seconds <= 300)
+    process = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                               stderr=subprocess.PIPE, close_fds=True)
+    selector = selectors.DefaultSelector()
+    stdout_bytes = stderr_bytes = 0
+    try:
+        for stream, role in ((process.stdout, 'stdout'), (process.stderr, 'stderr')):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, role)
+        deadline = time.monotonic() + timeout_seconds
+        with target.open('xb') as output:
+            while selector.get_map():
+                require(time.monotonic() < deadline)
+                events = selector.select(timeout=min(0.25, max(0, deadline-time.monotonic())))
+                if not events:
+                    continue
+                for key, _ in events:
+                    chunk = os.read(key.fileobj.fileno(), 65536)
+                    if not chunk:
+                        selector.unregister(key.fileobj)
+                        continue
+                    if key.data == 'stdout':
+                        stdout_bytes += len(chunk)
+                        require(stdout_bytes <= maximum)
+                        output.write(chunk)
+                    else:
+                        stderr_bytes += len(chunk)
+                        require(stderr_bytes <= 64 * 1024)
+        require(process.wait(timeout=5) == 0 and 0 < stdout_bytes <= maximum)
+    except BaseException:
+        if process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+        raise
+    finally:
+        selector.close()
+        for stream in (process.stdout, process.stderr):
+            stream.close()
+    return stdout_bytes
+
+
+def download_job_log(target):
+    checkpoint('producer-actions')
+    return bounded_command_to_file(
+        ['gh', 'api', REPO_API + '/actions/jobs/' + str(JOB_ID) + '/logs'],
+        target, JOB_LOG_MAX)
+
+
+def validate_action_resolution(raw):
+    """Verify only fixed runner action-resolution records from the exact job log."""
+    checkpoint('producer-actions')
+    require(type(raw) is bytes and 0 < len(raw) <= JOB_LOG_MAX and b'\x00' not in raw)
+    text = raw.decode('utf-8-sig', errors='strict')
+    prefix = re.compile(r"(?:\ufeff)?[0-9]{4}-[0-9]{2}-[0-9]{2}T"
+                        r"[0-9]{2}:[0-9]{2}:[0-9]{2}\.[0-9]+Z "
+                        r"Download action repository '([^']+)' \(SHA:([0-9a-f]{40})\)")
+    observed = []
+    for line in text.splitlines():
+        if 'Download action repository ' not in line:
+            continue
+        match = prefix.fullmatch(line)
+        require(match is not None)
+        observed.append((match.group(1), match.group(2)))
+    expected = [(name + '@v4', sha) for name, sha in ACTION_RESOLUTIONS.items()]
+    require(observed == expected)
+    return True
+
+
+def validate_action_commits():
+    checkpoint('producer-actions')
+    for name, expected in ACTION_RESOLUTIONS.items():
+        repository = name.split('/', 1)[1]
+        value = api_endpoint('repos/actions/' + repository + '/git/commits/' + expected)
+        require(type(value) is dict and value.get('sha') == expected)
+    return True
 
 
 def validate_artifact(value):
@@ -606,12 +721,17 @@ def run(manifest_path):
     manifest, qualification = validate_manifest(read_json_file(manifest_path, 32768))
     validate_run(api('/actions/runs/' + str(RUN_ID)),
                  api('/actions/runs/' + str(RUN_ID) + '/jobs?per_page=100'))
-    artifact = api('/actions/artifacts/' + str(ARTIFACT_ID))
-    validate_artifact(artifact)
+    validate_action_commits()
     with tempfile.TemporaryDirectory(prefix='arctic-native-safe-reader-') as temp:
+        job_log = Path(temp) / 'exact-job.log'
+        download_job_log(job_log)
+        validate_action_resolution(job_log.read_bytes())
+        artifact = api('/actions/artifacts/' + str(ARTIFACT_ID))
+        validate_artifact(artifact)
         archive = Path(temp) / 'exact-artifact.zip'
         download(archive)
         result = inspect_archive(archive, manifest, qualification)
+    result['producer_actions_verified'] = True
     emit(result)
 
 
