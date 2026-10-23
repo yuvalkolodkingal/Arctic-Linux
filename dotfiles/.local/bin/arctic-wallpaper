@@ -27,11 +27,12 @@
 # Winter / Polar night. ARCTIC_WALLPAPER_NO_SYNC=1 skips that. A new choice also runs your
 # wallpaper hooks (arctic-hook wallpaper PICTURE).
 #
-# Rotation changes the wallpaper and the colours with it: each picture is saved as your choice
-# and the desktop follows (your pictures colour it, Arctic's bring back Winter / Polar night),
-# so the rotation never leaves the colours behind. It is kept in
-# ~/.config/arctic/wallpaper-rotate.json and runs as the transient systemd user timer
-# arctic-wallpaper-rotate; in shuffle order every picture comes once per round.
+# Rotation changes only the picture, never the colours: the rotated picture is kept in
+# ~/.config/arctic/wallpaper-rotated, apart from your choice, so arctic-theme keeps colouring the
+# desktop from the wallpaper you picked. Picking a wallpaper (or turning rotation off) ends the
+# rotated picture. The rotation is kept in ~/.config/arctic/wallpaper-rotate.json and runs as the
+# transient systemd user timer arctic-wallpaper-rotate; in shuffle order every picture comes once
+# per round.
 set -euo pipefail
 
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -117,6 +118,7 @@ detach() {
 
 # ---- rotation (stream 6) ----
 ROTATE="$CONF/wallpaper-rotate.json"
+ROTATED="$CONF/wallpaper-rotated"
 QUEUE="$CACHE_DIR/wallpaper-rotate-queue"
 
 rotate_get() {   # rotate_get KEY: one value of wallpaper-rotate.json ('' when missing)
@@ -253,7 +255,12 @@ rotate_cmd() {
       if [[ -f "$ROTATE" ]]; then cat "$ROTATE"; else echo '{"every": "off"}'; fi ;;
     off)
       rm -f "$ROTATE" "$QUEUE"
-      systemctl --user stop arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true ;;
+      systemctl --user stop arctic-wallpaper-rotate.timer arctic-wallpaper-rotate.service >/dev/null 2>&1 || true
+      # Back to the wallpaper you picked (the one the colours were made from).
+      if [[ -f "$ROTATED" ]]; then
+        rm -f "$ROTATED"
+        "$0" >/dev/null || true
+      fi ;;
     apply)
       every="$(rotate_get every)"
       case "$every" in 30m|1h|1d) arm_rotation "$every" ;; esac ;;
@@ -307,22 +314,26 @@ case "${1:-}" in
     rotate_cmd "$@"
     exit $? ;;
   next)
-    # The rotation's next picture: it becomes your wallpaper and the colours follow it, so the
-    # desktop keeps matching what is on screen. Arctic's own wallpapers are saved by name, so
-    # arctic-theme brings back Winter / Polar night; your pictures get the 'wallpaper' theme.
+    # The rotation's next picture. It is kept apart from your choice and the colours are left
+    # alone: an automatic change never recolours the desktop. Arctic's own wallpapers are kept
+    # by name, so they still follow light / dark theme switches.
     folder="$(rotate_get folder)"
     [[ -n "$folder" ]] || folder="$(your_folder)"
     img="$(next_picture "$folder" "$(rotate_get shuffle)" || true)"
     [[ -n "$img" ]] || { echo "arctic-wallpaper: no pictures to rotate in $folder" >&2; exit 1; }
     mkdir -p "$CONF"
-    printf '%s\n' "$(design_name "$img" || printf '%s' "$img")" > "$CONF/wallpaper"
-    sync_colours
+    printf '%s\n' "$(design_name "$img" || printf '%s' "$img")" > "$ROTATED.tmp"
+    mv "$ROTATED.tmp" "$ROTATED"
     hook=1 ;;
   -h|--help)
     # the header comment, without its leading '#': everything up to the first line of code
     sed -n '2,${/^[^#]/q;s/^# \{0,1\}//;p;}' "$0"; exit 0 ;;
   "")
-    saved="$(cat "$CONF/wallpaper" 2>/dev/null || true)"
+    saved=""
+    # While rotating, redraws (theme switches, login) keep the rotated picture on screen.
+    [[ -f "$ROTATE" ]] && saved="$(cat "$ROTATED" 2>/dev/null || true)"
+    if [[ -n "$saved" ]] && ! is_name "$saved" && [[ ! -f "$saved" ]]; then saved=""; fi
+    [[ -n "$saved" ]] || saved="$(cat "$CONF/wallpaper" 2>/dev/null || true)"
     if is_name "$saved"; then
       img="$(find_design "$saved-$VARIANT" || true)"
     elif [[ -n "$saved" && -f "$saved" ]]; then
@@ -333,6 +344,7 @@ case "${1:-}" in
     chosen=1
     if is_name "$1"; then
       printf '%s\n' "$1" > "$CONF/wallpaper"
+      rm -f "$ROTATED"     # your pick replaces whatever the rotation was showing
       sync_colours
       img="$(find_design "$1-$VARIANT" || true)"
     elif [[ -f "$1" ]]; then
@@ -342,6 +354,7 @@ case "${1:-}" in
         *) echo "arctic-wallpaper: $1 isn't a picture (PNG, JPEG, WebP, SVG…)" >&2; exit 2 ;;
       esac
       printf '%s\n' "$path" > "$CONF/wallpaper"
+      rm -f "$ROTATED"
       sync_colours
       img="$path"
     else

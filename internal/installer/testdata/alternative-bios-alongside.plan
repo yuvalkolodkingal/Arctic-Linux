@@ -155,14 +155,6 @@ write /mnt/etc/xdg/mimeapps.list (0644)
     | audio/mpeg=mpv.desktop
     | audio/flac=mpv.desktop
     | audio/ogg=mpv.desktop
-write /mnt/var/lib/arctic/dictation/pending (0644)
-    | 1.1.1
-write /mnt/var/lib/arctic/dictation/setup.state (0644)
-    | queued
-write /mnt/var/lib/arctic/dictation/user (0600)
-    | alt
-$ systemctl --root=/mnt enable arctic-dictation-setup.timer
-$ chroot /mnt /usr/libexec/arctic/arctic-voxtype-setup --install alt
 mkdir -p /mnt/var/log/arctic-install
 $ cp /var/log/arctic-install/engine.log /mnt/var/log/arctic-install
 $ setfiles -F -r /mnt -e /mnt/proc -e /mnt/sys -e /mnt/dev -e /mnt/run -e /mnt/boot/efi /mnt/etc/selinux/targeted/contexts/files/file_contexts /mnt /mnt/home /mnt/var/log /mnt/nix /mnt/boot

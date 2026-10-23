@@ -38,15 +38,8 @@ Scope {
                 'The live user has no password. Install Arctic Linux to lock your screen.']);
             return;
         }
-        if (root.showing || dictationGuard.running) return;
-        // Cancel upstream VoxType before asking the compositor to lock.
-        dictationGuard.running = true;
-    }
-    Process {
-        id: dictationGuard
-        command: ['sh', '-c', 'if command -v voxtype >/dev/null 2>&1; then timeout 3s voxtype record cancel >/dev/null 2>&1 || :; timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || :; fi']
-        // Optional dictation must never prevent the screen from locking.
-        onExited: root.acquireLock()
+        if (root.showing) return;
+        root.acquireLock();
     }
     function acquireLock() {
         password = '';
@@ -190,7 +183,6 @@ Scope {
             NotificationService.locked = false;
             root.password = '';
             root.state = 'idle';
-            Quickshell.execDetached(['systemctl', '--user', 'start', 'voxtype.service']);
             Quickshell.execDetached(['arctic-hook', 'unlock']);
         }
     }

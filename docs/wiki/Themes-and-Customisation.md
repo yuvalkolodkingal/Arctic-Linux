@@ -223,9 +223,11 @@ arctic-wallpaper rotate off                # stop
 arctic-wallpaper next                      # the next picture now
 ```
 
-Each rotated picture becomes your saved choice in `~/.config/arctic/wallpaper`, and
-**Match colours to wallpaper** can update the palette with it. The next login uses the latest
-chosen picture. An enabled shared-login desktop sync follows these changes too. In random order
+Rotation changes only the picture: the desktop's colours stay the ones made from the wallpaper
+you picked, even with **Match colours to wallpaper** on. The rotated picture is kept in
+`~/.config/arctic/wallpaper-rotated`, apart from your choice in `~/.config/arctic/wallpaper`;
+picking a wallpaper or turning rotation off goes back to your own choice. The next login shows
+the latest rotated picture. An enabled shared-login desktop sync follows these changes too. In random order
 every picture from the selected source comes once before any comes again. **Both** treats your
 configured folder and the visible Arctic collection as one round; hidden packaged photos are
 excluded. Your [wallpaper hooks](#hooks-for-other-events) run with each picture.

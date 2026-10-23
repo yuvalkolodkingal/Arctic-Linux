@@ -11,7 +11,7 @@ quickshell -p settings          # from a checkout
 ```
 
 Pages: Appearance, Windows, Displays, Keyboard and mouse, Shortcuts, Default apps, Network,
-Sharing, Bluetooth, Sound, Dictation, Updates, Power and lock, Startup apps, Printers and scanners, Date and
+Sharing, Bluetooth, Sound, Voice typing, Updates, Power and lock, Startup apps, Printers and scanners, Date and
 time, Users and sign-in, About. `Ctrl + F` (or `/`, or just typing
 in the page list) searches every setting; a result opens its page and highlights the row. `↑ ↓`
 in the page list switch pages, `Tab` goes into the page, `Esc` comes back, `Ctrl + PgUp/PgDn`
@@ -36,12 +36,6 @@ reset per option, search, undo — and is built from Arctic's own parts.
 | Pages | `pages/*Page.qml` |
 | Look | `Theme.qml` (the design tokens of the current theme: `~/.config/arctic/current/theme.json`, live), `components/` (the installer's components, ported unchanged — `tests/test_app_files.py` keeps them in sync — plus `ArSlider` and `ArSegmented`) |
 | Backend | `Backend.qml` runs `scripts/arctic_settings.py`, which does every read and write and prints JSON |
-
-Quickshell keeps imports inside each application's config root. Dictation uses
-the canonical parser in `shell/DictationStatus.js`, bundled as an identical local
-`settings/DictationStatus.js` resource. After changing the parser, run
-`cp shell/DictationStatus.js settings/DictationStatus.js`; the consistency checks
-reject drift, and RPM installation uses the canonical source for both apps.
 
 ## What it changes
 
@@ -99,26 +93,12 @@ update with dnf; the older `arctic-theme` → only Winter and Polar night; no `w
 rotation and position only (plus wdisplays if installed); no NetworkManager, BlueZ or PipeWire →
 a note.
 
-Dictation runs the official VoxType 1.1.1 daemon. `arctic-dictation` is a
-setup/readiness adapter only; recording, transcription and insertion remain
-upstream VoxType operations. Settings shows setup, download, recording,
-transcription and fixed error states; language and CPU/Vulkan selection can
-change while idle.
-
-The online installer downloads one signed VoxType binary and one multilingual
-Whisper model after the OS copy. Offline installation queues retryable setup.
-Recording stays unavailable until the binary and model are verified. Setup
-discloses 506,440,871 bytes for baseline/Small or 593,457,131 bytes for
-AVX2/Turbo Q5; optional Vulkan adds 66,575,872 bytes. The live ISO contains the
-adapter and frontend, not the executable payload or model.
-
-Focus a text field and press **Super + Ctrl + X** to start; press it again to
-stop and insert. **Super + Ctrl + Backspace** invokes upstream cancellation.
-The taskbar pill exposes current state and opens Settings for recovery. QML
-consumes sanitized status only and never receives the transcript. The managed
-VoxType config is `~/.config/voxtype/config.toml`; models load on demand to avoid
-permanent idle RAM/VRAM use. Vulkan failure requires an explicit CPU selection
-and a new recording.
+Voice typing is [OpenWhispr](https://openwhispr.com), through `arctic-openwhispr` (the
+`voice` backend command). The page installs the latest official OpenWhispr RPM from its GitHub
+releases (its SHA-256 is checked; dnf runs through pkexec), opens it, removes it and starts it at
+login (`~/.config/autostart/open-whispr.desktop`). **Super + Ctrl + X** opens OpenWhispr, or
+this page when it isn't installed. Recording, models and pasting (wtype on Mango) are
+OpenWhispr's own; its shortcut is set in OpenWhispr.
 
 ## Developing
 

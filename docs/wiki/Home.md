@@ -40,7 +40,7 @@ contents and test results of the image you download.
 | Set up an NVIDIA, Intel, AMD or Broadcom driver | [Drivers](Drivers) |
 | Keep it up to date, or undo an update | [Updates](Updates) |
 | Change colours and wallpaper, or edit the settings files | [Themes and customisation](Themes-and-Customisation) |
-| Type by speaking in Hebrew or English | [Local dictation](Local-Dictation) |
+| Type by speaking | [Settings → Voice typing](Settings#voice-typing) |
 | Use the terminal | [Terminal and shell](Terminal-and-Shell) |
 | Fix something that isn't working | [Troubleshooting](Troubleshooting) and [FAQ](FAQ) |
 
@@ -65,8 +65,8 @@ contents and test results of the image you download.
   use *City Afterglow*; updates preserve existing users' wallpaper choices. Rotation can use the
   Arctic collection, your folder or **Both**. Packaged photos can be hidden per account and
   restored later without deleting RPM-owned files.
-- **Local Hebrew/English dictation**, prepared during online installation or queued for offline
-  first-boot recovery, with explicit recording, cancellation and visible readiness.
+- **Voice typing** with [OpenWhispr](https://openwhispr.com), installed from Settings when you
+  want it and opened with `Super + Ctrl + X`.
 - **Drivers found for you:** NVIDIA, Intel and AMD video acceleration and Broadcom Wi-Fi, ticked
   in the installer when your computer has the hardware, with Secure Boot handled.
 - **Automatic, signed updates**, installed when the computer restarts, with snapshots to go back.

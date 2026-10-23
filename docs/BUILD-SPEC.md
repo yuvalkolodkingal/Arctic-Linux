@@ -357,59 +357,20 @@ reads (sshd_config.d is root-only). Units:
 `arctic-flatpak-update.timer` (system and user), `gcr-ssh-agent.socket` (user preset), and the
 XDG autostart drop-ins (`mango-session.target.d/arctic-autostart.conf`).
 
-### 3.4 Local dictation
+### 3.4 Voice typing (OpenWhispr)
 
-`arctic-desktop-config` ships a setup/readiness adapter, the `/usr/bin/voxtype`
-binary selector, the upstream release key, `voxtype.service`, Settings/status
-integration and `arctic-dictation-setup.service`/`.timer`. The live RPM/ISO
-contains no VoxType executable or Whisper model.
-
-Installer finalization writes a target queue, enables the background timer and
-makes a bounded, nonfatal online setup attempt. Offline installations retain an
-explicit unready first-boot queue. The timer first runs about 90–120 seconds
-after boot and retries about every 15 minutes. Setup verifies the signed official
-VoxType 1.1.1 release, exact bytes and SHA-256, then installs one CPU binary and
-one multilingual model atomically: baseline/Small is 506,440,871 bytes; the
-conservatively selected AVX2/Turbo Q5 path is 593,457,131 bytes. Optional Vulkan
-is an explicit later 66,575,872-byte download and must pass real local model
-initialization with a positive observed Vulkan outcome before selection. Exit
-zero, intent-only, fallback, contradictory, unknown, oversized and timed-out
-proofs retain CPU. The silence transcript is discarded and the bounded private
-stderr proof is never persisted.
-
-Upgrades from VoxType 1.1.0 preserve the verified model, hardware profile and
-strictly validated receipt user,
-then queue the new signed executable without blocking the RPM transaction. The
-RPM ships the upstream 1.1.1 manifest and detached CPU signatures for
-verification and crash recovery. It verifies the new binary and retained model,
-writes the user configuration, then publishes the direct receipt and marker
-before deleting exact previous payloads. If any check fails, the previous
-official payload remains runnable and the ordinary online retry queue stays
-enabled. The launcher follows the old receipt, including its selected backend,
-until the atomic 1.1.1 receipt switch; Settings reports ready plus update
-pending throughout an offline deferral. The
-root-owned verified receipt is authoritative over a conflicting pending profile
-choice. File and parent-directory fsyncs make the queue-to-receipt transition
-crash durable; the current receipt and marker are committed before cleanup and
-the queue is removed afterward. A malformed but structurally trusted legacy receipt fails the first
-transaction attempt closed, then the normal online resume quarantines it and uses
-fresh signed metadata for repair. Current-session user-service activation is
-best effort after the commit point and cannot rewrite a completed migration as
-a pre-commit setup failure.
-The post-boot timer also recognizes an old direct receipt when a stopped RPM
-transaction never created `pending`; it reconstructs the queue for the bound
-account and safely no-ops on a current receipt. Failed strict receipt or payload
-hash validation leaves a durable rejection marker that both launcher and status
-honor until signed repair completes.
-
-The systemd user service runs official VoxType directly with local-only,
-error-only, on-demand Whisper settings. Mango calls `voxtype record toggle` and
-`voxtype record cancel`; the Arctic adapter handles only status, retry, language
-and CPU/Vulkan selection. GPU failure never implies automatic CPU fallback: the
-user selects CPU and makes a new recording. See [DICTATION.md](DICTATION.md) for
-hashes, paths, privacy controls, commands, historical accuracy measurements and
-the exact-image release gate. Source and RPM checks do not qualify inference,
-privacy or the final image.
+Voice typing is [OpenWhispr](https://openwhispr.com). Neither the image nor any Arctic RPM contains
+OpenWhispr or a speech model; `arctic-desktop-config` ships only `/usr/bin/arctic-openwhispr`, the
+Settings → Voice typing page (`voice`) and the `Super + Ctrl + X` binding, and the installer does
+nothing for it. `arctic-openwhispr install` reads the latest release of
+`github.com/OpenWhispr/openwhispr`, downloads its Linux x86_64 RPM, refuses it unless its bytes
+match the SHA-256 GitHub publishes for that asset, and installs it with `dnf` through `pkexec`;
+running it again updates. `remove` uninstalls it, `status` prints the page's state as JSON,
+`autostart on|off` writes or deletes `~/.config/autostart/open-whispr.desktop`, and `open` (the
+shortcut) starts OpenWhispr or opens Settings → Voice typing when it isn't installed. Recording,
+models (local Whisper or a cloud service), its own dictation shortcut (F8 by default) and pasting
+(wtype on Mango) are OpenWhispr's; its state stays in `~/.config/OpenWhispr` and
+`~/.cache/openwhispr`.
 
 ## 4. Engine ↔ installer UI protocol
 
@@ -464,7 +425,7 @@ privacy or the final image.
 |---|---|---|---|
 | 1 | `welcome` | `{language:"en_US.UTF-8"}` | `{languages:[{id,name(native),english}], suggested}` |
 | 2 | `keyboard` | `{layout:"us", variant:"", xkb:{layout, variant, options, keymap, latin}}` (`xkb` is read-only, what the choice gives: Latin layouts alone; non-Latin ones as `us,<layout>` with `grp:alt_shift_toggle` and a Latin console keymap). A valid SetStep also writes `xkb` to the live system's `/etc/arctic/mango/keyboard.conf` (sourced by the live session); the UI then runs `mmsg dispatch reload_config`, so passwords are typed as on the installed system | `{layouts:[{layout,variant,name,description,suggested:bool}]}` |
-| 3 | `network` | `{offline:bool}` (default `false`) | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. Without connectivity, the explicit **Install offline** choice enables normal Next; it persists on revisits without changing the actual network state. Apps already on the image work; downloads and security updates wait for connectivity, and dictation stays unready until its app and a verified model are installed. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
+| 3 | `network` | `{offline:bool}` (default `false`) | `{online,wired,ssid,driver_hint?}` (+ ScanWifi/ConnectWifi); auto-skipped when wired & online. Without connectivity, the explicit **Install offline** choice enables normal Next; it persists on revisits without changing the actual network state. Apps already on the image work; downloads and security updates wait for connectivity. `driver_hint` is set when a detected Wi-Fi card only works once its driver is installed (Broadcom wl): how to get online meanwhile |
 | 4 | `timezone` | `{timezone:"Asia/Jerusalem", auto_time:true}` | `{detected:{city,timezone,source:"network"\|"default"}, regions:{Europe:[{city,timezone}],…}}` |
 | 5 | `disk` | `{disk:"/dev/nvme0n1", mode:"erase"\|"alongside"}` | `{disks:[{path,model,size_bytes,size_label,removable,install_media:bool,existing_os:[…],alongside_possible:bool,alongside_label:"Uses 120 GB of free space"}]}` (install media excluded; alongside needs ≥ 40 GB free, on UEFI an ESP to share, on MBR room for two primary partitions) |
 | 6 | `encryption` | `{enabled:true}` | `{min_score:2, weak_warning, passphrase_set, strength?}` (passphrase via SetSecrets; `strength` is the saved one's CheckPassphrase result). `min_score` is the warning threshold, not a gate: below it the step shows `weak_warning` ("This passphrase is easy to guess: someone who has your computer could read your files. You can still use it.") in a warning banner and Next still works. Next needs a passphrase (both fields matching, English (US) characters on a non-Latin layout — checked by the UI) |

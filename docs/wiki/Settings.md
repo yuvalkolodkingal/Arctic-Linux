@@ -15,7 +15,7 @@ arctic-settings displays     # open it on a page
 ```
 
 The page names for `arctic-settings <page>` are `appearance`, `windows`, `displays`, `input`,
-`shortcuts`, `apps`, `network`, `sharing`, `bluetooth`, `sound`, `dictation`, `notifications`,
+`shortcuts`, `apps`, `network`, `sharing`, `bluetooth`, `sound`, `voice`, `notifications`,
 `updates`, `power`, `accessibility`, `startup`, `webapps`, `printers`, `datetime`, `users` and `about`.
 
 ## Finding a setting
@@ -66,7 +66,7 @@ file). That's what `Ctrl + Z` uses.
 | Bluetooth, sound | BlueZ and PipeWire directly | At once |
 | Updates | through `arctic-update` | At once |
 | Notifications: schedule, history, per-app choices | `~/.config/arctic/notifications.json`; do not disturb through `arctic-dnd` | At once |
-| Dictation: Hebrew/English language and CPU/Vulkan preference | `~/.config/voxtype/config.toml`; verified system state under `/var/lib/arctic/dictation` | Next recording; Retry setup asks for administrator authorization |
+| Voice typing: start OpenWhispr at login | `~/.config/autostart/open-whispr.desktop`; OpenWhispr's own settings in `~/.config/OpenWhispr` | Next login; installing asks for administrator authorization |
 
 `settings.conf` is read after Arctic's own Mango files and **before** your
 `~/.config/mango/user.conf`, so anything you set by hand in `user.conf` still wins. When it does,
@@ -78,29 +78,17 @@ When a program Settings needs is missing, the page says so instead of failing. F
 without `wlr-randr` the Displays page can change scale, rotation and position but not the
 resolution.
 
-## Dictation
+## Voice typing
 
-Local dictation runs the official **VoxType 1.1.1** daemon with multilingual
-Whisper for Hebrew and English. Online installation prepares it; offline
-installation queues first-boot setup. The page remains **not ready** until its
-signed executable and pinned model pass exact size and SHA-256 checks.
+Voice typing is [OpenWhispr](https://openwhispr.com), through `arctic-openwhispr`. The page
+installs the latest official OpenWhispr RPM from its GitHub releases (its SHA-256 is checked;
+installing asks for administrator authorization), updates or removes it, opens it and can start
+it at login. Nothing is downloaded until you ask.
 
-The initial fixed download is **506,440,871 bytes** (506.4 MB) for
-baseline/Small or **593,457,131 bytes** (593.5 MB) for AVX2/Turbo Q5, plus any
-missing system packages. Optional Vulkan is selected separately and adds
-**66,575,872 bytes** (66.6 MB). The confirmation discloses the selected size
-before administrator authorization.
-
-Focus a text field, press `Super + Ctrl + X` to record, and press it again to stop
-and insert. `Super + Ctrl + Backspace` cancels. The visible state comes from
-VoxType's native runtime file. Language choices are **Detect language**,
-**Hebrew · עברית** and **English**. Models load on demand to save idle memory.
-
-CPU is the recovery path after a Vulkan error, but it is never assumed or
-selected automatically: choose **CPU** and make a new recording. Audio remains
-local. The service suppresses known INFO-level transcript excerpts and disables
-transcript notifications; exact-image log and notification audits remain a
-release requirement. See [Local dictation](Local-Dictation).
+**Super + Ctrl + X** opens OpenWhispr, or this page when it isn't installed. Recording, models and
+pasting are OpenWhispr's own: dictate with its shortcut (`F8` by default, changed in OpenWhispr),
+and pick a local Whisper model or a cloud service in its settings. Its settings live in
+`~/.config/OpenWhispr`, its models in `~/.cache/openwhispr`.
 
 ## Appearance
 
@@ -145,9 +133,9 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   updates. A picture in use must be changed before it can be deleted or hidden.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures, Arctic's own, or **Both**, in name order or **in random order** (every picture once
-  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Each
-  picture becomes your wallpaper and the colours follow it: your pictures colour the desktop,
-  Arctic's bring back Winter / Polar night. Wallpaper hooks run with each picture.
+  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Only the
+  picture changes: the colours stay the ones from the wallpaper you picked. Wallpaper hooks run
+  with each picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at

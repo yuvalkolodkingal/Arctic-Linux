@@ -15,18 +15,6 @@ if arctic-is-live 2>/dev/null; then
   exit 0
 fi
 
-# Cancel upstream recording, then stop the daemon so a queued start cannot win
-# while the compositor is acquiring the secure lock.
-if command -v voxtype >/dev/null 2>&1; then
-  # VoxType 1.1.1 allows two seconds for the daemon to acknowledge that active
-  # audio and pending output were discarded. Keep the outer guard beyond it.
-  timeout 3s voxtype record cancel >/dev/null 2>&1 || true
-  timeout 2s systemctl --user stop voxtype.service >/dev/null 2>&1 || true
-fi
-start_dictation_after_unlock() {
-  systemctl --user start voxtype.service >/dev/null 2>&1 || true
-}
-
 if arctic-shell-ipc lock lock >/dev/null 2>&1; then
   # Wait until the compositor confirms the lock (isLocked reports WlSessionLock.secure: every
   # screen covered), so "lock before sleep" really locks first.
@@ -37,7 +25,6 @@ if arctic-shell-ipc lock lock >/dev/null 2>&1; then
 fi
 
 if pgrep -u "$UID" -x swaylock >/dev/null; then
-  (while pgrep -u "$UID" -x swaylock >/dev/null; do sleep 1; done; start_dictation_after_unlock) &
   exit 0
 fi
 CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arctic"
@@ -59,7 +46,4 @@ if [[ -z "$img" || ! -f "$img" ]]; then
 fi
 args=()
 [[ -f "$img" ]] && args+=(-i "$img")
-swaylock -f "${args[@]}" "$@"
-result=$?
-start_dictation_after_unlock
-exit "$result"
+exec swaylock -f "${args[@]}" "$@"

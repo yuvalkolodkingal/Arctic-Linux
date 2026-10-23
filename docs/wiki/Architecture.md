@@ -231,12 +231,10 @@ commands.
 - **arctic-firstboot** (in `arctic-desktop-config`, because the installer is removed from the new
   system) retries selected app downloads deferred by offline or unattended installation, after
   login through its timer when `/var/lib/arctic/pending.json` exists.
-- **Dictation** runs the official VoxType 1.1.1 user service. The ISO ships only setup/status,
-  Settings, a verified-binary selector and Mango shortcuts; online installation downloads one
-  signed upstream binary and one pinned multilingual model. Offline or failed setup is queued for
-  `arctic-dictation-setup.timer`. Recording stays unready until verification succeeds. Audio
-  inference is local; CPU recovery after Vulkan failure is explicit. See
-  [Local dictation](Local-Dictation).
+- **Voice typing** is [OpenWhispr](https://openwhispr.com), installed on request by
+  `arctic-openwhispr` (Settings → Voice typing): it downloads the latest official RPM from
+  OpenWhispr's GitHub releases, checks its SHA-256 and installs it with dnf through pkexec. The
+  ISO carries no OpenWhispr or model. `Super + Ctrl + X` runs `arctic-openwhispr open`.
 
 ## Packaging and the ISO
 
@@ -252,6 +250,6 @@ commands.
   descriptions: hybrid ISO, UEFI (Fedora's signed shim) and BIOS, erofs root, volume id
   `Arctic-Linux-1.2`. `config.sh` sets the live session, enables SDDM, `arcticd.socket` and
   `nix-daemon`, sets the Plymouth theme and removes rescue images. The image includes the native
-  lightweight app set and packaged photos, with dictation's engine/model downloaded to the target
-  during installation. A qualified replacement must be strictly below **2,000,000,000 bytes**;
-  source changes and historical size measurements do not prove the final image's size.
+  lightweight app set and packaged photos. A qualified replacement must be strictly below
+  **2,000,000,000 bytes**; source changes and historical size measurements do not prove the final
+  image's size.

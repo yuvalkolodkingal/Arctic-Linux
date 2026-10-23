@@ -11,8 +11,7 @@ import Quickshell.Io
 Singleton {
     id: engine
 
-    readonly property string clientVersion: "1.2.1"
-    readonly property string dictationDownloadNotice: "Online installation downloads 506,440,871 bytes on compatibility CPUs or 593,457,131 bytes on modern CPUs for signed VoxType 1.1.1 and a local multilingual Whisper model. Optional Vulkan acceleration adds 66,575,872 bytes later. Offline installation queues retryable setup; dictation stays unavailable until it finishes. Audio stays on this computer."
+    readonly property string clientVersion: "1.2.2"
     property bool connected: false      // Hello answered
     property bool starting: false
     property string failure: ""         // why the bridge is not usable

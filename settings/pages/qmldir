@@ -8,6 +8,7 @@ NetworkPage 1.0 NetworkPage.qml
 SharingPage 1.0 SharingPage.qml
 BluetoothPage 1.0 BluetoothPage.qml
 SoundPage 1.0 SoundPage.qml
+VoiceTypingPage 1.0 VoiceTypingPage.qml
 NotificationsPage 1.0 NotificationsPage.qml
 UpdatesPage 1.0 UpdatesPage.qml
 PowerPage 1.0 PowerPage.qml

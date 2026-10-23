@@ -128,8 +128,7 @@ menus together. Dodge needs an updated Mango session; Settings reports this and 
 visible when the required window information is unavailable. Log out and back in after a Mango
 update. Hiding is disabled in the live installer so Install stays reachable.
 
-Dictation's Recording/Transcribing status and the microphone, camera and screen-recording
-indicators stay visible while the bar is hidden.
+The microphone, camera and screen-recording indicators stay visible while the bar is hidden.
 
 `Super + Shift + Space` (or **Hide the top bar** in the [command menu](Command-Menu)'s Style
 branch) hides the bar on every screen, and windows move up into its place; press it again to bring

@@ -447,10 +447,6 @@ ShellRoot {
         }
     }
     IpcHandler {
-        target: 'dictation'
-        function refresh(): void { DictationService.refresh(); }
-    }
-    IpcHandler {
         target: 'record'
         // arctic-record toggle, when nothing is recording: what to record, and which sound.
         function open(): void { shell.present(recordDialog, null); }

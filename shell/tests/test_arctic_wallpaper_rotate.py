@@ -1,6 +1,6 @@
 """arctic-wallpaper rotate / next (dotfiles/.local/bin): a new picture every so often, from your
-folder, Arctic's, or both; each picture is saved as the choice and the colours follow it (arctic-theme
-sync). Fake swaybg, systemd-run, systemctl, arctic-hook and arctic-theme log what they're asked.
+folder, Arctic's, or both. A rotated picture is kept apart from your choice and never recolours the
+desktop (no arctic-theme sync). Fake swaybg, systemd-run, systemctl, arctic-hook and arctic-theme log what they're asked.
 
 Run: python3 -m unittest discover -s shell/tests
 """
@@ -135,17 +135,18 @@ class RotateTests(unittest.TestCase):
             self.wallpaper('next')
             self.assertEqual(self.drawn(), 'city.jpg')
 
-    def test_next_in_order_saves_the_picture_and_follows_its_colours(self):
+    def test_next_in_order_keeps_the_choice_and_the_colours(self):
         self.wallpaper('rotate', '1h', str(self.pictures))
         seen = []
         for _ in range(4):
             self.wallpaper('next')
             seen.append(self.drawn())
         self.assertEqual(seen, ['a.png', 'b.jpg', 'c.webp', 'a.png'])
-        # the choice follows the picture, so the colours never sit behind the wallpaper
-        self.assertEqual((self.config / 'wallpaper').read_text().strip(),
+        # An automatic change never touches your choice or the colours made from it.
+        self.assertEqual((self.config / 'wallpaper').read_text().strip(), 'fox')
+        self.assertEqual((self.config / 'wallpaper-rotated').read_text().strip(),
                          str((self.pictures / 'a.png').resolve()))
-        self.assertEqual(self.calls('arctic-theme'), ['arctic-theme sync --no-redraw'] * 4)
+        self.assertEqual(self.calls('arctic-theme'), [])
         self.assertEqual(len(self.calls('swaybg')), 4)
         # swaybg runs in a scope of its own: the timer's service must not take it along when it ends.
         self.assertEqual(len([c for c in self.calls('systemd-run --user --scope') if ' -- setsid -f swaybg ' in c]), 4)
@@ -155,7 +156,7 @@ class RotateTests(unittest.TestCase):
             time.sleep(0.1)
         self.assertIn('arctic-hook wallpaper {}'.format((self.pictures / 'b.jpg').resolve()), self.calls('arctic-hook'))
 
-    def test_next_over_arctic_saves_the_name_so_the_static_palettes_come_back(self):
+    def test_next_over_arctic_keeps_the_name_so_theme_switches_redraw_it(self):
         self.wallpaper('rotate', '1h', 'arctic')
         seen = []
         for _ in range(4):
@@ -163,18 +164,26 @@ class RotateTests(unittest.TestCase):
             seen.append(self.drawn())
         self.assertEqual(seen, ['snowfield-polar-night.png', 'aurora-polar-night.png',
                                 'fox-polar-night.png', 'snowfield-polar-night.png'])
-        # A design wallpaper is saved by name: arctic-theme reads it as Arctic's own, not a picture.
-        self.assertEqual((self.config / 'wallpaper').read_text().strip(), 'snowfield')
-        self.assertEqual(self.calls('arctic-theme'), ['arctic-theme sync --no-redraw'] * 4)
+        # A design wallpaper is kept by name, so a light / dark switch draws its other take.
+        self.assertEqual((self.config / 'wallpaper-rotated').read_text().strip(), 'snowfield')
+        self.assertEqual((self.config / 'wallpaper').read_text().strip(), 'fox')
+        self.assertEqual(self.calls('arctic-theme'), [])
 
-    def test_next_without_sync_saves_the_picture_but_leaves_the_colours(self):
-        self.env['ARCTIC_WALLPAPER_NO_SYNC'] = '1'
+    def test_redraws_keep_the_rotated_picture_until_you_pick_or_stop(self):
         self.wallpaper('rotate', '1h', str(self.pictures))
         self.wallpaper('next')
-        self.assertEqual((self.config / 'wallpaper').read_text().strip(),
-                         str((self.pictures / 'a.png').resolve()))
-        self.assertEqual(self.calls('arctic-theme'), [])
+        self.wallpaper()                                        # a redraw (theme switch, login)
         self.assertEqual(self.drawn(), 'a.png')
+        self.wallpaper('rotate', 'off')                         # back to the wallpaper you picked
+        self.assertFalse((self.config / 'wallpaper-rotated').exists())
+        self.assertEqual(self.drawn(), 'fox-polar-night.png')
+        self.wallpaper('rotate', '1h', str(self.pictures))
+        self.wallpaper('next')
+        self.wallpaper('snowfield')                             # a pick of your own ends it
+        self.assertFalse((self.config / 'wallpaper-rotated').exists())
+        self.assertEqual(self.calls('arctic-theme'), ['arctic-theme sync --no-redraw'])
+        self.wallpaper()
+        self.assertEqual(self.drawn(), 'snowfield-polar-night.png')
 
     def test_pictures_with_the_same_name(self):
         (self.pictures / 'a.jpg').write_bytes(b'x')
@@ -218,7 +227,7 @@ class RotateTests(unittest.TestCase):
             seen.append(self.drawn())
         self.assertEqual(sorted(seen), ['a.png', 'b.jpg', 'c.webp', 'city-afterglow.jpg',
                                         'ember-clouds.jpg'])
-        # Rotation changes the active choice, but preserves the picker folder and unknown settings.
+        # Rotation preserves the picker folder and unknown settings.
         self.assertEqual(picker_settings.read_bytes(), before)
 
     def test_both_rotation_excludes_hidden_arctic_wallpapers(self):

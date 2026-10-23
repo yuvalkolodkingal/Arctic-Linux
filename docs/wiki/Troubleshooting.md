@@ -61,8 +61,7 @@ The choice only appears when the disk you picked has all of these:
 ### I can't get past the network step
 
 Connect to download extra apps now, or choose **Install offline** and **Continue offline**.
-The installed system keeps the apps already on the image and queues extra downloads; dictation
-remains unavailable until local setup is verified.
+The installed system keeps the apps already on the image and queues extra downloads.
 
 - Plug in a network cable if you can; the step then passes by itself.
 - *"Wrong password. Check it and try again."* The Wi-Fi password is case-sensitive.
@@ -364,20 +363,17 @@ went wrong is in `$XDG_RUNTIME_DIR/arctic/record.log` (`/run/user/1000/arctic/re
 `~/.cache/arctic/record-codec` remembers the encoder that worked (delete it to try them all
 again). `wf-recorder` must be installed.
 
-### Dictation is not ready or recording fails
+### Voice typing doesn't work
 
-Open **Settings → Dictation**. Its setup/error message says what is missing; choose
-**Set up / retry…** when online. A failed model download is separate from OS installation.
-For a microphone problem, choose the input and unmute it in Sound settings. Cancel recording
-or transcription with `Super + Ctrl + Backspace`. If Vulkan fails, that phrase is not retried:
-select **CPU** in Dictation settings and make a new recording. If the executable or model is
-missing or damaged, choose **Set up / retry…** to verify and repair it. See
-[Local dictation](Local-Dictation).
+Install OpenWhispr from **Settings → Voice typing** first; `arctic-openwhispr status` shows
+whether it's installed, its version and whether it starts at login. Pick the microphone in
+OpenWhispr's settings (and unmute it in Sound settings). If the text isn't typed into the window,
+OpenWhispr leaves it on the clipboard: paste it with `Ctrl + V`.
 
-For a command-line readiness check, run `arctic-dictation status`; `voxtype status` reports the
-official daemon's native state. Do not paste service logs into a public issue without reviewing
-them first. Arctic suppresses known INFO-level transcript excerpts, but a log from an unverified
-or locally modified configuration can still contain private speech.
+On Mango, OpenWhispr's dictation key only reaches it while an XWayland window has focus (its
+global shortcuts work by themselves only on GNOME, KDE and Hyprland). For its **hold** mode
+everywhere, run `sudo usermod -aG input $USER` and log out and back in, or just press
+`Super + Ctrl + X` to open OpenWhispr and dictate from its window.
 
 ### The bar hides at the wrong time
 

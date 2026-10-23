@@ -1,0 +1,237 @@
+#!/usr/bin/env python3
+"""arctic-openwhispr — voice typing with OpenWhispr (https://openwhispr.com), built into Arctic.
+
+  arctic-openwhispr                 open OpenWhispr (the same as `open`)
+  arctic-openwhispr open            open OpenWhispr; when it isn't installed, Settings → Voice typing
+                                    (Super + Ctrl + X)
+  arctic-openwhispr status          print what Settings shows, as JSON
+  arctic-openwhispr install         download the latest official OpenWhispr RPM from its GitHub
+                                    releases, check its SHA-256 and install it (dnf, through
+                                    pkexec: the desktop's password dialog); again to update
+  arctic-openwhispr remove          uninstall it (its models in ~/.cache/openwhispr go with it)
+  arctic-openwhispr autostart [on|off]
+                                    start OpenWhispr at login (~/.config/autostart), or print it
+
+OpenWhispr does the listening, transcribing and pasting itself, with its own shortcut (F8 by
+default; Settings in OpenWhispr changes it) and local Whisper models or a cloud service you pick
+there. It pastes with wtype on Mango, which Arctic installs. Its settings are in
+~/.config/OpenWhispr, its models in ~/.cache/openwhispr.
+"""
+import hashlib
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+import urllib.request
+
+PACKAGE = "open-whispr"
+API = os.environ.get("ARCTIC_OPENWHISPR_API",
+                     "https://api.github.com/repos/OpenWhispr/openwhispr/releases/latest")
+ASSET_RE = re.compile(r"^OpenWhispr-[0-9][0-9A-Za-z.+~-]*-linux-(x64|x86_64)\.rpm$")
+HOME = os.path.expanduser("~")
+CONFIG = os.environ.get("XDG_CONFIG_HOME") or os.path.join(HOME, ".config")
+CACHE = os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache")
+AUTOSTART = os.path.join(CONFIG, "autostart", PACKAGE + ".desktop")
+TIMEOUT = 60
+
+
+class Error(Exception):
+    def __init__(self, message, code=1):
+        super().__init__(message)
+        self.code = code
+
+
+def run(cmd, **kw):
+    try:
+        return subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True, **kw)
+    except OSError:
+        return None
+
+
+def installed_version():
+    r = run(["rpm", "-q", "--qf", "%{VERSION}", PACKAGE])
+    return r.stdout.strip() if r and r.returncode == 0 else ""
+
+
+def desktop_entry():
+    """The .desktop file the package installs (its name follows the upstream build)."""
+    r = run(["rpm", "-ql", PACKAGE])
+    if r and r.returncode == 0:
+        for line in r.stdout.splitlines():
+            if line.startswith("/usr/share/applications/") and line.endswith(".desktop"):
+                return line
+    return ""
+
+
+def executable():
+    found = shutil.which(PACKAGE)
+    if found:
+        return found
+    r = run(["rpm", "-ql", PACKAGE])
+    if r and r.returncode == 0:
+        for line in r.stdout.splitlines():
+            if line.endswith("/" + PACKAGE) and os.access(line, os.X_OK) and os.path.isfile(line):
+                return line
+    return ""
+
+
+def running():
+    r = run(["pgrep", "-u", str(os.getuid()), "-f", "/" + PACKAGE + "( |$)"])
+    return bool(r and r.returncode == 0)
+
+
+def status():
+    version = installed_version()
+    return {"ok": True, "installed": bool(version), "version": version,
+            "running": bool(version) and running(), "autostart": os.path.isfile(AUTOSTART),
+            "paste": shutil.which("wtype") is not None}
+
+
+def spawn(cmd):
+    subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                     stderr=subprocess.DEVNULL, start_new_session=True)
+
+
+def cmd_open():
+    if not installed_version():
+        spawn(["arctic-settings", "voice"])
+        return
+    entry = desktop_entry()
+    if entry and shutil.which("gtk-launch"):
+        spawn(["gtk-launch", os.path.basename(entry)])
+        return
+    exe = executable()
+    if not exe:
+        raise Error("OpenWhispr is installed but its program was not found; reinstall it in Settings")
+    # A second start brings the running OpenWhispr to the front (it keeps one instance).
+    spawn([exe])
+
+
+def latest_release():
+    req = urllib.request.Request(API, headers={"Accept": "application/vnd.github+json",
+                                               "User-Agent": "arctic-openwhispr"})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as f:
+            data = json.load(f)
+    except (OSError, ValueError) as e:
+        raise Error("could not reach OpenWhispr's releases on GitHub: {}".format(e))
+    for asset in data.get("assets") or []:
+        name = asset.get("name") or ""
+        url = asset.get("browser_download_url") or ""
+        if ASSET_RE.match(name) and url.startswith("https://github.com/OpenWhispr/openwhispr/releases/download/"):
+            digest = asset.get("digest") or ""
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+                raise Error("GitHub gave no SHA-256 for {}; not installing it".format(name))
+            return {"tag": data.get("tag_name") or "", "name": name, "url": url,
+                    "sha256": digest.split(":", 1)[1], "size": asset.get("size") or 0}
+    raise Error("the latest OpenWhispr release has no x86_64 RPM")
+
+
+def download(release, folder):
+    path = os.path.join(folder, release["name"])
+    sha = hashlib.sha256()
+    req = urllib.request.Request(release["url"], headers={"User-Agent": "arctic-openwhispr"})
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as src, open(path, "wb") as out:
+            while True:
+                chunk = src.read(1 << 20)
+                if not chunk:
+                    break
+                sha.update(chunk)
+                out.write(chunk)
+    except OSError as e:
+        raise Error("the download stopped: {}".format(e))
+    if sha.hexdigest() != release["sha256"]:
+        raise Error("the download of {} does not match its SHA-256; not installing it".format(release["name"]))
+    return path
+
+
+def as_root(cmd):
+    if os.geteuid() != 0:
+        cmd = ["pkexec"] + cmd
+    r = subprocess.run(cmd, stdin=subprocess.DEVNULL)
+    if r.returncode in (126, 127) and cmd[0] == "pkexec":
+        raise Error("not authorized", 126)
+    if r.returncode:
+        raise Error("{} failed ({})".format(" ".join(cmd[1:3] if cmd[0] == "pkexec" else cmd[:2]), r.returncode))
+
+
+def cmd_install():
+    if (os.uname().machine or "") != "x86_64":
+        raise Error("OpenWhispr's Linux builds are for x86_64 computers only")
+    release = latest_release()
+    before = installed_version()
+    os.makedirs(os.path.join(CACHE, "arctic"), exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="openwhispr-", dir=os.path.join(CACHE, "arctic")) as folder:
+        os.chmod(folder, 0o755)
+        rpm = download(release, folder)
+        os.chmod(rpm, 0o644)
+        # OpenWhispr's RPM is not signed: the checked SHA-256 from GitHub stands in for that.
+        as_root(["/usr/bin/dnf", "install", "-y", "--nogpgcheck", rpm])
+    return {"ok": True, "installed": True, "version": installed_version(), "previous": before,
+            "release": release["tag"]}
+
+
+def cmd_remove():
+    if not installed_version():
+        return {"ok": True, "installed": False}
+    as_root(["/usr/bin/dnf", "remove", "-y", PACKAGE])
+    set_autostart(False)
+    return {"ok": True, "installed": False}
+
+
+def set_autostart(on):
+    if not on:
+        try:
+            os.remove(AUTOSTART)
+        except FileNotFoundError:
+            pass
+        return
+    if not installed_version():
+        raise Error("install OpenWhispr first", 2)
+    exe = executable()
+    os.makedirs(os.path.dirname(AUTOSTART), exist_ok=True)
+    with open(AUTOSTART + ".tmp", "w", encoding="utf-8") as f:
+        f.write("[Desktop Entry]\nType=Application\nName=OpenWhispr\n"
+                "Comment=Voice typing (arctic-openwhispr)\nExec={}\nIcon={}\n"
+                "X-GNOME-Autostart-enabled=true\n".format(exe or PACKAGE, PACKAGE))
+    os.replace(AUTOSTART + ".tmp", AUTOSTART)
+
+
+def main(argv):
+    cmd = argv[0] if argv else "open"
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__.strip())
+        return 0
+    try:
+        if cmd == "open":
+            cmd_open()
+        elif cmd == "status":
+            print(json.dumps(status()))
+        elif cmd == "install":
+            print(json.dumps(cmd_install()))
+        elif cmd == "remove":
+            print(json.dumps(cmd_remove()))
+        elif cmd == "autostart":
+            if len(argv) < 2:
+                print("on" if os.path.isfile(AUTOSTART) else "off")
+            elif argv[1] in ("on", "off"):
+                set_autostart(argv[1] == "on")
+                print(json.dumps(status()))
+            else:
+                raise Error("usage: arctic-openwhispr autostart [on|off]", 2)
+        else:
+            raise Error("usage: arctic-openwhispr [open|status|install|remove|autostart [on|off]]", 2)
+    except Error as e:
+        print("arctic-openwhispr: {}".format(e), file=sys.stderr)
+        if cmd != "open":
+            print(json.dumps({"ok": False, "error": str(e)}))
+        return e.code
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

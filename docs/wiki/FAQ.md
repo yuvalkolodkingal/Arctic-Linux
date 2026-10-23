@@ -57,10 +57,9 @@ in the installer. You pick which system to start each time the computer starts. 
 
 ### Why does the installer need the internet?
 
-The replacement image includes the native default apps. Optional apps, additional drivers and
-local dictation's engine and model need downloads. Current installer packages let you connect
-during installation or explicitly choose **Install offline** to queue extra setup for later.
-Dictation remains unavailable until its verified files and dependencies are present.
+The replacement image includes the native default apps. Optional apps and additional drivers
+need downloads. Current installer packages let you connect during installation or explicitly
+choose **Install offline** to queue extra setup for later.
 
 ### How long does installing take?
 
@@ -141,13 +140,13 @@ Yes, from version 0.2: **Settings** (`Super + S`, or the first item of the power
 changes the look, windows, displays, keyboard and mouse, shortcuts, default apps, network,
 Bluetooth, sound, updates, power and startup apps. See [Settings](Settings).
 
-### Can I dictate in Hebrew and English?
+### Can I type by speaking?
 
-Yes, once local setup is ready. **Settings → Dictation** selects the language and shows setup
-progress. `Super + Ctrl + X` starts recording and stops to insert; `Super + Ctrl + Backspace`
-cancels. Whisper runs on the computer, using CPU or supported Vulkan acceleration. A GPU failure
-discards the phrase and asks you to record again on CPU. See [Local dictation](Local-Dictation)
-for download sizes, measured limitations and recovery.
+Yes, with [OpenWhispr](https://openwhispr.com), which understands many languages, Hebrew and
+English included. Install it from **Settings → Voice typing**; `Super + Ctrl + X` opens it, and
+its own shortcut (`F8` by default) dictates into the focused window. In OpenWhispr you choose a
+local Whisper model, which runs on the computer, or a cloud service. See
+[Settings](Settings#voice-typing).
 
 ### How do I update?
 
