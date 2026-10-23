@@ -15,7 +15,6 @@ Open an [issue](https://github.com/yuvalkolodkingal/Arctic-Linux/issues) and inc
 - a screenshot (`Print` or `Super + Shift + S` saves one to `~/Pictures/Screenshots`).
 
 Review logs/screenshots before posting: installer logs can identify disks, networks or accounts.
-For dictation, include the profile/backend and sanitized status error rather than private speech.
 
 ## Before you change something
 

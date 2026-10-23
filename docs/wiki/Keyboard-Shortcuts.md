@@ -143,16 +143,14 @@ click it for the next one, right-click for the list. If that key is Right Alt, p
 `Super + Alt` shortcuts with the left Alt. In the notification centre, the arrow keys, `Enter`,
 `Tab` and `Delete` work as described in [Notifications](Notifications#the-notification-centre).
 
-## Local dictation
+## Voice typing
 
 | Shortcut | Does |
 |---|---|
-| `Super + Ctrl + X` | Start recording; press again to stop and insert into the focused text field |
-| `Super + Ctrl + Backspace` | Cancel recording or transcription without inserting |
+| `Super + Ctrl + X` | Open OpenWhispr (or **Settings → Voice typing** when it isn't installed) |
+| `F8` | OpenWhispr's own dictation key, while it runs; change it in OpenWhispr's settings |
 
-Setup must be ready first. **Settings → Dictation** shows the model, readiness, Hebrew/English
-language and acceleration. The visible status survives a hidden taskbar. Locking cancels it.
-See [Local dictation](Local-Dictation).
+See [Settings](Settings#voice-typing).
 
 ## Hardware keys
 

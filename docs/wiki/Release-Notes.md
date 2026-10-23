@@ -26,7 +26,7 @@ The stable package set includes:
   status, the lock-screen clock, and installer restoration after a console/output change.
 - Local VoxType 1.1.1 dictation for Hebrew and English: verified online-install downloads,
   nonfatal offline setup queue, explicit recording/cancel, visible readiness and CPU retry
-  selection after a GPU failure. See [Local dictation](Local-Dictation) for measured limitations.
+  selection after a GPU failure. (Dictation was later removed in favour of OpenWhispr voice typing.)
 - A **What's New** card keyed by a unique packaged update ID, shown once per account after every
   Arctic update; **Settings → Updates → Release notes** or `arctic-shell-ipc whatsnew open`
   reopens the current notes.

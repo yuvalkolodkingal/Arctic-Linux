@@ -47,11 +47,11 @@ with open(os.environ['TEST_ENGINE_LOG'], 'w') as output:
             # do not copy the network choice into a synthetic implementation.
             functions = [node for node in ast.parse(values['DRIVER']).body
                          if isinstance(node, ast.FunctionDef)
-                         and node.name in {'qemu_argv', 'dictation_network_argv'}]
+                         and node.name in {'qemu_argv', 'install_network_argv'}]
             namespace = dict(E=values, out=values['OUT'], fw=values['FIRMWARE'],
                              mem=values['MEMORY'], smp=values['SMP'], accel='kvm')
             exec(compile(ast.Module(body=functions, type_ignores=[]), '<actual QEMU driver>', 'exec'), namespace)
-            commands = [namespace['dictation_network_argv'](namespace['qemu_argv'](name, with_iso), with_iso)
+            commands = [namespace['install_network_argv'](namespace['qemu_argv'](name, with_iso), with_iso)
                         for name, with_iso in [('install', True), ('boot', False)]]
             return result, values, commands, (out / 'data/run.sh').read_text()
 

@@ -68,12 +68,6 @@ class SearchIndexTest(unittest.TestCase):
 
 
 class IntegrationFilesTest(unittest.TestCase):
-    def test_dictation_status_resource_matches_canonical_parser(self):
-        local = APP / 'DictationStatus.js'
-        self.assertFalse(local.is_symlink(), 'Quickshell must bundle a local regular resource')
-        self.assertEqual(local.read_bytes(), (REPO / 'shell/DictationStatus.js').read_bytes(),
-                         'Copy shell/DictationStatus.js to settings/DictationStatus.js after parser changes')
-
     def test_javascript_imports_stay_inside_the_settings_config_root(self):
         root = APP.resolve()
         for qml in APP.rglob('*.qml'):

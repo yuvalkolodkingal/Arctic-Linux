@@ -266,11 +266,8 @@ class MainTests(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             return firstboot.main(runner, sb=sb)
 
-    def test_offline_queue_merges_idempotently_and_retries_without_losing_dictation(self):
+    def test_offline_queue_merges_idempotently_and_retries(self):
         self.write([engine_entry('editor/zed')])
-        dictation = self.pending.parent / 'dictation' / 'pending.json'
-        dictation.parent.mkdir()
-        dictation.write_bytes(b'{"version":"1.1.0"}\n')
         support = {'id': 'installer-support', 'name': 'Language and app support',
                    'install': [{'method': 'dnf', 'packages': ['glibc-langpack-he', 'os-prober'], 'verified': False, 'download_mb': 0}]}
         doc = {'version': 2, 'nixpkgs': 'github:NixOS/nixpkgs/abc',
@@ -287,7 +284,6 @@ class MainTests(unittest.TestCase):
         self.assertEqual({m['id'] for m in left}, {'codecs', 'installer-support'})
         self.assertEqual(self.main(FakeRunner(installed={'ffmpeg-free'})), 0)
         self.assertFalse(self.pending.exists())
-        self.assertEqual(dictation.read_bytes(), b'{"version":"1.1.0"}\n')
 
     def test_queue_preserves_legacy_ids_and_rejects_conflicting_pins(self):
         self.pending.write_text(json.dumps({'version': 1, 'nixpkgs': 'old-pin',

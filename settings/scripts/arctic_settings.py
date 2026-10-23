@@ -71,6 +71,7 @@ JSON object; failures print {"ok": false, "error": "<a sentence for the person>"
     contrast-set on|off           high contrast (arctic-theme contrast)
     fonts | font-set FAMILY       the code font (arctic-font): terminals, GTK's monospace, the shell
     wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]     a new picture every so often
+    voice [status | open | install | remove | autostart on|off]    voice typing (arctic-openwhispr)
     theme-install URL | theme-remove NAME     themes from the web (arctic-theme install / remove)
 
 Writes are atomic (temporary file + rename), user-level, validated first (our own key table,
@@ -3511,8 +3512,8 @@ ROTATE_EVERY = ('off', '30m', '1h', '1d')
 
 
 def cmd_wallpaper_rotate(paths, args):
-    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]: a new picture every so often,
-    saving each new picture as the active choice so the colours can follow it."""
+    """wallpaper-rotate [off | 30m|1h|1d FOLDER|arctic|both [shuffle]]: a new picture every so often.
+    Only the picture changes; the colours stay the ones made from the chosen wallpaper."""
     if not which('arctic-wallpaper'):
         return dict(ok=True, available=False, every='off')
     if args:
@@ -3534,6 +3535,33 @@ def cmd_wallpaper_rotate(paths, args):
     every = data.get('every') if data.get('every') in ROTATE_EVERY else 'off'
     return dict(ok=True, available=True, every=every, folder=str(data.get('folder') or ''),
                 shuffle=data.get('shuffle') is True)
+
+
+# ---- voice typing (arctic-openwhispr) ----------------------------------------------------------------
+
+VOICE_ACTIONS = {('status',): 10, ('open',): 10, ('install',): 1800, ('remove',): 600,
+                 ('autostart', 'on'): 10, ('autostart', 'off'): 10}
+
+
+def cmd_voice(paths, args):
+    """voice [status | open | install | remove | autostart on|off]: OpenWhispr, the voice typing
+    app, through arctic-openwhispr (install and remove ask for the password with pkexec)."""
+    args = tuple(args) or ('status',)
+    if args not in VOICE_ACTIONS:
+        raise Failure('usage: voice [status | open | install | remove | autostart on|off]')
+    if not which('arctic-openwhispr'):
+        raise Failure('arctic-openwhispr isn’t installed. Install the current Arctic desktop updates.')
+    code, out, err = run(['arctic-openwhispr'] + list(args), timeout=VOICE_ACTIONS[args])
+    data = _loads(out.strip().splitlines()[-1] if out.strip() else '')
+    if code != 0 or (isinstance(data, dict) and data.get('ok') is False):
+        message = data.get('error') if isinstance(data, dict) and data.get('error') else \
+            (strip_ansi(err).strip().splitlines() or ['OpenWhispr couldn’t be changed.'])[-1].replace('arctic-openwhispr: ', '')
+        raise Failure(message[:1].upper() + message[1:])
+    if args != ('status',):
+        return cmd_voice(paths, ['status'])
+    if not isinstance(data, dict):
+        raise Failure('arctic-openwhispr gave no answer.')
+    return dict(data, ok=True)
 
 
 # ---- accessibility ---------------------------------------------------------------------------------
@@ -3619,6 +3647,7 @@ COMMANDS.update({'login-wallpaper': cmd_login_wallpaper,
                  'shell-options': cmd_shell_options, 'shell-option-set': cmd_shell_option_set, 'shell-options-reset': cmd_shell_options_reset,
                  'daylight': cmd_daylight, 'daylight-set': cmd_daylight_set, 'accessibility': cmd_accessibility,
                  'contrast-set': cmd_contrast_set, 'wallpaper-rotate': cmd_wallpaper_rotate,
+                 'voice': cmd_voice,
                  'weather-place': cmd_weather_place, 'theme-install': cmd_theme_install,
                  'theme-remove': cmd_theme_remove,
                  'fonts': cmd_fonts, 'font-set': cmd_font_set})

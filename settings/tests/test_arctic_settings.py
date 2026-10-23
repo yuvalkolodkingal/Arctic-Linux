@@ -1359,6 +1359,28 @@ class UpdatesTest(Home):
         self.assertEqual(result['message'], 'Finish another transaction first')
 
 
+class VoiceTest(Home):
+    def test_missing_helper(self):
+        self.assertIn('arctic-openwhispr', self.helper('voice', ok=False)['error'])
+
+    def test_status_actions_and_errors(self):
+        stub(self.bin, 'arctic-openwhispr', '''\
+            echo "arctic-openwhispr $*" >> "{}"
+            case "$1" in
+              status) echo '{{"ok": true, "installed": true, "version": "1.10.4", "running": false, "autostart": false}}' ;;
+              install) echo 'arctic-openwhispr: not authorized' >&2; echo '{{"ok": false, "error": "not authorized"}}'; exit 126 ;;
+              *) echo '{{"ok": true}}' ;;
+            esac
+            '''.format(self.log))
+        data = self.helper('voice')
+        self.assertEqual((data['installed'], data['version']), (True, '1.10.4'))
+        self.helper('voice', 'autostart', 'on')
+        self.assertEqual(self.calls()[-2:], ['arctic-openwhispr autostart on', 'arctic-openwhispr status'])
+        self.assertEqual(self.helper('voice', 'install', ok=False)['error'], 'Not authorized')
+        self.helper('voice', 'autostart', 'maybe', ok=False)
+        self.helper('voice', 'rm', '-rf', ok=False)
+
+
 class NetworkTest(Home):
     def test_status(self):
         stub(self.bin, 'nmcli', r'''

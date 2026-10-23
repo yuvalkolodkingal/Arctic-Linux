@@ -89,8 +89,8 @@ func TestOfflineAppsPreserveLocalPayloadAndQueueDownloads(t *testing.T) {
 	if ids["zen"] || ids["featherpad"] {
 		t.Fatal("local payload was unnecessarily queued")
 	}
-	if !strings.Contains(strings.Join(job.Outcome.Notes, "\n"), NoteAppsPending) || !strings.Contains(rec.Plan(), "arctic-voxtype-setup --install") {
-		t.Fatal("pending apps/dictation readiness is not disclosed")
+	if !strings.Contains(strings.Join(job.Outcome.Notes, "\n"), NoteAppsPending) {
+		t.Fatal("pending apps readiness is not disclosed")
 	}
 }
 

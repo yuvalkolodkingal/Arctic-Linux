@@ -19,7 +19,7 @@ const notes = W.parseNotes(JSON.stringify({
     update_id: packagedId,
     title: 'What’s new in Arctic Linux',
     items: [
-        { icon: 'microphone', title: 'Local dictation', text: 'Speak in Hebrew or English.' },
+        { icon: 'microphone', title: 'Voice typing', text: 'Speak into any app.' },
         { icon: '../bad', title: 'Safe fallback icon', text: 'Still visible.' },
         { title: 3 }
     ],
@@ -28,7 +28,7 @@ const notes = W.parseNotes(JSON.stringify({
 assert.equal(notes.updateId, packagedId);
 assert.equal(notes.notesUrl, 'https://example.org/notes');
 assert.deepEqual(plain(notes.items), [
-    { icon: 'microphone', title: 'Local dictation', text: 'Speak in Hebrew or English.' },
+    { icon: 'microphone', title: 'Voice typing', text: 'Speak into any app.' },
     { icon: 'sparkle', title: 'Safe fallback icon', text: 'Still visible.' }
 ]);
 

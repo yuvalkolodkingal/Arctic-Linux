@@ -11,8 +11,8 @@ import unittest
 
 HERE = Path(__file__).resolve().parent
 HARNESS = (HERE.parents[1] / 'tools/test-install.sh').read_text()
-HOST_STAGE = 'dictation_host_stage() {\n' + HARNESS.split('dictation_host_stage() {\n', 1)[1].split(
-    '\ndictation_host_stage host-data', 1)[0]
+HOST_STAGE = 'host_stage() {\n' + HARNESS.split('host_stage() {\n', 1)[1].split(
+    '\nhost_stage host-data', 1)[0]
 MODE_NORMALIZATION = '  # Do not let' + HARNESS.split('  # Do not let', 1)[1].split(
     '\n  [[ -f "$NATIVE_TASKBAR_DISPLAY_CONTROLLER"', 1)[0]
 BUILD = HARNESS.split('data_owner_args=()\n', 1)[1].split('\nif [ "$STAGE" != boot ]', 1)[0]
@@ -46,11 +46,11 @@ class OwnershipControls(unittest.TestCase):
             (out / 'sysarea.sh').write_text('#!/bin/sh\nexit 1\n')
             for fixture, expected in (('0', (owner, group)), ('1', (0, 0))):
                 env = dict(os.environ, OUT=str(out), NATIVE_TASKBAR_FIXTURE=fixture,
-                           ARCTIC_DICTATION_HOST_TOKEN='')
+                           ARCTIC_HOST_STAGE_TOKEN='')
                 built = subprocess.run(['bash', '-c', BUILD], env=env, check=True, capture_output=True, timeout=30)
                 self.assertLess(len(built.stdout) + len(built.stderr), 65536, 'Actual CD fixture output exceeds bound')
                 for stream in (built.stdout, built.stderr):
-                    self.assertNotIn(b'ARCTIC-DICTATION-HOST-STAGE', stream, 'Disabled host diagnostics emitted output')
+                    self.assertNotIn(b'ARCTIC-HOST-STAGE', stream, 'Disabled host diagnostics emitted output')
                 info = subprocess.run(['xorriso', '-report_about', 'FATAL', '-indev', str(out/'data.iso'),
                     '-find', '/taskbar-context.json', '-exec', 'getfacl', '--'],
                     check=True, capture_output=True, text=True, timeout=30).stdout

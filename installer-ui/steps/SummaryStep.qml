@@ -141,13 +141,6 @@ StepPage {
             width: page.width
             spacing: 14
 
-            ArBanner {
-                width: parent.width
-                kind: "info"
-                title: "Local dictation setup"
-                text: Engine.dictationDownloadNotice
-            }
-
             ArList {
                 id: list
                 width: parent.width

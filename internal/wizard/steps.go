@@ -61,7 +61,7 @@ var DoneDef = StepDef{StepDone, "Done", "Arctic Linux is ready",
 // Copy used by several screens (design/guidelines/20-installer-copy.md and the design mockups).
 const (
 	CopyNetworkWhyTitle = "Connect now or later"
-	CopyNetworkWhy      = "Connect to download apps and security updates during installation. You can also choose Install offline: apps already on the image remain available, and downloads wait until you connect. Dictation stays unready until its app and a verified model are installed."
+	CopyNetworkWhy      = "Connect to download apps and security updates during installation. You can also choose Install offline: apps already on the image remain available, and downloads wait until you connect."
 	CopyEraseTitle      = "Erase disk and install"
 	CopyEraseDesc       = "Replaces everything on this disk with Arctic Linux. Your files are encrypted, so they stay private if the laptop is lost."
 	CopyEraseWarning    = "All files on this disk will be erased. Back up anything you want to keep first."

@@ -169,7 +169,7 @@ Pick a page on the left, or start typing to search every setting:
 | **Shortcuts** | Your own shortcuts |
 | **Default apps** | The browser, terminal, file manager and editor the shortcuts open, and the apps for links and files |
 | **Network**, **Bluetooth**, **Sound** | Wi-Fi, Bluetooth devices, speakers and microphones |
-| **Dictation** | Local setup, Hebrew/English language, recording and CPU/Vulkan preference |
+| **Voice typing** | Install, update or remove OpenWhispr, open it and start it at login |
 | **Updates** | What's waiting, automatic updates and the channel |
 | **Power and lock** | Power mode, when the screen locks and when the computer sleeps |
 | **Startup apps** | Apps that start when you log in |
@@ -251,14 +251,13 @@ There's no lock screen in the live session.
 `Super + /` opens a sheet with every shortcut. Press `Esc` to close it. The same list is on
 [Keyboard shortcuts](Keyboard-Shortcuts).
 
-## Local dictation
+## Voice typing
 
-Focus a text field, press `Super + Ctrl + X` to record, then press it again to stop and insert.
-`Super + Ctrl + Backspace` cancels without inserting. The recording/transcribing indicator stays
-visible while the taskbar is hidden. **Settings → Dictation** shows readiness, setup downloads,
-language and acceleration. Audio is processed locally. After a Vulkan error, select CPU in
-Settings and make a new recording; the failed phrase is not retried automatically. See
-[Local dictation](Local-Dictation).
+Voice typing is [OpenWhispr](https://openwhispr.com). Install it from **Settings → Voice
+typing**, then `Super + Ctrl + X` opens it. Dictate with OpenWhispr's own shortcut (`F8` unless
+you change it in OpenWhispr); the text is typed into the focused window. OpenWhispr's settings
+pick a local Whisper model or a cloud service and the language. See
+[Settings](Settings#voice-typing).
 
 ## Capture and the clipboard
 

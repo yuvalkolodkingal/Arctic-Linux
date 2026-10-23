@@ -91,8 +91,7 @@ use."*
 - **Online:** Next continues after you connect. Extra apps and dependencies are downloaded
   during installation.
 - **Offline:** choose **Install offline**, then **Continue offline**. Apps already on the image
-  remain available; extra app downloads and dictation setup are queued for first boot. Dictation
-  remains unready until its engine, model and required dependencies have been verified.
+  remain available; extra app downloads are queued for first boot.
 - The Wi-Fi networks you connect to here are copied to your new system, so it's online the first
   time you log in.
 
@@ -228,14 +227,6 @@ removes them from your new system. `bash` is always installed, whatever shell yo
 
 Every app, section by section, and where each comes from: [Apps and software](Apps-and-Software).
 
-Local dictation's executable and large Whisper model are excluded from the live image. During
-online installation, a separate bounded setup attempt downloads and verifies them. The selected
-CPU path needs exactly **506,440,871 bytes** (506.4 MB) for baseline/Small or
-**593,457,131 bytes** (593.5 MB) for AVX2/Turbo Q5, plus missing system packages. Optional Vulkan
-is a separate 66,575,872-byte download. A failed download does not fail the OS installation; the
-Done screen shows the pending setup.
-See [Local dictation](Local-Dictation) for readiness and recovery.
-
 ### Drivers
 
 When the installer finds a graphics card or Wi-Fi chip that works better with a driver that isn't
@@ -336,9 +327,7 @@ be installed. You get three buttons:
 **Remove the USB stick**: take it out now, then press **Restart now**. Your computer starts
 Arctic Linux and asks for your disk passphrase. If you skipped an app, this screen lists it.
 
-An offline install lists its deferred downloads. A model download failure says that local
-dictation is not ready yet; connect and open **Settings → Dictation → Set up / retry…** after
-booting the installed system.
+An offline install lists its deferred downloads.
 
 If you picked a driver, a **Drivers** card says what happened to each one, for example *"The
 NVIDIA driver for your … starts after you restart"*. A driver that couldn't be installed because

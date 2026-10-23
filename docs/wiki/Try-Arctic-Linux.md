@@ -51,10 +51,6 @@ The replacement image under qualification includes **GNOME Web (Epiphany)** (`Su
 These are native packages. The published 1.2.0 image has earlier app choices; read its release
 page for the actual inventory. Optional apps can be added for a live session with Get apps.
 
-The replacement keeps local dictation's large model and executable out of the live image.
-Installation prepares them online, or queues retryable setup for the installed system. The
-live session does not claim that dictation is ready. See [Local dictation](Local-Dictation).
-
 ## What's different from an installed system
 
 - **Nothing is kept.** Files you save, apps you add and settings you change are lost when you

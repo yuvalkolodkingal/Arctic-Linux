@@ -885,22 +885,6 @@ install -Dpm 0644 packaging/selinux/arctic-nix.pp %{buildroot}%{_datadir}/selinu
 install -Dpm 0644 packaging/systemd/arctic-firstboot.service %{buildroot}%{_unitdir}/arctic-firstboot.service
 install -Dpm 0644 packaging/systemd/arctic-firstboot.timer %{buildroot}%{_unitdir}/arctic-firstboot.timer
 install -Dpm 0755 packaging/firstboot/arctic-firstboot %{buildroot}%{_libexecdir}/arctic/arctic-firstboot
-# Dictation keeps large upstream binaries and models out of the live image. The
-# installer/first-boot bootstrap fetches and verifies them for the installed host.
-install -Dpm 0755 packaging/dictation/arctic-dictation %{buildroot}%{_bindir}/arctic-dictation
-install -Dpm 0755 packaging/dictation/arctic-dictation-toggle %{buildroot}%{_bindir}/arctic-dictation-toggle
-install -Dpm 0755 packaging/dictation/voxtype %{buildroot}%{_bindir}/voxtype
-install -Dpm 0755 packaging/dictation/arctic-voxtype-setup %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-setup
-install -Dpm 0755 packaging/dictation/arctic-voxtype-host-profile %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-host-profile
-install -Dpm 0755 packaging/dictation/arctic-voxtype-configure %{buildroot}%{_libexecdir}/arctic/arctic-voxtype-configure
-install -Dpm 0644 packaging/dictation/voxtype-release-key.asc %{buildroot}%{_datadir}/arctic/dictation/voxtype-release-key.asc
-install -d %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.1
-install -pm 0644 packaging/dictation/provenance/v1.1.1/* \
-  %{buildroot}%{_datadir}/arctic/dictation/provenance/1.1.1/
-install -Dpm 0644 packaging/dictation/org.arcticlinux.dictation.policy %{buildroot}%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
-install -Dpm 0644 packaging/systemd/arctic-dictation-setup.service %{buildroot}%{_unitdir}/arctic-dictation-setup.service
-install -Dpm 0644 packaging/systemd/arctic-dictation-setup.timer %{buildroot}%{_unitdir}/arctic-dictation-setup.timer
-install -Dpm 0644 packaging/systemd/voxtype.service %{buildroot}%{_userunitdir}/voxtype.service
 # New accounts start from /etc/skel. What Arctic keeps up to date is installed once, in
 # /usr/share/arctic, and the home directory only points at it, so package updates reach
 # accounts that already exist (a copy in the home directory would never change again):
@@ -1102,9 +1086,6 @@ install -pm 0644 fetch/config %{buildroot}%{_datadir}/arctic/fetch/config
 install -d %{buildroot}%{_datadir}/arctic/settings
 # tests/ and dev/ (headless screenshots) are development-only.
 tar -C settings --exclude=./tests --exclude=./dev --exclude=./README.md -cf - . | tar -C %{buildroot}%{_datadir}/arctic/settings -xf -
-# Each Quickshell config root needs a local resource. Keep the status whitelist
-# sourced from one canonical parser; never follow an import outside Settings.
-install -pm 0644 shell/DictationStatus.js %{buildroot}%{_datadir}/arctic/settings/DictationStatus.js
 chmod 0755 %{buildroot}%{_datadir}/arctic/settings/scripts/arctic_settings.py
 desktop-file-install --dir=%{buildroot}%{_datadir}/applications packaging/settings/org.arcticlinux.Settings.desktop
 install -Dpm 0644 packaging/settings/org.arcticlinux.Settings.svg \
@@ -1228,11 +1209,6 @@ for s in %{buildroot}%{_libexecdir}/arctic/* %{buildroot}%{_libexecdir}/livesys/
 done
 # arctic-update's file handling (update.conf, dnf5's offline state, the status file).
 python3 -m unittest discover -s packaging/updates -p 'test_*.py'
-python3 -m unittest discover -s packaging/dictation -p 'test_*.py'
-# Execute the old stable state/payload migration, conflicting profile choices,
-# online recovery from fail-closed state, the receipt-to-marker crash/retry
-# transition, and failure of current-session activation after commit.
-python3 tools/dictation-qualification/test_upgrade_migration.py
 # ---- stream 1 (web apps): the host is the real cgo build and the manager is cgo-free; both
 # start without a display; the launcher entries the manager writes are valid.
 readelf -d %{buildroot}%{_libexecdir}/arctic/arctic-webapp-host | grep -q 'NEEDED.*libwebkitgtk-6\.0\.so\.4'
@@ -1365,62 +1341,26 @@ done
 systemd-sysusers %{_sysusersdir}/arctic-wallpaper.conf || :
 %systemd_post arctic-login-wallpaper.service
 %systemd_post arctic-firstboot.timer arctic-update-stage.timer
-%systemd_post arctic-dictation-setup.timer
 %systemd_post arctic-flatpak-update.timer
 
 %preun -n arctic-desktop-config
 %systemd_preun arctic-login-wallpaper.service
 %systemd_preun arctic-firstboot.service arctic-firstboot.timer arctic-update-stage.timer arctic-update-restage.timer arctic-update-stage.service
-%systemd_preun arctic-dictation-setup.service arctic-dictation-setup.timer
 %systemd_preun arctic-flatpak-update.timer arctic-flatpak-update.service
 
 %posttrans -n arctic-desktop-config
 %{arctic_skel_zsh}
-# Direct-upstream dictation replaced the old Arctic runtime controller. A new
-# pinned upstream release also enters this queue: the model and user choice are
-# reused, while the new signed executable is fetched in the background. The
-# direct marker is published only after the binary, model and user config
-# verify; failures keep the last verified upstream payload runnable and remain
-# retryable. The launcher switches releases only when the receipt commits.
-dictation_current=false
-python3 - <<'PY' && dictation_current=true || :
-import json, os, stat
-path = '/var/lib/arctic/dictation/verified.json'
-marker = '/var/lib/arctic/dictation/upstream-direct-v1'
-try:
-    info = os.lstat(path)
-    if not stat.S_ISREG(info.st_mode) or info.st_uid != 0 or stat.S_IMODE(info.st_mode) != 0o644:
-        raise SystemExit(1)
-    mark = os.lstat(marker)
-    if (not stat.S_ISREG(mark.st_mode) or mark.st_uid != 0
-            or stat.S_IMODE(mark.st_mode) != 0o644):
-        raise SystemExit(1)
-    with open(marker, encoding='ascii') as source:
-        if source.read() != 'upstream-direct-v1\n':
-            raise SystemExit(1)
-    with open(path, encoding='utf-8') as source:
-        value = json.load(source)
-    if (type(value) is not dict or value.get('integration') != 'upstream-direct-v1'
-            or value.get('version') != '1.1.1'
-            or value.get('source_commit') != '014c56105b2f071bb3457c51a95c38be380e5124'):
-        raise SystemExit(1)
-except (OSError, ValueError, TypeError):
-    raise SystemExit(1)
-PY
-if [ "$dictation_current" != true ]; then
-  user=$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $6 ~ /^\/home\// { print $1; exit }')
-  if [ -n "$user" ]; then
-    if ! %{_libexecdir}/arctic/arctic-voxtype-setup --migrate-legacy "$user" >/dev/null 2>&1; then
-      %{_libexecdir}/arctic/arctic-voxtype-setup --install "$user" --offline >/dev/null 2>&1 || :
-      systemctl --no-block start arctic-dictation-setup.timer >/dev/null 2>&1 || :
-    fi
-  fi
+# Built-in VoxType dictation was removed in favour of OpenWhispr (arctic-openwhispr). Clear
+# its downloaded binaries, models and setup queue from systems that had it, once.
+if [ -e %{_sharedstatedir}/arctic/dictation ] || [ -e /opt/arctic/voxtype ]; then
+  systemctl --no-reload disable --now arctic-dictation-setup.timer arctic-dictation-setup.service >/dev/null 2>&1 || :
+  rm -rf %{_sharedstatedir}/arctic/dictation /opt/arctic/voxtype || :
 fi
 # Migrate old boot-wanted download services to post-boot retries once. Do not stop a
 # currently running setup, and do not override later administrator timer choices.
 if [ ! -e %{_sharedstatedir}/arctic/.postboot-setup-timers ]; then
-  if systemctl --no-reload disable arctic-firstboot.service arctic-dictation-setup.service >/dev/null 2>&1 && \
-     systemctl --no-reload preset arctic-firstboot.timer arctic-dictation-setup.timer >/dev/null 2>&1; then
+  if systemctl --no-reload disable arctic-firstboot.service >/dev/null 2>&1 && \
+     systemctl --no-reload preset arctic-firstboot.timer >/dev/null 2>&1; then
     mkdir -p %{_sharedstatedir}/arctic && touch %{_sharedstatedir}/arctic/.postboot-setup-timers || :
   fi
 fi
@@ -1634,17 +1574,6 @@ fi
 %{_unitdir}/arctic-firstboot.timer
 %dir %{_libexecdir}/arctic
 %{_libexecdir}/arctic/arctic-firstboot
-%{_bindir}/arctic-dictation
-%{_bindir}/arctic-dictation-toggle
-%{_bindir}/voxtype
-%{_libexecdir}/arctic/arctic-voxtype-setup
-%{_libexecdir}/arctic/arctic-voxtype-host-profile
-%{_libexecdir}/arctic/arctic-voxtype-configure
-%{_datadir}/arctic/dictation/
-%{_datadir}/polkit-1/actions/org.arcticlinux.dictation.policy
-%{_unitdir}/arctic-dictation-setup.service
-%{_unitdir}/arctic-dictation-setup.timer
-%{_userunitdir}/voxtype.service
 %{_libexecdir}/arctic/neofetch
 %{_unitdir}/arctic-update-stage.service
 %{_unitdir}/arctic-update-stage.timer

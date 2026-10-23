@@ -13,13 +13,13 @@ StepPage {
     measure: 600
     valid: online || installOffline
     nextLabel: !online && installOffline ? "Continue offline" : "Next"
-    helpText: "Pick a Wi-Fi network or plug in a network cable to download apps and security updates during installation. " + offlineNotice + " " + Engine.dictationDownloadNotice
+    helpText: "Pick a Wi-Fi network or plug in a network cable to download apps and security updates during installation. " + offlineNotice
 
     readonly property var opts: Wizard.step.options || {}
     property bool online: !!opts.online
     property bool wired: !!opts.wired
     property bool installOffline: !!(Wizard.step.data && Wizard.step.data.offline)
-    readonly property string offlineNotice: "Offline installation uses the apps already on this image. App downloads and security updates wait until you connect. Dictation is not ready until its app and a verified model are available; setup is queued for a retry at first boot."
+    readonly property string offlineNotice: "Offline installation uses the apps already on this image. App downloads and security updates wait until you connect."
     testState: ({ online: online, offline: installOffline })
     property string ssid: opts.ssid || ""
     property var networks: []
@@ -153,7 +153,7 @@ StepPage {
             width: parent.width
             kind: "info"
             title: page.online ? "Downloads during installation" : "You can install offline"
-            text: (page.online ? "Arctic Linux downloads the apps you pick and the latest security updates while it installs. " : page.offlineNotice + " ") + Engine.dictationDownloadNotice
+            text: (page.online ? "Arctic Linux downloads the apps you pick and the latest security updates while it installs. " : page.offlineNotice)
         }
 
         ArCheck {

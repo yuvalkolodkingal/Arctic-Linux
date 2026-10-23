@@ -271,7 +271,7 @@ successful screenshot collection is not enough.
 
 Before publishing a replacement, complete [the release reliability checks](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/RELEASE-RELIABILITY.md):
 real live/installed boots, installation and recovery, networking, apps/media, SELinux/security,
-Nix, signed stable update plus reboot, online/offline dictation, and the required precise paired
+Nix, signed stable update plus reboot, and the required precise paired
 measurements. Preserve failed and unrun results. The final ISO must be **strictly below
 2,000,000,000 bytes**; regression thresholds and precision requirements are not waived for size.
 

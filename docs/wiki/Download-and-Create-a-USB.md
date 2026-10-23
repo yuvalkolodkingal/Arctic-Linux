@@ -8,7 +8,7 @@ from the stick, and choose whether to try Arctic Linux or install it.
 - **A 64-bit PC** (x86_64). Newer computers (UEFI) and older ones (BIOS) both work.
 - **A USB stick of 4 GB or more.** Writing Arctic Linux to it erases everything on it.
 - **To install:** at least **40 GB** of disk space. Current installer packages offer an explicit
-  offline path; extra apps, drivers and dictation setup wait until you connect. Check the
+  offline path; extra apps and drivers wait until you connect. Check the
   particular ISO's release notes for its installer and included apps. Trying it needs no internet.
 - **Memory:** our tests run the live USB with 4 GB and the installer with 6 GB.
 
