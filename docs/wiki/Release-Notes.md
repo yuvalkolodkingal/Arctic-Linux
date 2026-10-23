@@ -1,6 +1,23 @@
 # Release notes
 
-## Arctic Linux 1.2.1 — prepared release
+## Arctic Linux 1.2.2
+
+Arctic Linux 1.2.2 replaces the unpublished 1.2.1 image. On top of the 1.2.1 changes below:
+
+- **Voice typing with OpenWhispr** replaces the built-in VoxType dictation. **Settings → Voice
+  typing** installs, updates or removes [OpenWhispr](https://openwhispr.com) and can start it at
+  login; **Super + Ctrl + X** opens it. Nothing is downloaded during installation, and upgraded
+  systems delete the old VoxType files once. See [Settings](Settings#voice-typing).
+- **Wallpaper rotation keeps your colours**: a wallpaper that changes by itself no longer
+  recolours the desktop.
+
+The release record is
+[`docs/releases/v1.2.2.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.2.md).
+
+## Arctic Linux 1.2.1 — prepared, superseded by 1.2.2
+
+1.2.1 was never published as an image; its changes ship in 1.2.2.
+
 
 The completed desktop, installer and setup changes described here are on `main`. The v1.2.1
 release notes are prepared, while the replacement ISO and its final measurements still require

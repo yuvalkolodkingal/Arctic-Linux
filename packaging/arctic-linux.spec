@@ -49,7 +49,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.2.1
+Version:        1.2.2
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -1684,6 +1684,10 @@ fi
 # metapackage: no files
 
 %changelog
+* Fri Oct 23 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.2-1
+- Replace built-in VoxType dictation with OpenWhispr voice typing (Settings → Voice typing).
+- Keep the desktop's colours when the wallpaper rotates by itself.
+
 * Fri Oct 09 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.1-1
 - Repair taskbar frame transitions and installer window restoration.
 - Use the lightweight default applications and repository photo wallpapers.
