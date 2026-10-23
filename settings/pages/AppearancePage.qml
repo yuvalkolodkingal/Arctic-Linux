@@ -892,7 +892,7 @@ Page {
 
     Group {
         title: "Change the wallpaper by itself"
-        desc: "A new picture now and then, with the colours following it."
+        desc: "A new picture now and then. The colours stay the ones from the wallpaper you picked."
         visible: page.rotate.available === true
         SettingRow {
             searchKey: "appearance.rotate"
