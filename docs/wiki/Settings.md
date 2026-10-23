@@ -145,9 +145,9 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   updates. A picture in use must be changed before it can be deleted or hidden.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures, Arctic's own, or **Both**, in name order or **in random order** (every picture once
-  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Each
-  picture becomes your wallpaper and the colours follow it: your pictures colour the desktop,
-  Arctic's bring back Winter / Polar night. Wallpaper hooks run with each picture.
+  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Only the
+  picture changes: the colours stay the ones from the wallpaper you picked. Wallpaper hooks run
+  with each picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
