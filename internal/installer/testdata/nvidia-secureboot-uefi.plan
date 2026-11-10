@@ -77,10 +77,10 @@ write /mnt/usr/share/sddm/themes/arctic/theme.conf.user (0644)
     | keyboardLayout=us
 write /mnt/etc/fstab (0644)
     | # /etc/fstab — written by the Arctic Linux installer.
-    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /          btrfs subvol=@,compress=zstd:1,x-systemd.device-timeout=0 0 0
-    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /home      btrfs subvol=@home,compress=zstd:1 0 0
-    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /var/log   btrfs subvol=@var_log,compress=zstd:1 0 0
-    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /nix       btrfs subvol=@nix,compress=zstd:1 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /          btrfs subvol=@,compress=zstd:1,noatime,x-systemd.device-timeout=0 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /home      btrfs subvol=@home,compress=zstd:1,noatime 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /var/log   btrfs subvol=@var_log,compress=zstd:1,noatime 0 0
+    | UUID=acc15146-0000-4000-8000-bfd07b1d4766 /nix       btrfs subvol=@nix,compress=zstd:1,noatime 0 0
     | UUID=c5e9ebb8-0000-4000-8000-42d19badf238 /boot      ext4 defaults 1 2
     | UUID=c6e9ed4b-0000-4000-8000-7b445e0283db /boot/efi  vfat umask=0077,shortname=winnt 0 2
 write /mnt/etc/crypttab (0600)
@@ -96,7 +96,7 @@ $ rsync -a /etc/NetworkManager/system-connections/ /mnt/etc/NetworkManager/syste
 # == bootloader: Getting your computer ready to start Arctic Linux…
 write /mnt/etc/default/grub (0644)
     | # Written by the Arctic Linux installer.
-    | GRUB_TIMEOUT=5
+    | GRUB_TIMEOUT=3
     | GRUB_DISTRIBUTOR="Arctic Linux"
     | GRUB_DEFAULT=saved
     | GRUB_DISABLE_SUBMENU=true

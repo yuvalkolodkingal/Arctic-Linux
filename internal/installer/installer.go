@@ -925,7 +925,10 @@ func (in *Installer) fstab() string {
 	var b strings.Builder
 	b.WriteString("# /etc/fstab — written by the Arctic Linux installer.\n")
 	for i, sv := range subvolumes {
-		opts := "subvol=" + sv.name + ",compress=zstd:1"
+		// noatime: reading a file doesn't write its access time back. On btrfs that write
+		// copies metadata, and after a snapshot (snapper takes a pair around every update)
+		// the first read of each file would otherwise unshare it from the snapshot.
+		opts := "subvol=" + sv.name + ",compress=zstd:1,noatime"
 		if i == 0 {
 			opts += ",x-systemd.device-timeout=0"
 		}
@@ -957,11 +960,23 @@ func (in *Installer) grubArgs() string {
 	return args + "rhgb quiet"
 }
 
+// The boot menu's countdown, in seconds. Alone on the disk, Arctic Linux starts after a short
+// one: long enough to press a key (older kernels, editing an entry), short enough not to be
+// most of the boot. Next to another system the menu is where you choose, so it stays longer.
+const (
+	grubTimeout          = 3
+	grubTimeoutAlongside = 5
+)
+
 func (in *Installer) bootloaderPhase(ctx context.Context) error {
 	job := in.Job
+	timeout := grubTimeout
+	if job.Data.Disk.Mode == wizard.ModeAlongside {
+		timeout = grubTimeoutAlongside
+	}
 	grub := strings.Join([]string{
 		"# Written by the Arctic Linux installer.",
-		"GRUB_TIMEOUT=5",
+		"GRUB_TIMEOUT=" + strconv.Itoa(timeout),
 		`GRUB_DISTRIBUTOR="Arctic Linux"`,
 		"GRUB_DEFAULT=saved",
 		"GRUB_DISABLE_SUBMENU=true",

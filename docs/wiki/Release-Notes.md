@@ -1,5 +1,21 @@
 # Release notes
 
+## Arctic Linux 1.2.3
+
+Arctic Linux 1.2.3 starts quicker and asks less:
+
+- **One passphrase when updates are installed.** The update boot no longer ends with a second
+  full restart: unless a kernel, a graphics driver or firmware changed, the computer goes
+  straight on to the login screen with the disk still unlocked. See
+  [Updates](Updates#how-updates-work).
+- **A shorter boot menu**: 3 seconds instead of 5 on a computer with only Arctic Linux (new
+  installations).
+- **Fewer disk writes**: the btrfs subvolumes are mounted with `noatime` (new installations).
+- **Compressed swap in memory (zram)** is a named part of the image.
+
+The release record is
+[`docs/releases/v1.2.3.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.3.md).
+
 ## Arctic Linux 1.2.2
 
 Arctic Linux 1.2.2 replaces the unpublished 1.2.1 image. On top of the 1.2.1 changes below:

@@ -3,6 +3,7 @@
   "update_id": "package-build",
   "title": "What’s new in Arctic Linux",
   "items": [
+    {"icon": "key", "title": "One passphrase when updating", "text": "After installing updates at a restart, Arctic goes straight on to the login screen. Only a new kernel, graphics driver or firmware restarts once more."},
     {"icon": "microphone", "title": "Voice typing with OpenWhispr", "text": "Install OpenWhispr from Settings → Voice typing, then press Super + Ctrl + X to open it and speak into any app."},
     {"icon": "image", "title": "A growing photo collection", "text": "Arctic’s photo wallpapers now replace the old stock backgrounds, while your own wallpaper choice stays yours."},
     {"icon": "folder", "title": "Lighter everyday apps", "text": "Epiphany, Foot, PCManFM, XArchiver, Celluloid and FeatherPad keep the default desktop quick and focused."},

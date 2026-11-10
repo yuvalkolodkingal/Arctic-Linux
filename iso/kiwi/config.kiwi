@@ -20,7 +20,7 @@
 	</description>
 
 	<preferences>
-		<version>1.2.2</version>
+		<version>1.2.3</version>
 		<packagemanager>dnf5</packagemanager>
 		<locale>en_US</locale>
 		<keytable>us</keytable>
@@ -142,6 +142,9 @@
 		<package name="shim-signed-x64"/>
 		<package name="efibootmgr"/>
 		<package name="systemd-oomd-defaults"/>
+		<!-- Compressed swap in memory, as Fedora (there is no swap partition). Named so it
+		     never depends on another package's weak dependency. -->
+		<package name="zram-generator-defaults"/>
 		<package name="systemd-resolved"/>
 		<package name="plymouth"/>
 		<!-- LiveInstall: what the installer needs from the live system -->

@@ -21,7 +21,8 @@
 # script then marks it ready for the next boot the way `dnf5 offline reboot` does (status
 # "ready" in dnf5's state file, then the /system-update link), without rebooting. At the next
 # restart systemd boots into system-update.target, dnf5-offline-transaction.service installs
-# the updates and restarts into the updated system. Offline transactions prepared by anything
+# the updates and arctic-update-finish starts the updated system (a soft-reboot, so an encrypted
+# disk is unlocked once; a full restart after a kernel, driver or firmware change). Offline transactions prepared by anything
 # else (`dnf5 install --offline`, `dnf5 system-upgrade download`) are left alone. Settings:
 # /etc/arctic/update.conf. The shell's bar indicator reads /var/lib/arctic/update-status.json.
 # Flatpak apps are updated in place instead (a running app keeps its version until it restarts),
@@ -610,7 +611,7 @@ cmd_now() {
   record_ready true
   summary
   say "" "$(plural "$COUNT" update) ($(mb "$BYTES") MB) ready. Restart to install $(them "$COUNT"):" \
-      "updates are installed before the desktop starts, then the computer restarts once more." \
+      "updates are installed before the desktop starts, then the login screen appears." \
       "Restart now with: arctic-update apply"
 }
 

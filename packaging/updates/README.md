@@ -7,12 +7,14 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 |---|---|---|
 | `../../dotfiles/.local/bin/arctic-update` | `/usr/bin/arctic-update` | The command: `status`, `now`, `apply`, `channel`, `auto`, `metered`, and `stage` for the timer, `after-transaction` for dnf's hook |
 | `arctic-update-helper` | `/usr/libexec/arctic/arctic-update-helper` | Its file handling in Python: `update.conf`, dnf5's offline state, the status file |
+| `arctic-update-finish`, `50-arctic-finish.conf` | `/usr/libexec/arctic/arctic-update-finish`, `/usr/lib/systemd/system/dnf5-offline-transaction.service.d/50-arctic-finish.conf` | How the update boot ends: a soft-reboot when only programs changed (see "Leaving the update boot") |
 | `update.conf` | `/etc/arctic/update.conf` (config) | `AUTO=download-and-install-on-reboot\|download-only\|off`, `METERED=skip\|allow` |
 | `../systemd/arctic-update-stage.{service,timer}` | `/usr/lib/systemd/system/` | The daily check, 10 minutes after boot and then daily; never on the live USB |
 | `../systemd/arctic-update-restage.timer` | `/usr/lib/systemd/system/` | The same check two minutes after a dnf transaction invalidated the downloaded updates |
 | `../systemd/arctic-flatpak-update.{service,timer}` | `/usr/lib/systemd/system/` | `arctic-update flatpak --auto`: Flatpak apps (the system installation) updated in place, daily, with the same AUTO and METERED settings; the result in `/var/lib/arctic/flatpak-status.json` (`status` shows it) |
 | `update.actions` | `/etc/dnf/libdnf5-plugins/actions.d/arctic-update.actions` (config) | dnf's post-transaction hook: `arctic-update after-transaction` |
 | `snapper.actions` | `/etc/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions` (config) | A snapper pre/post snapshot pair around every dnf transaction, once `/etc/snapper/configs/root` exists |
+| `test_arctic_update_finish.py` | (not installed) | Unit tests of `arctic-update-finish` under a scratch root with a scripted systemctl |
 | `test_arctic_update.py`, `testdata/fake-dnf5` | (not installed) | Unit tests of the helper and scenario tests of `arctic-update` with a scripted dnf5 under a scratch root (`ARCTIC_UPDATE_TEST_ROOT`): `python3 -m unittest discover -s packaging/updates` (also the spec's `%check` and CI) |
 | `test-dnf5-offline.sh` | (not installed) | The same flow with the real dnf5 and a local repository, in a throwaway Fedora 44 container (CI's "dnf5 offline updates" job): pins the dnf5 behaviour and messages this relies on |
 
@@ -40,7 +42,7 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
    it checked again two minutes later, reusing the packages already downloaded.
 5. At the next restart systemd boots into `system-update.target`: dnf5-offline-transaction.service
    installs the updates before the desktop starts (snapper takes its pre/post pair) and
-   restarts into the updated system.
+   starts the updated system (see "Leaving the update boot").
 6. The first check after that restart looks at what became of it (the status file says it was
    armed in an earlier boot): no stored transaction any more means installed; status
    `transaction-incomplete`, or still `ready` without the link while the journal shows
@@ -48,6 +50,30 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
    (`boot_failures`, the end of dnf5's output in `install_error`; the shell notifies once) and
    the updates are downloaded and scheduled once more; after two failures in a row nothing is
    scheduled automatically until `arctic-update now` succeeds.
+
+## Leaving the update boot
+
+Stock dnf5 ends the update boot with a full restart: firmware, boot menu, initramfs and, on an
+encrypted disk, the passphrase a second time (unlock, install, restart, unlock again). The
+drop-in `50-arctic-finish.conf` sets `DNF_SYSTEM_UPGRADE_NO_REBOOT=1`, so dnf5 leaves that to
+`arctic-update-finish`:
+
+| After a successful transaction | The update boot ends with |
+|---|---|
+| Only programs and libraries changed | `systemctl soft-reboot`: the kernel keeps running, the disk stays unlocked, systemd starts the updated system |
+| Anything under `/usr/lib/modules`, `/usr/lib/firmware` or `/usr/src/akmods` was added, replaced or removed (a kernel, NVIDIA's driver, firmware, microcode) | a full restart, the only thing that loads them |
+| A release upgrade (`dnf5 system-upgrade`, or `target_releasever` differs) | a full restart |
+| `dnf5 offline reboot --poweroff` | power off |
+| `prepare` did not run, or `soft-reboot` was refused | a full restart |
+
+`prepare` (ExecStartPre, never fatal) notes the request and leaves a marker in
+`/run/arctic/update-boot`; `finish` (ExecStartPost) waits for shutdown inhibitors as dnf5 does
+(akmods, at most five minutes), compares inode change times with the marker (rpm gives files
+their build time, so modification times say nothing) and asks systemd. If even the restart is
+refused the unit fails and dnf5's cleanup unit restarts. A failed transaction never reaches
+`finish`: `dnf5-offline-transaction-cleanup.service` restarts as before. A soft-reboot keeps
+the kernel's boot id, which still differs from the boot the update was scheduled in, so the
+check in step 6 works unchanged.
 
 **Someone else's offline transaction.** dnf5 keeps one offline transaction, whoever prepared it
 (`dnf5 install --offline`, `dnf5 system-upgrade download`, dnf5daemon). The state's `cmd_line`
