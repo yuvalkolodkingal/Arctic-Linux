@@ -91,7 +91,7 @@ def fixed_now():
 class ConfigTests(unittest.TestCase):
     def test_shipped_file_is_the_defaults(self):
         settings, warnings = helper.parse_config((HERE / 'update.conf').read_text())
-        self.assertEqual(settings, {"AUTO": "download-and-install-on-reboot", "METERED": "skip"})
+        self.assertEqual(settings, {"AUTO": "download-and-install-on-reboot", "METERED": "skip", "INSTALL": "now"})
         self.assertEqual(warnings, [])
 
     def test_missing_file_means_defaults(self):
@@ -104,9 +104,11 @@ class ConfigTests(unittest.TestCase):
             metered = allow   # on my unlimited plan
             UNRELATED=1
             '''))
-        self.assertEqual(settings, {"AUTO": "download-only", "METERED": "allow"})
+        self.assertEqual(settings, {"AUTO": "download-only", "METERED": "allow", "INSTALL": "now"})
+        self.assertEqual(helper.parse_config("INSTALL=at-restart\n")[0]["INSTALL"], "restart")
+        self.assertEqual(helper.parse_config("INSTALL=whenever\n")[0]["INSTALL"], "now")
         self.assertEqual(warnings, [])
-        self.assertEqual(helper.parse_config("AUTO=no\nMETERED=yes\n")[0], {"AUTO": "off", "METERED": "allow"})
+        self.assertEqual(helper.parse_config("AUTO=no\nMETERED=yes\n")[0], {"AUTO": "off", "METERED": "allow", "INSTALL": "now"})
         self.assertEqual(helper.parse_config("AUTO='ON'\n")[0]["AUTO"], "download-and-install-on-reboot")
 
     def test_unknown_value_warns_and_uses_the_default(self):
@@ -519,6 +521,7 @@ exit 0
 ''',
     "rpm": '#!/bin/sh\ncat "$ARCTIC_UPDATE_TEST_ROOT/fake/rpmdb" 2>/dev/null\n',
     "journalctl": '#!/bin/sh\ncat "$ARCTIC_UPDATE_TEST_ROOT/fake/journal" 2>/dev/null\nexit 0\n',
+    "systemd-run": '#!/bin/sh\necho "$*" >> "$ARCTIC_UPDATE_TEST_ROOT/fake/systemd-run.log"\n',
     "nmcli": '#!/bin/sh\ncase "$*" in *METERED*) echo no ;; *CONNECTIVITY*) echo full ;; esac\n',
 }
 UPDATES = [["jq-1.8.1-3.fc44.x86_64", "Upgrade"], ["tzdata-2026c-2.fc44.noarch", "Upgrade"]]
@@ -530,6 +533,7 @@ FOREIGN = "dnf5 -y install --offline --refresh arctic-other"
 @unittest.skipUnless(shutil.which("bash") and shutil.which("flock"), "needs bash and flock")
 class ScenarioTests(unittest.TestCase):
     """arctic-update with every path under a scratch root and a scripted dnf5 (testdata/fake-dnf5)."""
+    INSTALL = "INSTALL=restart\n"
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -544,6 +548,9 @@ class ScenarioTests(unittest.TestCase):
         self.write("proc/cmdline", "BOOT_IMAGE=/vmlinuz-7.1.0 root=UUID=1234 ro rhgb quiet\n")
         self.write("usr/lib/systemd/system/system-update.target.wants/dnf5-offline-transaction.service", "")
         self.write("fake/rpmdb", "jq-1.8.1-2.fc44.x86_64 1780000000\n")
+        # These scenarios are the install-at-restart flow (INSTALL=restart, the only one up to
+        # 1.2.2); LiveScenarioTests below covers the default, INSTALL=now.
+        self.write("etc/arctic/update.conf", self.INSTALL)
         env = {k: v for k, v in os.environ.items()
                if k not in ("INVOCATION_ID", "ARCTIC_UPDATE_CONF", "ARCTIC_UPDATE_STATUS")}
         self.env = dict(env, PATH=bindir + os.pathsep + os.environ.get("PATH", ""),
@@ -867,7 +874,7 @@ class ScenarioTests(unittest.TestCase):
         self.assertEqual((self.state()[0], self.linked()), ("ready", True))
 
     def test_download_only(self):
-        self.write("etc/arctic/update.conf", "AUTO=download-only\n")
+        self.write("etc/arctic/update.conf", "AUTO=download-only\nINSTALL=restart\n")
         self.scenario(updates=UPDATES)
         self.cli("stage")
         self.assertEqual((self.state()[0], self.linked(), self.status()["armed"]), ("download-complete", False, False))
@@ -982,9 +989,9 @@ class ScenarioTests(unittest.TestCase):
     def test_flatpak_follows_the_settings(self):
         self.fake_flatpak()
         for conf in ("AUTO=off\n", "AUTO=download-only\n"):
-            self.write("etc/arctic/update.conf", conf)
+            self.write("etc/arctic/update.conf", conf + "INSTALL=restart\n")
             self.assertIn("when you run arctic-update flatpak", self.cli("flatpak", "--auto").stdout)
-        self.write("etc/arctic/update.conf", "AUTO=download-and-install-on-reboot\n")
+        self.write("etc/arctic/update.conf", "AUTO=download-and-install-on-reboot\nINSTALL=restart\n")
         self.write("fake/bin/nmcli", '#!/bin/sh\ncase "$*" in *METERED*) echo yes ;; *CONNECTIVITY*) echo full ;; esac\n')
         self.assertIn("Metered connection", self.cli("flatpak", "--auto").stdout)
         self.assertFalse([c for c in self.calls("flatpak") if c.startswith("update")])
@@ -1061,6 +1068,135 @@ class ScenarioTests(unittest.TestCase):
         fw = json.loads(self.cli("firmware", "--json").stdout)
         self.assertEqual((fw["available"], fw["devices"]), (True, []))
         self.cli("firmware", "flash", rc=2)
+
+
+NOW = "upgrade -y --refresh --setopt=arctic.skip_if_unavailable=False --setopt=arctic-testing.skip_if_unavailable=False"
+
+
+class LiveScenarioTests(ScenarioTests):
+    """INSTALL=now, the default: plain `dnf5 upgrade` into the running system; a restart is only
+    suggested when dnf5 needs-restarting (or the running kernel's modules) says so."""
+    INSTALL = ""          # an update.conf from before 1.2.3 has no INSTALL line: now
+
+    def _inherited(self):
+        self.skipTest("the install-at-restart scenarios run in ScenarioTests")
+
+    def setUp(self):
+        if not self._testMethodName.startswith("test_live_"):
+            self._inherited()
+        super().setUp()
+
+    def test_live_daily_check_installs_and_needs_no_restart(self):
+        self.scenario(updates=UPDATES)
+        p = self.cli("stage")
+        self.assertIn("2 updates installed.", p.stdout)
+        self.assertIn(NOW, self.calls())
+        self.assertFalse([c for c in self.calls() if "--offline" in c])
+        self.assertIn("jq-1.8.1-3.fc44.x86_64", Path(self.path("fake/rpmdb")).read_text())
+        st = self.status()
+        self.assertEqual((st["state"], st["installed"], st["armed"]), ("idle", 2, False))
+        self.assertTrue(st["installed_at"])
+        self.assertFalse(st.get("restart_boot"))
+        self.assertEqual((self.state()[0], self.linked()), ("none", False))      # nothing waits for a restart
+        r = json.loads(self.cli("status", "--json").stdout)
+        self.assertEqual((r["state"], r["restart_needed"], r["install"]), ("idle", False, "now"))
+        # The next day: nothing to do, and the note about the last install is replaced.
+        self.cli("stage")
+        self.assertEqual(self.status()["message"], "The system is up to date.")
+
+    def test_live_kernel_update_suggests_a_restart_until_the_next_boot(self):
+        self.scenario(updates=[["kernel-core-7.1.1-300.fc44.x86_64", "Install"]], reboot=["kernel-core"])
+        p = self.cli("now")
+        self.assertIn("1 update installed. Restart when you like to start using kernel-core.", p.stdout)
+        st = self.status()
+        self.assertEqual((st["restart_boot"], st["restart_packages"]), ("boot-1", "kernel-core"))
+        r = json.loads(self.cli("status", "--json").stdout)
+        self.assertTrue(r["restart_needed"])
+        self.assertIn("Restart", self.cli("status").stdout)
+        # Nothing restarts by itself, and nothing is stored for the restart.
+        self.assertFalse([c for c in self.calls() if c.startswith("offline reboot")])
+        self.assertFalse(self.linked())
+        # After the restart the note is gone, before any check ran …
+        self.write("proc/sys/kernel/random/boot_id", "boot-2\n")
+        self.assertFalse(json.loads(self.cli("status", "--json").stdout)["restart_needed"])
+        # … and the next check clears it from the file.
+        self.scenario(updates=None)
+        self.cli("stage")
+        self.assertFalse(self.status().get("restart_boot"))
+
+    def test_live_now_reports_up_to_date(self):
+        self.scenario(updates=None)
+        self.assertIn("Your system is up to date.", self.cli("now").stdout)
+        self.assertEqual(self.status()["state"], "idle")
+
+    def test_live_failure_is_reported_and_nothing_is_scheduled(self):
+        self.scenario(fail="Failed to download metadata (metalink: \"https://example.invalid\")")
+        p = self.cli("stage", rc=1)
+        self.assertIn("installing the updates failed", p.stderr)
+        st = self.status()
+        self.assertEqual(st["state"], "failed")
+        self.assertIn("Failed to download metadata", st["check_error"])
+        self.assertFalse(self.linked())
+        self.cli("now", rc=1)
+
+    def test_live_drops_an_update_stored_for_a_restart_by_an_older_version(self):
+        # 1.2.2 left an armed offline transaction; 1.2.3 installs now instead.
+        self.write("etc/arctic/update.conf", "INSTALL=restart\n")
+        self.scenario(updates=UPDATES)
+        self.cli("stage")
+        self.assertEqual((self.state()[0], self.linked()), ("ready", True))
+        self.write("etc/arctic/update.conf", "")
+        self.scenario(updates=UPDATES)
+        self.cli("stage")
+        self.assertEqual((self.state()[0], self.linked()), ("none", False))
+        self.assertIn("offline clean", " ".join(self.calls()))
+        self.assertEqual(self.status()["installed"], 2)
+
+    def test_live_leaves_someone_elses_offline_transaction_alone(self):
+        self.store_foreign()
+        self.scenario(updates=UPDATES)
+        self.cli("stage")
+        self.assertNotIn(NOW, self.calls())
+        self.assertEqual(self.state()[0], "download-complete")
+        self.cli("now", rc=1)
+        self.cli("now", "--replace")
+        self.assertIn(NOW, self.calls())
+
+    def test_live_download_only_and_off_do_not_install(self):
+        self.write("etc/arctic/update.conf", "AUTO=off\n")
+        self.scenario(updates=UPDATES)
+        self.cli("stage")
+        self.assertEqual(self.calls(), [c for c in self.calls() if c.startswith("repo list") or c.startswith("-q repo list")])
+        self.write("etc/arctic/update.conf", "AUTO=download-only\n")
+        self.cli("stage")
+        self.assertNotIn(NOW, self.calls())
+        self.assertEqual(self.state()[0], "download-complete")      # downloaded, not installed
+        # Asking installs now, whatever AUTO says.
+        self.cli("now")
+        self.assertIn(NOW, self.calls())
+        self.assertEqual(self.state()[0], "none")
+
+    def test_live_install_setting(self):
+        self.assertIn("now:", self.cli("install").stdout)
+        self.cli("install", "restart")
+        self.assertIn("INSTALL=restart", Path(self.path("etc/arctic/update.conf")).read_text())
+        self.assertIn("restart:", self.cli("install").stdout)
+        self.cli("install", "now")
+        self.assertIn("on: updates install by themselves", self.cli("auto").stdout)
+        self.cli("install", "sometimes", rc=2)
+
+    def test_live_restart_check_after_your_own_dnf(self):
+        # `sudo dnf upgrade` by hand: the dnf hook asks for a check, which records the note.
+        self.cli("after-transaction")
+        self.assertTrue([c for c in self.calls("systemd-run") if "restart-check" in c])
+        self.scenario(reboot=["glibc", "systemd"])
+        self.cli("restart-check")
+        self.assertEqual(self.status()["restart_packages"], "glibc, systemd")
+        # arctic-update's own transaction records its result itself.
+        Path(self.path("fake/systemd-run.log")).unlink()
+        self.env["ARCTIC_UPDATE_RUNNING"] = "1"
+        self.cli("after-transaction")
+        self.assertEqual(self.calls("systemd-run"), [])
 
 
 class UpgradeTests(unittest.TestCase):

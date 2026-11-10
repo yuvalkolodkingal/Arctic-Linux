@@ -139,6 +139,50 @@ def store(verb, argv, s):
     return 0
 
 
+def install(s):
+    """`dnf5 upgrade -y --refresh`: straight into the installed system (fake/rpmdb). The
+    scenario's "updates" are installed once; "reboot": [names] is what needs-restarting says."""
+    if s.get("fail"):
+        print("Updating and loading repositories:")
+        print(s["fail"])
+        return 1
+    updates = s.get("updates")
+    if not updates:
+        print("Nothing to do.")
+        return 0
+    print("Total size of inbound packages is 949 KiB. Need to download 949 KiB.")
+    rpmdb = os.path.join(FAKE, "rpmdb")
+    try:
+        lines = open(rpmdb).read().splitlines()
+    except FileNotFoundError:
+        lines = []
+    for nevra, _action in updates:
+        name = nevra.rsplit("-", 2)[0]
+        lines = [l for l in lines if l.split()[0].rsplit("-", 2)[0] != name]
+        lines.append(nevra + " 1790000000")
+    with open(rpmdb, "w") as f:
+        f.write("\n".join(lines) + "\n")
+    s["updates"] = None
+    save(s)
+    print("Complete!")
+    return 0
+
+
+def needs_restarting(s):
+    names = s.get("reboot") or []
+    if not names:
+        print("No core libraries or services have been updated since boot-up.")
+        print("Reboot should not be necessary.")
+        return 0
+    print("Core libraries or services have been updated since boot-up:")
+    for name in names:
+        print("  * " + name)
+    print()
+    print("Reboot is required to fully utilize these updates.")
+    print("More information: https://access.redhat.com/solutions/27943")
+    return 1
+
+
 def main(argv):
     os.makedirs(FAKE, exist_ok=True)
     with open(os.path.join(FAKE, "dnf5.log"), "a") as f:
@@ -161,6 +205,10 @@ def main(argv):
         return 0
     if args and args[0] in ("upgrade", "distro-sync") and "--offline" in args:
         return store(args[0], argv, s)
+    if args and args[0] in ("upgrade", "distro-sync"):
+        return install(s)
+    if args and args[0] == "needs-restarting":
+        return needs_restarting(s)
     print("fake dnf5: unexpected command: " + " ".join(argv), file=sys.stderr)
     return 2
 

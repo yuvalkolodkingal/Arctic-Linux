@@ -11,7 +11,8 @@
 // installs stop until `arctic-update now`).
 
 const EMPTY = { state: 'idle', packages: 0, download_mb: 0, staged_at: '', notify_key: '', armed: false, message: '',
-                boot_failures: 0, install_error: '', install_failed_at: '', installed_at: '' };
+                boot_failures: 0, install_error: '', install_failed_at: '', installed_at: '',
+                installed: 0, restart_boot: '', restart_packages: '' };
 
 function parse(text) {
     let data = null;
@@ -33,7 +34,38 @@ function parse(text) {
     out.install_failed_at = typeof data.install_failed_at === 'string' ? data.install_failed_at : '';
     // installed_at: when updates scheduled for a restart were installed (the post-update hooks).
     out.installed_at = typeof data.installed_at === 'string' ? data.installed_at : '';
+    // Updates installed while the computer runs (plain dnf): how many, and whether starting to
+    // use them takes a restart. restart_boot is the kernel's boot id when that was found, so
+    // the note ends with that boot.
+    const installed = Number(data.installed);
+    out.installed = Number.isFinite(installed) && installed > 0 ? Math.floor(installed) : 0;
+    out.restart_boot = typeof data.restart_boot === 'string' ? data.restart_boot : '';
+    out.restart_packages = typeof data.restart_packages === 'string' ? data.restart_packages.slice(0, 120) : '';
     return out;
+}
+
+// ---- installed while running: is a restart needed? ---------------------------------------------
+
+// True while updates that only a restart loads (a kernel, a driver, firmware, core libraries)
+// were installed in this boot. bootId: /proc/sys/kernel/random/boot_id.
+function needsRestart(status, bootId, live) {
+    const id = String(bootId || '').trim();
+    return !live && !!status && id !== '' && status.restart_boot === id;
+}
+
+function restartDetail(status) {
+    const what = status && status.restart_packages ? ' (' + status.restart_packages + ')' : '';
+    return 'Updates are installed. A few of them' + what + ' only start working after a restart. '
+        + 'Restart when it suits you; nothing restarts by itself.';
+}
+
+function restartNotification(status) {
+    return 'Updates are installed. Restart when you like to finish' + (status && status.restart_packages
+        ? ' (' + status.restart_packages + ').' : '.');
+}
+
+function shouldNotifyRestart(status, needed, notified) {
+    return !!needed && !!status && status.restart_boot !== '' && status.restart_boot !== String(notified || '').trim();
 }
 
 function isReady(status, linked, live) {

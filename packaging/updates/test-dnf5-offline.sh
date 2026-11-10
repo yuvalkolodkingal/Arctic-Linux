@@ -68,6 +68,8 @@ step "Setting up: arctic-update, the actions hooks, a local repository"
 install -Dm0755 "$REPO/dotfiles/.local/bin/arctic-update" /usr/bin/arctic-update
 install -Dm0755 "$HERE/arctic-update-helper" "$HELPER"
 install -Dm0644 "$HERE/update.conf" /etc/arctic/update.conf
+# Most of this file is the install-at-restart flow; "Installing now" at the end is the default.
+sed -i 's/^INSTALL=.*/INSTALL=restart/' /etc/arctic/update.conf
 install -Dm0644 "$HERE/update.actions" /etc/dnf/libdnf5-plugins/actions.d/arctic-update.actions
 install -Dm0644 "$HERE/snapper.actions" /etc/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
 grep -qE '^enabled *= *(1|true)' /etc/dnf/libdnf5-plugins/actions.conf || fail "the actions plugin isn't enabled"
@@ -318,4 +320,47 @@ PY
 boot_execute
 expect "GUI-staged newer package installs offline" "$(rpm -q arctic-ui)" arctic-ui-1-3.noarch
 
-printf '\n\033[1;32mdnf5 offline updates: all checks passed\033[0m\n'
+step "Installing now (INSTALL=now, the default): plain dnf5 upgrade, nothing waits for a restart"
+install -Dm0644 "$HERE/update.conf" /etc/arctic/update.conf
+expect "the shipped setting" "$(arctic-update install | cut -d: -f1)" now
+build arctic-ui 4; build arctic-ui 5; build arctic-ui 6
+publish stable arctic-ui-1-4
+out="$(arctic-update stage)"
+expect "the daily check installed it" "$(rpm -q arctic-ui)" arctic-ui-1-4.noarch
+expect_in "it says so" "$out" "1 update installed."
+expect "nothing stored for a restart" "$(offline_status)" "$TEXT_NONE"
+linked && fail "/system-update exists after installing now"
+expect "status" "$(status_get state)/$(status_get installed)" idle/1
+expect "no restart for a program" "$(status_get restart_boot)" ""
+python3 - <<'PY'
+import json, subprocess
+report = json.loads(subprocess.check_output(["arctic-update", "status", "--json"]))
+assert report["state"] == "idle" and report["restart_needed"] is False and report["install"] == "now", report
+PY
+ok "status --json: idle, no restart needed"
+out="$(arctic-update stage)"
+expect_in "the next check finds nothing" "$out" "The system is up to date."
+publish stable arctic-ui-1-5
+out="$(arctic-update now)"
+expect "arctic-update now installed it" "$(rpm -q arctic-ui)" arctic-ui-1-5.noarch
+expect_in "and says no restart is needed" "$out" "No restart needed."
+
+step "Installing now replaces an update an older version stored for a restart"
+sed -i 's/^INSTALL=.*/INSTALL=restart/' /etc/arctic/update.conf
+publish stable arctic-ui-1-6
+arctic-update stage >/dev/null
+linked || fail "not scheduled with INSTALL=restart"
+sed -i 's/^INSTALL=.*/INSTALL=now/' /etc/arctic/update.conf
+arctic-update stage >/dev/null
+expect "installed now instead" "$(rpm -q arctic-ui)" arctic-ui-1-6.noarch
+linked && fail "/system-update left behind"
+expect "nothing stored" "$(offline_status)" "$TEXT_NONE"
+
+step "Plain dnf does the same"
+build arctic-ui 7; publish stable arctic-ui-1-7
+dnf5 -q -y --refresh upgrade >/dev/null
+expect "dnf5 upgrade" "$(rpm -q arctic-ui)" arctic-ui-1-7.noarch
+out="$(arctic-update stage)"
+expect_in "arctic-update agrees" "$out" "The system is up to date."
+
+printf '\n\033[1;32mdnf5 updates: all checks passed\033[0m\n'

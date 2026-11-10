@@ -1695,6 +1695,9 @@ fi
 
 %changelog
 * Tue Nov 10 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.3-1
+- Install updates into the running system with plain dnf5 (INSTALL=now); a restart is only
+  suggested after a kernel, driver or firmware change. Keep two kernels (installonly_limit=2).
+- Colour the desktop from Arctic's packaged photographs and from each rotated wallpaper.
 - Ask for the disk passphrase once when updates are installed at a restart: the update boot
   ends with a soft-reboot unless a kernel, driver or firmware changed.
 - Start sooner: a 3 second boot menu on single-system installs; noatime on the btrfs subvolumes.

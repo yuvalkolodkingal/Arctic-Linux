@@ -1,5 +1,5 @@
 [Unit]
-Description=Arctic Linux: download updates to install at the next restart
+Description=Arctic Linux: install updates in the background
 Documentation=https://github.com/yuvalkolodkingal/Arctic-Linux/wiki/Updates man:dnf5-offline(8)
 # Never on the live USB: nothing there survives a restart.
 ConditionKernelCommandLine=!rd.live.image
@@ -7,9 +7,9 @@ Wants=network-online.target
 After=network-online.target
 
 [Service]
-# `arctic-update stage`: dnf5 upgrade --offline (download and test, the running system is not
-# touched), then the transaction is scheduled for the next boot. It skips metered connections
-# (METERED= in /etc/arctic/update.conf) and does nothing with AUTO=off.
+# `arctic-update stage`: `dnf5 upgrade -y --refresh` into the running system (INSTALL=now, the
+# default), or dnf5's offline transaction for the next start (INSTALL=restart). It skips
+# metered connections (METERED= in /etc/arctic/update.conf) and does nothing with AUTO=off.
 Type=oneshot
 ExecStart=/usr/bin/arctic-update stage
 # In the background: the lowest CPU and disk priority.

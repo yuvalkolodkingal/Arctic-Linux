@@ -365,9 +365,9 @@ centre only, show even during do not disturb, or keep even its urgent ones quiet
 
 ![The Updates page](images/settings-updates.png)
 
-What's waiting, **Check now**, and **Restart and install** when updates have been downloaded.
-Under **How updates come**: **Download updates automatically** (in the background; they only
-install when you restart) and the **Channel**, Stable or Testing. These are the same as
+The last update, **Update now**, and whether a restart is needed (only after a new kernel,
+driver or firmware). Under **How updates come**: **Update automatically** (once a day, in the
+background, while you work) and the **Channel**, Stable or Testing. These are the same as
 `arctic-update auto on|off` and `arctic-update channel stable|testing`; see [Updates](Updates).
 **Apps and firmware** shows how the daily update of your Flatpak apps went, with **Update apps
 now**, and the firmware updates fwupd has for this computer, with **Install in a terminal**.

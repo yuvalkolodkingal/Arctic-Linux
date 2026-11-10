@@ -19,7 +19,7 @@ Popover {
     // Installed, or no longer waiting (a dnf transaction invalidated it): nothing to offer.
     Connections {
         target: UpdateService
-        function onReadyChanged() { if (!UpdateService.ready) pop.close(); }
+        function onAttentionChanged() { if (!UpdateService.attention) pop.close(); }
     }
 
     ColumnLayout {
@@ -35,11 +35,11 @@ Popover {
                 implicitHeight: 32
                 radius: Theme.radiusMd
                 color: Theme.accentSoft
-                Icon { anchors.centerIn: parent; name: 'download'; size: 18; color: Theme.accentText }
+                Icon { anchors.centerIn: parent; name: UpdateService.ready ? 'download' : 'restart'; size: 18; color: Theme.accentText }
             }
             Text {
                 Layout.fillWidth: true
-                text: 'Updates are ready'
+                text: UpdateService.ready ? 'Updates are ready' : 'Updates are installed'
                 color: Theme.ink
                 font.family: Theme.fontSans
                 font.pixelSize: 15
@@ -49,7 +49,7 @@ Popover {
         }
         Text {
             Layout.fillWidth: true
-            text: UpdateService.detail
+            text: UpdateService.ready ? UpdateService.detail : UpdateService.restartDetail
             textFormat: Text.PlainText
             wrapMode: Text.WordWrap
             color: Theme.inkMuted
@@ -59,7 +59,9 @@ Popover {
         }
         Text {
             Layout.fillWidth: true
-            text: 'Save your work first. Installing takes a few minutes; then the login screen appears.'
+            text: UpdateService.ready
+                ? 'Save your work first. Installing takes a few minutes; then the login screen appears.'
+                : 'Save your work first.'
             wrapMode: Text.WordWrap
             color: Theme.inkSubtle
             font.family: Theme.fontSans
@@ -82,7 +84,7 @@ Popover {
             }
             ArcticButton {
                 id: restartButton
-                text: 'Restart and install'
+                text: UpdateService.ready ? 'Restart and install' : 'Restart now'
                 iconName: 'restart'
                 variant: 'primary'
                 size: 'sm'

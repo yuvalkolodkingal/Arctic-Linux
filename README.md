@@ -8,6 +8,8 @@ and it only downloads the apps you pick.
 - **Desktop:** Mango, a Quickshell shell (bar, launcher with calculator and commands, wallpaper
   picker, Get Apps and a separate Remove Apps menu, OSD, lock screen), Arctic Settings (`Super + S`), mako, Foot + Fish with the animated `arctic-fetch`
   fox, with themes switched using `Super + Shift + T`.
+- **Updates:** plain dnf, installed in the background while you work; a restart is only
+  suggested for a new kernel, driver or firmware. Two kernels are kept.
 - **System:** night light (`Super + Ctrl + N`) and keep awake (`Super + Ctrl + I`), screen modes
   (`Super + P`) and the laptop lid, printing and scanning without drivers, USB drives that mount
   themselves, apps' own "start on login", daily Flatpak updates and firmware updates, snapshots

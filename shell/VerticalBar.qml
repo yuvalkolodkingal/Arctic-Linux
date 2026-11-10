@@ -132,7 +132,7 @@ Item {
             }
             Button {
                 id: update
-                visible: UpdateService.ready; iconName: 'download'; tooltip: UpdateService.summary; accentFill: true
+                visible: UpdateService.attention; iconName: UpdateService.ready ? 'download' : 'restart'; tooltip: UpdateService.ready ? UpdateService.summary : 'Restart when you like'; accentFill: true
                 onClicked: root.bar.shell.toggleUpdates(root.bar.screen, root.coordinate(update))
             }
             Button {
