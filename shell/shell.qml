@@ -24,6 +24,13 @@ import Quickshell.Io
 // The bar's menus all open in one BarMenu (one menu at a time); Quick Settings is its `quick` panel.
 ShellRoot {
     id: shell
+    // The packaged shell is not reloaded when its files change: updates are installed while
+    // the desktop runs, and a reload halfway through a package (or with the screen locked)
+    // must not happen. The new version starts at the next login, or with arctic-shell --restart.
+    // A copy of your own (~/.config/quickshell/arctic, a checkout) keeps live reloading.
+    Component.onCompleted: {
+        if (String(Quickshell.shellDir).startsWith('/usr/')) Quickshell.watchFiles = false;
+    }
     // What `shell: …` bindings below hand out: inside `Bar { shell: shell }` the name would
     // resolve to Bar's own (still unset) `shell` property, not to this id.
     readonly property var root: shell
@@ -75,7 +82,7 @@ ShellRoot {
     function toggleUpdates(screen, x) {
         const target = screen || Outputs.focused;
         if (updates.open && updates.screen === target) { updates.close(); return; }
-        if (!UpdateService.ready) return;
+        if (!UpdateService.attention) return;
         updates.pointX = x !== undefined ? x : (target ? target.width - 160 : 0);
         present(updates, target);
     }

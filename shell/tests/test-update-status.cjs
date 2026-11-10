@@ -23,7 +23,24 @@ assert.deepEqual(plain(ready), {
     state: 'ready', packages: 12, download_mb: 84.3, staged_at: '2026-09-27T21:53:15+00:00', notify_key: '', armed: true,
     message: '12 updates will be installed the next time you restart.',
     boot_failures: 0, install_error: '', install_failed_at: '', installed_at: '',
+    installed: 0, restart_boot: '', restart_packages: '',
 });
+// ---- installed while running: a restart only when something needs one ------------------
+const BOOT = '2898f00d-a7a4-4e03-a081-f99253f43ad1';
+const live = U.parse(JSON.stringify({ state: 'idle', installed: 14, installed_at: '2026-11-10T09:00:00+00:00',
+    restart_boot: BOOT, restart_packages: 'kernel-core, systemd', message: '14 updates installed.' }));
+assert.equal(live.installed, 14);
+assert.equal(U.needsRestart(live, BOOT + '\n', false), true);
+assert.equal(U.needsRestart(live, 'aed4183e-7f1f-499b-b424-43ebc8e29720', false), false, 'after the restart');
+assert.equal(U.needsRestart(live, '', false), false, 'boot id not read yet');
+assert.equal(U.needsRestart(live, BOOT, true), false, 'never on the live USB');
+assert.equal(U.needsRestart(U.parse('{"state": "idle", "installed": 3}'), BOOT, false), false, 'apps only: no restart');
+assert.equal(U.isReady(live, false, false), false);
+assert.ok(U.restartDetail(live).includes('kernel-core, systemd'));
+assert.ok(U.restartNotification(live).startsWith('Updates are installed.'));
+assert.equal(U.shouldNotifyRestart(live, true, ''), true);
+assert.equal(U.shouldNotifyRestart(live, true, BOOT), false, 'once per boot');
+assert.equal(U.shouldNotifyRestart(live, false, ''), false);
 // Missing, empty, broken or odd files mean "nothing waiting", never an exception.
 for (const bad of ['', '{', 'null', '[]', '42', '"ready"', '{"state": 3, "packages": "many", "armed": "true"}']) {
     const s = U.parse(bad);

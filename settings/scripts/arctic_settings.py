@@ -2715,6 +2715,9 @@ def cmd_updates(paths, _args):
                 channel=str(data.get('channel') or 'stable'), auto=bool(auto),
                 message=str(data.get('message') or ''), checkedAt=str(data.get('checked_at') or ''),
                 held=str(data.get('held') or ''),
+                restartNeeded=data.get('restart_needed') is True,
+                restartPackages=str(data.get('restart_packages') or '')[:120],
+                installed=int(data.get('installed') or 0),
                 error=str(data.get('check_error') or data.get('error') or
                           (data.get('message') if data.get('state') == 'failed' else '') or ''))
 

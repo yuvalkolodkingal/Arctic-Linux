@@ -133,9 +133,9 @@ Colours, wallpaper and motion for the whole desktop: the bar, windows, the termi
   updates. A picture in use must be changed before it can be deleted or hidden.
 - **Change the wallpaper by itself:** a new picture every 30 minutes, hour or day, from your
   pictures, Arctic's own, or **Both**, in name order or **in random order** (every picture once
-  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Only the
-  picture changes: the colours stay the ones from the wallpaper you picked. Wallpaper hooks run
-  with each picture.
+  before any comes again). Hidden Arctic photos are excluded from Arctic and Both rotation. Each
+  picture becomes your wallpaper and the colours follow it: your pictures colour the desktop,
+  Arctic's bring back Winter / Polar night. Wallpaper hooks run with each picture.
 - **Wallhaven:** search [wallhaven.cc](https://wallhaven.cc) from Settings. Type some words (or
   press **Browse**), choose **Top**, **Latest** or **Random**, the categories and how safe the
   pictures must be (only **Safe** is ticked at first). **Fit my screens** shows only pictures at
@@ -365,9 +365,9 @@ centre only, show even during do not disturb, or keep even its urgent ones quiet
 
 ![The Updates page](images/settings-updates.png)
 
-What's waiting, **Check now**, and **Restart and install** when updates have been downloaded.
-Under **How updates come**: **Download updates automatically** (in the background; they only
-install when you restart) and the **Channel**, Stable or Testing. These are the same as
+The last update, **Update now**, and whether a restart is needed (only after a new kernel,
+driver or firmware). Under **How updates come**: **Update automatically** (once a day, in the
+background, while you work) and the **Channel**, Stable or Testing. These are the same as
 `arctic-update auto on|off` and `arctic-update channel stable|testing`; see [Updates](Updates).
 **Apps and firmware** shows how the daily update of your Flatpak apps went, with **Update apps
 now**, and the firmware updates fwupd has for this computer, with **Install in a terminal**.

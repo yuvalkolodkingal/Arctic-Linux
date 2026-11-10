@@ -2,16 +2,16 @@
 
 ## Arctic Linux 1.2.3
 
-Arctic Linux 1.2.3 starts quicker and asks less:
-
-- **One passphrase when updates are installed.** The update boot no longer ends with a second
-  full restart: unless a kernel, a graphics driver or firmware changed, the computer goes
-  straight on to the login screen with the disk still unlocked. See
-  [Updates](Updates#how-updates-work).
-- **A shorter boot menu**: 3 seconds instead of 5 on a computer with only Arctic Linux (new
-  installations).
-- **Fewer disk writes**: the btrfs subvolumes are mounted with `noatime` (new installations).
-- **Compressed swap in memory (zram)** is a named part of the image.
+- **Updates install while you work**, with plain `dnf`, once a day in the background. A restart
+  is only suggested (never forced) after a new kernel, graphics driver or firmware: the bar
+  says **Restart when you like**. See [Updates](Updates#how-updates-work).
+- **Two kernels are kept** instead of three: the running one and the newest.
+- **Colours follow every wallpaper**: Arctic's own photographs no longer reset the desktop to
+  the default colours, and automatic rotation recolours the desktop with each picture again.
+- **One passphrase** when updates are installed at start-up (`arctic-update install restart`,
+  release upgrades).
+- **A shorter boot menu** (3 seconds instead of 5 on a computer with only Arctic Linux) and
+  **fewer disk writes** (`noatime`), on new installations. zram swap is a named part of the image.
 
 The release record is
 [`docs/releases/v1.2.3.md`](https://github.com/yuvalkolodkingal/Arctic-Linux/blob/main/docs/releases/v1.2.3.md).

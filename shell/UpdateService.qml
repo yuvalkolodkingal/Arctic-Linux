@@ -14,6 +14,15 @@ Singleton {
     property var status: UpdateStatus.parse('')
     property bool linked: false
     readonly property bool ready: UpdateStatus.isReady(status, linked, Session.live)
+    // Updates installed while the computer runs that only a restart loads (a kernel, a driver,
+    // firmware): the bar says "Restart when you like". Never both: `ready` is the older
+    // install-at-restart flow.
+    property string bootId: ''
+    readonly property bool restartNeeded: !ready && UpdateStatus.needsRestart(status, bootId, Session.live)
+    readonly property bool attention: ready || restartNeeded
+    readonly property string restartDetail: UpdateStatus.restartDetail(status)
+    property string restartNotified: ''
+    property bool restartNotifiedLoaded: false
     readonly property string summary: UpdateStatus.summary(status)
     readonly property string detail: UpdateStatus.detail(status)
     // The update already announced (its notify_key, kept in ~/.cache/arctic, so a shell restart
@@ -39,6 +48,29 @@ Singleton {
                                  'Updates are ready', UpdateStatus.notification(status)]);
     }
     onReadyChanged: announce()
+
+    // Once per boot: the installed updates want a restart.
+    function announceRestart() {
+        if (!restartNotifiedLoaded || !UpdateStatus.shouldNotifyRestart(status, restartNeeded, restartNotified)) return;
+        restartNotified = status.restart_boot;
+        const file = Session.arcticCache + '/update-restart-notified';
+        Quickshell.execDetached(['sh', '-c', 'mkdir -p "${1%/*}" && printf "%s\\n" "$2" > "$1"', 'sh', file, restartNotified]);
+        Quickshell.execDetached(['notify-send', '-a', 'Arctic Linux', '-i', 'system-software-update',
+                                 'Restart when you like', UpdateStatus.restartNotification(status)]);
+    }
+    onRestartNeededChanged: announceRestart()
+    onRestartNotifiedLoadedChanged: announceRestart()
+    FileView {
+        path: '/proc/sys/kernel/random/boot_id'
+        printErrors: false
+        onLoaded: updates.bootId = text().trim()
+    }
+    FileView {
+        path: Session.arcticCache + '/update-restart-notified'
+        printErrors: false
+        onLoaded: { updates.restartNotified = text().trim(); updates.restartNotifiedLoaded = true; }
+        onLoadFailed: { updates.restartNotified = ''; updates.restartNotifiedLoaded = true; }
+    }
     onNotifiedLoadedChanged: announce()
 
     // Installing the updates at the last restart failed: say so once.

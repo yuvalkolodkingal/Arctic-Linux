@@ -138,7 +138,7 @@ var ENTRIES = [
     ["notifications", "notifications.history", "Keep notifications after a restart", "history centre center clear"],
     ["notifications", "notifications.apps", "What each app may do", "per app rules pop-ups urgent banners"],
     ["updates", "updates.status", "Updates", "check now install restart"],
-    ["updates", "updates.auto", "Download updates automatically", "automatic"],
+    ["updates", "updates.auto", "Update automatically", "automatic download install"],
     ["updates", "updates.channel", "Update channel", "stable testing beta"],
     ["updates", "updates.apps", "Flatpak apps", "flathub app updates"],
     ["updates", "updates.firmware", "Firmware", "fwupd bios uefi device updates"],

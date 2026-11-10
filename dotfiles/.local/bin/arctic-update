@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
-# arctic-update — Arctic Linux updates: downloaded in the background, installed the next time
-# the computer restarts, before the desktop starts. Nothing changes while you work.
+# arctic-update — Arctic Linux updates: plain dnf, installed in the background while the
+# computer runs. A restart is only suggested when a kernel, driver or firmware changed.
 #
 #   arctic-update [status] [--json]          channel, automatic updates, last check, what's waiting
-#   arctic-update now [--sync] [--replace]   check and download now; installed at the next restart
-#   arctic-update apply [--yes]              restart now and install the downloaded updates
+#   arctic-update now [--sync] [--replace]   check and install now
+#   arctic-update install [now|restart]      install while running (default), or at the next start
+#   arctic-update apply [--yes]              restart now and install updates stored for a restart
 #   arctic-update channel [stable|testing] [--replace]
 #   arctic-update auto [on|off|download-only]
 #   arctic-update metered [skip|allow]
 #   arctic-update stage                      the daily check (arctic-update-stage.timer, root)
 #   arctic-update after-transaction          dnf's post-transaction hook (arctic-update.actions)
+#   arctic-update restart-check              does what dnf just installed take a restart? (root)
 #   arctic-update flatpak [--auto] [--user] [--notify]
 #                                            update Flatpak apps now (--auto: the daily timers' run;
 #                                            --user: only your own installation)
@@ -17,15 +19,21 @@
 #   arctic-update upgrade check [--json] | upgrade download
 #                                            the next Fedora release, once Arctic has it
 #
-# How it works: `dnf5 upgrade --offline` downloads the updates and tests the transaction; this
-# script then marks it ready for the next boot the way `dnf5 offline reboot` does (status
-# "ready" in dnf5's state file, then the /system-update link), without rebooting. At the next
-# restart systemd boots into system-update.target, dnf5-offline-transaction.service installs
-# the updates and arctic-update-finish starts the updated system (a soft-reboot, so an encrypted
-# disk is unlocked once; a full restart after a kernel, driver or firmware change). Offline transactions prepared by anything
-# else (`dnf5 install --offline`, `dnf5 system-upgrade download`) are left alone. Settings:
+# How it works (INSTALL=now, the default): `dnf5 upgrade -y --refresh`, exactly what
+# `sudo dnf upgrade` does, run once a day by the timer or by `arctic-update now`. Snapper takes
+# its snapshot pair around it. Afterwards `dnf5 needs-restarting` (plus a look at the running
+# kernel's modules and the firmware) says whether a restart is needed to start using what was
+# installed; the status file keeps that note for this boot and the bar shows it. Nothing ever
+# restarts by itself.
+#
+# INSTALL=restart is how Arctic Linux updated up to 1.2.2: `dnf5 upgrade --offline` downloads
+# and tests the transaction, it is marked ready the way `dnf5 offline reboot` does, and
+# dnf5-offline-transaction.service installs it at the next start (arctic-update-finish then
+# goes on with a soft-reboot when it can). AUTO=download-only stores the same without scheduling
+# it; `arctic-update apply` restarts into it. Offline transactions prepared by anything else
+# (`dnf5 install --offline`, `dnf5 system-upgrade download`) are left alone. Settings:
 # /etc/arctic/update.conf. The shell's bar indicator reads /var/lib/arctic/update-status.json.
-# Flatpak apps are updated in place instead (a running app keeps its version until it restarts),
+# Flatpak apps are updated in place (a running app keeps its version until it restarts),
 # daily by arctic-flatpak-update.timer with the same AUTO and METERED settings; firmware is
 # fwupd's (fwupd-refresh.timer keeps its list current), installed when you ask.
 # Wiki: Updates.
@@ -68,10 +76,11 @@ die()  { warn "$*"; exit 1; }
 
 usage() {
   cat <<'EOF'
-Arctic Linux updates: downloaded in the background, installed the next time you restart.
+Arctic Linux updates: plain dnf, installed in the background while the computer runs.
+A restart is only suggested when a kernel, driver or firmware changed. `sudo dnf upgrade` does the same.
 
   arctic-update [status] [--json]          what's waiting, the channel, automatic updates
-  arctic-update now [--sync] [--replace]   check and download now; installed at the next restart
+  arctic-update now [--sync] [--replace]   check and install now
                                            (--sync: every package to the versions in the enabled
                                            repositories; --replace: cancel an offline transaction
                                            another command prepared)
@@ -80,6 +89,7 @@ Arctic Linux updates: downloaded in the background, installed the next time you 
                                            show or switch the update channel
   arctic-update auto [on|off|download-only]
                                            show or change automatic updates
+  arctic-update install [now|restart]      install while running (default), or at the next start
   arctic-update metered [skip|allow]       downloads on metered connections
   arctic-update nix                      update your Arctic Nix profile (no sudo)
   arctic-update flatpak [--notify]         update Flatpak apps now (yours and the system's)
@@ -146,12 +156,13 @@ busy() {
 }
 
 load_config() {
-  AUTO=download-and-install-on-reboot METERED=skip
+  AUTO=download-and-install-on-reboot METERED=skip INSTALL=now
   local key value
   while IFS='=' read -r key value; do
     case $key in
       auto) AUTO=$value ;;
       metered) METERED=$value ;;
+      install) INSTALL=$value ;;
     esac
   done < <(helper config "$CONF")
 }
@@ -429,6 +440,96 @@ stage() {
   UPDATE=yes
 }
 
+# ---- installing now (INSTALL=now, the default) --------------------------------------------------
+
+# Plain `dnf5 upgrade` into the running system: nothing is stored for a restart. The same
+# strict Arctic repository options as the offline check. ARCTIC_UPDATE_RUNNING tells
+# arctic-update's own dnf hook (after-transaction) that this transaction is ours.
+run_dnf5_now() {  # VERB MODE
+  if [[ $2 == interactive ]]; then
+    ARCTIC_UPDATE_RUNNING=1 dnf5 "$1" -y --refresh \
+      --setopt=arctic.skip_if_unavailable=False \
+      --setopt=arctic-testing.skip_if_unavailable=False
+    return $?
+  fi
+  ARCTIC_UPDATE_RUNNING=1 LC_ALL=C dnf5 "$1" -y --refresh \
+    --setopt=arctic.skip_if_unavailable=False \
+    --setopt=arctic-testing.skip_if_unavailable=False 2>&1 | follow
+  return "${PIPESTATUS[0]}"
+}
+
+installed_list() { rpm -qa --qf '%{NEVRA}\n' 2>/dev/null | LC_ALL=C sort; }
+
+# What only a restart loads. dnf5 needs-restarting knows the core packages (kernel, glibc,
+# systemd, D-Bus, firmware…) installed since this boot; a driver built outside Fedora (NVIDIA's)
+# isn't on its list, so anything changed under the running kernel's modules, the firmware or the
+# akmod sources since MARKER (a file made before the transaction) counts too.
+# Sets RESTART=yes|no and RESTART_PACKAGES (a few names, for the message).
+restart_check() {  # [MARKER]
+  local marker=${1:-} out dir found
+  RESTART=no RESTART_PACKAGES=""
+  out="$(LC_ALL=C dnf5 -q needs-restarting 2>/dev/null)"
+  if (( $? == 1 )) && [[ $out == *"Reboot is required"* ]]; then
+    RESTART=yes
+    RESTART_PACKAGES="$(sed -n 's/^  \* //p' <<<"$out" | head -n 4 | paste -sd, - | sed 's/,/, /g')"
+  fi
+  if [[ $RESTART == no && -n $marker && -e $marker ]]; then
+    for dir in "$R/usr/lib/modules/$(uname -r)" "$R/usr/lib/firmware" "$R/usr/src/akmods"; do
+      [[ -d $dir ]] || continue
+      found="$(find "$dir" -newercm "$marker" -print -quit 2>/dev/null)"
+      if [[ -n $found ]]; then RESTART=yes RESTART_PACKAGES="drivers or firmware"; break; fi
+    done
+  fi
+}
+
+record_restart() {  # after restart_check
+  if [[ $RESTART == yes ]]; then
+    status_set "restart_boot=$(boot_id)" "restart_packages=$RESTART_PACKAGES"
+  else
+    # Only this boot's note counts; an older one is gone with that boot.
+    [[ "$(status_get restart_boot)" == "$(boot_id)" ]] || status_set restart_boot= restart_packages=
+  fi
+}
+
+# install_now VERB MODE REPLACE: install the updates now. Sets UPDATE=yes|no|held, INSTALLED (how many
+# packages changed) and RESTART; returns 1 when dnf5 failed. An update arctic-update stored
+# for the next restart earlier (INSTALL=restart, or Arctic Linux up to 1.2.2) is dropped first:
+# this installs the same and more. Someone else's offline transaction is left alone.
+install_now() {
+  local verb=$1 mode=$2 replace=$3 rc before after marker
+  UPDATE=no INSTALLED=0 RESTART=no RESTART_PACKAGES=""
+  inspect
+  if [[ $ST_HOLD == yes && $replace != yes ]]; then UPDATE=held; return 0; fi
+  if [[ $ST_STATUS != none ]]; then
+    disarm "$([[ $replace == yes ]] && echo force)"
+    dnf5 -q offline clean || warn "dnf5 offline clean failed"
+  fi
+  before="$(mktemp)" after="$(mktemp)" marker="$(mktemp)"
+  installed_list > "$before"
+  status_set state=checking check_error= armed=false "message=Checking for updates…"
+  run_dnf5_now "$verb" "$mode"
+  rc=$?
+  installed_list > "$after"
+  INSTALLED="$(LC_ALL=C comm -13 "$before" "$after" | wc -l)"
+  (( INSTALLED > 0 )) && UPDATE=yes
+  restart_check "$marker"
+  rm -f "$before" "$after" "$marker"
+  return "$rc"
+}
+
+record_installed() {  # after install_now
+  record_restart
+  if [[ $UPDATE == yes ]]; then
+    local msg
+    msg="$(plural "$INSTALLED" update) installed."
+    [[ $RESTART == yes ]] && msg+=" Restart when you like to start using ${RESTART_PACKAGES:-them}."
+    status_set state=idle packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+      "installed=$INSTALLED" installed_at=@now boot_failures=0 install_error= "message=$msg"
+  else
+    record_idle "The system is up to date."
+  fi
+}
+
 # After a failed check: the transaction stored by an earlier one is untouched (dnf5 writes its
 # state only once everything is downloaded and tested). Keep it if it is arctic-update's own and
 # dnf5 still takes it; with "arm", schedule it again.
@@ -475,6 +576,7 @@ cmd_status() {
   esac
   is_root && offline="$(offline_class)"
   helper report "${json[@]}" --channel "$(current_channel)" --offline "$offline" --busy "$(busy)" \
+    --boot-id "$(boot_id)" \
     --status-file "$STATUS_FILE" --conf "$CONF" --state "$STATE" --transaction "$TRANSACTION" \
     --magic "$MAGIC" --datadir "$DATADIR" --flatpak-status "$FLATPAK_STATUS"
 }
@@ -512,6 +614,32 @@ cmd_stage() {
   fi
   ERRFILE="$(mktemp)"
   trap 'rm -f "$ERRFILE"' EXIT
+  if [[ $INSTALL == now && $AUTO == download-and-install-on-reboot ]]; then
+    if install_now upgrade background no; then
+      if [[ $UPDATE == held ]]; then
+        local held
+        held="$(held_message | tr '\n' ' ')"
+        say "$held"
+        status_set state=idle packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+          "message=${held% }"
+        return 0
+      fi
+      record_installed
+      if [[ $UPDATE == yes ]]; then
+        say "$(plural "$INSTALLED" update) installed.$([[ $RESTART == yes ]] && echo " A restart starts using ${RESTART_PACKAGES:-them}.")"
+      else
+        say "The system is up to date."
+      fi
+      return 0
+    fi
+    local nerr
+    nerr="$(head -c 300 "$ERRFILE" 2>/dev/null)"
+    record_restart
+    warn "installing the updates failed${nerr:+: $nerr}"
+    status_set state=failed packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+      "check_error=${nerr:-The update failed.}" "message=Couldn't install updates${nerr:+: $nerr}"
+    return 1
+  fi
   if stage upgrade background no; then
     case $UPDATE in
       held)
@@ -578,9 +706,26 @@ cmd_now() {
   if [[ $METERED == skip ]] && connection_metered; then
     say "You're on a metered connection; downloading anyway because you asked."
   fi
-  say "Checking for updates…"
   ERRFILE="$(mktemp)"
   trap 'rm -f "$ERRFILE"' EXIT
+  if [[ $INSTALL == now ]]; then
+    if ! install_now "$verb" interactive "$replace"; then
+      record_restart
+      status_set state=failed packages=0 download_mb=0 staged_at= notify_key= armed=false checked_at=@now \
+        "check_error=The update failed." "message=Couldn't install updates (see: arctic-update now)."
+      die "the update failed (see the messages above)"
+    fi
+    record_installed
+    if [[ $UPDATE == no ]]; then
+      say "" "Your system is up to date."
+    elif [[ $RESTART == yes ]]; then
+      say "" "$(plural "$INSTALLED" update) installed. Restart when you like to start using ${RESTART_PACKAGES:-them}."
+    else
+      say "" "$(plural "$INSTALLED" update) installed. No restart needed."
+    fi
+    return 0
+  fi
+  say "Checking for updates…"
   if ! stage "$verb" interactive "$replace"; then
     local err
     err="$(head -c 300 "$ERRFILE" 2>/dev/null)"
@@ -700,8 +845,8 @@ cmd_channel() {
   fi
   say "You're on the stable channel." \
       "Packages already updated from testing are newer than stable, so they stay until a newer" \
-      "stable build replaces them. To go back to the stable builds now (installed at the next" \
-      "restart; this syncs every package to the versions in the enabled repositories):" \
+      "stable build replaces them. To go back to the stable builds now (this syncs every" \
+      "package to the versions in the enabled repositories):" \
       "arctic-update now --sync"
   if [[ -t 0 && -t 1 ]]; then
     local answer
@@ -713,13 +858,37 @@ cmd_channel() {
   fi
 }
 
+cmd_install() {
+  case ${1:-} in
+    "")
+      load_config
+      if [[ $INSTALL == now ]]; then
+        say "now: updates are installed while the computer runs (a restart only for a kernel, driver or firmware)"
+      else
+        say "restart: updates are downloaded, then installed the next time the computer starts"
+      fi
+      return 0 ;;
+    now|restart) ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  as_root
+  helper set-config "$CONF" INSTALL "$1" || die "couldn't write $CONF"
+  if [[ $1 == now ]]; then
+    say "Updates are installed while the computer runs. A restart is only suggested for a kernel, driver or firmware."
+  else
+    say "Updates are downloaded in the background and installed the next time the computer starts."
+  fi
+}
+
 cmd_auto() {
   local mode
   case ${1:-} in
     "")
       load_config
       case $AUTO in
-        download-and-install-on-reboot) say "on: updates download in the background and install at the next restart" ;;
+        download-and-install-on-reboot)
+          if [[ $INSTALL == now ]]; then say "on: updates install by themselves in the background"
+          else say "on: updates download in the background and install at the next restart"; fi ;;
         download-only) say "download-only: updates download in the background; install them with arctic-update apply" ;;
         off) say "off: check by hand with arctic-update now" ;;
       esac
@@ -748,6 +917,11 @@ cmd_auto() {
       say "The updates already downloaded won't be installed at the next restart." \
           "Install them with: arctic-update apply"
     fi
+    return 0
+  fi
+  load_config
+  if [[ $INSTALL == now ]]; then
+    say "Updates will install by themselves in the background, once a day."
     return 0
   fi
   say "Updates will download in the background and install the next time you restart."
@@ -784,6 +958,12 @@ cmd_after_transaction() {
   exec >/dev/null 2>&1
   is_root || return 0
   is_live && return 0
+  # arctic-update's own transaction records its result itself. After anyone else's (you ran
+  # dnf): does it take a restart to start using it? Checked once dnf has finished.
+  if [[ -z ${ARCTIC_UPDATE_RUNNING:-} ]] && command -v systemd-run >/dev/null 2>&1; then
+    systemd-run --quiet --collect --no-block --on-active=20s --unit=arctic-update-restart-check \
+      "$SELF" restart-check || true
+  fi
   inspect
   [[ $ST_OWNER == ours && ( $ST_STATUS == download-complete || $ST_STATUS == ready ) ]] || return 0
   load_config
@@ -955,6 +1135,8 @@ case $cmd in
   metered)           cmd_metered "$@" ;;
   stage)             cmd_stage ;;
   after-transaction) cmd_after_transaction ;;
+  restart-check)     is_root || die "restart-check runs as root"; restart_check; record_restart ;;
+  install)           cmd_install "$@" ;;
   nix)               exec arctic-nix update "$@" ;;
   flatpak)           cmd_flatpak "$@" ;;
   firmware)          cmd_firmware "$@" ;;

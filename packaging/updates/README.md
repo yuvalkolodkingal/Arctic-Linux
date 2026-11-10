@@ -8,7 +8,7 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 | `../../dotfiles/.local/bin/arctic-update` | `/usr/bin/arctic-update` | The command: `status`, `now`, `apply`, `channel`, `auto`, `metered`, and `stage` for the timer, `after-transaction` for dnf's hook |
 | `arctic-update-helper` | `/usr/libexec/arctic/arctic-update-helper` | Its file handling in Python: `update.conf`, dnf5's offline state, the status file |
 | `arctic-update-finish`, `50-arctic-finish.conf` | `/usr/libexec/arctic/arctic-update-finish`, `/usr/lib/systemd/system/dnf5-offline-transaction.service.d/50-arctic-finish.conf` | How the update boot ends: a soft-reboot when only programs changed (see "Leaving the update boot") |
-| `update.conf` | `/etc/arctic/update.conf` (config) | `AUTO=download-and-install-on-reboot\|download-only\|off`, `METERED=skip\|allow` |
+| `update.conf` | `/etc/arctic/update.conf` (config) | `AUTO=download-and-install-on-reboot\|download-only\|off`, `INSTALL=now\|restart`, `METERED=skip\|allow` |
 | `../systemd/arctic-update-stage.{service,timer}` | `/usr/lib/systemd/system/` | The daily check, 10 minutes after boot and then daily; never on the live USB |
 | `../systemd/arctic-update-restage.timer` | `/usr/lib/systemd/system/` | The same check two minutes after a dnf transaction invalidated the downloaded updates |
 | `../systemd/arctic-flatpak-update.{service,timer}` | `/usr/lib/systemd/system/` | `arctic-update flatpak --auto`: Flatpak apps (the system installation) updated in place, daily, with the same AUTO and METERED settings; the result in `/var/lib/arctic/flatpak-status.json` (`status` shows it) |
@@ -18,7 +18,37 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 | `test_arctic_update.py`, `testdata/fake-dnf5` | (not installed) | Unit tests of the helper and scenario tests of `arctic-update` with a scripted dnf5 under a scratch root (`ARCTIC_UPDATE_TEST_ROOT`): `python3 -m unittest discover -s packaging/updates` (also the spec's `%check` and CI) |
 | `test-dnf5-offline.sh` | (not installed) | The same flow with the real dnf5 and a local repository, in a throwaway Fedora 44 container (CI's "dnf5 offline updates" job): pins the dnf5 behaviour and messages this relies on |
 
-## How an update travels
+## Installing now (the default since 1.2.3)
+
+`INSTALL=now` in `update.conf` (also when the line is missing, as in a file from before 1.2.3):
+
+1. `arctic-update-stage.timer` starts `arctic-update stage` as before (AUTO, METERED, the wait
+   for arctic-firstboot and the lock are unchanged).
+2. It runs `dnf5 upgrade -y --refresh` with the strict Arctic repository overrides: exactly
+   `sudo dnf upgrade`. Snapper's pre/post pair comes from `arctic-snapper.actions`. An offline
+   transaction arctic-update itself stored earlier (INSTALL=restart, or 1.2.2) is unscheduled
+   and cleaned first; someone else's is left alone and nothing is installed (`now --replace`).
+3. Is a restart needed to start using it? `dnf5 needs-restarting` (exit 1 and "Reboot is
+   required": core packages installed since this boot) or, for drivers outside Fedora, anything
+   changed under the running kernel's `/usr/lib/modules/<release>`, `/usr/lib/firmware` or
+   `/usr/src/akmods` since a marker made before the transaction.
+4. The status file gets `installed`, `installed_at` (the shell runs the post-update hooks and
+   What's New) and, when a restart is needed, `restart_boot` (this boot's id) and
+   `restart_packages`. `status --json` reports `restart_needed` only while `restart_boot` is
+   the running boot; the bar shows **Restart when you like** on the same condition.
+5. After a dnf transaction of your own, `arctic-update after-transaction` (the dnf hook) starts
+   `arctic-update restart-check` 20 seconds later (a transient unit), which records the same
+   note. arctic-update's own transaction sets `ARCTIC_UPDATE_RUNNING` and is skipped.
+
+`AUTO=download-only` still stores an offline transaction without scheduling it; `apply`
+restarts into it, `now` installs everything without a restart. dnf's own defaults for Arctic
+are in `packaging/release/20-arctic-dnf-defaults.conf`: `max_parallel_downloads=10` and
+`installonly_limit=2` (the running kernel and the newest).
+
+The packaged shell does not reload itself when its files change (`Quickshell.watchFiles` is
+off under `/usr`), so a transaction never reloads the bar or the lock screen halfway through.
+
+## How an update travels at a restart (INSTALL=restart)
 
 1. `arctic-update-stage.timer` starts `arctic-update stage` (root, lowest CPU and I/O
    priority). It does nothing with `AUTO=off`, on a metered connection with `METERED=skip`

@@ -1,10 +1,9 @@
 # Updates
 
-Arctic Linux keeps itself up to date. Once a day it downloads updates in the background, and it
-installs them the next time the computer starts, before the desktop appears. Nothing changes
-while you work, and it never restarts the computer by itself.
-
-![The bar's "Restart to update" item and its card: 12 updates, 84 MB, Restart and install](images/updates-ready.png)
+Arctic Linux keeps itself up to date with plain `dnf`, the standard Fedora updater. Once a day
+it downloads and installs updates in the background, while you work. Most updates need nothing
+from you. Only a new kernel, a graphics driver or firmware needs a restart to start working, and
+the computer never restarts by itself.
 
 ## How updates work
 
@@ -13,23 +12,27 @@ while you work, and it never restarts the computer by itself.
    Arctic's own (the desktop, the shell, Mango, the installer's apps), RPM Fusion and any other
    repository you added. Flatpak apps are updated every day too, in their own way, and firmware
    when you ask (see [below](#flatpak-apps-firmware-and-nix)).
-2. **Downloaded in the background.** The updates are downloaded at the lowest priority and
-   tested: dnf checks that they install cleanly, without installing anything yet. Your running
-   system isn't touched.
-3. **Ready.** The bar shows **Restart to update**, and a notification says so once (the same
-   updates downloaded again by the next day's check aren't announced again).
-4. **Installed at the next start.** The next time the computer starts (a restart, or when you
-   switch it on again after shutting down), it installs the updates before the desktop appears,
-   then starts the updated system. The boot screen stays up while it works; press `Esc` to see
-   the progress as text. Don't switch the computer off during this.
+2. **Installed in the background.** It runs `dnf upgrade`, at the lowest priority, with ten
+   downloads at a time. A snapshot is taken before and after, so an update can be undone
+   ([below](#snapshots)).
+3. **A restart only when it is needed.** Afterwards dnf is asked whether anything it installed
+   only starts working after a restart: a kernel, core system libraries, firmware, or a
+   graphics driver such as NVIDIA's. If so the bar shows **Restart when you like**, and a
+   notification says so once. Restart whenever it suits you; until then the computer keeps
+   running what it was running.
 
-   With an encrypted disk you type the passphrase once: when only apps and system programs
-   changed, Arctic Linux goes straight on to the login screen. Only an update that brings a new
-   kernel, a graphics driver or firmware restarts the computer once more (and asks for the
-   passphrase again), because nothing else can load those.
+An app that is updated while it is open keeps running its old version until you close and
+reopen it; the desktop bar and launcher pick up their new version at your next login. On the
+live USB nothing is downloaded: nothing there survives a restart.
 
-Updates are never installed into the running desktop, so an update can't break the apps you
-have open. On the live USB nothing is downloaded: nothing there survives a restart.
+**Kernels.** Two are kept: the one that is running, which is known to start, and the newest.
+Each new kernel replaces the older spare (`installonly_limit=2`).
+
+**Prefer updates at start-up?** `arctic-update install restart` goes back to how Arctic Linux
+updated up to 1.2.2: updates are downloaded in the background and installed the next time the
+computer starts, before the desktop. With an encrypted disk the passphrase is asked once: unless
+a kernel, driver or firmware changed, the computer goes straight on to the login screen.
+`arctic-update install now` returns to the default.
 
 ## What’s New after an Arctic update
 
@@ -53,22 +56,12 @@ source for an ISO's checksum, size and exact qualification results.
 
 | You see | It means |
 |---|---|
-| **Restart to update** (amber, on the right of the bar) | Updates are downloaded and will be installed the next time the computer starts. Hover for how many; click for the card. |
-| Nothing | No downloaded updates are waiting; open Settings for the last check or an error. |
+| Nothing | Up to date, or updates were installed and need nothing from you. Open Settings for the last check or an error. |
+| **Restart when you like** (amber, on the right of the bar) | Updates are installed; a new kernel, driver or firmware starts working after a restart. Click for the card. |
+| **Restart to update** | Only with `arctic-update install restart` or `auto download-only`: updates are downloaded and will be installed the next time the computer starts. |
 
-The card says how many updates there are and how big they are. **Restart and install** restarts
-now (save your work first); **Later** closes the card, and the updates wait for your next restart.
+The card has **Restart now** (save your work first) and **Later**.
 `arctic-shell-ipc updates toggle` opens the card from a key binding.
-
-If you install or remove software after the updates were downloaded (with `dnf`, Get apps or Remove apps),
-they no longer fit the system exactly, so they aren't installed and the item disappears. Two
-minutes later Arctic Linux prepares them again, reusing what it already downloaded, and the item
-comes back; `arctic-update now` does it right away.
-
-If installing the updates fails during a restart, the computer starts normally without them and
-a notification says so; `arctic-update` shows what went wrong (`dnf5 offline log` has the whole
-story). They are downloaded and tried again at the next restart. After two failures in a row,
-Arctic Linux stops scheduling updates by itself until you run `arctic-update now`.
 
 ## The `arctic-update` command
 
@@ -79,10 +72,11 @@ password.
 |---|---|
 | `arctic-update` | Shows the channel, automatic updates, the last check and what's waiting |
 | `arctic-update status --json` | The same as JSON, for scripts |
-| `arctic-update now` | Checks and downloads now, with progress. The updates are installed at the next restart. |
+| `arctic-update now` | Checks and installs now, with dnf's progress. Says whether a restart is needed. |
+| `arctic-update install` | Shows when updates are installed; `install now` (the default) or `install restart` changes it |
 | `arctic-update now --sync` | The same, but syncs every package to the versions in the enabled repositories: after leaving testing, packages go back to the stable builds (this also downgrades anything newer than the repositories have, such as packages from updates-testing or your own builds) |
 | `arctic-update now --replace` | Checks even when another command prepared an offline transaction (see [below](#offline-transactions-of-your-own)), and cancels that one |
-| `arctic-update apply` | Restarts now and installs the waiting updates (asks first; `--yes` doesn't) |
+| `arctic-update apply` | Restarts now and installs updates stored for a restart (`install restart`, `auto download-only`; asks first, `--yes` doesn't) |
 | `arctic-update channel` | Shows the channel; `channel stable` or `channel testing` switches |
 | `arctic-update auto` | Shows automatic updates; `auto on`, `auto download-only` or `auto off` changes them |
 | `arctic-update metered` | Shows what happens on metered connections; `metered skip` or `metered allow` changes it |
@@ -93,14 +87,14 @@ password.
 ```text
 $ arctic-update
 Channel     stable (released builds)
-Automatic   on: downloads in the background, installs at the next restart
+Automatic   on: installs updates by itself, in the background
 Metered     no downloads on metered connections
 Last check  Sun 27 Sep 2026 06:12
-Waiting     12 updates (84.3 MB), installed the next time you restart
+Waiting     12 updates installed.
 ```
 
-`dnf upgrade` still works as always, but it installs into the running system; `arctic-update
-now` is the gentler way.
+`sudo dnf upgrade` does exactly the same; use whichever you like. After your own dnf command
+Arctic Linux also checks whether a restart is needed and tells you in the bar.
 
 ## Channels
 
@@ -112,8 +106,7 @@ metadata are verified against the Arctic key shipped by `arctic-release`.
 
 ```sh
 arctic-update channel stable
-arctic-update now                # stage available signed updates
-arctic-update apply              # asks before restarting; save your work first
+arctic-update now                # install the available signed updates
 ```
 
 The Arctic signing-key fingerprint is
@@ -130,7 +123,7 @@ both.
 
 ```sh
 arctic-update channel testing    # testing builds on top of stable
-arctic-update now                # get them now (installed at the next restart)
+arctic-update now                # get them now
 ```
 
 Switching back:
@@ -144,7 +137,7 @@ newer stable build replaces them, usually at the next release. To go back to the
 right away:
 
 ```sh
-arctic-update now --sync         # installed at the next restart
+arctic-update now --sync
 ```
 
 `--sync` is a `dnf distro-sync`: every package goes to the version in the repositories that are
@@ -162,13 +155,12 @@ arctic-update auto off             # no daily check; arctic-update now checks by
 arctic-update auto on              # back to the default
 ```
 
-Updates that were already waiting for the next restart stay downloaded but are no longer
-installed by themselves after `auto off` or `auto download-only`: `arctic-update apply` installs
-them. Updates you check for yourself with `arctic-update now` are always installed at the next
-restart, whatever this setting.
+With `auto download-only` the updates are downloaded and kept for a restart: `arctic-update
+apply` restarts and installs them, and `arctic-update now` installs everything right away
+without a restart. `arctic-update now` always works, whatever this setting.
 
-The settings live in `/etc/arctic/update.conf`, which you can also edit (`AUTO=` and
-`METERED=`); the next check reads them. `journalctl -u arctic-update-stage` shows what each
+The settings live in `/etc/arctic/update.conf`, which you can also edit (`AUTO=`, `INSTALL=`
+and `METERED=`); the next check reads them. `journalctl -u arctic-update-stage` shows what each
 check did.
 
 ## Offline transactions of your own
@@ -229,8 +221,9 @@ do.
 ### Start the previous kernel
 
 If the computer doesn't start properly after an update that brought a new kernel, restart and
-pick the entry with the older version number in the boot menu (it shows for 3 seconds; press any arrow key to stop the countdown). The last
-three kernels are kept.
+pick the entry with the older version number in the boot menu (it shows for 3 seconds; press
+any arrow key to stop the countdown). Two kernels are kept: the one that was running when the
+new one arrived, and the new one.
 
 ### Snapshots
 

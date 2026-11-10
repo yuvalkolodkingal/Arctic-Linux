@@ -13,7 +13,7 @@ Page {
     lede: "Security fixes and new versions of your apps and of Arctic Linux."
     property var up: ({ available: true, state: "idle" })
     property bool requestPending: false
-    readonly property bool active: requestPending || up.state === "checking" || up.state === "downloading"
+    readonly property bool active: requestPending || up.state === "checking" || up.state === "downloading" || up.state === "installing"
     function load() {
         Backend.call(["updates"], r => { if (r.ok) page.up = r; }, true);
     }
@@ -50,12 +50,14 @@ Page {
             idle: ["check-circle", Theme.success, "No updates at the last check"],
             checking: ["refresh", Theme.info, "Checking for updates…"],
             downloading: ["download", Theme.info, "Downloading updates…"],
+            installing: ["download", Theme.info, "Installing updates…"],
             ready: ["download", Theme.accentText, "Updates are ready to install"],
             failed: ["alert", Theme.error, "The last update didn’t work"]
         })
-    readonly property var head: requestPending && !["checking", "downloading"].includes(up.state)
+    readonly property var head: requestPending && !["checking", "downloading", "installing"].includes(up.state)
         ? ["refresh", Theme.info, "Waiting for the update command…"]
         : up.held ? ["info", Theme.info, "Another offline update is waiting"]
+        : up.state === "idle" && up.restartNeeded ? ["restart", Theme.accentText, "Updates installed: restart when you like"]
         : up.state === "idle" && !up.checkedAt ? ["refresh", Theme.info, "Check for updates"]
         : headline[up.state] || headline.idle
 
@@ -115,6 +117,8 @@ Page {
                     return u.count + " updates" + (u.downloadMb ? ", " + Math.round(u.downloadMb) + " MB" : "") + ". You can keep working.";
                 if (u.state === "failed")
                     return u.error || "Check the network and try again.";
+                if (u.restartNeeded)
+                    return "A new kernel, driver or firmware" + (u.restartPackages ? " (" + u.restartPackages + ")" : "") + " starts working after a restart. Nothing restarts by itself.";
                 return (u.checkedAt ? "Last checked " + page.when(u.checkedAt) + ". " : "")
                     + (u.channel === "testing" ? "You get test versions first." : "");
             }
@@ -128,7 +132,7 @@ Page {
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 ArButton {
-                    text: page.active ? "Checking…" : "Check now"
+                    text: page.active ? "Updating…" : "Update now"
                     enabled: !page.active
                     gapColor: Theme.surfaceRaised
                     onClicked: page.run(["now"], "")
@@ -313,11 +317,11 @@ Page {
         title: "How updates come"
         SettingRow {
             searchKey: "updates.auto"
-            title: "Download updates automatically"
-            desc: "In the background. They only install when you restart."
+            title: "Update automatically"
+            desc: "Once a day, in the background, while you work. A restart is only suggested for a new kernel, driver or firmware."
             resettable: false
             RowSwitch {
-                Accessible.name: "Download updates automatically"
+                Accessible.name: "Update automatically"
                 checked: page.up.auto === true
                 onToggled: page.run(["auto", checked ? "on" : "off"], checked ? "Automatic downloads on" : "Automatic downloads off")
             }

@@ -62,22 +62,28 @@ PENDING = ("download-complete", "ready")
 
 AUTO_MODES = ("download-and-install-on-reboot", "download-only", "off")
 METERED_MODES = ("skip", "allow")
-DEFAULTS = {"AUTO": AUTO_MODES[0], "METERED": "skip"}
+# INSTALL: now = into the running system with plain `dnf5 upgrade` (the default; a restart is
+# only suggested when a kernel or another core package changed); restart = dnf5's offline
+# transaction at the next start, as Arctic Linux did up to 1.2.2.
+INSTALL_MODES = ("now", "restart")
+DEFAULTS = {"AUTO": AUTO_MODES[0], "METERED": "skip", "INSTALL": "now"}
 # Spellings people are likely to write in update.conf.
 ALIASES = {
     "AUTO": {"on": AUTO_MODES[0], "yes": AUTO_MODES[0], "true": AUTO_MODES[0], "1": AUTO_MODES[0],
              "install-on-reboot": AUTO_MODES[0], "download": "download-only",
              "no": "off", "false": "off", "0": "off", "disabled": "off"},
     "METERED": {"no": "skip", "false": "skip", "0": "skip", "yes": "allow", "true": "allow", "1": "allow"},
+    "INSTALL": {"live": "now", "online": "now", "reboot": "restart", "at-restart": "restart",
+                "offline": "restart"},
 }
 # Actions in dnf5's transaction.json that bring a package in (the rest: "Remove", "Replaced", …).
 INBOUND = {"Install", "Upgrade", "Downgrade", "Reinstall"}
 # Fields of the status file, and their types (anything else is kept as a string).
 STATUS_TYPES = {"packages": int, "download_mb": float, "armed": bool, "boot_failures": int,
-                "apps_updated": int}
+                "apps_updated": int, "installed": int}
 # Flatpak apps: /var/lib/arctic/flatpak-status.json, written by `arctic-update flatpak` (root).
 FLATPAK_STATUS = "/var/lib/arctic/flatpak-status.json"
-STATES = ("idle", "checking", "downloading", "ready", "failed")
+STATES = ("idle", "checking", "downloading", "installing", "ready", "failed")
 
 
 # ---- update.conf ---------------------------------------------------------------------------
@@ -104,7 +110,7 @@ def parse_config(text):
             key = key[len("export "):].strip()
         raw[key.upper()] = _unquote(value)
     settings, warnings = dict(DEFAULTS), []
-    for key, allowed in (("AUTO", AUTO_MODES), ("METERED", METERED_MODES)):
+    for key, allowed in (("AUTO", AUTO_MODES), ("METERED", METERED_MODES), ("INSTALL", INSTALL_MODES)):
         if key not in raw:
             continue
         value = raw[key].strip().lower()
@@ -518,8 +524,15 @@ def is_armed(magic=MAGIC, datadir=DATADIR):
         return False
 
 
+def restart_needed(status, boot_id):
+    """A restart is suggested when the status file says so for this very boot (restart_boot is
+    the kernel's boot id at the time): after a restart the note no longer applies."""
+    wanted = status.get("restart_boot") or ""
+    return bool(wanted) and bool(boot_id) and wanted == boot_id
+
+
 def build_report(status_file, settings, state, armed, rpms, channel, offline="", busy=False,
-                 size=os.path.getsize, table=None):
+                 size=os.path.getsize, table=None, boot_id=""):
     """What `arctic-update status --json` prints: the status file corrected by what is on disk
     now (it may be days old: the update may have been installed, or invalidated by a dnf
     transaction since, which removes /system-update). table: the state file's contents."""
@@ -536,11 +549,17 @@ def build_report(status_file, settings, state, armed, rpms, channel, offline="",
         "armed": False, "stored": stored and not stale, "held": None,
         "boot_failures": s.get("boot_failures") or 0, "install_error": s.get("install_error") or "",
         "install_failed_at": s.get("install_failed_at"),
+        "install": settings.get("INSTALL", DEFAULTS["INSTALL"]),
+        "installed": s.get("installed") or 0, "installed_at": s.get("installed_at"),
+        # Updates installed into the running system that only a restart loads (a kernel, a
+        # driver, firmware, core libraries): true until the computer has been restarted.
+        "restart_needed": restart_needed(s, boot_id),
+        "restart_packages": s.get("restart_packages") or "",
     }
-    if report["state"] in ("checking", "downloading") and not busy:
+    if report["state"] in ("checking", "downloading", "installing") and not busy:
         report["state"] = "failed"
         report["message"] = "The last check stopped before it finished."
-    if report["state"] in ("checking", "downloading"):
+    if report["state"] in ("checking", "downloading", "installing"):
         return report
     if held(state, table):
         # Someone else's (dnf5 install --offline, dnf5 system-upgrade download): never ours to
@@ -629,6 +648,7 @@ def plural(n, word):
     return f"{n} {word}{'' if n == 1 else 's'}"
 
 
+AUTO_TEXT_NOW = "on: installs updates by itself, in the background"
 AUTO_TEXT = {
     "download-and-install-on-reboot": "on: downloads in the background, installs at the next restart",
     "download-only": "download only: install with arctic-update apply",
@@ -651,8 +671,11 @@ def when(iso):
 
 
 def format_report(r):
+    auto = AUTO_TEXT.get(r["auto"], r["auto"])
+    if r["auto"] == AUTO_MODES[0] and r.get("install", "restart") == "now":
+        auto = AUTO_TEXT_NOW
     rows = [("Channel", CHANNEL_TEXT.get(r["channel"], r["channel"])),
-            ("Automatic", AUTO_TEXT.get(r["auto"], r["auto"])),
+            ("Automatic", auto),
             ("Metered", "downloads on metered connections too" if r["metered"] == "allow"
              else "no downloads on metered connections"),
             ("Last check", when(r["checked_at"]))]
@@ -662,12 +685,15 @@ def format_report(r):
         waiting = f"{plural(r['packages'], 'update')}{size}, "
         waiting += "installed the next time you restart" if r["armed"] else "downloaded; install with arctic-update apply"
         rows.append(("Waiting", waiting))
-    elif state in ("checking", "downloading"):
+    elif state in ("checking", "downloading", "installing"):
         rows.append(("Now", r["message"] or "Checking for updates…"))
     elif state == "failed":
         rows.append(("Problem", r["message"] or "The last check failed."))
     else:
         rows.append(("Waiting", r["message"] or "Nothing: the system is up to date."))
+    if r.get("restart_needed"):
+        what = f" ({r['restart_packages']})" if r.get("restart_packages") else ""
+        rows.append(("Restart", f"when you like: the updates{what} are installed, a restart starts using them"))
     apps = r.get("apps")
     if apps:
         done = (f"{plural(apps['updated'], 'app')} updated" if apps["updated"] else "all up to date")
@@ -719,6 +745,7 @@ def main(argv=None):
     c.add_argument("--channel", default="none")
     c.add_argument("--offline", default="", help="offline-status class (root only)")
     c.add_argument("--busy", default="no")
+    c.add_argument("--boot-id", default="")
     c.add_argument("--status-file", default=STATUS)
     c.add_argument("--conf", default=CONF)
     c.add_argument("--state", default=STATE)
@@ -735,9 +762,9 @@ def main(argv=None):
         settings, warnings = parse_config(read_text(a.file))
         for w in warnings:
             print(f"{a.file}: {w}", file=sys.stderr)
-        print(f"auto={settings['AUTO']}\nmetered={settings['METERED']}")
+        print(f"auto={settings['AUTO']}\nmetered={settings['METERED']}\ninstall={settings['INSTALL']}")
     elif a.cmd == "set-config":
-        allowed = {"AUTO": AUTO_MODES, "METERED": METERED_MODES}.get(a.key.upper())
+        allowed = {"AUTO": AUTO_MODES, "METERED": METERED_MODES, "INSTALL": INSTALL_MODES}.get(a.key.upper())
         if allowed is None or a.value not in allowed:
             p.error(f"{a.key}={a.value}: not a setting")
         os.makedirs(os.path.dirname(os.path.abspath(a.file)), exist_ok=True)
@@ -784,7 +811,8 @@ def main(argv=None):
         state, table = read_state(a.state)
         report = build_report(read_json(a.status_file), settings, state,
                               is_armed(a.magic, a.datadir), load_transaction(a.transaction),
-                              a.channel, a.offline, a.busy == "yes", table=table)
+                              a.channel, a.offline, a.busy == "yes", table=table,
+                              boot_id=a.boot_id.strip())
         report["apps"] = apps_report(read_json(a.flatpak_status))
         print(json.dumps(report, indent=2) if a.json else format_report(report))
     elif a.cmd == "repomd-url":
