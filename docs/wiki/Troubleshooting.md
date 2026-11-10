@@ -202,7 +202,7 @@ The password is right, but the desktop can't start. On systems installed with Ar
 0.1.0 the usual cause is missing SELinux labels on your home folder: the login can't enter it and
 returns to the login screen. Relabel the whole system once:
 
-1. Restart, and in the boot menu (it shows for 5 seconds) press `e` on the first entry.
+1. Restart, and in the boot menu (it shows for 3 seconds, 5 next to another system) press `e` on the first entry.
 2. At the end of the line that starts with `linux`, add a space and `autorelabel=1`, then press
    `Ctrl + X`.
 3. The computer labels every file (a few minutes) and restarts by itself. Log in normally.

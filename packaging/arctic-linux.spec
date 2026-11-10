@@ -49,7 +49,7 @@
 # --- end stream 6
 
 Name:           arctic-linux
-Version:        1.2.2
+Version:        1.2.3
 # tools/build-rpms.sh defines arctic_snapshot as .<UTC commit time>.<UTC build time>.git<commit>,
 # so builds of newer commits are newer packages (docs/BUILD-SPEC.md §9).
 Release:        1%{?arctic_snapshot}%{?dist}
@@ -669,6 +669,8 @@ Requires:       python3-pillow
 Requires:       layer-shell-qt
 Requires:       tuned-ppd
 Requires:       mesa-dri-drivers
+# Compressed swap in memory (zram), as Fedora: the installer makes no swap partition.
+Recommends:     zram-generator-defaults
 # Updates and rollback (arctic-update, snapper snapshots of the btrfs root).
 Requires:       snapper
 Requires:       libdnf5-plugin-actions
@@ -994,6 +996,11 @@ install -Dpm 0644 packaging/systemd/arctic-flatpak-update.timer %{buildroot}%{_u
 install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.service %{buildroot}%{_userunitdir}/arctic-flatpak-update.service
 install -Dpm 0644 packaging/systemd/user/arctic-flatpak-update.timer %{buildroot}%{_userunitdir}/arctic-flatpak-update.timer
 install -Dpm 0755 packaging/updates/arctic-update-helper %{buildroot}%{_libexecdir}/arctic/arctic-update-helper
+# Leaving the update boot: a soft-reboot when only programs changed, so an encrypted disk's
+# passphrase is asked for once (packaging/updates/README.md).
+install -Dpm 0755 packaging/updates/arctic-update-finish %{buildroot}%{_libexecdir}/arctic/arctic-update-finish
+install -Dpm 0644 packaging/updates/50-arctic-finish.conf \
+  %{buildroot}%{_unitdir}/dnf5-offline-transaction.service.d/50-arctic-finish.conf
 install -Dpm 0644 packaging/updates/update.conf %{buildroot}%{_sysconfdir}/arctic/update.conf
 install -Dpm 0644 packaging/updates/snapper.actions \
   %{buildroot}%{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
@@ -1583,6 +1590,9 @@ fi
 %{_userunitdir}/arctic-flatpak-update.service
 %{_userunitdir}/arctic-flatpak-update.timer
 %{_libexecdir}/arctic/arctic-update-helper
+%{_libexecdir}/arctic/arctic-update-finish
+%dir %{_unitdir}/dnf5-offline-transaction.service.d
+%{_unitdir}/dnf5-offline-transaction.service.d/50-arctic-finish.conf
 %config(noreplace) %{_sysconfdir}/arctic/update.conf
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-snapper.actions
 %config(noreplace) %{_sysconfdir}/dnf/libdnf5-plugins/actions.d/arctic-update.actions
@@ -1684,6 +1694,12 @@ fi
 # metapackage: no files
 
 %changelog
+* Tue Nov 10 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.3-1
+- Ask for the disk passphrase once when updates are installed at a restart: the update boot
+  ends with a soft-reboot unless a kernel, driver or firmware changed.
+- Start sooner: a 3 second boot menu on single-system installs; noatime on the btrfs subvolumes.
+- Make compressed swap in memory (zram) part of the image explicitly.
+
 * Fri Oct 23 2026 Arctic Linux <arctic@arcticlinux.org> - 1.2.2-1
 - Replace built-in VoxType dictation with OpenWhispr voice typing (Settings → Voice typing).
 - Keep the desktop's colours when the wallpaper rotates by itself.

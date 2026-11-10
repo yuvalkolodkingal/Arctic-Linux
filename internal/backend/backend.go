@@ -15,7 +15,7 @@ import (
 )
 
 // EngineVersion is reported by Hello.
-const EngineVersion = "1.2.2"
+const EngineVersion = "1.2.3"
 
 // Info describes the environment.
 type Info struct {

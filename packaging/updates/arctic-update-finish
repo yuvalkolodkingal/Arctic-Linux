@@ -1,0 +1,116 @@
+#!/usr/bin/bash
+# arctic-update-finish — how the computer leaves the offline-update boot.
+#
+#   arctic-update-finish prepare   before dnf5 installs the updates (ExecStartPre)
+#   arctic-update-finish finish    after it succeeded (ExecStartPost)
+#   arctic-update-finish decide    print what `finish` would do: soft-reboot | reboot | poweroff
+#
+# Installed as /usr/libexec/arctic/arctic-update-finish and run by the drop-in
+# dnf5-offline-transaction.service.d/50-arctic-finish.conf, which also tells dnf5 not to restart
+# the computer itself (DNF_SYSTEM_UPGRADE_NO_REBOOT).
+#
+# Stock dnf5 always ends the update boot with a full restart: firmware, boot menu, initramfs
+# and, on an encrypted disk, the passphrase a second time. Most updates change programs only,
+# so here the update boot ends with `systemctl soft-reboot` instead: the kernel keeps running,
+# the disk stays unlocked, and systemd starts the updated system directly. A full restart is
+# still used whenever the running kernel side changed, because only that loads it:
+#
+#   - anything under /usr/lib/modules or /usr/lib/firmware was added, replaced or removed
+#     (a kernel, a driver such as NVIDIA's, firmware, microcode), or an akmod source changed;
+#   - the transaction was a release upgrade (dnf5 system-upgrade);
+#   - `prepare` did not run, or anything here is unsure.
+#
+# A request to power off afterwards (`dnf5 offline reboot --poweroff`) is kept.
+# When dnf5 fails, dnf5-offline-transaction-cleanup.service restarts as before; this script
+# only runs after a successful transaction.
+set -u
+
+RUN="${ARCTIC_UPDATE_FINISH_RUN:-/run/arctic/update-boot}"
+ROOT="${ARCTIC_UPDATE_FINISH_ROOT:-}"
+STATE="$ROOT/usr/lib/sysimage/libdnf5/offline/offline-transaction-state.toml"
+# What only a full restart loads.
+WATCH=("$ROOT/usr/lib/modules" "$ROOT/usr/lib/firmware" "$ROOT/usr/src/akmods")
+INHIBIT_WAIT="${ARCTIC_UPDATE_FINISH_INHIBIT_WAIT:-300}"
+
+log() { printf 'arctic-update-finish: %s\n' "$*" >&2; }
+
+# The value of a `key = value` line of dnf5's state file, without quotes.
+state_value() {
+  sed -n "s/^[[:space:]]*$1[[:space:]]*=[[:space:]]*//p" "$STATE" 2>/dev/null | head -n 1 | tr -d "\"'" | tr -d '[:space:]'
+}
+
+prepare() {
+  rm -rf "$RUN"
+  mkdir -p "$RUN" || return 0
+  local verb system target
+  verb="$(sed -n 's/^[[:space:]]*verb[[:space:]]*=[[:space:]]*//p' "$STATE" 2>/dev/null | head -n 1 | tr -d "\"'")"
+  system="$(state_value system_releasever)"
+  target="$(state_value target_releasever)"
+  [[ "$(state_value poweroff_after)" == true ]] && : > "$RUN/poweroff"
+  if [[ "$verb" == system-upgrade* || ( -n "$system" && -n "$target" && "$system" != "$target" ) ]]; then
+    : > "$RUN/release-upgrade"
+  fi
+  # Last: its time is what `decide` compares the kernel side against.
+  : > "$RUN/marker"
+  return 0
+}
+
+# Something only a full restart loads changed since `prepare`. rpm gives files their build
+# time, so this looks at when the inode changed (ctime); a removed file changes its directory.
+kernel_side_changed() {
+  local dir found
+  for dir in "${WATCH[@]}"; do
+    [[ -d "$dir" ]] || continue
+    found="$(find "$dir" -newercm "$RUN/marker" -print -quit 2>/dev/null)" || return 0
+    [[ -z "$found" ]] || { log "changed since the update began: $found"; return 0; }
+  done
+  return 1
+}
+
+decide() {
+  if [[ -e "$RUN/poweroff" ]]; then echo poweroff; return; fi
+  if [[ ! -e "$RUN/marker" ]]; then log "no marker from prepare: full restart"; echo reboot; return; fi
+  if [[ -e "$RUN/release-upgrade" ]]; then log "release upgrade: full restart"; echo reboot; return; fi
+  if kernel_side_changed; then echo reboot; return; fi
+  echo soft-reboot
+}
+
+# Something still blocks shutting down (akmods building a driver for the new kernel holds such
+# a lock): wait for it, as dnf5 does before it restarts, at most INHIBIT_WAIT seconds.
+wait_for_inhibitors() {
+  command -v systemd-inhibit >/dev/null 2>&1 || return 0
+  local waited=0 lines
+  while (( waited < INHIBIT_WAIT )); do
+    lines="$(systemd-inhibit --list --no-legend --no-pager 2>/dev/null | awk '$NF == "block" && /shutdown/')"
+    [[ -n "$lines" ]] || return 0
+    (( waited % 30 == 0 )) && log "waiting for what blocks shutting down (${waited}s of ${INHIBIT_WAIT}s)"
+    sleep 1
+    waited=$((waited + 1))
+  done
+  log "still blocked after ${INHIBIT_WAIT}s; continuing"
+}
+
+finish() {
+  wait_for_inhibitors
+  local how
+  how="$(decide)"
+  [[ "$how" == poweroff || "$how" == reboot || "$how" == soft-reboot ]] || how=reboot
+  rm -rf "$RUN"
+  log "updates installed: $how"
+  # --no-block: this script is part of the unit the shutdown waits for.
+  if [[ "$how" == soft-reboot ]]; then
+    systemctl --no-block soft-reboot && return 0
+    log "soft-reboot was refused: full restart"
+    how=reboot
+  fi
+  systemctl --no-block "$how" && return 0
+  # Never stay in the update boot: the unit fails and its cleanup unit restarts.
+  return 1
+}
+
+case "${1:-}" in
+  prepare) prepare ;;
+  finish)  finish ;;
+  decide)  decide ;;
+  *) echo "usage: arctic-update-finish prepare|finish|decide" >&2; exit 2 ;;
+esac

@@ -59,7 +59,7 @@ Popover {
         }
         Text {
             Layout.fillWidth: true
-            text: 'Save your work first. Installing takes a few minutes; then the computer restarts once more.'
+            text: 'Save your work first. Installing takes a few minutes; then the login screen appears.'
             wrapMode: Text.WordWrap
             color: Theme.inkSubtle
             font.family: Theme.fontSans

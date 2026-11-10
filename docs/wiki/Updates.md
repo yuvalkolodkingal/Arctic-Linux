@@ -20,8 +20,13 @@ while you work, and it never restarts the computer by itself.
    updates downloaded again by the next day's check aren't announced again).
 4. **Installed at the next start.** The next time the computer starts (a restart, or when you
    switch it on again after shutting down), it installs the updates before the desktop appears,
-   then restarts once more into the updated system. The boot screen stays up while it works;
-   press `Esc` to see the progress as text. Don't switch the computer off during this.
+   then starts the updated system. The boot screen stays up while it works; press `Esc` to see
+   the progress as text. Don't switch the computer off during this.
+
+   With an encrypted disk you type the passphrase once: when only apps and system programs
+   changed, Arctic Linux goes straight on to the login screen. Only an update that brings a new
+   kernel, a graphics driver or firmware restarts the computer once more (and asks for the
+   passphrase again), because nothing else can load those.
 
 Updates are never installed into the running desktop, so an update can't break the apps you
 have open. On the live USB nothing is downloaded: nothing there survives a restart.
@@ -224,7 +229,7 @@ do.
 ### Start the previous kernel
 
 If the computer doesn't start properly after an update that brought a new kernel, restart and
-pick the entry with the older version number in the boot menu (it shows for 5 seconds). The last
+pick the entry with the older version number in the boot menu (it shows for 3 seconds; press any arrow key to stop the countdown). The last
 three kernels are kept.
 
 ### Snapshots

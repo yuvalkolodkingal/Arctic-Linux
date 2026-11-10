@@ -193,7 +193,7 @@ module: see [Missed the blue screen](#missed-the-blue-screen). `journalctl -b -k
 
 1. Wait a minute on the first start: if a new kernel arrived, akmods may still be building.
 2. Switch to a text console with `Ctrl + Alt + F3`, log in, and check with the commands above.
-3. To start once without the NVIDIA driver, press `e` in the boot menu (it shows for 5 seconds),
+3. To start once without the NVIDIA driver, press `e` in the boot menu (it shows for 3 seconds, 5 next to another system),
    and on the line starting with `linux` remove `rd.driver.blacklist=nouveau,nova_core
    modprobe.blacklist=nouveau,nova_core nvidia-drm.modeset=1`, then press `Ctrl + X`. The card
    then starts on `nouveau`.

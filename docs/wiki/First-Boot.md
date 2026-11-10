@@ -14,7 +14,7 @@ appears before anything else: press any key within 10 seconds, choose **Enroll M
 ## 1. The boot menu
 
 For a few seconds you may see the Arctic Linux boot menu. If you installed alongside another
-system, it's listed here too; otherwise the menu simply starts Arctic Linux after 5 seconds.
+system, it's listed here too; otherwise the menu simply starts Arctic Linux after 3 seconds.
 
 ## 2. Your disk passphrase
 

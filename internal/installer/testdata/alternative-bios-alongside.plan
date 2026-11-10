@@ -67,10 +67,10 @@ write /mnt/usr/share/sddm/themes/arctic/theme.conf.user (0644)
     | keyboardLayout=de
 write /mnt/etc/fstab (0644)
     | # /etc/fstab — written by the Arctic Linux installer.
-    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /          btrfs subvol=@,compress=zstd:1,x-systemd.device-timeout=0 0 0
-    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /home      btrfs subvol=@home,compress=zstd:1 0 0
-    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /var/log   btrfs subvol=@var_log,compress=zstd:1 0 0
-    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /nix       btrfs subvol=@nix,compress=zstd:1 0 0
+    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /          btrfs subvol=@,compress=zstd:1,noatime,x-systemd.device-timeout=0 0 0
+    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /home      btrfs subvol=@home,compress=zstd:1,noatime 0 0
+    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /var/log   btrfs subvol=@var_log,compress=zstd:1,noatime 0 0
+    | UUID=c9e9f204-0000-4000-8000-249ca50038c4 /nix       btrfs subvol=@nix,compress=zstd:1,noatime 0 0
     | UUID=cae9f397-0000-4000-8000-5d0f6754ca67 /boot      ext4 defaults 1 2
 write /mnt/etc/sddm.conf.d/50-arctic-autologin.conf (0644)
     | # Written by the Arctic Linux installer ("Log in automatically").
