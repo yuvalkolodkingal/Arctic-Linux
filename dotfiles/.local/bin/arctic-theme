@@ -234,10 +234,17 @@ def saved_wallpaper():
         return ""
 
 
+DESIGN_FILE_RE = re.compile(r"^(?:{})-(?:winter|polar-night)\.(?:png|svg)$".format("|".join(DESIGN_WALLPAPERS)))
+
+
 def is_design_wallpaper(choice):
-    """Arctic's own wallpapers are drawn for Winter and Polar night: they keep the static palettes."""
+    """Arctic's three drawings (snowfield, aurora, fox) are made for Winter and Polar night: they
+    keep the static palettes. Everything else colours the desktop, Arctic's packaged photographs
+    included: they live in the same folders as the drawings, so the folder alone says nothing."""
     if not choice or choice in DESIGN_WALLPAPERS:
         return True
+    if not DESIGN_FILE_RE.match(os.path.basename(choice)):
+        return False
     real = os.path.realpath(choice)
     cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.join(HOME, ".cache"), "arctic", "wallpapers")
     for d in DESIGN_DIRS + (cache,):

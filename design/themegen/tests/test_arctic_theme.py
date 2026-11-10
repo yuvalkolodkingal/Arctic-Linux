@@ -285,6 +285,27 @@ class ArcticThemeTests(unittest.TestCase):
         self.theme("set", "wallpaper")
         self.assertEqual(self.theme().stdout, "wallpaper\n")
 
+    def test_arctic_photographs_colour_the_desktop(self):
+        # The packaged photo collection lives in the same folder as the three drawings. A photo
+        # there is a picture like any other: it must not fall back to Winter / Polar night.
+        photo = os.path.join(self.backgrounds, "glacier-lagoon.jpg")
+        Image.new("RGB", (64, 36), (24, 96, 150)).save(photo)
+        self.choose(photo)
+        self.theme("auto", "on")
+        self.assertEqual(self.theme().stdout, "wallpaper\n")
+        with open(os.path.join(self.config, "themes", "wallpaper", "theme.json")) as f:
+            self.assertEqual(json.load(f)["wallpaper"], photo)
+        # A photo whose name merely starts like a drawing is still a photo.
+        lookalike = os.path.join(self.backgrounds, "fox-in-snow.jpg")
+        Image.new("RGB", (64, 36), (200, 120, 40)).save(lookalike)
+        self.choose(lookalike)
+        self.theme("sync", "--no-redraw")
+        self.assertEqual(self.theme().stdout, "wallpaper\n")
+        # The drawings keep the design palettes (light or dark as the desktop is now).
+        self.choose("aurora")
+        self.theme("sync", "--no-redraw")
+        self.assertIn(self.theme().stdout, ("winter\n", "polar-night\n"))
+
     def test_login_survives_a_broken_picture(self):
         broken = os.path.join(self.pictures, "broken.png")
         with open(broken, "wb") as f:

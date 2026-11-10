@@ -918,8 +918,9 @@ input (message on stderr, `arctic-themegen: …`).
 | `arctic-theme sync [--force] [--no-redraw]` | if auto colours are on, follow the wallpaper now (no-op when up to date); `arctic-wallpaper` runs it |
 | `arctic-theme winter\|polar-night\|light\|dark` | kept from v0.1: `winter`/`polar-night` = `set`; `light`/`dark` = `mode` when auto colours are on, else `set winter`/`set polar-night` |
 
-Following the wallpaper: Arctic's own wallpapers (snowfield, aurora, fox — by name or any file
-under the design wallpaper folders) keep the static palettes — Winter or Polar night by
+Following the wallpaper: Arctic's three drawings (snowfield, aurora, fox — by name or as their
+`<name>-winter|polar-night` file under the design wallpaper folders; not the packaged
+photographs beside them, which are pictures like any other) keep the static palettes — Winter or Polar night by
 `wallpaper_mode`, or the current light/dark for `auto` — so first boot (Polar night, aurora)
 looks exactly like the design. Any other picture makes `~/.config/arctic/themes/wallpaper`
 (`label` "Wallpaper", `lock_wallpaper` the base's) and switches to it; it is remade only when
