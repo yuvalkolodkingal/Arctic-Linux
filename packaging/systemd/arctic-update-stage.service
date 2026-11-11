@@ -12,8 +12,13 @@ After=network-online.target
 # metered connections (METERED= in /etc/arctic/update.conf) and does nothing with AUTO=off.
 Type=oneshot
 ExecStart=/usr/bin/arctic-update stage
-# In the background: the lowest CPU and disk priority.
+# In the background, behind everything you do. Updates are installed while the desktop runs
+# (INSTALL=now), and a transaction is heavy work: rpm's scriptlets, a new kernel's initramfs,
+# a driver build. Nice=19 alone still shares the processors with the compositor, which shows
+# as stuttering animations. CPUWeight=idle gives this unit, with everything dnf starts, only
+# the processor time nothing else wants; the disk priority is the lowest too.
 Nice=19
+CPUWeight=idle
 IOSchedulingClass=idle
 # A slow mirror must not keep it running forever; the next check tries again.
 TimeoutStartSec=3h

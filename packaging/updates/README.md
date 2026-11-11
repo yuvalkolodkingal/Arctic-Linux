@@ -23,7 +23,9 @@ wiki's [Updates](../../docs/wiki/Updates.md) page.
 `INSTALL=now` in `update.conf` (also when the line is missing, as in a file from before 1.2.3):
 
 1. `arctic-update-stage.timer` starts `arctic-update stage` as before (AUTO, METERED, the wait
-   for arctic-firstboot and the lock are unchanged).
+   for arctic-firstboot and the lock are unchanged). The unit runs with `CPUWeight=idle`, so
+   the transaction (scriptlets, a kernel's initramfs, a driver build) only gets processor time
+   the desktop doesn't want; `Nice=19` alone made animations stutter while updates installed.
 2. It runs `dnf5 upgrade -y --refresh` with the strict Arctic repository overrides: exactly
    `sudo dnf upgrade`. Snapper's pre/post pair comes from `arctic-snapper.actions`. An offline
    transaction arctic-update itself stored earlier (INSTALL=restart, or 1.2.2) is unscheduled
